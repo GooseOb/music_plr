@@ -1,0 +1,727 @@
+import { Button, LineEdit, Slider, ListView, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+export struct Track {
+    id: string,
+    title: string,
+    artist: string,
+    duration: int,
+    duration-text: string,
+    url: string,
+    source: string,
+    is-downloaded: bool,
+    is-downloading: bool,
+    is-selected: bool,
+}
+
+export struct PlaylistInfo {
+    name: string,
+    track-count: int,
+}
+
+component TrackRow {
+    in property <Track> track;
+    in property <int> idx;
+    in property <string> current-track-id;
+    in property <bool> player-playing;
+
+    callback play-clicked(int);
+    callback context-menu-clicked(int);
+    callback row-clicked(int);
+
+    property <bool> is-current: current-track-id != "" && current-track-id == track.id;
+    property <bool> is-playing: is-current && player-playing;
+
+    Rectangle {
+        horizontal-stretch: 1;
+        background: track.is-selected ? #1a3a6a : is-current ? #0a3a20 : row-touch.has-hover ? #2a2a34 : transparent;
+        border-radius: 6px;
+
+        row-touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.row-clicked(root.idx); }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                    root.context-menu-clicked(root.idx);
+                }
+            }
+        }
+
+        HorizontalLayout {
+            padding-top: 4px;
+            padding-bottom: 4px;
+            padding-left: 14px;
+            padding-right: 14px;
+            spacing: 6px;
+
+            Rectangle {
+                width: 30px;
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 30px;
+                        height: 30px;
+                        border-radius: 4px;
+                        background: #14c884;
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.play-clicked(root.idx); }
+                        }
+                        Text {
+                            text: is-playing ? "⏸" : "▶";
+                            color: #000000;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+                }
+            }
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                Text {
+                    text: track.title;
+                    color: #e0e0e0;
+                    overflow: elide;
+                }
+                Text {
+                    text: track.artist;
+                    color: #8888a0;
+                    overflow: elide;
+                }
+            }
+
+            VerticalLayout {
+                width: 24px;
+                alignment: center;
+                if track.is-downloaded : Text {
+                    text: "⬇";
+                    color: #14c884;
+                }
+                if !track.is-downloaded && track.source != "youtube" : Text {
+                    text: "📁";
+                    color: #8888a0;
+                }
+            }
+
+            VerticalLayout {
+                width: 54px;
+                alignment: center;
+                Text {
+                    text: track.duration-text;
+                    color: #8888a0;
+                }
+            }
+        }
+    }
+}
+
+component PlaylistCard {
+    in property <string> pl-name;
+    in property <int> track-count;
+    in property <bool> selected;
+    callback clicked;
+    callback delete-clicked;
+
+    Rectangle {
+        border-radius: 8px;
+        border-width: 1px;
+        border-color: selected ? #14c884 : #333340;
+        background: selected ? #0a3a20 : #1a1a22;
+        min-height: 36px;
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.clicked(); }
+        }
+        HorizontalLayout {
+            padding: 10px;
+            spacing: 10px;
+            Text { text: pl-name; color: #e0e0e0; horizontal-stretch: 1; }
+            Text { text: track-count == 1 ? "1 track" : track-count + " tracks"; color: #8888a0; }
+            Rectangle {
+                width: 28px;
+                height: 22px;
+                TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.delete-clicked(); }
+                }
+                Text {
+                    text: "✕";
+                    color: #e0e0e0;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+            }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    in-out property <int> current-view;
+    in-out property <string> search-input-text;
+    in-out property <string> playlist-create-name;
+    in-out property <bool> loading;
+    in-out property <bool> track-loading;
+    in-out property <string> notification;
+    in-out property <string> radio-label;
+    in-out property <bool> can-go-back;
+    in-out property <bool> can-go-forward;
+
+    in-out property <string> current-track-id;
+    in-out property <bool> is-playing;
+    in-out property <float> progress;
+    in-out property <float> duration-secs;
+    in-out property <float> volume;
+    in-out property <string> current-title;
+    in-out property <string> current-artist;
+
+    in-out property <[Track]> search-results;
+    in-out property <[Track]> radio-tracks;
+    in-out property <[PlaylistInfo]> playlist-list;
+    in-out property <[Track]> playlist-tracks;
+    in-out property <[string]> picker-playlists;
+
+    in-out property <bool> show-picker;
+    in-out property <int> picker-track-idx;
+    in-out property <int> selected-playlist;
+    in-out property <string> selected-playlist-name;
+
+    in-out property <bool> show-context-menu;
+    in-out property <int> context-menu-idx;
+    in-out property <bool> context-is-youtube;
+    in-out property <bool> context-is-downloaded;
+    in-out property <bool> context-in-playlist;
+
+    in-out property <[string]> search-history-items;
+    in-out property <bool> show-search-history: false;
+    in-out property <bool> search-has-focus: search-text-input.has-focus;
+    in-out property <string> elapsed-text;
+    in-out property <string> total-text;
+
+    callback navigate-to(int);
+    callback navigate-back();
+    callback navigate-forward();
+    callback search-execute();
+    callback search-load-more();
+    callback play-track(int);
+    callback toggle-play-pause();
+    callback next-track();
+    callback previous-track();
+    callback set-volume(float);
+    callback seek(float);
+    callback start-song-radio(string);
+    callback start-artist-radio(string);
+    callback download-track(int);
+    callback remove-download(int);
+    callback download-current();
+    callback add-local-music();
+    callback create-playlist();
+    callback delete-playlist(int);
+    callback select-playlist(int);
+    callback add-to-playlist(int);
+    callback remove-from-playlist(int);
+    callback toggle-picker(int);
+    callback close-picker();
+    callback search-input-changed(string);
+    callback playlist-name-changed(string);
+    callback search-history-selected(int);
+    callback delete-search-history(int);
+    callback toggle-select(int);
+    callback copy-selected();
+    callback delete-selected();
+    callback paste-clipboard();
+    callback open-context-menu(int);
+    callback context-radio();
+    callback context-artist();
+    callback context-add-to-playlist();
+    callback context-download-or-delete();
+    callback context-remove-from-playlist();
+    callback context-close-menu();
+
+    title: "Music PLR";
+    no-frame: false;
+    background: #141418;
+    default-font-size: 14px;
+    forward-focus: root-focus;
+
+    VerticalLayout {
+        spacing: 0;
+
+        HorizontalLayout {
+            spacing: 0;
+            vertical-stretch: 1;
+
+            Rectangle {
+                width: 200px;
+                background: #1a1a20;
+                VerticalLayout {
+                    padding: 12px;
+                    spacing: 6px;
+
+                    Text {
+                        text: "Music PLR";
+                        color: #14c884;
+                    }
+
+                    Rectangle { height: 1px; background: #333340; }
+
+                    HorizontalLayout {
+                        spacing: 4px;
+                        Rectangle {
+                            background: can-go-back ? transparent : #333340;
+                            border-radius: 4px;
+                            horizontal-stretch: 1;
+                            height: 22px;
+                            TouchArea {
+                                mouse-cursor: pointer;
+                                enabled: can-go-back;
+                                clicked => { navigate-back(); }
+                            }
+                            Text {
+                                text: "◀";
+                                color: can-go-back ? #b8b8c2 : #555560;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+                        Rectangle {
+                            background: can-go-forward ? transparent : #333340;
+                            border-radius: 4px;
+                            horizontal-stretch: 1;
+                            height: 22px;
+                            TouchArea {
+                                mouse-cursor: pointer;
+                                enabled: can-go-forward;
+                                clicked => { navigate-forward(); }
+                            }
+                            Text {
+                                text: "▶";
+                                color: can-go-forward ? #b8b8c2 : #555560;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: #333340; }
+
+                    HorizontalLayout {
+                        spacing: 4px;
+                        Text { text: "Playlists"; color: #14c884; }
+                        Rectangle { horizontal-stretch: 1; }
+                        Rectangle {
+                            width: 24px; height: 24px; border-radius: 4px; background: #14c884;
+                            TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { create-playlist(); }
+                            }
+                            Text {
+                                text: "+"; color: #000000;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+                    }
+                    LineEdit {
+                        text: playlist-create-name;
+                        placeholder-text: "New playlist...";
+                        edited => { playlist-name-changed(self.text); }
+                        accepted => { create-playlist(); }
+                    }
+
+                    Rectangle {
+                        vertical-stretch: 1;
+                        clip: true;
+                        if playlist-list.length == 0 : Text {
+                            text: "No playlists";
+                            color: #8888a0;
+                            x: 0;
+                            y: 0;
+                        }
+                        if playlist-list.length > 0 : ListView {
+                            vertical-stretch: 1;
+                            for pl[i] in playlist-list: PlaylistCard {
+                                pl-name: pl.name;
+                                track-count: pl.track-count;
+                                selected: selected-playlist == i;
+                                clicked => { select-playlist(i); }
+                                delete-clicked => { delete-playlist(i); }
+                            }
+                        }
+                    }
+
+                    if notification != "" : Text {
+                        text: notification;
+                        color: #e6b800;
+                    }
+                }
+            }
+
+            Rectangle {
+                background: #141418;
+                horizontal-stretch: 1;
+
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 4px;
+
+                    // SEARCH BAR - always on top
+                    HorizontalLayout {
+                        spacing: 6px;
+                        search-text-input := LineEdit {
+                            text: search-input-text;
+                            placeholder-text: "Search songs, artists, albums...";
+                            horizontal-stretch: 1;
+                            edited => { search-input-changed(self.text); }
+                            accepted => { search-execute(); }
+                        }
+                        Rectangle {
+                            width: 30px; height: 30px; border-radius: 4px; background: #14c884;
+                            TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { search-execute(); }
+                            }
+                            Text {
+                                text: "🔍";
+                                color: #000000;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+                    }
+                    Rectangle { height: 8px; }
+
+                    if loading : Text { text: "Searching..."; color: #8888a0; }
+
+                    // SEARCH RESULTS
+                    if !loading && search-results.length > 0 && selected-playlist < 0 && current-view != 1 : VerticalLayout {
+                        spacing: 2px;
+                        Rectangle { height: 4px; }
+                        ListView {
+                            vertical-stretch: 1;
+                            for t[i] in search-results: TrackRow {
+                                track: t;
+                                idx: i;
+                                current-track-id: root.current-track-id;
+                                player-playing: root.is-playing;
+                                play-clicked(index) => { root.play-track(index); }
+                                context-menu-clicked(index) => { root.open-context-menu(index); }
+                                row-clicked(index) => { root.toggle-select(index); }
+                            }
+                        }
+                        Rectangle { height: 4px; }
+                        Button { text: "Load more"; horizontal-stretch: 1; clicked => { search-load-more(); } }
+                    }
+
+                    // PLAYLIST TRACKS
+                    if selected-playlist >= 0 : VerticalLayout {
+                        spacing: 6px;
+                        Text { text: selected-playlist-name; color: #e0e0e0; }
+                        if playlist-tracks.length > 0 : ListView {
+                            vertical-stretch: 1;
+                            for t[i] in playlist-tracks: TrackRow {
+                                track: t;
+                                idx: i;
+                                current-track-id: root.current-track-id;
+                                player-playing: root.is-playing;
+                                play-clicked(index) => { root.play-track(index); }
+                                context-menu-clicked(index) => { root.open-context-menu(index); }
+                                row-clicked(index) => { root.toggle-select(index); }
+                            }
+                        }
+                        if playlist-tracks.length == 0 : Rectangle {
+                            vertical-stretch: 1;
+                            Text {
+                                text: "No tracks yet. Add local music or add from Search.";
+                                color: #8888a0;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+                        Button { text: "Add Local Music"; horizontal-stretch: 1; clicked => { add-local-music(); } }
+                    }
+
+                    // RADIO VIEW
+                    if selected-playlist < 0 && current-view == 1 : VerticalLayout {
+                        vertical-stretch: 1;
+                        spacing: 4px;
+                        if radio-label != "" : Text { text: radio-label; color: #e0e0e0; }
+                        if loading && radio-tracks.length == 0 : Text { text: "Loading recommendations..."; color: #8888a0; }
+                        if radio-tracks.length > 0 : ListView {
+                            vertical-stretch: 1;
+                            for t[i] in radio-tracks: TrackRow {
+                                track: t;
+                                idx: i;
+                                current-track-id: root.current-track-id;
+                                player-playing: root.is-playing;
+                                play-clicked(index) => { root.play-track(index); }
+                                context-menu-clicked(index) => { root.open-context-menu(index); }
+                                row-clicked(index) => { root.toggle-select(index); }
+                            }
+                        }
+                        if radio-tracks.length == 0 && !loading : Text {
+                            text: "Search for a song first, then use Radio or Artist";
+                            color: #8888a0;
+                        }
+                    }
+
+                    // EMPTY STATE
+                    if search-results.length == 0 && selected-playlist < 0 && current-view != 1 && !loading : Rectangle {
+                        vertical-stretch: 1;
+                        Text {
+                            text: "Search for music or select a playlist";
+                            color: #8888a0;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+
+                }
+
+            }
+        }
+
+        // PLAYER BAR
+        Rectangle {
+            height: 80px;
+            horizontal-stretch: 1;
+            background: #0f0f14;
+            HorizontalLayout {
+                padding-top: 8px;
+                padding-bottom: 8px;
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 4px;
+
+                VerticalLayout {
+                    width: 160px;
+                    Text {
+                        text: current-title;
+                        color: #e0e0e0;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: current-artist;
+                        color: #8888a0;
+                        overflow: elide;
+                    }
+                }
+
+                if track-loading : Text { text: "Loading track..."; color: #e6b800; }
+                if !track-loading : VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 4px;
+                    alignment: stretch;
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: center;
+                        Button { min-width: 30px; min-height: 30px; text: "⏮"; clicked => { previous-track(); } }
+                        Rectangle {
+                            width: 36px; height: 36px;
+                            border-radius: 6px;
+                            background: #14c884;
+                            TouchArea {
+                                mouse-cursor: pointer;
+                                clicked => { toggle-play-pause(); }
+                            }
+                            Text {
+                                text: is-playing ? "⏸" : "▶";
+                                color: #000000;
+                                x: (parent.width - self.width) / 2;
+                                y: (parent.height - self.height) / 2;
+                            }
+                        }
+                        Button { min-width: 30px; min-height: 30px; text: "⏭"; clicked => { next-track(); } }
+                    }
+
+                    HorizontalLayout {
+                        horizontal-stretch: 1;
+                        spacing: 4px;
+                        Text { text: elapsed-text; color: #8888a0; }
+                        Slider {
+                            horizontal-stretch: 1;
+                            minimum: 0;
+                            maximum: 1;
+                            value <=> root.progress;
+                            changed(value) => { root.seek(value); }
+                        }
+                        Text { text: total-text; color: #8888a0; }
+                    }
+                }
+
+                HorizontalLayout {
+                    width: 120px;
+                    spacing: 4px;
+                    alignment: center;
+                    Text { text: "Vol"; color: #8888a0; }
+                    Slider {
+                        width: 80px;
+                        minimum: 0;
+                        maximum: 1;
+                        value: volume;
+                        changed(value) => { set-volume(value); }
+                    }
+                }
+
+            }
+        }
+    }
+
+    // SEARCH HISTORY DROPDOWN - positioned directly at root level
+    if root.show-search-history && root.search-history-items.length > 0 : Rectangle {
+        x: 216px;
+        y: 48px;
+        width: parent.width - 232px;
+        height: min(root.search-history-items.length * 36px + 2px, 300px);
+        background: #1a1a22;
+        border-radius: 6px;
+        border-width: 1px;
+        border-color: #333340;
+
+        ListView {
+            vertical-stretch: 1;
+            for h[i] in root.search-history-items: Rectangle {
+                height: 36px;
+                border-radius: 6px;
+                background: #2a2a32;
+                TouchArea {
+                    mouse-cursor: pointer;
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up) {
+                            search-text-input.text = h;
+                            root.search-history-selected(i);
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    padding: 8px;
+                    spacing: 4px;
+                    Text { text: h; color: #e0e0e0; horizontal-stretch: 1; }
+                    Rectangle {
+                        width: 28px;
+                        height: 24px;
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            pointer-event(event) => {
+                                if (event.kind == PointerEventKind.up) {
+                                    root.delete-search-history(i);
+                                    search-text-input.focus();
+                                }
+                            }
+                        }
+                        Text {
+                            text: "✕";
+                            color: #666680;
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // PLAYLIST PICKER OVERLAY
+    if show-picker : Rectangle {
+        background: #00000080;
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { close-picker(); }
+        }
+
+        Rectangle {
+            width: 300px;
+            height: 400px;
+            background: #1a1a22;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: #333340;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            VerticalLayout {
+                padding: 16px;
+                spacing: 8px;
+
+                Text { text: "Add to Playlist"; color: #e0e0e0; }
+
+                if picker-playlists.length == 0 : Text { text: "No playlists. Create one first."; color: #8888a0; }
+
+                ListView {
+                    vertical-stretch: 1;
+                    for pl[i] in picker-playlists: Rectangle {
+                        border-radius: 6px;
+                        background: #2a2a32;
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { add-to-playlist(i); }
+                        }
+                        HorizontalLayout {
+                            padding: 8px;
+                            Text { text: pl; color: #e0e0e0; }
+                        }
+                    }
+                }
+
+                Button { text: "Cancel"; horizontal-stretch: 1; clicked => { close-picker(); } }
+            }
+        }
+    }
+
+    // CONTEXT MENU OVERLAY
+    if show-context-menu : Rectangle {
+        background: #00000080;
+        TouchArea {
+            mouse-cursor: pointer;
+            clicked => { context-close-menu(); }
+        }
+
+        Rectangle {
+            width: 260px;
+            height: 240px;
+            background: #1a1a22;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: #333340;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            VerticalLayout {
+                padding: 8px;
+                spacing: 4px;
+                Text { text: "Track Actions"; color: #e0e0e0; }
+                Rectangle { height: 1px; background: #333340; }
+                if context-is-youtube : Button { text: "Radio"; horizontal-stretch: 1; min-height: 28px; clicked => { context-radio(); } }
+                if context-is-youtube : Button { text: "Artist"; horizontal-stretch: 1; min-height: 28px; clicked => { context-artist(); } }
+                Button { text: "Add to Playlist"; horizontal-stretch: 1; min-height: 28px; clicked => { context-add-to-playlist(); } }
+                if context-is-youtube && !context-is-downloaded : Button { text: "Download"; horizontal-stretch: 1; min-height: 28px; clicked => { context-download-or-delete(); } }
+                if context-is-youtube && context-is-downloaded : Button { text: "Delete Download"; horizontal-stretch: 1; min-height: 28px; clicked => { context-download-or-delete(); } }
+                if context-in-playlist : Button { text: "Remove from Playlist"; horizontal-stretch: 1; min-height: 28px; clicked => { context-remove-from-playlist(); } }
+                Rectangle { height: 4px; }
+                Button { text: "Cancel"; horizontal-stretch: 1; min-height: 28px; clicked => { context-close-menu(); } }
+            }
+        }
+    }
+
+    root-focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == " ") {
+                toggle-play-pause();
+                accept
+            } else if (event.text == Key.Escape) {
+                show-search-history = false;
+                root-focus.focus();
+                accept
+            } else if (event.text == Key.Delete) {
+                delete-selected();
+                accept
+            } else if (event.modifiers.control && event.text == "c") {
+                copy-selected();
+                accept
+            } else if (event.modifiers.control && event.text == "v") {
+                paste-clipboard();
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+}
