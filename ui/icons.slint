@@ -1,0 +1,123 @@
+import { Theme } from "theme.slint";
+
+export component PlayIcon {
+    in property <brush> colorize: Theme.accent-fg;
+    Rectangle {
+        width: 14px; height: 14px;
+        Image {
+            source: @image-url("../icons/play.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+export component PauseIcon {
+    in property <brush> colorize: Theme.accent-fg;
+    Rectangle {
+        width: 14px; height: 14px;
+        Image {
+            source: @image-url("../icons/pause.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+export component SkipBackIcon {
+    in property <brush> colorize: Theme.fg;
+    Rectangle {
+        width: 18px; height: 18px;
+        Image {
+            source: @image-url("../icons/skip-back.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+export component SkipForwardIcon {
+    in property <brush> colorize: Theme.fg;
+    Rectangle {
+        width: 18px; height: 18px;
+        Image {
+            source: @image-url("../icons/skip-forward.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+export component SearchIcon {
+    in property <brush> colorize: Theme.accent-fg;
+    Rectangle {
+        width: 16px; height: 16px;
+        Image {
+            source: @image-url("../icons/search.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+export component DownloadIcon {
+    in property <brush> colorize: Theme.accent;
+    Rectangle {
+        width: 16px; height: 16px;
+        Image {
+            source: @image-url("../icons/download.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+export component FolderIcon {
+    in property <brush> colorize: Theme.fg-secondary;
+    Rectangle {
+        width: 16px; height: 16px;
+        Image {
+            source: @image-url("../icons/folder.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+export component DeleteIcon {
+    in property <brush> colorize: Theme.fg-secondary;
+    Rectangle {
+        width: 14px; height: 14px;
+        Image {
+            source: @image-url("../icons/delete.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+export component NavIcon {
+    in property <brush> colorize: Theme.fg;
+    in property <bool> flipped: false;
+    Rectangle {
+        width: 16px; height: 16px;
+        transform-rotation: flipped ? 180deg : 0deg;
+        Image {
+            source: @image-url("../icons/chevron-right.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+export component VolumeIcon {
+    in property <brush> colorize: Theme.fg-secondary;
+    Rectangle {
+        width: 16px; height: 16px;
+        Image {
+            source: @image-url("../icons/volume.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}

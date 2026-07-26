@@ -1,0 +1,59 @@
+import { Theme } from "theme.slint";
+import { DeleteIcon } from "icons.slint";
+
+export component PlaylistCard {
+    in property <string> pl-name;
+    in property <int> track-count;
+    in property <bool> selected;
+    callback clicked;
+    callback delete-clicked;
+
+    Rectangle {
+        horizontal-stretch: 1;
+        border-radius: Theme.radius-lg;
+        border-width: 1px;
+        border-color: selected ? Theme.accent : pl-fs.has-focus ? Theme.accent : Theme.border;
+        background: pl-fs.has-focus ? Theme.bg-hover : selected ? Theme.bg-current : Theme.bg-elevated;
+        min-height: 36px;
+        animate background { duration: 150ms; }
+
+        pl-fs := FocusScope {
+            width: 0px; height: 0px;
+            focus-on-click: false;
+            key-pressed(event) => {
+                if (event.text == Key.Return || event.text == " ") {
+                    root.clicked(); accept
+                } else if (event.text == Key.Delete) {
+                    root.delete-clicked(); accept
+                } else { reject }
+            }
+        }
+
+        TouchArea {
+            mouse-cursor: pointer;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up) { root.clicked(); }
+            }
+        }
+        HorizontalLayout {
+            padding: Theme.spacing-md;
+            spacing: Theme.spacing-sm;
+            Text { text: pl-name; color: Theme.fg; horizontal-stretch: 1; }
+            Text { text: track-count == 1 ? "1 track" : "\{track-count} tracks"; color: Theme.fg-secondary; }
+            Rectangle {
+                width: 28px;
+                height: 22px;
+                VerticalLayout {
+                    alignment: center;
+                    DeleteIcon { colorize: Theme.fg; }
+                }
+                TouchArea {
+                    mouse-cursor: pointer;
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up) { root.delete-clicked(); }
+                    }
+                }
+            }
+        }
+    }
+}

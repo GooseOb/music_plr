@@ -1,0 +1,103 @@
+import { Theme } from "theme.slint";
+import { PlayIcon, PauseIcon, DownloadIcon, FolderIcon } from "icons.slint";
+import { Track } from "types.slint";
+
+export component TrackRow {
+    in property <Track> track;
+    in property <int> idx;
+    in property <string> current-track-id;
+    in property <bool> player-playing;
+    in property <bool> keyboard-focused;
+    in property <bool> in-playlist;
+    in property <bool> context-open: false;
+
+    callback clear-search-focus;
+    callback play-clicked(int);
+    callback row-clicked(int);
+    callback right-clicked(int, length, length);
+    callback start-radio(int);
+    callback start-artist(int);
+    callback toggle-picker(int);
+    callback download-or-delete(int);
+    callback remove-from-playlist(int);
+
+    property <bool> is-current: root.current-track-id != "" && root.current-track-id == track.id;
+    property <bool> is-playing: is-current && root.player-playing;
+
+    Rectangle {
+        horizontal-stretch: 1;
+        background: keyboard-focused ? Theme.bg-hover : track.is-selected ? Theme.bg-selected : is-current ? Theme.bg-current : context-open ? Theme.bg-hover : touch-area.has-hover ? Theme.bg-hover : transparent;
+        border-radius: Theme.radius-md;
+        animate background { duration: 150ms; }
+
+        touch-area := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.clear-search-focus(); root.row-clicked(root.idx); }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                    root.right-clicked(root.idx, touch-area.absolute-position.x + touch-area.mouse-x, touch-area.absolute-position.y + touch-area.mouse-y);
+                }
+            }
+        }
+
+        HorizontalLayout {
+            padding-top: Theme.spacing-xs;
+            padding-bottom: Theme.spacing-xs;
+            padding-left: Theme.spacing-md;
+            padding-right: Theme.spacing-md;
+            spacing: Theme.spacing-sm;
+
+            Rectangle {
+                width: 30px;
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 30px;
+                        height: 30px;
+                        border-radius: Theme.radius-sm;
+                        background: Theme.accent;
+                        VerticalLayout {
+                            alignment: center;
+                            if is-playing : PauseIcon { colorize: Theme.accent-fg; }
+                            if !is-playing : PlayIcon { colorize: Theme.accent-fg; }
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.play-clicked(root.idx); }
+                        }
+                    }
+                }
+            }
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                Text {
+                    text: track.title;
+                    color: Theme.fg;
+                    overflow: elide;
+                }
+                Text {
+                    text: track.artist;
+                    color: Theme.fg-secondary;
+                    overflow: elide;
+                }
+            }
+
+            VerticalLayout {
+                width: 24px;
+                alignment: center;
+                if track.is-downloaded : DownloadIcon { colorize: Theme.accent; }
+                if !track.is-downloaded && track.source != "youtube" : FolderIcon { colorize: Theme.fg-secondary; }
+            }
+
+            VerticalLayout {
+                width: 54px;
+                alignment: center;
+                Text {
+                    text: track.duration-text;
+                    color: Theme.fg-secondary;
+                }
+            }
+        }
+    }
+}
