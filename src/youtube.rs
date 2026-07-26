@@ -9,8 +9,6 @@ pub struct YouTubeVideo {
     pub title: String,
     pub url: String,
     pub duration: f64,
-    #[allow(dead_code)]
-    pub thumbnail: String,
     pub channel: String,
 }
 
@@ -18,13 +16,8 @@ pub struct YouTubeVideo {
 struct YTDLPSearchResult {
     id: String,
     title: String,
-    #[allow(dead_code)]
-    url: String,
     #[serde(default)]
     duration: f64,
-    #[serde(default)]
-    thumbnail: String,
-    #[serde(default)]
     channel: String,
     #[serde(default)]
     webpage_url: String,
@@ -103,7 +96,6 @@ fn search_ytmusic(query: &str) -> Result<Vec<YouTubeVideo>> {
             title: r.title,
             url: r.url,
             duration: r.duration as f64,
-            thumbnail: r.thumbnail.unwrap_or_default(),
             channel: r.channel,
         })
         .collect())
@@ -116,8 +108,6 @@ struct YtMusicResult {
     url: String,
     #[serde(default)]
     duration: u32,
-    #[serde(default)]
-    thumbnail: Option<String>,
     #[serde(default)]
     channel: String,
 }
@@ -162,7 +152,6 @@ fn search_ytdlp(query: &str) -> Result<Vec<YouTubeVideo>> {
                 title: item.title,
                 url: String::new(),
                 duration: 0.0,
-                thumbnail: String::new(),
                 channel: String::new(),
             });
         }
@@ -203,11 +192,6 @@ fn search_ytdlp(query: &str) -> Result<Vec<YouTubeVideo>> {
                     if let Ok(item) = serde_json::from_str::<YTDLPSearchResult>(line) {
                         if let Some(video) = videos.get_mut(i) {
                             video.duration = item.duration;
-                            video.thumbnail = if item.thumbnail.is_empty() {
-                                format!("https://img.youtube.com/vi/{}/hqdefault.jpg", video.id)
-                            } else {
-                                item.thumbnail
-                            };
                             video.channel = item.channel;
                             video.url = if item.webpage_url.is_empty() {
                                 format!("https://youtube.com/watch?v={}", video.id)
@@ -224,9 +208,6 @@ fn search_ytdlp(query: &str) -> Result<Vec<YouTubeVideo>> {
     for video in &mut videos {
         if video.url.is_empty() {
             video.url = format!("https://youtube.com/watch?v={}", video.id);
-        }
-        if video.thumbnail.is_empty() {
-            video.thumbnail = format!("https://img.youtube.com/vi/{}/hqdefault.jpg", video.id);
         }
     }
 

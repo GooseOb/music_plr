@@ -31,7 +31,7 @@ fn main() {
     }
 
     setup_callbacks(&window, &backend);
-    setup_timer(&window, &backend);
+    setup_timer(&backend);
 
     if !backend.borrow().config.last_search_query.is_empty() {
         let mut b = backend.borrow_mut();
@@ -46,54 +46,55 @@ fn main() {
     window.run().unwrap();
 }
 
-fn setup_timer(_window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) {
+fn setup_timer(backend: &Rc<RefCell<Backend>>) {
     let backend_weak = Rc::downgrade(backend);
-    let timer = Box::new(slint::Timer::default());
-    timer.start(
-        slint::TimerMode::Repeated,
-        Duration::from_millis(250),
-        move || {
-            if let Some(b) = backend_weak.upgrade() {
-                b.borrow_mut().tick();
-            }
-        },
-    );
-    let _ = Box::into_raw(timer);
+    let timer = slint::Timer::default();
+    if let Some(b) = backend_weak.upgrade() {
+        b.borrow_mut()._timer = Some(timer);
+        if let Some(t) = &b.borrow()._timer {
+            t.start(
+                slint::TimerMode::Repeated,
+                Duration::from_millis(250),
+                move || {
+                    if let Some(b) = backend_weak.upgrade() {
+                        b.borrow_mut().tick();
+                    }
+                },
+            );
+        }
+    }
 }
 
 fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) {
     let b = Rc::downgrade(backend);
-    window.on_navigate_to(move |view| {
+    window.on_navigate_to(move |_view| {
         if let Some(b) = b.upgrade() {
             let mut b = b.borrow_mut();
             b.selected_playlist = None;
             b.selected_playlist_name.clear();
-            b.handle_navigate_to(match view {
-                0 => backend::View::Search,
-                _ => backend::View::Search,
-            });
+            b.handle_navigate_to(backend::View::Search);
         }
     });
 
-    let b = Rc::downgrade(backend);
-    window.on_navigate_back(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_navigate_back();
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_navigate_forward(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_navigate_forward();
-        }
-    });
+    {
+        let b = Rc::downgrade(backend);
+        window.on_navigate_back(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_navigate_back();
+            }
+        });
+    }
+    {
+        let b = Rc::downgrade(backend);
+        window.on_navigate_forward(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_navigate_forward();
+            }
+        });
+    }
 
     let b = Rc::downgrade(backend);
     window.on_search_input_changed(move |text| {
-        if cfg!(debug_assertions) {
-            eprintln!("[ui] on_search_input_changed: text='{}'", text);
-        }
         if let Some(b) = b.upgrade() {
             let mut b = b.borrow_mut();
             b.search_query = text.to_string();
@@ -106,9 +107,6 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
 
     let b = Rc::downgrade(backend);
     window.on_search_execute(move || {
-        if cfg!(debug_assertions) {
-            eprintln!("[ui] on_search_execute");
-        }
         if let Some(b) = b.upgrade() {
             let mut b = b.borrow_mut();
             if let Some(w) = b.ui.upgrade() {
@@ -118,34 +116,26 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
         }
     });
 
-    let b = Rc::downgrade(backend);
-    window.on_search_load_more(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_search_load_more();
-        }
-    });
+    {
+        let b = Rc::downgrade(backend);
+        window.on_search_load_more(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_search_load_more();
+            }
+        });
+    }
 
     let b = Rc::downgrade(backend);
     window.on_search_history_selected(move |index| {
-        if cfg!(debug_assertions) {
-            eprintln!("[ui] >>> search-history-selected CALLED: index={}", index);
-        }
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_search_history_select(index as usize);
-        } else if cfg!(debug_assertions) {
-            eprintln!("[ui] >>> search-history-selected: backend DROPPED");
         }
     });
 
     let b = Rc::downgrade(backend);
     window.on_delete_search_history(move |index| {
-        if cfg!(debug_assertions) {
-            eprintln!("[ui] >>> delete-search-history CALLED: index={}", index);
-        }
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_delete_search_history(index as usize);
-        } else if cfg!(debug_assertions) {
-            eprintln!("[ui] >>> delete-search-history: backend DROPPED");
         }
     });
 
@@ -156,40 +146,46 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
         }
     });
 
-    let b = Rc::downgrade(backend);
-    window.on_toggle_play_pause(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_toggle_play_pause();
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_next_track(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_next_track();
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_previous_track(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_previous_track();
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_set_volume(move |vol| {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_set_volume(vol);
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_seek(move |frac| {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_seek(frac);
-        }
-    });
+    {
+        let b = Rc::downgrade(backend);
+        window.on_toggle_play_pause(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_toggle_play_pause();
+            }
+        });
+    }
+    {
+        let b = Rc::downgrade(backend);
+        window.on_next_track(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_next_track();
+            }
+        });
+    }
+    {
+        let b = Rc::downgrade(backend);
+        window.on_previous_track(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_previous_track();
+            }
+        });
+    }
+    {
+        let b = Rc::downgrade(backend);
+        window.on_set_volume(move |vol| {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_set_volume(vol);
+            }
+        });
+    }
+    {
+        let b = Rc::downgrade(backend);
+        window.on_seek(move |frac| {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_seek(frac);
+            }
+        });
+    }
 
     let b = Rc::downgrade(backend);
     window.on_start_song_radio(move |name| {
@@ -219,12 +215,14 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
         }
     });
 
-    let b = Rc::downgrade(backend);
-    window.on_download_current(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_download_current();
-        }
-    });
+    {
+        let b = Rc::downgrade(backend);
+        window.on_download_current(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_download_current();
+            }
+        });
+    }
 
     let b = Rc::downgrade(backend);
     window.on_add_local_music(move || {
@@ -239,12 +237,14 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
         }
     });
 
-    let b = Rc::downgrade(backend);
-    window.on_create_playlist(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_create_playlist();
-        }
-    });
+    {
+        let b = Rc::downgrade(backend);
+        window.on_create_playlist(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_create_playlist();
+            }
+        });
+    }
 
     let b = Rc::downgrade(backend);
     window.on_delete_playlist(move |index| {
@@ -255,9 +255,6 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
 
     let b = Rc::downgrade(backend);
     window.on_select_playlist(move |index| {
-        if cfg!(debug_assertions) {
-            eprintln!("[ui] playlist card clicked: index={}", index);
-        }
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_select_playlist(index as usize);
         }
@@ -309,73 +306,49 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
         }
     });
 
+    {
+        let b = Rc::downgrade(backend);
+        window.on_copy_selected(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_copy_selected();
+            }
+        });
+    }
+    {
+        let b = Rc::downgrade(backend);
+        window.on_delete_selected(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_delete_selected();
+            }
+        });
+    }
+    {
+        let b = Rc::downgrade(backend);
+        window.on_paste_clipboard(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_paste_clipboard();
+            }
+        });
+    }
+
     let b = Rc::downgrade(backend);
-    window.on_copy_selected(move || {
+    window.on_start_radio(move |index| {
         if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_copy_selected();
+            b.borrow_mut().handle_radio_at(index as usize);
         }
     });
 
     let b = Rc::downgrade(backend);
-    window.on_delete_selected(move || {
+    window.on_start_artist(move |index| {
         if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_delete_selected();
+            b.borrow_mut().handle_artist_at(index as usize);
         }
     });
 
     let b = Rc::downgrade(backend);
-    window.on_paste_clipboard(move || {
+    window.on_download_or_delete(move |index| {
         if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_paste_clipboard();
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_open_context_menu(move |index| {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_context_open(index as usize);
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_context_radio(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_context_radio();
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_context_artist(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_context_artist();
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_context_add_to_playlist(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_context_add_to_playlist();
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_context_download_or_delete(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_context_download_or_delete();
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_context_remove_from_playlist(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_context_remove_from_playlist();
-        }
-    });
-
-    let b = Rc::downgrade(backend);
-    window.on_context_close_menu(move || {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_context_close();
+            b.borrow_mut().handle_download_or_delete_at(index as usize);
         }
     });
 }

@@ -58,6 +58,9 @@ pub fn save_config(cfg: &Config) {
 }
 
 pub fn fuzzy_match(query: &str, text: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
     let query = query.to_lowercase();
     let text = text.to_lowercase();
     let mut qi = query.chars().peekable();

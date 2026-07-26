@@ -2,6 +2,8 @@
 name = "music_plr"
 version = "0.1.0"
 edition = "2021"
+description = "A music player with YouTube search, local playback, and MPRIS integration"
+license = "MIT"
 
 [dependencies]
 slint = "1"

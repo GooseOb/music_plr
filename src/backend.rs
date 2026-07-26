@@ -96,6 +96,7 @@ pub struct Backend {
     pub result_rx: mpsc::Receiver<BackendResult>,
     pub result_tx: mpsc::Sender<BackendResult>,
     pub ui: slint::Weak<AppWindow>,
+    pub _timer: Option<slint::Timer>,
     focus_lost_ticks: u32,
     pending_search_text: Option<String>,
     last_filtered_history: Vec<String>,
@@ -106,7 +107,6 @@ pub struct Backend {
     search_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     radio_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     playlist_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
-    context_menu_idx: usize,
 }
 
 fn format_dur(dur: i32) -> String {
@@ -115,6 +115,20 @@ fn format_dur(dur: i32) -> String {
     } else {
         "--:--".to_string()
     }
+}
+
+fn safe_filename(artist: &str, title: &str) -> String {
+    let filename = format!("{} - {}", artist, title);
+    filename
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 pub fn to_slint_track(t: &RustTrack, registry: &DownloadRegistry, selected: bool) -> Track {
@@ -173,6 +187,7 @@ impl Backend {
                 result_rx,
                 result_tx,
                 ui: slint::Weak::default(),
+                _timer: None,
                 focus_lost_ticks: 0,
                 pending_search_text: None,
                 last_filtered_history: Vec::new(),
@@ -183,7 +198,6 @@ impl Backend {
                 search_model_handle: None,
                 radio_model_handle: None,
                 playlist_model_handle: None,
-                context_menu_idx: 0,
             },
             mpris_cmd_tx,
         )
@@ -252,6 +266,25 @@ impl Backend {
         self.audio.play_stream(&track_url, duration);
     }
 
+    fn play_local_track(&mut self, track: &RustTrack) {
+        self.track_loading = true;
+        self.is_playing = false;
+        if let Ok(data) = std::fs::read(&track.url) {
+            let dur = track.duration as f32;
+            self.track_loading = false;
+            self.audio.play(data, dur);
+            self.duration = dur;
+            self.is_playing = true;
+        }
+    }
+
+    fn play_track_internal(&mut self, track: &RustTrack) {
+        match track.source {
+            TrackSource::YouTube => self.play_youtube_track(track),
+            TrackSource::Local => self.play_local_track(track),
+        }
+    }
+
     pub fn tick(&mut self) {
         let s = self.audio.get_state();
         self.is_playing = s.is_playing;
@@ -275,40 +308,14 @@ impl Backend {
                 MprisCommand::NextTrack => {
                     if self.queue.next().is_some() {
                         if let Some(track) = self.queue.current().cloned() {
-                            match track.source {
-                                TrackSource::YouTube => self.play_youtube_track(&track),
-                                TrackSource::Local => {
-                                    self.track_loading = true;
-                                    self.is_playing = false;
-                                    if let Ok(data) = std::fs::read(&track.url) {
-                                        let dur = track.duration as f32;
-                                        self.track_loading = false;
-                                        self.audio.play(data, dur);
-                                        self.duration = dur;
-                                        self.is_playing = true;
-                                    }
-                                }
-                            }
+                            self.play_track_internal(&track);
                         }
                     }
                 }
                 MprisCommand::PreviousTrack => {
                     if self.queue.previous().is_some() {
                         if let Some(track) = self.queue.current().cloned() {
-                            match track.source {
-                                TrackSource::YouTube => self.play_youtube_track(&track),
-                                TrackSource::Local => {
-                                    self.track_loading = true;
-                                    self.is_playing = false;
-                                    if let Ok(data) = std::fs::read(&track.url) {
-                                        let dur = track.duration as f32;
-                                        self.track_loading = false;
-                                        self.audio.play(data, dur);
-                                        self.duration = dur;
-                                        self.is_playing = true;
-                                    }
-                                }
-                            }
+                            self.play_track_internal(&track);
                         }
                     }
                 }
@@ -317,6 +324,12 @@ impl Backend {
                     self.config.volume = vol;
                     self.audio.set_volume(vol);
                     config::save_config(&self.config);
+                }
+                MprisCommand::Seek(delta_us) => {
+                    let current_progress = self.progress;
+                    let delta_frac = delta_us as f32 / 1_000_000.0 / self.duration.max(0.001);
+                    let new_frac = (current_progress + delta_frac).clamp(0.0, 1.0);
+                    self.handle_seek(new_frac);
                 }
             }
         }
@@ -366,6 +379,7 @@ impl Backend {
                 title: track.map(|t| t.title.clone()).unwrap_or_default(),
                 artist: track.map(|t| t.artist.clone()).unwrap_or_default(),
                 duration_secs: self.duration,
+                position_us: (self.progress * self.duration * 1_000_000.0) as i64,
                 volume: self.volume,
                 has_track: track.is_some(),
             };
@@ -443,41 +457,40 @@ impl Backend {
     }
 
     pub fn update_search_history(&mut self, window: &AppWindow) {
-        let history = &self.config.search_history;
-        let max_visible = self.config.max_search_history_visible;
-        let query = self.search_query.trim().to_lowercase();
-        let filtered: Vec<String> = if query.is_empty() {
-            history.iter().take(max_visible).cloned().collect()
-        } else {
-            history
-                .iter()
-                .filter(|s| fuzzy_match(&query, s))
-                .take(max_visible)
-                .cloned()
-                .collect()
-        };
-        if cfg!(debug_assertions) {
-            eprintln!(
-                "[dbg] update_search_history: query='{}' filtered={} last={} changed={}",
-                query,
-                filtered.len(),
-                self.last_filtered_history.len(),
-                filtered != self.last_filtered_history
-            );
-        }
+        let filtered: Vec<String> = self
+            .filtered_history()
+            .into_iter()
+            .map(|(_, s)| s)
+            .collect();
         if filtered != self.last_filtered_history {
             self.last_filtered_history = filtered.clone();
             let slint_items: Vec<slint::SharedString> =
                 filtered.iter().map(|s| s.as_str().into()).collect();
-            if cfg!(debug_assertions) {
-                eprintln!(
-                    "[dbg] update_search_history: SETTING new model with {} items",
-                    slint_items.len()
-                );
-            }
             window.set_search_history_items(
                 std::rc::Rc::new(slint::VecModel::from(slint_items)).into(),
             );
+        }
+    }
+
+    fn filtered_history(&self) -> Vec<(usize, String)> {
+        let history = &self.config.search_history;
+        let max_visible = self.config.max_search_history_visible;
+        let query = self.search_query.trim().to_lowercase();
+        if query.is_empty() {
+            history
+                .iter()
+                .take(max_visible)
+                .enumerate()
+                .map(|(i, s)| (i, s.clone()))
+                .collect()
+        } else {
+            history
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| fuzzy_match(&query, s))
+                .take(max_visible)
+                .map(|(i, s)| (i, s.clone()))
+                .collect()
         }
     }
 
@@ -611,104 +624,29 @@ impl Backend {
     }
 
     pub fn handle_search_history_select(&mut self, index: usize) {
-        if cfg!(debug_assertions) {
-            eprintln!("[dbg] handle_search_history_select ENTER: index={}", index);
-        }
-        let history = &self.config.search_history;
-        let max_visible = self.config.max_search_history_visible;
-        let query = self.search_query.trim().to_lowercase();
-        if cfg!(debug_assertions) {
-            eprintln!(
-                "[dbg] handle_search_history_select: history_len={} query='{}'",
-                history.len(),
-                query
-            );
-        }
-        let items: Vec<&String> = if query.is_empty() {
-            history.iter().take(max_visible).collect()
-        } else {
-            history
-                .iter()
-                .filter(|s| fuzzy_match(&query, s))
-                .take(max_visible)
-                .collect()
-        };
-        if cfg!(debug_assertions) {
-            eprintln!(
-                "[dbg] handle_search_history_select: filtered items count={}",
-                items.len(),
-            );
-        }
+        let items: Vec<String> = self
+            .filtered_history()
+            .into_iter()
+            .map(|(_, s)| s)
+            .collect();
         if let Some(selected) = items.get(index) {
-            if cfg!(debug_assertions) {
-                eprintln!(
-                    "[dbg] handle_search_history_select: selected '{}'",
-                    selected
-                );
-            }
-            self.search_query = (*selected).clone();
-            self.pending_search_text = Some((*selected).clone());
-        } else if cfg!(debug_assertions) {
-            eprintln!(
-                "[dbg] handle_search_history_select: index {} out of bounds for {} items",
-                index,
-                items.len()
-            );
-        }
-        if cfg!(debug_assertions) {
-            eprintln!("[dbg] handle_search_history_select EXIT");
+            self.search_query = selected.clone();
+            self.pending_search_text = Some(selected.clone());
         }
     }
 
     pub fn handle_delete_search_history(&mut self, index: usize) {
-        if cfg!(debug_assertions) {
-            eprintln!("[dbg] handle_delete_search_history ENTER: index={}", index);
-        }
-        let history = &self.config.search_history;
-        let max_visible = self.config.max_search_history_visible;
-        let query = self.search_query.trim().to_lowercase();
-        let items: Vec<usize> = if query.is_empty() {
-            history
-                .iter()
-                .enumerate()
-                .take(max_visible)
-                .map(|(i, _)| i)
-                .collect()
-        } else {
-            history
-                .iter()
-                .enumerate()
-                .filter(|(_, s)| fuzzy_match(&query, s))
-                .take(max_visible)
-                .map(|(i, _)| i)
-                .collect()
-        };
-        if cfg!(debug_assertions) {
-            eprintln!(
-                "[dbg] handle_delete_search_history: {} visible items, index={}, real_idx={:?}",
-                items.len(),
-                index,
-                items.get(index)
-            );
-        }
+        let items: Vec<usize> = self
+            .filtered_history()
+            .into_iter()
+            .map(|(i, _)| i)
+            .collect();
         if let Some(&real_idx) = items.get(index) {
-            if cfg!(debug_assertions) {
-                eprintln!(
-                    "[dbg] handle_delete_search_history: removing history[{}]",
-                    real_idx
-                );
-            }
             self.config.search_history.remove(real_idx);
             config::save_config(&self.config);
             if let Some(w) = self.ui.upgrade() {
-                if cfg!(debug_assertions) {
-                    eprintln!("[dbg] handle_delete_search_history: refreshing UI");
-                }
                 self.update_search_history(&w);
             }
-        }
-        if cfg!(debug_assertions) {
-            eprintln!("[dbg] handle_delete_search_history EXIT");
         }
     }
 
@@ -726,21 +664,7 @@ impl Backend {
             current_index: index,
         };
 
-        match track.source {
-            TrackSource::YouTube => self.play_youtube_track(&track),
-            TrackSource::Local => {
-                let path = track.url.clone();
-                let dur = track.duration as f32;
-                self.track_loading = true;
-                self.is_playing = false;
-                if let Ok(data) = std::fs::read(&path) {
-                    self.track_loading = false;
-                    self.audio.play(data, dur);
-                    self.duration = dur;
-                    self.is_playing = true;
-                }
-            }
-        }
+        self.play_track_internal(&track);
     }
 
     pub fn handle_toggle_play_pause(&mut self) {
@@ -761,20 +685,7 @@ impl Backend {
             Some(t) => t.clone(),
             None => return,
         };
-        match track.source {
-            TrackSource::YouTube => self.play_youtube_track(&track),
-            TrackSource::Local => {
-                self.track_loading = true;
-                self.is_playing = false;
-                if let Ok(data) = std::fs::read(&track.url) {
-                    let dur = track.duration as f32;
-                    self.track_loading = false;
-                    self.audio.play(data, dur);
-                    self.duration = dur;
-                    self.is_playing = true;
-                }
-            }
-        }
+        self.play_track_internal(&track);
     }
 
     pub fn handle_previous_track(&mut self) {
@@ -785,20 +696,7 @@ impl Backend {
             Some(t) => t.clone(),
             None => return,
         };
-        match track.source {
-            TrackSource::YouTube => self.play_youtube_track(&track),
-            TrackSource::Local => {
-                self.track_loading = true;
-                self.is_playing = false;
-                if let Ok(data) = std::fs::read(&track.url) {
-                    let dur = track.duration as f32;
-                    self.track_loading = false;
-                    self.audio.play(data, dur);
-                    self.duration = dur;
-                    self.is_playing = true;
-                }
-            }
-        }
+        self.play_track_internal(&track);
     }
 
     pub fn handle_set_volume(&mut self, vol: f32) {
@@ -867,22 +765,15 @@ impl Backend {
             Some(t) => t,
             None => return,
         };
-        let track_url = track.url.clone();
         let download_dir = self.config.download_dir.clone();
-        let filename = format!("{} - {}", track.artist, track.title);
-        let safe_filename: String = filename
-            .chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect();
-        let output_path = format!("{}/{}.%(ext)s", download_dir, safe_filename);
+        let output_path = format!(
+            "{}/{}.%(ext)s",
+            download_dir,
+            safe_filename(&track.artist, &track.title)
+        );
         self.downloading_index = Some(index);
 
+        let track_url = track.url.clone();
         let result_tx = self.result_tx.clone();
         std::thread::spawn(move || {
             match crate::youtube::download_audio(&track_url, &output_path) {
@@ -913,21 +804,14 @@ impl Backend {
             Some(t) => t.clone(),
             None => return,
         };
-        let track_url = track.url.clone();
         let download_dir = self.config.download_dir.clone();
-        let filename = format!("{} - {}", track.artist, track.title);
-        let safe_filename: String = filename
-            .chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect();
-        let output_path = format!("{}/{}.%(ext)s", download_dir, safe_filename);
+        let output_path = format!(
+            "{}/{}.%(ext)s",
+            download_dir,
+            safe_filename(&track.artist, &track.title)
+        );
 
+        let track_url = track.url.clone();
         let result_tx = self.result_tx.clone();
         std::thread::spawn(move || {
             match crate::youtube::download_audio(&track_url, &output_path) {
@@ -1098,69 +982,28 @@ impl Backend {
         self.update_ui();
     }
 
-    pub fn handle_context_open(&mut self, index: usize) {
-        self.context_menu_idx = index;
-        if let Some(window) = self.ui.upgrade() {
-            let track = self.get_track_at(index);
-            if let Some(t) = track {
-                window.set_context_is_youtube(matches!(t.source, TrackSource::YouTube));
-                window.set_context_is_downloaded(self.download_registry.contains(&t.url));
-                window.set_context_in_playlist(self.selected_playlist.is_some());
-            }
-            window.set_show_context_menu(true);
-        }
-    }
-
-    pub fn handle_context_close(&mut self) {
-        self.context_menu_idx = 0;
-        if let Some(window) = self.ui.upgrade() {
-            window.set_show_context_menu(false);
-        }
-    }
-
-    pub fn handle_context_radio(&mut self) {
-        let idx = self.context_menu_idx;
-        self.handle_context_close();
-        if let Some(track) = self.get_track_at(idx) {
+    pub fn handle_radio_at(&mut self, index: usize) {
+        if let Some(track) = self.get_track_at(index) {
             self.handle_start_song_radio(track.title);
         }
     }
 
-    pub fn handle_context_artist(&mut self) {
-        let idx = self.context_menu_idx;
-        self.handle_context_close();
-        if let Some(track) = self.get_track_at(idx) {
+    pub fn handle_artist_at(&mut self, index: usize) {
+        if let Some(track) = self.get_track_at(index) {
             self.handle_start_artist_radio(track.artist);
         }
     }
 
-    pub fn handle_context_add_to_playlist(&mut self) {
-        let idx = self.context_menu_idx;
-        self.handle_context_close();
-        self.handle_toggle_picker(idx);
-    }
-
-    pub fn handle_context_download_or_delete(&mut self) {
-        let idx = self.context_menu_idx;
-        let track = match self.get_track_at(idx) {
+    pub fn handle_download_or_delete_at(&mut self, index: usize) {
+        let track = match self.get_track_at(index) {
             Some(t) => t,
-            None => {
-                self.handle_context_close();
-                return;
-            }
+            None => return,
         };
         if self.download_registry.contains(&track.url) {
-            self.handle_remove_download(idx);
+            self.handle_remove_download(index);
         } else {
-            self.handle_download_track(idx);
+            self.handle_download_track(index);
         }
-        self.handle_context_close();
-    }
-
-    pub fn handle_context_remove_from_playlist(&mut self) {
-        let idx = self.context_menu_idx;
-        self.handle_context_close();
-        self.handle_remove_from_playlist(idx);
     }
 
     fn update_selection_row(&mut self, index: usize) {

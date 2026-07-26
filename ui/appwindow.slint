@@ -1,4 +1,4 @@
-import { Button, LineEdit, Slider, ListView, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Button, LineEdit, Slider, ListView, ScrollView, VerticalBox, HorizontalBox, Palette } from "std-widgets.slint";
 
 export struct Track {
     id: string,
@@ -18,40 +18,199 @@ export struct PlaylistInfo {
     track-count: int,
 }
 
+export global Theme {
+    private property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+    out property <brush> bg: dark ? #141418 : #f5f5f5;
+    out property <brush> bg-secondary: dark ? #1a1a20 : #e8e8ec;
+    out property <brush> bg-elevated: dark ? #1a1a22 : #ffffff;
+    out property <brush> bg-hover: dark ? #2a2a34 : #e0e0e8;
+    out property <brush> bg-current: dark ? #0a3a20 : #d4f0e0;
+    out property <brush> bg-selected: dark ? #1a3a6a : #d0d8f0;
+    out property <brush> accent: #14c884;
+    out property <brush> accent-fg: #000000;
+    out property <brush> fg: dark ? #e0e0e0 : #1a1a1a;
+    out property <brush> fg-secondary: dark ? #8888a0 : #555570;
+    out property <brush> fg-muted: dark ? #555560 : #888890;
+    out property <brush> border: dark ? #333340 : #ccccd0;
+    out property <brush> overlay: dark ? #00000080 : #00000040;
+    out property <brush> warning: dark ? #f0a030 : #c07000;
+    out property <brush> playbar-bg: dark ? #0f0f14 : #d8d8dc;
+    out property <length> radius-sm: 4px;
+    out property <length> radius-md: 6px;
+    out property <length> radius-lg: 8px;
+    out property <length> spacing-xs: 4px;
+    out property <length> spacing-sm: 8px;
+    out property <length> spacing-md: 12px;
+    out property <length> spacing-lg: 16px;
+    out property <length> spacing-xl: 20px;
+}
+
+component PlayIcon {
+    in property <brush> colorize: Theme.accent-fg;
+    Rectangle {
+        width: 14px; height: 14px;
+        Image {
+            source: @image-url("../icons/play.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+component PauseIcon {
+    in property <brush> colorize: Theme.accent-fg;
+    Rectangle {
+        width: 14px; height: 14px;
+        Image {
+            source: @image-url("../icons/pause.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+component SkipBackIcon {
+    in property <brush> colorize: Theme.fg;
+    Rectangle {
+        width: 18px; height: 18px;
+        Image {
+            source: @image-url("../icons/skip-back.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+component SkipForwardIcon {
+    in property <brush> colorize: Theme.fg;
+    Rectangle {
+        width: 18px; height: 18px;
+        Image {
+            source: @image-url("../icons/skip-forward.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+component SearchIcon {
+    in property <brush> colorize: Theme.accent-fg;
+    Rectangle {
+        width: 16px; height: 16px;
+        Image {
+            source: @image-url("../icons/search.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+component DownloadIcon {
+    in property <brush> colorize: Theme.accent;
+    Rectangle {
+        width: 16px; height: 16px;
+        Image {
+            source: @image-url("../icons/download.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+component FolderIcon {
+    in property <brush> colorize: Theme.fg-secondary;
+    Rectangle {
+        width: 16px; height: 16px;
+        Image {
+            source: @image-url("../icons/folder.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+component DeleteIcon {
+    in property <brush> colorize: Theme.fg-secondary;
+    Rectangle {
+        width: 14px; height: 14px;
+        Image {
+            source: @image-url("../icons/delete.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+component NavIcon {
+    in property <brush> colorize: Theme.fg;
+    in property <bool> flipped: false;
+    Rectangle {
+        width: 16px; height: 16px;
+        transform-rotation: flipped ? 180deg : 0deg;
+        Image {
+            source: @image-url("../icons/chevron-right.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
+component VolumeIcon {
+    in property <brush> colorize: Theme.fg-secondary;
+    Rectangle {
+        width: 16px; height: 16px;
+        Image {
+            source: @image-url("../icons/volume.svg");
+            width: 100%; height: 100%;
+            colorize: root.colorize;
+        }
+    }
+}
+
 component TrackRow {
     in property <Track> track;
     in property <int> idx;
     in property <string> current-track-id;
     in property <bool> player-playing;
+    in property <bool> keyboard-focused;
+    in property <bool> in-playlist;
+    in property <bool> context-open: false;
 
+    callback clear-search-focus;
     callback play-clicked(int);
-    callback context-menu-clicked(int);
     callback row-clicked(int);
+    callback right-clicked(int, length, length);
+    callback start-radio(int);
+    callback start-artist(int);
+    callback toggle-picker(int);
+    callback download-or-delete(int);
+    callback remove-from-playlist(int);
 
-    property <bool> is-current: current-track-id != "" && current-track-id == track.id;
-    property <bool> is-playing: is-current && player-playing;
+    property <bool> is-current: root.current-track-id != "" && root.current-track-id == track.id;
+    property <bool> is-playing: is-current && root.player-playing;
 
     Rectangle {
         horizontal-stretch: 1;
-        background: track.is-selected ? #1a3a6a : is-current ? #0a3a20 : row-touch.has-hover ? #2a2a34 : transparent;
-        border-radius: 6px;
+        background: keyboard-focused ? Theme.bg-hover : track.is-selected ? Theme.bg-selected : is-current ? Theme.bg-current : context-open ? Theme.bg-hover : touch-area.has-hover ? Theme.bg-hover : transparent;
+        border-radius: Theme.radius-md;
+        animate background { duration: 150ms; }
 
-        row-touch := TouchArea {
+        touch-area := TouchArea {
             mouse-cursor: pointer;
-            clicked => { root.row-clicked(root.idx); }
+            clicked => { root.clear-search-focus(); root.row-clicked(root.idx); }
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
-                    root.context-menu-clicked(root.idx);
+                    root.right-clicked(root.idx, touch-area.absolute-position.x + touch-area.mouse-x, touch-area.absolute-position.y + touch-area.mouse-y);
                 }
             }
         }
 
         HorizontalLayout {
-            padding-top: 4px;
-            padding-bottom: 4px;
-            padding-left: 14px;
-            padding-right: 14px;
-            spacing: 6px;
+            padding-top: Theme.spacing-xs;
+            padding-bottom: Theme.spacing-xs;
+            padding-left: Theme.spacing-md;
+            padding-right: Theme.spacing-md;
+            spacing: Theme.spacing-sm;
 
             Rectangle {
                 width: 30px;
@@ -60,17 +219,16 @@ component TrackRow {
                     Rectangle {
                         width: 30px;
                         height: 30px;
-                        border-radius: 4px;
-                        background: #14c884;
+                        border-radius: Theme.radius-sm;
+                        background: Theme.accent;
+                        VerticalLayout {
+                            alignment: center;
+                            if is-playing : PauseIcon { colorize: Theme.accent-fg; }
+                            if !is-playing : PlayIcon { colorize: Theme.accent-fg; }
+                        }
                         TouchArea {
                             mouse-cursor: pointer;
                             clicked => { root.play-clicked(root.idx); }
-                        }
-                        Text {
-                            text: is-playing ? "⏸" : "▶";
-                            color: #000000;
-                            x: (parent.width - self.width) / 2;
-                            y: (parent.height - self.height) / 2;
                         }
                     }
                 }
@@ -80,12 +238,12 @@ component TrackRow {
                 horizontal-stretch: 1;
                 Text {
                     text: track.title;
-                    color: #e0e0e0;
+                    color: Theme.fg;
                     overflow: elide;
                 }
                 Text {
                     text: track.artist;
-                    color: #8888a0;
+                    color: Theme.fg-secondary;
                     overflow: elide;
                 }
             }
@@ -93,14 +251,8 @@ component TrackRow {
             VerticalLayout {
                 width: 24px;
                 alignment: center;
-                if track.is-downloaded : Text {
-                    text: "⬇";
-                    color: #14c884;
-                }
-                if !track.is-downloaded && track.source != "youtube" : Text {
-                    text: "📁";
-                    color: #8888a0;
-                }
+                if track.is-downloaded : DownloadIcon { colorize: Theme.accent; }
+                if !track.is-downloaded && track.source != "youtube" : FolderIcon { colorize: Theme.fg-secondary; }
             }
 
             VerticalLayout {
@@ -108,7 +260,7 @@ component TrackRow {
                 alignment: center;
                 Text {
                     text: track.duration-text;
-                    color: #8888a0;
+                    color: Theme.fg-secondary;
                 }
             }
         }
@@ -123,32 +275,49 @@ component PlaylistCard {
     callback delete-clicked;
 
     Rectangle {
-        border-radius: 8px;
+        horizontal-stretch: 1;
+        border-radius: Theme.radius-lg;
         border-width: 1px;
-        border-color: selected ? #14c884 : #333340;
-        background: selected ? #0a3a20 : #1a1a22;
+        border-color: selected ? Theme.accent : pl-fs.has-focus ? Theme.accent : Theme.border;
+        background: pl-fs.has-focus ? Theme.bg-hover : selected ? Theme.bg-current : Theme.bg-elevated;
         min-height: 36px;
+        animate background { duration: 150ms; }
+
+        pl-fs := FocusScope {
+            width: 0px; height: 0px;
+            focus-on-click: false;
+            key-pressed(event) => {
+                if (event.text == Key.Return || event.text == " ") {
+                    root.clicked(); accept
+                } else if (event.text == Key.Delete) {
+                    root.delete-clicked(); accept
+                } else { reject }
+            }
+        }
+
         TouchArea {
             mouse-cursor: pointer;
-            clicked => { root.clicked(); }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up) { root.clicked(); }
+            }
         }
         HorizontalLayout {
-            padding: 10px;
-            spacing: 10px;
-            Text { text: pl-name; color: #e0e0e0; horizontal-stretch: 1; }
-            Text { text: track-count == 1 ? "1 track" : track-count + " tracks"; color: #8888a0; }
+            padding: Theme.spacing-md;
+            spacing: Theme.spacing-sm;
+            Text { text: pl-name; color: Theme.fg; horizontal-stretch: 1; }
+            Text { text: track-count == 1 ? "1 track" : "\{track-count} tracks"; color: Theme.fg-secondary; }
             Rectangle {
                 width: 28px;
                 height: 22px;
+                VerticalLayout {
+                    alignment: center;
+                    DeleteIcon { colorize: Theme.fg; }
+                }
                 TouchArea {
                     mouse-cursor: pointer;
-                    clicked => { root.delete-clicked(); }
-                }
-                Text {
-                    text: "✕";
-                    color: #e0e0e0;
-                    x: (parent.width - self.width) / 2;
-                    y: (parent.height - self.height) / 2;
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up) { root.delete-clicked(); }
+                    }
                 }
             }
         }
@@ -180,22 +349,29 @@ export component AppWindow inherits Window {
     in-out property <[Track]> playlist-tracks;
     in-out property <[string]> picker-playlists;
 
+    in-out property <int> search-focused-index: 0;
+    in-out property <int> playlist-focused-index: 0;
+    in-out property <int> radio-focused-index: 0;
+    in-out property <int> search-history-focused-index: 0;
+    in-out property <int> picker-focused-index: 0;
+
     in-out property <bool> show-picker;
     in-out property <int> picker-track-idx;
     in-out property <int> selected-playlist;
     in-out property <string> selected-playlist-name;
 
-    in-out property <bool> show-context-menu;
-    in-out property <int> context-menu-idx;
-    in-out property <bool> context-is-youtube;
-    in-out property <bool> context-is-downloaded;
-    in-out property <bool> context-in-playlist;
-
     in-out property <[string]> search-history-items;
     in-out property <bool> show-search-history: false;
-    in-out property <bool> search-has-focus: search-text-input.has-focus;
+    in-out property <bool> search-has-focus: false;
     in-out property <string> elapsed-text;
     in-out property <string> total-text;
+    in-out property <bool> show-context-menu: false;
+    in-out property <int> context-menu-idx: -1;
+    in-out property <length> context-menu-x: 0px;
+    in-out property <length> context-menu-y: 0px;
+    in-out property <bool> context-is-youtube: false;
+    in-out property <bool> context-is-downloaded: false;
+    in-out property <bool> context-in-playlist: false;
 
     callback navigate-to(int);
     callback navigate-back();
@@ -229,19 +405,17 @@ export component AppWindow inherits Window {
     callback copy-selected();
     callback delete-selected();
     callback paste-clipboard();
-    callback open-context-menu(int);
-    callback context-radio();
-    callback context-artist();
-    callback context-add-to-playlist();
-    callback context-download-or-delete();
-    callback context-remove-from-playlist();
-    callback context-close-menu();
+    callback start-radio(int);
+    callback start-artist(int);
+    callback download-or-delete(int);
 
     title: "Music PLR";
     no-frame: false;
-    background: #141418;
+    background: Theme.bg;
     default-font-size: 14px;
     forward-focus: root-focus;
+    min-width: 640px;
+    min-height: 400px;
 
     VerticalLayout {
         spacing: 0;
@@ -252,72 +426,101 @@ export component AppWindow inherits Window {
 
             Rectangle {
                 width: 200px;
-                background: #1a1a20;
+                background: Theme.bg-secondary;
                 VerticalLayout {
-                    padding: 12px;
-                    spacing: 6px;
+                    padding: Theme.spacing-lg;
+                    spacing: Theme.spacing-sm;
 
                     Text {
                         text: "Music PLR";
-                        color: #14c884;
+                        color: Theme.accent;
                     }
 
-                    Rectangle { height: 1px; background: #333340; }
+                    Rectangle { height: 1px; background: Theme.border; }
 
                     HorizontalLayout {
-                        spacing: 4px;
+                        spacing: Theme.spacing-xs;
                         Rectangle {
-                            background: can-go-back ? transparent : #333340;
-                            border-radius: 4px;
+                            background: back-fs.has-focus ? Theme.bg-hover : can-go-back ? transparent : Theme.border;
+                            border-radius: Theme.radius-sm;
                             horizontal-stretch: 1;
                             height: 22px;
+                            VerticalLayout {
+                                alignment: center;
+                                NavIcon {
+                                    colorize: can-go-back ? Theme.fg : Theme.fg-muted;
+                                    flipped: true;
+                                }
+                            }
+                            back-fs := FocusScope {
+                                width: 0px; height: 0px;
+                                focus-on-click: false;
+                                enabled: can-go-back;
+                                key-pressed(event) => {
+                                    if (event.text == Key.Return || event.text == " ") {
+                                        navigate-back(); accept
+                                    } else { reject }
+                                }
+                            }
                             TouchArea {
                                 mouse-cursor: pointer;
                                 enabled: can-go-back;
-                                clicked => { navigate-back(); }
-                            }
-                            Text {
-                                text: "◀";
-                                color: can-go-back ? #b8b8c2 : #555560;
-                                x: (parent.width - self.width) / 2;
-                                y: (parent.height - self.height) / 2;
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.up) { navigate-back(); }
+                                }
                             }
                         }
                         Rectangle {
-                            background: can-go-forward ? transparent : #333340;
-                            border-radius: 4px;
+                            background: forward-fs.has-focus ? Theme.bg-hover : can-go-forward ? transparent : Theme.border;
+                            border-radius: Theme.radius-sm;
                             horizontal-stretch: 1;
                             height: 22px;
+                            VerticalLayout {
+                                alignment: center;
+                                NavIcon {
+                                    colorize: can-go-forward ? Theme.fg : Theme.fg-muted;
+                                    flipped: false;
+                                }
+                            }
+                            forward-fs := FocusScope {
+                                width: 0px; height: 0px;
+                                focus-on-click: false;
+                                enabled: can-go-forward;
+                                key-pressed(event) => {
+                                    if (event.text == Key.Return || event.text == " ") {
+                                        navigate-forward(); accept
+                                    } else { reject }
+                                }
+                            }
                             TouchArea {
                                 mouse-cursor: pointer;
                                 enabled: can-go-forward;
-                                clicked => { navigate-forward(); }
-                            }
-                            Text {
-                                text: "▶";
-                                color: can-go-forward ? #b8b8c2 : #555560;
-                                x: (parent.width - self.width) / 2;
-                                y: (parent.height - self.height) / 2;
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.up) { navigate-forward(); }
+                                }
                             }
                         }
                     }
 
-                    Rectangle { height: 1px; background: #333340; }
+                    Rectangle { height: 1px; background: Theme.border; }
 
                     HorizontalLayout {
-                        spacing: 4px;
-                        Text { text: "Playlists"; color: #14c884; }
+                        spacing: Theme.spacing-xs;
+                        Text { text: "Playlists"; color: Theme.accent; }
                         Rectangle { horizontal-stretch: 1; }
                         Rectangle {
-                            width: 24px; height: 24px; border-radius: 4px; background: #14c884;
-                            TouchArea {
-                                mouse-cursor: pointer;
-                                clicked => { create-playlist(); }
+                            width: 28px; height: 28px; border-radius: Theme.radius-sm; background: add-pl-touch.has-hover ? Theme.bg-hover : Theme.accent;
+                            animate background { duration: 150ms; }
+                            VerticalLayout { alignment: center;
+                                HorizontalLayout { alignment: center;
+                                    Text { text: "+"; color: Theme.accent-fg; }
+                                }
                             }
-                            Text {
-                                text: "+"; color: #000000;
-                                x: (parent.width - self.width) / 2;
-                                y: (parent.height - self.height) / 2;
+                            add-pl-touch := TouchArea {
+                                mouse-cursor: pointer;
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.up) { create-playlist(); }
+                                }
                             }
                         }
                     }
@@ -333,40 +536,43 @@ export component AppWindow inherits Window {
                         clip: true;
                         if playlist-list.length == 0 : Text {
                             text: "No playlists";
-                            color: #8888a0;
+                            color: Theme.fg-secondary;
                             x: 0;
                             y: 0;
                         }
                         if playlist-list.length > 0 : ListView {
                             vertical-stretch: 1;
-                            for pl[i] in playlist-list: PlaylistCard {
-                                pl-name: pl.name;
-                                track-count: pl.track-count;
-                                selected: selected-playlist == i;
-                                clicked => { select-playlist(i); }
-                                delete-clicked => { delete-playlist(i); }
+                            for pl[i] in playlist-list: VerticalLayout {
+                                padding-bottom: Theme.spacing-sm;
+                                PlaylistCard {
+                                    pl-name: pl.name;
+                                    track-count: pl.track-count;
+                                    selected: selected-playlist == i;
+                                    clicked => { select-playlist(i); }
+                                    delete-clicked => { delete-playlist(i); }
+                                }
                             }
                         }
                     }
 
                     if notification != "" : Text {
                         text: notification;
-                        color: #e6b800;
+                        color: Theme.warning;
                     }
                 }
             }
 
             Rectangle {
-                background: #141418;
+                background: Theme.bg;
                 horizontal-stretch: 1;
+                min-width: 400px;
 
                 VerticalLayout {
-                    padding: 16px;
-                    spacing: 4px;
+                    padding: Theme.spacing-xl;
+                    spacing: Theme.spacing-xs;
 
-                    // SEARCH BAR - always on top
                     HorizontalLayout {
-                        spacing: 6px;
+                        spacing: Theme.spacing-sm;
                         search-text-input := LineEdit {
                             text: search-input-text;
                             placeholder-text: "Search songs, artists, albums...";
@@ -375,169 +581,339 @@ export component AppWindow inherits Window {
                             accepted => { search-execute(); }
                         }
                         Rectangle {
-                            width: 30px; height: 30px; border-radius: 4px; background: #14c884;
+                            width: 30px; height: 30px; border-radius: Theme.radius-sm; background: search-btn-fs.has-focus ? Theme.bg-hover : Theme.accent;
+                            VerticalLayout { alignment: center;
+                                SearchIcon { colorize: Theme.accent-fg; }
+                            }
+                            search-btn-fs := FocusScope {
+                                width: 0px; height: 0px;
+                                focus-on-click: false;
+                                key-pressed(event) => {
+                                    if (event.text == Key.Return || event.text == " ") {
+                                        search-execute(); accept
+                                    } else { reject }
+                                }
+                            }
                             TouchArea {
                                 mouse-cursor: pointer;
-                                clicked => { search-execute(); }
-                            }
-                            Text {
-                                text: "🔍";
-                                color: #000000;
-                                x: (parent.width - self.width) / 2;
-                                y: (parent.height - self.height) / 2;
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.up) { search-execute(); }
+                                }
                             }
                         }
                     }
-                    Rectangle { height: 8px; }
+                    Rectangle { height: Theme.spacing-md; }
 
-                    if loading : Text { text: "Searching..."; color: #8888a0; }
+                    if loading : Text { text: "Searching..."; color: Theme.fg-secondary; }
 
-                    // SEARCH RESULTS
                     if !loading && search-results.length > 0 && selected-playlist < 0 && current-view != 1 : VerticalLayout {
-                        spacing: 2px;
-                        Rectangle { height: 4px; }
+                        spacing: Theme.spacing-xs;
+                        Rectangle { height: Theme.spacing-xs; }
                         ListView {
                             vertical-stretch: 1;
                             for t[i] in search-results: TrackRow {
                                 track: t;
                                 idx: i;
+                                keyboard-focused: search-fs.has-focus && root.search-focused-index == i;
                                 current-track-id: root.current-track-id;
                                 player-playing: root.is-playing;
+                                in-playlist: false;
+                                context-open: root.show-context-menu && root.context-menu-idx == i;
+                                clear-search-focus => { search-text-input.clear-focus(); }
                                 play-clicked(index) => { root.play-track(index); }
-                                context-menu-clicked(index) => { root.open-context-menu(index); }
                                 row-clicked(index) => { root.toggle-select(index); }
+                                start-radio(index) => { root.start-radio(index); }
+                                start-artist(index) => { root.start-artist(index); }
+                                toggle-picker(index) => { root.toggle-picker(index); }
+                                download-or-delete(index) => { root.download-or-delete(index); }
+                                remove-from-playlist(index) => {}
+                                right-clicked(index, abs-x, abs-y) => {
+                                    root.context-menu-idx = index;
+                                    root.context-menu-x = abs-x;
+                                    root.context-menu-y = abs-y;
+                                    root.context-is-youtube = t.source == "youtube";
+                                    root.context-is-downloaded = t.is-downloaded;
+                                    root.context-in-playlist = false;
+                                    root.show-context-menu = true;
+                                }
                             }
                         }
-                        Rectangle { height: 4px; }
+                        Rectangle { height: Theme.spacing-xs; }
                         Button { text: "Load more"; horizontal-stretch: 1; clicked => { search-load-more(); } }
                     }
 
-                    // PLAYLIST TRACKS
                     if selected-playlist >= 0 : VerticalLayout {
-                        spacing: 6px;
-                        Text { text: selected-playlist-name; color: #e0e0e0; }
+                        spacing: Theme.spacing-sm;
+                        Text { text: selected-playlist-name; color: Theme.fg; }
                         if playlist-tracks.length > 0 : ListView {
                             vertical-stretch: 1;
                             for t[i] in playlist-tracks: TrackRow {
                                 track: t;
                                 idx: i;
+                                keyboard-focused: playlist-fs.has-focus && root.playlist-focused-index == i;
                                 current-track-id: root.current-track-id;
                                 player-playing: root.is-playing;
+                                in-playlist: true;
+                                context-open: root.show-context-menu && root.context-menu-idx == i;
+                                clear-search-focus => { search-text-input.clear-focus(); }
                                 play-clicked(index) => { root.play-track(index); }
-                                context-menu-clicked(index) => { root.open-context-menu(index); }
                                 row-clicked(index) => { root.toggle-select(index); }
+                                start-radio(index) => { root.start-radio(index); }
+                                start-artist(index) => { root.start-artist(index); }
+                                toggle-picker(index) => { root.toggle-picker(index); }
+                                download-or-delete(index) => { root.download-or-delete(index); }
+                                remove-from-playlist(index) => { root.remove-from-playlist(index); }
+                                right-clicked(index, abs-x, abs-y) => {
+                                    root.context-menu-idx = index;
+                                    root.context-menu-x = abs-x;
+                                    root.context-menu-y = abs-y;
+                                    root.context-is-youtube = t.source == "youtube";
+                                    root.context-is-downloaded = t.is-downloaded;
+                                    root.context-in-playlist = true;
+                                    root.show-context-menu = true;
+                                }
                             }
                         }
                         if playlist-tracks.length == 0 : Rectangle {
                             vertical-stretch: 1;
-                            Text {
-                                text: "No tracks yet. Add local music or add from Search.";
-                                color: #8888a0;
-                                x: (parent.width - self.width) / 2;
-                                y: (parent.height - self.height) / 2;
+                            VerticalLayout {
+                                alignment: center;
+                                Text {
+                                    text: "No tracks yet. Add local music or add from Search.";
+                                    color: Theme.fg-secondary;
+                                }
                             }
                         }
                         Button { text: "Add Local Music"; horizontal-stretch: 1; clicked => { add-local-music(); } }
                     }
 
-                    // RADIO VIEW
                     if selected-playlist < 0 && current-view == 1 : VerticalLayout {
                         vertical-stretch: 1;
-                        spacing: 4px;
-                        if radio-label != "" : Text { text: radio-label; color: #e0e0e0; }
-                        if loading && radio-tracks.length == 0 : Text { text: "Loading recommendations..."; color: #8888a0; }
+                        spacing: Theme.spacing-xs;
+                        if radio-label != "" : Text { text: radio-label; color: Theme.fg; }
+                        if loading && radio-tracks.length == 0 : Text { text: "Loading recommendations..."; color: Theme.fg-secondary; }
                         if radio-tracks.length > 0 : ListView {
                             vertical-stretch: 1;
                             for t[i] in radio-tracks: TrackRow {
                                 track: t;
                                 idx: i;
+                                keyboard-focused: radio-fs.has-focus && root.radio-focused-index == i;
                                 current-track-id: root.current-track-id;
                                 player-playing: root.is-playing;
+                                in-playlist: false;
+                                context-open: root.show-context-menu && root.context-menu-idx == i;
+                                clear-search-focus => { search-text-input.clear-focus(); }
                                 play-clicked(index) => { root.play-track(index); }
-                                context-menu-clicked(index) => { root.open-context-menu(index); }
                                 row-clicked(index) => { root.toggle-select(index); }
+                                start-radio(index) => { root.start-radio(index); }
+                                start-artist(index) => { root.start-artist(index); }
+                                toggle-picker(index) => { root.toggle-picker(index); }
+                                download-or-delete(index) => { root.download-or-delete(index); }
+                                remove-from-playlist(index) => {}
+                                right-clicked(index, abs-x, abs-y) => {
+                                    root.context-menu-idx = index;
+                                    root.context-menu-x = abs-x;
+                                    root.context-menu-y = abs-y;
+                                    root.context-is-youtube = t.source == "youtube";
+                                    root.context-is-downloaded = t.is-downloaded;
+                                    root.context-in-playlist = false;
+                                    root.show-context-menu = true;
+                                }
                             }
                         }
                         if radio-tracks.length == 0 && !loading : Text {
                             text: "Search for a song first, then use Radio or Artist";
-                            color: #8888a0;
+                            color: Theme.fg-secondary;
                         }
                     }
 
-                    // EMPTY STATE
                     if search-results.length == 0 && selected-playlist < 0 && current-view != 1 && !loading : Rectangle {
                         vertical-stretch: 1;
-                        Text {
-                            text: "Search for music or select a playlist";
-                            color: #8888a0;
-                            x: (parent.width - self.width) / 2;
-                            y: (parent.height - self.height) / 2;
+                        VerticalLayout {
+                            alignment: center;
+                            Text {
+                                text: "Search for music or select a playlist";
+                                color: Theme.fg-secondary;
+                            }
                         }
                     }
-
                 }
 
+                search-fs := FocusScope {
+                    width: 0px; height: 0px;
+                    focus-on-click: false;
+                    key-pressed(event) => {
+                        if (event.text == Key.DownArrow) {
+                            root.search-focused-index = (root.search-focused-index + 1).min(search-results.length - 1);
+                            accept
+                        } else if (event.text == Key.UpArrow) {
+                            root.search-focused-index = (root.search-focused-index - 1).max(0);
+                            accept
+                        } else if (event.text == Key.Return) {
+                            root.play-track(root.search-focused-index);
+                            accept
+                        } else if (event.text == Key.Delete) {
+                            root.download-or-delete(root.search-focused-index);
+                            accept
+                        } else { reject }
+                    }
+                }
+                playlist-fs := FocusScope {
+                    width: 0px; height: 0px;
+                    focus-on-click: false;
+                    key-pressed(event) => {
+                        if (event.text == Key.DownArrow) {
+                            root.playlist-focused-index = (root.playlist-focused-index + 1).min(playlist-tracks.length - 1);
+                            accept
+                        } else if (event.text == Key.UpArrow) {
+                            root.playlist-focused-index = (root.playlist-focused-index - 1).max(0);
+                            accept
+                        } else if (event.text == Key.Return) {
+                            root.play-track(root.playlist-focused-index);
+                            accept
+                        } else if (event.text == Key.Delete) {
+                            root.remove-from-playlist(root.playlist-focused-index);
+                            accept
+                        } else { reject }
+                    }
+                }
+                radio-fs := FocusScope {
+                    width: 0px; height: 0px;
+                    focus-on-click: false;
+                    key-pressed(event) => {
+                        if (event.text == Key.DownArrow) {
+                            root.radio-focused-index = (root.radio-focused-index + 1).min(radio-tracks.length - 1);
+                            accept
+                        } else if (event.text == Key.UpArrow) {
+                            root.radio-focused-index = (root.radio-focused-index - 1).max(0);
+                            accept
+                        } else if (event.text == Key.Return) {
+                            root.play-track(root.radio-focused-index);
+                            accept
+                        } else if (event.text == Key.Delete) {
+                            root.download-or-delete(root.radio-focused-index);
+                            accept
+                        } else { reject }
+                    }
+                }
             }
         }
 
-        // PLAYER BAR
         Rectangle {
             height: 80px;
             horizontal-stretch: 1;
-            background: #0f0f14;
+            background: Theme.playbar-bg;
             HorizontalLayout {
-                padding-top: 8px;
-                padding-bottom: 8px;
-                padding-left: 16px;
-                padding-right: 16px;
-                spacing: 4px;
+                padding-top: Theme.spacing-md;
+                padding-bottom: Theme.spacing-md;
+                padding-left: Theme.spacing-xl;
+                padding-right: Theme.spacing-xl;
+                spacing: Theme.spacing-xs;
 
                 VerticalLayout {
                     width: 160px;
                     Text {
                         text: current-title;
-                        color: #e0e0e0;
+                        color: Theme.fg;
                         overflow: elide;
                     }
                     Text {
                         text: current-artist;
-                        color: #8888a0;
+                        color: Theme.fg-secondary;
                         overflow: elide;
                     }
                 }
 
-                if track-loading : Text { text: "Loading track..."; color: #e6b800; }
+                if track-loading : Text { text: "Loading track..."; color: Theme.warning; }
                 if !track-loading : VerticalLayout {
                     horizontal-stretch: 1;
-                    spacing: 4px;
+                    spacing: Theme.spacing-xs;
                     alignment: stretch;
 
                     HorizontalLayout {
-                        spacing: 8px;
+                        spacing: Theme.spacing-md;
                         alignment: center;
-                        Button { min-width: 30px; min-height: 30px; text: "⏮"; clicked => { previous-track(); } }
                         Rectangle {
-                            width: 36px; height: 36px;
-                            border-radius: 6px;
-                            background: #14c884;
-                            TouchArea {
-                                mouse-cursor: pointer;
-                                clicked => { toggle-play-pause(); }
+                            width: 30px; height: 30px;
+                            border-radius: Theme.radius-sm;
+                            background: prev-fs.has-focus ? Theme.bg-hover : prev-ta.has-hover ? Theme.bg-hover : transparent;
+                            animate background { duration: 150ms; }
+                            VerticalLayout {
+                                alignment: center;
+                                SkipBackIcon { colorize: Theme.fg; }
                             }
-                            Text {
-                                text: is-playing ? "⏸" : "▶";
-                                color: #000000;
-                                x: (parent.width - self.width) / 2;
-                                y: (parent.height - self.height) / 2;
+                            prev-fs := FocusScope {
+                                width: 0px; height: 0px;
+                                focus-on-click: false;
+                                key-pressed(event) => {
+                                    if (event.text == Key.Return || event.text == " ") {
+                                        previous-track(); accept
+                                    } else { reject }
+                                }
+                            }
+                            prev-ta := TouchArea {
+                                mouse-cursor: pointer;
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.up) { previous-track(); }
+                                }
                             }
                         }
-                        Button { min-width: 30px; min-height: 30px; text: "⏭"; clicked => { next-track(); } }
+                        Rectangle {
+                            width: 36px; height: 36px;
+                            border-radius: Theme.radius-md;
+                            background: play-fs.has-focus ? Theme.bg-hover : Theme.accent;
+                            VerticalLayout {
+                                alignment: center;
+                                if is-playing : PauseIcon { colorize: Theme.accent-fg; }
+                                if !is-playing : PlayIcon { colorize: Theme.accent-fg; }
+                            }
+                            play-fs := FocusScope {
+                                width: 0px; height: 0px;
+                                focus-on-click: false;
+                                key-pressed(event) => {
+                                    if (event.text == Key.Return || event.text == " ") {
+                                        toggle-play-pause(); accept
+                                    } else { reject }
+                                }
+                            }
+                            TouchArea {
+                                mouse-cursor: pointer;
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.up) { toggle-play-pause(); }
+                                }
+                            }
+                        }
+                        Rectangle {
+                            width: 30px; height: 30px;
+                            border-radius: Theme.radius-sm;
+                            background: next-fs.has-focus ? Theme.bg-hover : next-ta.has-hover ? Theme.bg-hover : transparent;
+                            animate background { duration: 150ms; }
+                            VerticalLayout {
+                                alignment: center;
+                                SkipForwardIcon { colorize: Theme.fg; }
+                            }
+                            next-fs := FocusScope {
+                                width: 0px; height: 0px;
+                                focus-on-click: false;
+                                key-pressed(event) => {
+                                    if (event.text == Key.Return || event.text == " ") {
+                                        next-track(); accept
+                                    } else { reject }
+                                }
+                            }
+                            next-ta := TouchArea {
+                                mouse-cursor: pointer;
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.up) { next-track(); }
+                                }
+                            }
+                        }
                     }
 
                     HorizontalLayout {
                         horizontal-stretch: 1;
-                        spacing: 4px;
-                        Text { text: elapsed-text; color: #8888a0; }
+                        spacing: Theme.spacing-xs;
+                        Text { text: elapsed-text; color: Theme.fg-secondary; }
                         Slider {
                             horizontal-stretch: 1;
                             minimum: 0;
@@ -545,15 +921,15 @@ export component AppWindow inherits Window {
                             value <=> root.progress;
                             changed(value) => { root.seek(value); }
                         }
-                        Text { text: total-text; color: #8888a0; }
+                        Text { text: total-text; color: Theme.fg-secondary; }
                     }
                 }
 
                 HorizontalLayout {
                     width: 120px;
-                    spacing: 4px;
+                    spacing: Theme.spacing-xs;
                     alignment: center;
-                    Text { text: "Vol"; color: #8888a0; }
+                    VolumeIcon { colorize: Theme.fg-secondary; }
                     Slider {
                         width: 80px;
                         minimum: 0;
@@ -562,152 +938,280 @@ export component AppWindow inherits Window {
                         changed(value) => { set-volume(value); }
                     }
                 }
-
             }
         }
     }
 
-    // SEARCH HISTORY DROPDOWN - positioned directly at root level
     if root.show-search-history && root.search-history-items.length > 0 : Rectangle {
+        // Positioned relative to the search input area
         x: 216px;
         y: 48px;
-        width: parent.width - 232px;
+        width: min(parent.width - 232px, 500px);
         height: min(root.search-history-items.length * 36px + 2px, 300px);
-        background: #1a1a22;
-        border-radius: 6px;
+        background: Theme.bg-elevated;
+        border-radius: Theme.radius-md;
         border-width: 1px;
-        border-color: #333340;
+        border-color: Theme.border;
 
-        ListView {
-            vertical-stretch: 1;
-            for h[i] in root.search-history-items: Rectangle {
-                height: 36px;
-                border-radius: 6px;
-                background: #2a2a32;
-                TouchArea {
-                    mouse-cursor: pointer;
-                    pointer-event(event) => {
-                        if (event.kind == PointerEventKind.up) {
-                            search-text-input.text = h;
-                            root.search-history-selected(i);
+        sh-fs := FocusScope {
+            key-pressed(event) => {
+                if (event.text == Key.DownArrow) {
+                    root.search-history-focused-index = (root.search-history-focused-index + 1).min(root.search-history-items.length - 1);
+                    accept
+                } else if (event.text == Key.UpArrow) {
+                    root.search-history-focused-index = (root.search-history-focused-index - 1).max(0);
+                    accept
+                } else if (event.text == Key.Return) {
+                    search-text-input.text = root.search-history-items[root.search-history-focused-index];
+                    root.search-history-selected(root.search-history-focused-index);
+                    accept
+                } else if (event.text == Key.Delete) {
+                    root.delete-search-history(root.search-history-focused-index);
+                    search-text-input.focus();
+                    accept
+                } else { reject }
+            }
+
+            ListView {
+                vertical-stretch: 1;
+                for h[i] in root.search-history-items: Rectangle {
+                    height: 36px;
+                    border-radius: Theme.radius-md;
+                    background: sh-fs.has-focus && root.search-history-focused-index == i ? Theme.bg-hover.brighter(0.1) : Theme.bg-hover;
+                    border-width: sh-fs.has-focus && root.search-history-focused-index == i ? 1px : 0px;
+                    border-color: Theme.accent;
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) {
+                                search-text-input.text = h;
+                                root.search-history-selected(i);
+                            }
                         }
                     }
-                }
-                HorizontalLayout {
-                    padding: 8px;
-                    spacing: 4px;
-                    Text { text: h; color: #e0e0e0; horizontal-stretch: 1; }
-                    Rectangle {
-                        width: 28px;
-                        height: 24px;
-                        TouchArea {
-                            mouse-cursor: pointer;
-                            pointer-event(event) => {
-                                if (event.kind == PointerEventKind.up) {
-                                    root.delete-search-history(i);
-                                    search-text-input.focus();
+                    HorizontalLayout {
+                        padding: Theme.spacing-md;
+                        spacing: Theme.spacing-xs;
+                        Text { text: h; color: Theme.fg; horizontal-stretch: 1; }
+                        Rectangle {
+                            width: 28px;
+                            height: 24px;
+                            VerticalLayout {
+                                alignment: center;
+                                DeleteIcon { colorize: Theme.fg; }
+                            }
+                            TouchArea {
+                                mouse-cursor: pointer;
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.up) {
+                                        root.delete-search-history(i);
+                                        search-text-input.focus();
+                                    }
                                 }
                             }
                         }
-                        Text {
-                            text: "✕";
-                            color: #666680;
-                            x: (parent.width - self.width) / 2;
-                            y: (parent.height - self.height) / 2;
-                        }
                     }
                 }
             }
         }
     }
 
-    // PLAYLIST PICKER OVERLAY
     if show-picker : Rectangle {
-        background: #00000080;
+        background: Theme.overlay;
         TouchArea {
             mouse-cursor: pointer;
-            clicked => { close-picker(); }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up) { close-picker(); }
+            }
         }
-
         Rectangle {
             width: 300px;
             height: 400px;
-            background: #1a1a22;
-            border-radius: 8px;
+            background: Theme.bg-elevated;
+            border-radius: Theme.radius-lg;
             border-width: 1px;
-            border-color: #333340;
+            border-color: Theme.border;
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
             VerticalLayout {
-                padding: 16px;
-                spacing: 8px;
-
-                Text { text: "Add to Playlist"; color: #e0e0e0; }
-
-                if picker-playlists.length == 0 : Text { text: "No playlists. Create one first."; color: #8888a0; }
-
-                ListView {
-                    vertical-stretch: 1;
-                    for pl[i] in picker-playlists: Rectangle {
-                        border-radius: 6px;
-                        background: #2a2a32;
-                        TouchArea {
-                            mouse-cursor: pointer;
-                            clicked => { add-to-playlist(i); }
-                        }
-                        HorizontalLayout {
-                            padding: 8px;
-                            Text { text: pl; color: #e0e0e0; }
+                padding: Theme.spacing-xl;
+                spacing: Theme.spacing-md;
+                Text { text: "Add to Playlist"; color: Theme.fg; }
+                if picker-playlists.length == 0 : Text {
+                    text: "No playlists. Create one first.";
+                    color: Theme.fg-secondary;
+                }
+                picker-fs := FocusScope {
+                    key-pressed(event) => {
+                        if (event.text == Key.DownArrow) {
+                            root.picker-focused-index = (root.picker-focused-index + 1).min(picker-playlists.length - 1);
+                            accept
+                        } else if (event.text == Key.UpArrow) {
+                            root.picker-focused-index = (root.picker-focused-index - 1).max(0);
+                            accept
+                        } else if (event.text == Key.Return) {
+                            root.add-to-playlist(root.picker-focused-index);
+                            accept
+                        } else if (event.text == Key.Escape) {
+                            close-picker();
+                            accept
+                        } else { reject }
+                    }
+                    ListView {
+                        vertical-stretch: 1;
+                        for pl[i] in picker-playlists: Rectangle {
+                            border-radius: Theme.radius-md;
+                            background: picker-fs.has-focus && root.picker-focused-index == i ? Theme.bg-hover.brighter(0.1) : tp.has-hover ? Theme.bg-hover : Theme.bg-elevated;
+                            border-width: picker-fs.has-focus && root.picker-focused-index == i ? 1px : 0px;
+                            border-color: Theme.accent;
+                            animate background { duration: 150ms; }
+                            tp := TouchArea {
+                                mouse-cursor: pointer;
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.up) { add-to-playlist(i); }
+                                }
+                            }
+                            HorizontalLayout {
+                                padding: Theme.spacing-md;
+                                Text { text: pl; color: Theme.fg; }
+                            }
                         }
                     }
                 }
-
                 Button { text: "Cancel"; horizontal-stretch: 1; clicked => { close-picker(); } }
             }
         }
     }
 
-    // CONTEXT MENU OVERLAY
-    if show-context-menu : Rectangle {
-        background: #00000080;
+    if root.show-context-menu : Rectangle {
+        background: transparent;
         TouchArea {
-            mouse-cursor: pointer;
-            clicked => { context-close-menu(); }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up) { root.show-context-menu = false; }
+            }
         }
-
         Rectangle {
-            width: 260px;
-            height: 240px;
-            background: #1a1a22;
-            border-radius: 8px;
+            x: max(0px, min(root.context-menu-x, parent.width - 190px));
+            y: max(0px, min(root.context-menu-y, parent.height - max(40px, Theme.spacing-xs * 2 + 36px + (root.context-is-youtube ? 108px : 0px) + (root.context-in-playlist ? 36px : 0px) - Theme.spacing-xs)));
+            width: 190px;
+            height: max(40px, Theme.spacing-xs * 2 + 36px + (root.context-is-youtube ? 108px : 0px) + (root.context-in-playlist ? 36px : 0px) - Theme.spacing-xs);
+            background: Theme.bg-elevated;
+            border-radius: Theme.radius-md;
             border-width: 1px;
-            border-color: #333340;
-            x: (parent.width - self.width) / 2;
-            y: (parent.height - self.height) / 2;
+            border-color: Theme.border;
             VerticalLayout {
-                padding: 8px;
-                spacing: 4px;
-                Text { text: "Track Actions"; color: #e0e0e0; }
-                Rectangle { height: 1px; background: #333340; }
-                if context-is-youtube : Button { text: "Radio"; horizontal-stretch: 1; min-height: 28px; clicked => { context-radio(); } }
-                if context-is-youtube : Button { text: "Artist"; horizontal-stretch: 1; min-height: 28px; clicked => { context-artist(); } }
-                Button { text: "Add to Playlist"; horizontal-stretch: 1; min-height: 28px; clicked => { context-add-to-playlist(); } }
-                if context-is-youtube && !context-is-downloaded : Button { text: "Download"; horizontal-stretch: 1; min-height: 28px; clicked => { context-download-or-delete(); } }
-                if context-is-youtube && context-is-downloaded : Button { text: "Delete Download"; horizontal-stretch: 1; min-height: 28px; clicked => { context-download-or-delete(); } }
-                if context-in-playlist : Button { text: "Remove from Playlist"; horizontal-stretch: 1; min-height: 28px; clicked => { context-remove-from-playlist(); } }
-                Rectangle { height: 4px; }
-                Button { text: "Cancel"; horizontal-stretch: 1; min-height: 28px; clicked => { context-close-menu(); } }
+                padding: Theme.spacing-xs;
+                spacing: Theme.spacing-xs;
+                if root.context-is-youtube : Rectangle {
+                    height: 32px;
+                    border-radius: Theme.radius-sm;
+                    background: radio-touch.has-hover ? Theme.bg-hover : transparent;
+                    HorizontalLayout {
+                        padding-left: Theme.spacing-md;
+                        padding-right: Theme.spacing-md;
+                        Text { text: "Radio"; color: Theme.fg; vertical-alignment: center; }
+                    }
+                    radio-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) {
+                                root.show-context-menu = false;
+                                root.start-radio(root.context-menu-idx);
+                            }
+                        }
+                    }
+                }
+                if root.context-is-youtube : Rectangle {
+                    height: 32px;
+                    border-radius: Theme.radius-sm;
+                    background: artist-touch.has-hover ? Theme.bg-hover : transparent;
+                    HorizontalLayout {
+                        padding-left: Theme.spacing-md;
+                        padding-right: Theme.spacing-md;
+                        Text { text: "Artist"; color: Theme.fg; vertical-alignment: center; }
+                    }
+                    artist-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) {
+                                root.show-context-menu = false;
+                                root.start-artist(root.context-menu-idx);
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    height: 32px;
+                    border-radius: Theme.radius-sm;
+                    background: pl-touch.has-hover ? Theme.bg-hover : transparent;
+                    HorizontalLayout {
+                        padding-left: Theme.spacing-md;
+                        padding-right: Theme.spacing-md;
+                        Text { text: "Add to Playlist"; color: Theme.fg; vertical-alignment: center; }
+                    }
+                    pl-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) {
+                                root.show-context-menu = false;
+                                root.toggle-picker(root.context-menu-idx);
+                            }
+                        }
+                    }
+                }
+                if root.context-is-youtube : Rectangle {
+                    height: 32px;
+                    border-radius: Theme.radius-sm;
+                    background: dl-touch.has-hover ? Theme.bg-hover : transparent;
+                    HorizontalLayout {
+                        padding-left: Theme.spacing-md;
+                        padding-right: Theme.spacing-md;
+                        Text { text: root.context-is-downloaded ? "Delete Download" : "Download"; color: Theme.fg; vertical-alignment: center; }
+                    }
+                    dl-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) {
+                                root.show-context-menu = false;
+                                root.download-or-delete(root.context-menu-idx);
+                            }
+                        }
+                    }
+                }
+                if root.context-in-playlist : Rectangle {
+                    height: 32px;
+                    border-radius: Theme.radius-sm;
+                    background: remove-touch.has-hover ? Theme.bg-hover : transparent;
+                    HorizontalLayout {
+                        padding-left: Theme.spacing-md;
+                        padding-right: Theme.spacing-md;
+                        Text { text: "Remove from Playlist"; color: Theme.fg; vertical-alignment: center; }
+                    }
+                    remove-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) {
+                                root.show-context-menu = false;
+                                root.remove-from-playlist(root.context-menu-idx);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
     root-focus := FocusScope {
-        key-pressed(event) => {
+        capture-key-pressed(event) => {
             if (event.text == " ") {
                 toggle-play-pause();
                 accept
             } else if (event.text == Key.Escape) {
-                show-search-history = false;
+                if root.show-context-menu {
+                    root.show-context-menu = false;
+                } else {
+                    show-search-history = false;
+                }
                 root-focus.focus();
                 accept
             } else if (event.text == Key.Delete) {

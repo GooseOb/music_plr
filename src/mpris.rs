@@ -11,6 +11,7 @@ pub enum MprisCommand {
     NextTrack,
     PreviousTrack,
     SetVolume(f32),
+    Seek(i64),
 }
 
 #[derive(Debug, Clone)]
@@ -19,6 +20,7 @@ pub struct MprisUpdate {
     pub title: String,
     pub artist: String,
     pub duration_secs: f32,
+    pub position_us: i64,
     pub volume: f32,
     pub has_track: bool,
 }
@@ -28,6 +30,7 @@ struct MprisData {
     title: String,
     artist: String,
     duration_us: i64,
+    position_us: i64,
     volume: f64,
     has_track: bool,
 }
@@ -96,7 +99,9 @@ impl PlayerInterface {
         let _ = self.cmd_tx.send(MprisCommand::TogglePlayPause);
     }
 
-    async fn seek(&self, _offset: i64) {}
+    async fn seek(&self, offset: i64) {
+        let _ = self.cmd_tx.send(MprisCommand::Seek(offset));
+    }
 
     #[zbus(property)]
     fn playback_status(&self) -> String {
@@ -142,7 +147,7 @@ impl PlayerInterface {
 
     #[zbus(property)]
     fn position(&self) -> i64 {
-        0
+        self.data.lock().unwrap().position_us
     }
 
     #[zbus(property)]
@@ -222,6 +227,7 @@ pub fn start(
                 title: String::new(),
                 artist: String::new(),
                 duration_us: 0,
+                position_us: 0,
                 volume: 0.8,
                 has_track: false,
             });
@@ -273,6 +279,7 @@ pub fn start(
                         data.title = update.title;
                         data.artist = update.artist;
                         data.duration_us = (update.duration_secs * 1_000_000.0) as i64;
+                        data.position_us = update.position_us;
                         data.volume = update.volume as f64;
                         data.has_track = update.has_track;
                     }

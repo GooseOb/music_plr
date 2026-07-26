@@ -54,72 +54,46 @@ impl AudioPlayer {
                     Ok(cmd) => match cmd {
                         PlayerCommand::Play(bytes, expected_duration) => {
                             eprintln!("[audio] Play command received, {} bytes", bytes.len());
-                            // Kill any active stream
-                            if let Some(mut p) = stream_process.take() {
-                                let _ = p.kill();
-                                let _ = p.wait();
-                            }
-                            if let Some(mut p) = ytdlp_process.take() {
-                                let _ = p.kill();
-                                let _ = p.wait();
-                            }
-                            if let Some(ref path) = stream_path {
-                                let _ = std::fs::remove_file(path);
-                            }
-                            stream_path = None;
-                            stream_url = None;
-
+                            Self::kill_processes(
+                                &mut stream_process,
+                                &mut ytdlp_process,
+                                &mut stream_path,
+                                &mut stream_url,
+                            );
                             if let Some((_, s)) = &output {
                                 s.stop();
                             }
                             output = None;
 
-                            match rodio::OutputStream::try_default() {
-                                Ok((stream, handle)) => match rodio::Sink::try_new(&handle) {
-                                    Ok(sink) => {
-                                        let cursor = Cursor::new(bytes);
-                                        match rodio::Decoder::new(cursor) {
-                                            Ok(source) => {
-                                                let vol = state_clone
-                                                    .lock()
-                                                    .map(|st| st.volume)
-                                                    .unwrap_or(1.0);
-                                                let actual_duration = if expected_duration > 0.0 {
-                                                    expected_duration
-                                                } else {
-                                                    source
-                                                        .total_duration()
-                                                        .map(|d| d.as_secs_f32())
-                                                        .unwrap_or(0.0)
-                                                };
-                                                sink.set_volume(vol);
-                                                sink.append(source);
-                                                sink.play();
-
-                                                if let Ok(mut st) = state_clone.lock() {
-                                                    st.is_playing = true;
-                                                    st.duration = actual_duration;
-                                                    st.progress = 0.0;
-                                                }
-                                                output = Some((stream, sink));
-                                            }
-                                            Err(e) => {
-                                                eprintln!("[audio] Decoder::new failed: {:?}", e);
-                                            }
+                            if let Ok((stream, handle)) = rodio::OutputStream::try_default() {
+                                if let Ok(sink) = rodio::Sink::try_new(&handle) {
+                                    let cursor = Cursor::new(bytes);
+                                    if let Ok(source) = rodio::Decoder::new(cursor) {
+                                        let vol =
+                                            state_clone.lock().map(|st| st.volume).unwrap_or(1.0);
+                                        let actual_duration = if expected_duration > 0.0 {
+                                            expected_duration
+                                        } else {
+                                            source
+                                                .total_duration()
+                                                .map(|d| d.as_secs_f32())
+                                                .unwrap_or(0.0)
+                                        };
+                                        sink.set_volume(vol);
+                                        sink.append(source);
+                                        sink.play();
+                                        if let Ok(mut st) = state_clone.lock() {
+                                            st.is_playing = true;
+                                            st.duration = actual_duration;
+                                            st.progress = 0.0;
                                         }
+                                        output = Some((stream, sink));
                                     }
-                                    Err(e) => {
-                                        eprintln!("[audio] Sink::try_new failed: {:?}", e);
-                                    }
-                                },
-                                Err(e) => {
-                                    eprintln!("[audio] OutputStream::try_default failed: {:?}", e);
                                 }
                             }
                         }
 
                         PlayerCommand::PlayStream(url, expected_duration) => {
-                            // Dedup: ignore if same URL already streaming
                             if let Some(ref current) = stream_url {
                                 if current == &url {
                                     eprintln!("[audio] Ignoring duplicate PlayStream for same URL");
@@ -127,20 +101,12 @@ impl AudioPlayer {
                                 }
                             }
 
-                            // Kill any previous stream
-                            if let Some(mut p) = stream_process.take() {
-                                let _ = p.kill();
-                                let _ = p.wait();
-                            }
-                            if let Some(mut p) = ytdlp_process.take() {
-                                let _ = p.kill();
-                                let _ = p.wait();
-                            }
-                            if let Some(ref path) = stream_path {
-                                let _ = std::fs::remove_file(path);
-                            }
-                            stream_path = None;
-
+                            Self::kill_processes(
+                                &mut stream_process,
+                                &mut ytdlp_process,
+                                &mut stream_path,
+                                &mut stream_url,
+                            );
                             if let Some((_, s)) = &output {
                                 s.stop();
                             }
@@ -284,7 +250,6 @@ impl AudioPlayer {
                     ytdlp_process.take();
                 }
 
-                // Check if a pending stream is ready to play
                 if output.is_none() {
                     if let Some(ref path) = stream_path {
                         if let Some(ref mut process) = stream_process {
@@ -295,61 +260,33 @@ impl AudioPlayer {
 
                             if ready || exited {
                                 eprintln!("[audio] Stream ready, starting playback");
-                                match rodio::OutputStream::try_default() {
-                                    Ok((stream, handle)) => match rodio::Sink::try_new(&handle) {
-                                        Ok(sink) => match std::fs::File::open(path) {
-                                            Ok(file) => match rodio::Decoder::new(file) {
-                                                Ok(source) => {
-                                                    let vol = state_clone
-                                                        .lock()
-                                                        .map(|st| st.volume)
-                                                        .unwrap_or(1.0);
-                                                    let actual_duration = if stream_duration > 0.0 {
-                                                        stream_duration
-                                                    } else {
-                                                        source
-                                                            .total_duration()
-                                                            .map(|d| d.as_secs_f32())
-                                                            .unwrap_or(0.0)
-                                                    };
-                                                    sink.set_volume(vol);
-                                                    sink.append(source);
-                                                    sink.play();
-                                                    eprintln!(
-                                                                    "[audio] Streaming... volume={}, duration={}",
-                                                                    vol, actual_duration
-                                                                );
-
-                                                    if let Ok(mut st) = state_clone.lock() {
-                                                        st.is_playing = true;
-                                                        st.duration = actual_duration;
-                                                        st.progress = 0.0;
-                                                    }
-                                                    output = Some((stream, sink));
+                                if let Ok((stream, handle)) = rodio::OutputStream::try_default() {
+                                    if let Ok(sink) = rodio::Sink::try_new(&handle) {
+                                        if let Ok(file) = std::fs::File::open(path) {
+                                            if let Ok(source) = rodio::Decoder::new(file) {
+                                                let vol = state_clone
+                                                    .lock()
+                                                    .map(|st| st.volume)
+                                                    .unwrap_or(1.0);
+                                                let actual_duration = if stream_duration > 0.0 {
+                                                    stream_duration
+                                                } else {
+                                                    source
+                                                        .total_duration()
+                                                        .map(|d| d.as_secs_f32())
+                                                        .unwrap_or(0.0)
+                                                };
+                                                sink.set_volume(vol);
+                                                sink.append(source);
+                                                sink.play();
+                                                if let Ok(mut st) = state_clone.lock() {
+                                                    st.is_playing = true;
+                                                    st.duration = actual_duration;
+                                                    st.progress = 0.0;
                                                 }
-                                                Err(e) => {
-                                                    eprintln!(
-                                                                    "[audio] Decoder::new (stream) failed: {:?}",
-                                                                    e
-                                                                );
-                                                }
-                                            },
-                                            Err(e) => {
-                                                eprintln!(
-                                                    "[audio] Failed to open temp file: {}",
-                                                    e
-                                                );
+                                                output = Some((stream, sink));
                                             }
-                                        },
-                                        Err(e) => {
-                                            eprintln!("[audio] Sink::try_new failed: {:?}", e);
                                         }
-                                    },
-                                    Err(e) => {
-                                        eprintln!(
-                                            "[audio] OutputStream::try_default failed: {:?}",
-                                            e
-                                        );
                                     }
                                 }
                             }
@@ -365,6 +302,27 @@ impl AudioPlayer {
         });
 
         Self { cmd_tx, state }
+    }
+
+    fn kill_processes(
+        stream_process: &mut Option<std::process::Child>,
+        ytdlp_process: &mut Option<std::process::Child>,
+        stream_path: &mut Option<PathBuf>,
+        stream_url: &mut Option<String>,
+    ) {
+        if let Some(mut p) = stream_process.take() {
+            let _ = p.kill();
+            let _ = p.wait();
+        }
+        if let Some(mut p) = ytdlp_process.take() {
+            let _ = p.kill();
+            let _ = p.wait();
+        }
+        if let Some(ref path) = stream_path {
+            let _ = std::fs::remove_file(path);
+        }
+        *stream_path = None;
+        *stream_url = None;
     }
 
     pub fn play(&mut self, audio_data: Vec<u8>, duration: f32) {
@@ -394,6 +352,9 @@ impl AudioPlayer {
     }
 
     pub fn get_state(&self) -> PlayerState {
-        self.state.lock().unwrap().clone()
+        self.state
+            .lock()
+            .map(|st| st.clone())
+            .unwrap_or_else(|e| e.into_inner().clone())
     }
 }
