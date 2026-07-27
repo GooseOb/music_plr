@@ -15,6 +15,17 @@ impl super::Backend {
             self.track_loading = false;
         }
 
+        if let Some(ref pending) = self.pending_cache_id.clone() {
+            if s.stream_finished {
+                if self.stream_cache.path_for(pending).exists() {
+                    if self.stream_cache.insert(pending) {
+                        eprintln!("[cache] Registered cached track: {}", pending);
+                    }
+                }
+                self.pending_cache_id = None;
+            }
+        }
+
         self.send_mpris_update();
 
         if let Some(window) = self.ui.upgrade() {

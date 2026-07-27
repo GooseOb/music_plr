@@ -9,6 +9,7 @@ pub struct Config {
     pub max_search_history_stored: usize,
     pub search_history: Vec<String>,
     pub last_search_query: String,
+    pub cache_max_size_mb: u64,
 }
 
 impl Default for Config {
@@ -21,6 +22,7 @@ impl Default for Config {
             max_search_history_stored: 100,
             search_history: Vec::new(),
             last_search_query: String::new(),
+            cache_max_size_mb: 1024,
         }
     }
 }

@@ -1,5 +1,6 @@
 mod audio;
 mod backend;
+mod cache;
 mod config;
 mod downloads;
 mod mpris;

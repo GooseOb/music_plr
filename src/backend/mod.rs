@@ -1,6 +1,7 @@
 use std::sync::mpsc;
 
 use crate::audio::AudioPlayer;
+use crate::cache::StreamCache;
 use crate::config::Config;
 use crate::downloads::DownloadRegistry;
 use crate::mpris::MprisUpdate;
@@ -112,6 +113,8 @@ pub struct Backend {
     pub search_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     pub radio_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     pub playlist_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
+    pub stream_cache: StreamCache,
+    pub pending_cache_id: Option<String>,
 }
 
 fn format_dur(dur: i32) -> String {
@@ -144,9 +147,12 @@ impl Backend {
     pub fn new(config: Config, result_tx: mpsc::Sender<BackendResult>) -> Self {
         let volume = config.volume;
         let (event_tx, event_rx) = mpsc::channel();
+        let cache_max_mb = config.cache_max_size_mb;
 
         Self {
             audio: AudioPlayer::new(volume),
+            stream_cache: StreamCache::new(cache_max_mb),
+            pending_cache_id: None,
             config,
             current_view: View::Search,
             search_query: String::new(),
@@ -221,6 +227,7 @@ impl Backend {
     fn play_youtube_track(&mut self, track: &RustTrack) {
         let track_url = track.url.clone();
         let duration = track.duration as f32;
+        let video_id = track.id.clone();
         self.track_loading = true;
         self.is_playing = false;
         self.duration = duration;
@@ -241,7 +248,7 @@ impl Backend {
                     Err(e) => {
                         eprintln!("[play] failed to read local file: {}", e);
                         self.download_registry.remove(&track_url);
-                        self.audio.play_stream(&track_url, duration);
+                        self.cache_or_stream(&track_url, duration, &video_id);
                     }
                 }
                 return;
@@ -249,7 +256,36 @@ impl Backend {
                 self.download_registry.remove(&track_url);
             }
         }
-        self.audio.play_stream(&track_url, duration);
+        self.cache_or_stream(&track_url, duration, &video_id);
+    }
+
+    fn cache_or_stream(&mut self, track_url: &str, duration: f32, video_id: &str) {
+        if self.stream_cache.contains(video_id) {
+            let cached_path = self.stream_cache.path_for(video_id);
+            if cached_path.exists()
+                && cached_path
+                    .metadata()
+                    .map(|m| m.len() > 4096)
+                    .unwrap_or(false)
+            {
+                eprintln!("[play] Playing from cache: {:?}", cached_path);
+                self.track_loading = false;
+                self.audio.play_cached(cached_path, duration);
+                self.is_playing = true;
+                self.stream_cache.record_access(video_id);
+                return;
+            }
+            eprintln!("[play] Cache too small or missing, removing and re-streaming");
+            self.stream_cache.remove(video_id);
+        }
+        self.play_stream_with_cache(track_url, duration, video_id);
+    }
+
+    fn play_stream_with_cache(&mut self, track_url: &str, duration: f32, video_id: &str) {
+        let cache_path = self.stream_cache.path_for(video_id);
+        self.pending_cache_id = Some(video_id.to_string());
+        self.audio
+            .play_stream_cache(track_url, duration, cache_path);
     }
 
     fn play_local_track(&mut self, track: &RustTrack) {
