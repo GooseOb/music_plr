@@ -1,4 +1,5 @@
 use super::{BackendResult, RustTrack};
+use crate::thumbnails;
 use crate::youtube;
 
 impl super::Backend {
@@ -11,6 +12,14 @@ impl super::Backend {
         std::thread::spawn(move || match youtube::search(&query, 0) {
             Ok(videos) => {
                 let tracks: Vec<RustTrack> = videos.into_iter().map(RustTrack::from).collect();
+                let thumb_tracks = tracks.clone();
+                let thumb_tx = result_tx.clone();
+                std::thread::spawn(move || {
+                    for t in &thumb_tracks {
+                        thumbnails::download(&t.id, &t.thumbnail);
+                    }
+                    let _ = thumb_tx.send(BackendResult::ThumbnailsReady);
+                });
                 let _ = result_tx.send(BackendResult::RadioResults(
                     format!("Song Radio: {}", track_name),
                     tracks,
@@ -35,6 +44,14 @@ impl super::Backend {
         std::thread::spawn(move || match youtube::search(&query, 0) {
             Ok(videos) => {
                 let tracks: Vec<RustTrack> = videos.into_iter().map(RustTrack::from).collect();
+                let thumb_tracks = tracks.clone();
+                let thumb_tx = result_tx.clone();
+                std::thread::spawn(move || {
+                    for t in &thumb_tracks {
+                        thumbnails::download(&t.id, &t.thumbnail);
+                    }
+                    let _ = thumb_tx.send(BackendResult::ThumbnailsReady);
+                });
                 let _ = result_tx.send(BackendResult::RadioResults(
                     format!("Artist Radio: {}", artist_name),
                     tracks,

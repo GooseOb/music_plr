@@ -20,6 +20,8 @@ pub struct Track {
     pub duration: u32,
     pub url: String,
     pub source: TrackSource,
+    #[serde(default)]
+    pub thumbnail: String,
 }
 
 impl From<crate::youtube::YouTubeVideo> for Track {
@@ -31,6 +33,7 @@ impl From<crate::youtube::YouTubeVideo> for Track {
             duration: v.duration as u32,
             url: v.url,
             source: TrackSource::YouTube,
+            thumbnail: v.thumbnail,
         }
     }
 }

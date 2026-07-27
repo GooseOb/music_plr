@@ -25,6 +25,7 @@ pub enum BackendResult {
     RadioResults(String, Vec<RustTrack>),
     DownloadComplete(usize, String, String),
     DownloadError(String),
+    ThumbnailsReady,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -126,6 +127,18 @@ fn format_dur(dur: i32) -> String {
 }
 
 pub fn to_slint_track(t: &RustTrack, registry: &DownloadRegistry, selected: bool) -> Track {
+    let thumb = if t.source == TrackSource::YouTube {
+        let cached = crate::thumbnails::thumbnail_path(&t.id);
+        if cached.exists() {
+            cached.to_string_lossy().to_string()
+        } else if !t.thumbnail.is_empty() {
+            t.thumbnail.clone()
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
     Track {
         id: t.id.clone().into(),
         title: t.title.clone().into(),
@@ -140,6 +153,7 @@ pub fn to_slint_track(t: &RustTrack, registry: &DownloadRegistry, selected: bool
         is_downloaded: registry.contains(&t.url),
         is_downloading: false,
         is_selected: selected,
+        thumbnail: thumb.into(),
     }
 }
 
@@ -350,7 +364,30 @@ impl Backend {
                 self.downloading_index = None;
                 eprintln!("[backend] Download error: {}", msg);
             }
+            BackendResult::ThumbnailsReady => {
+                self.sync_search_model();
+                self.sync_radio_model();
+                self.sync_playlist_content();
+            }
         }
+    }
+
+    pub fn spawn_thumbnail_downloads(&self, tracks: &[RustTrack]) {
+        let entries: Vec<(String, String)> = tracks
+            .iter()
+            .filter(|t| t.source == TrackSource::YouTube)
+            .map(|t| (t.id.clone(), t.thumbnail.clone()))
+            .collect();
+        if entries.is_empty() {
+            return;
+        }
+        let result_tx = self.result_tx.clone();
+        std::thread::spawn(move || {
+            for (id, thumb) in &entries {
+                crate::thumbnails::download(id, thumb);
+            }
+            let _ = result_tx.send(BackendResult::ThumbnailsReady);
+        });
     }
 
     pub fn send_mpris_update(&self) {

@@ -5,6 +5,7 @@ mod config;
 mod downloads;
 mod mpris;
 mod playlists;
+mod thumbnails;
 mod types;
 mod youtube;
 
@@ -394,6 +395,19 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
             }
         });
     }
+
+    window.on_resolve_thumbnail(|path: slint::SharedString| -> slint::Image {
+        let p = path.as_str();
+        if p.is_empty() {
+            return slint::Image::default();
+        }
+        let pobj = std::path::Path::new(p);
+        if pobj.exists() {
+            slint::Image::load_from_path(pobj).unwrap_or_default()
+        } else {
+            slint::Image::default()
+        }
+    });
 
     let b = Rc::downgrade(backend);
     window.on_start_radio(move |index| {

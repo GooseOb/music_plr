@@ -11,6 +11,8 @@ export component TrackRow {
     in property <bool> in-playlist;
     in property <bool> context-open: false;
 
+    in property <image> thumbnail-image;
+
     callback clear-search-focus;
     callback play-clicked(int);
     callback row-clicked(int);
@@ -82,17 +84,37 @@ export component TrackRow {
                         width: 30px;
                         height: 30px;
                         border-radius: Theme.radius-sm;
-                        background: Theme.accent;
+                        background: (touch-area.has-hover || is-current || play-click-area.has-hover) ? Theme.accent : transparent;
+                        animate background { duration: 150ms; }
                         VerticalLayout {
                             alignment: center;
-                            if is-playing : PauseIcon { colorize: Theme.accent-fg; }
-                            if !is-playing : PlayIcon { colorize: Theme.accent-fg; }
+                            if (touch-area.has-hover || is-current || play-click-area.has-hover) && is-playing : PauseIcon { colorize: Theme.accent-fg; }
+                            if (touch-area.has-hover || is-current || play-click-area.has-hover) && !is-playing : PlayIcon { colorize: Theme.accent-fg; }
+                            if !(touch-area.has-hover || is-current || play-click-area.has-hover) : Text {
+                                text: "\{root.idx + 1}";
+                                color: Theme.fg-secondary;
+                                font-size: 12px;
+                            }
                         }
-                        TouchArea {
+                        play-click-area := TouchArea {
                             mouse-cursor: pointer;
                             clicked => { root.play-clicked(root.idx); }
                         }
                     }
+                }
+            }
+
+            Rectangle {
+                width: 36px;
+                height: 36px;
+                border-radius: Theme.radius-sm;
+                background: Theme.accent;
+                clip: true;
+                Image {
+                    source: thumbnail-image;
+                    width: 36px;
+                    height: 36px;
+                    image-fit: cover;
                 }
             }
 

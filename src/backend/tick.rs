@@ -65,10 +65,22 @@ impl super::Backend {
             window.set_current_title(track.title.clone().into());
             window.set_current_artist(track.artist.clone().into());
             window.set_current_track_id(track.id.clone().into());
+            let thumb_img = if track.source == crate::types::TrackSource::YouTube {
+                let cached = crate::thumbnails::thumbnail_path(&track.id);
+                if cached.exists() {
+                    slint::Image::load_from_path(&cached).unwrap_or_default()
+                } else {
+                    slint::Image::default()
+                }
+            } else {
+                slint::Image::default()
+            };
+            window.set_current_thumbnail(thumb_img);
         } else {
             window.set_current_title("".into());
             window.set_current_artist("".into());
             window.set_current_track_id("".into());
+            window.set_current_thumbnail(slint::Image::default());
         }
         window.set_is_playing(self.is_playing);
         window.set_duration_secs(self.duration);

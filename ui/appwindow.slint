@@ -23,6 +23,7 @@ export component AppWindow inherits Window {
     in-out property <float> volume;
     in-out property <string> current-title;
     in-out property <string> current-artist;
+    in-out property <image> current-thumbnail;
 
     in-out property <[Track]> search-results;
     in-out property <[Track]> radio-tracks;
@@ -101,6 +102,7 @@ export component AppWindow inherits Window {
     callback download-or-delete(int);
     callback drag-add-to-playlist(int, int);
     callback clear-selection();
+    pure callback resolve-thumbnail(string) -> image;
 
     title: "Music PLR";
     no-frame: false;
@@ -307,6 +309,7 @@ export component AppWindow inherits Window {
                                 vertical-stretch: 1;
                                 for t[i] in search-results: TrackRow {
                                     track: t;
+                                    thumbnail-image: root.resolve-thumbnail(t.thumbnail);
                                     idx: i;
                                     keyboard-focused: search-fs.has-focus && root.search-focused-index == i;
                                     current-track-id: root.current-track-id;
@@ -383,6 +386,7 @@ export component AppWindow inherits Window {
                             vertical-stretch: 1;
                             for t[i] in playlist-tracks: TrackRow {
                                     track: t;
+                                    thumbnail-image: root.resolve-thumbnail(t.thumbnail);
                                     idx: i;
                                     keyboard-focused: playlist-fs.has-focus && root.playlist-focused-index == i;
                                     current-track-id: root.current-track-id;
@@ -450,6 +454,7 @@ export component AppWindow inherits Window {
                                 vertical-stretch: 1;
                                 for t[i] in radio-tracks: TrackRow {
                                     track: t;
+                                    thumbnail-image: root.resolve-thumbnail(t.thumbnail);
                                     idx: i;
                                     keyboard-focused: radio-fs.has-focus && root.radio-focused-index == i;
                                     current-track-id: root.current-track-id;
@@ -584,17 +589,33 @@ export component AppWindow inherits Window {
                 padding-right: Theme.spacing-xl;
                 spacing: Theme.spacing-xs;
 
-                VerticalLayout {
-                    width: 160px;
-                    Text {
-                        text: current-title;
-                        color: Theme.fg;
-                        overflow: elide;
+                HorizontalLayout {
+                    width: 200px;
+                    spacing: Theme.spacing-sm;
+                    Rectangle {
+                        width: 56px;
+                        height: 56px;
+                        border-radius: Theme.radius-sm;
+                        background: Theme.accent;
+                        clip: true;
+                        Image {
+                            source: current-thumbnail;
+                            width: 56px;
+                            height: 56px;
+                            image-fit: cover;
+                        }
                     }
-                    Text {
-                        text: current-artist;
-                        color: Theme.fg-secondary;
-                        overflow: elide;
+                    VerticalLayout {
+                        Text {
+                            text: current-title;
+                            color: Theme.fg;
+                            overflow: elide;
+                        }
+                        Text {
+                            text: current-artist;
+                            color: Theme.fg-secondary;
+                            overflow: elide;
+                        }
                     }
                 }
 

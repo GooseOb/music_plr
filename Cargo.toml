@@ -14,6 +14,7 @@ rodio = { version = "0.20", features = ["symphonia-all"] }
 confy = "0.6"
 directories = "6"
 anyhow = "1"
+ureq = "3"
 rfd = "0.15"
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 

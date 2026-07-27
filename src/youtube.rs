@@ -10,6 +10,7 @@ pub struct YouTubeVideo {
     pub url: String,
     pub duration: f64,
     pub channel: String,
+    pub thumbnail: String,
 }
 
 #[derive(Deserialize)]
@@ -97,6 +98,7 @@ fn search_ytmusic(query: &str) -> Result<Vec<YouTubeVideo>> {
             url: r.url,
             duration: r.duration as f64,
             channel: r.channel,
+            thumbnail: r.thumbnail,
         })
         .collect())
 }
@@ -110,6 +112,8 @@ struct YtMusicResult {
     duration: u32,
     #[serde(default)]
     channel: String,
+    #[serde(default)]
+    thumbnail: String,
 }
 
 fn search_ytdlp(query: &str) -> Result<Vec<YouTubeVideo>> {
@@ -148,11 +152,12 @@ fn search_ytdlp(query: &str) -> Result<Vec<YouTubeVideo>> {
             }
             valid_ids.push(id.clone());
             videos.push(YouTubeVideo {
-                id,
+                id: id.clone(),
                 title: item.title,
                 url: String::new(),
                 duration: 0.0,
                 channel: String::new(),
+                thumbnail: format!("https://i.ytimg.com/vi/{}/mqdefault.jpg", id),
             });
         }
     }

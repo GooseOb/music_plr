@@ -18,6 +18,7 @@ impl super::Backend {
                     duration: 0,
                     url: path_str.clone(),
                     source: TrackSource::Local,
+                    thumbnail: String::new(),
                 }
             })
             .collect();
@@ -96,8 +97,22 @@ impl super::Backend {
                 .map(|pl| pl.name.clone())
                 .unwrap_or_default();
         }
+        let pl_tracks: Vec<RustTrack> = self
+            .selected_playlist
+            .and_then(|i| self.playlists.playlists.get(i))
+            .map(|pl| pl.tracks.clone())
+            .unwrap_or_default();
         self.clear_selection();
         self.sync_playlist_content();
+        self.spawn_thumbnail_downloads(&pl_tracks);
+        self.clear_selection();
+        self.sync_playlist_content();
+        if let Some(pl) = self
+            .selected_playlist
+            .and_then(|i| self.playlists.playlists.get(i))
+        {
+            self.spawn_thumbnail_downloads(&pl.tracks);
+        }
     }
 
     pub fn handle_toggle_picker(&mut self, index: usize) {
