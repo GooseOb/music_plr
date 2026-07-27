@@ -7,17 +7,21 @@ mod playlists;
 mod types;
 mod youtube;
 
-use backend::Backend;
+use backend::{Backend, BackendResult};
 use slint::ComponentHandle;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 fn main() {
     let config = config::load_config();
-    let (backend, mpris_cmd_tx) = Backend::new(config);
-    let backend = Rc::new(RefCell::new(backend));
+
+    let (mpris_cmd_tx, mpris_cmd_rx) = mpsc::channel();
+    let (result_tx, result_rx) = mpsc::channel();
+
+    let backend = Rc::new(RefCell::new(Backend::new(config, result_tx)));
 
     let window = backend::AppWindow::new().unwrap();
     window.window().set_maximized(true);
@@ -30,8 +34,12 @@ fn main() {
         b.update_ui();
     }
 
+    let event_tx = backend.borrow().event_tx.clone();
+    setup_result_processor(event_tx.clone(), result_rx);
+    setup_mpris_processor(event_tx, mpris_cmd_rx);
+    setup_audio_tick(&backend);
+
     setup_callbacks(&window, &backend);
-    setup_timer(&backend);
 
     if !backend.borrow().config.last_search_query.is_empty() {
         let mut b = backend.borrow_mut();
@@ -46,18 +54,58 @@ fn main() {
     window.run().unwrap();
 }
 
-fn setup_timer(backend: &Rc<RefCell<Backend>>) {
+fn setup_result_processor(
+    event_tx: mpsc::Sender<backend::EventFn>,
+    result_rx: mpsc::Receiver<BackendResult>,
+) {
+    thread::spawn(move || {
+        while let Ok(result) = result_rx.recv() {
+            let _ = event_tx.send(Box::new(move |b: &mut Backend| {
+                b.process_result(result);
+            }));
+        }
+    });
+}
+
+fn setup_mpris_processor(
+    event_tx: mpsc::Sender<backend::EventFn>,
+    mpris_cmd_rx: mpsc::Receiver<mpris::MprisCommand>,
+) {
+    thread::spawn(move || {
+        while let Ok(cmd) = mpris_cmd_rx.recv() {
+            let _ = event_tx.send(Box::new(move |b: &mut Backend| {
+                use mpris::MprisCommand;
+                match cmd {
+                    MprisCommand::TogglePlayPause => b.handle_toggle_play_pause(),
+                    MprisCommand::NextTrack => b.handle_next_track(),
+                    MprisCommand::PreviousTrack => b.handle_previous_track(),
+                    MprisCommand::SetVolume(vol) => b.handle_set_volume(vol),
+                    MprisCommand::Seek(delta_us) => {
+                        let current_progress = b.progress;
+                        let delta_frac =
+                            delta_us as f32 / 1_000_000.0 / b.duration.max(0.001);
+                        let new_frac = (current_progress + delta_frac).clamp(0.0, 1.0);
+                        b.handle_seek(new_frac);
+                    }
+                }
+                b.send_mpris_update();
+            }));
+        }
+    });
+}
+
+fn setup_audio_tick(backend: &Rc<RefCell<Backend>>) {
     let backend_weak = Rc::downgrade(backend);
     let timer = slint::Timer::default();
     if let Some(b) = backend_weak.upgrade() {
-        b.borrow_mut()._timer = Some(timer);
-        if let Some(t) = &b.borrow()._timer {
+        b.borrow_mut().audio_timer = Some(timer);
+        if let Some(t) = &b.borrow().audio_timer {
             t.start(
                 slint::TimerMode::Repeated,
                 Duration::from_millis(250),
                 move || {
                     if let Some(b) = backend_weak.upgrade() {
-                        b.borrow_mut().tick();
+                        b.borrow_mut().audio_tick();
                     }
                 },
             );

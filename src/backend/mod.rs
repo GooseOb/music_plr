@@ -3,7 +3,7 @@ use std::sync::mpsc;
 use crate::audio::AudioPlayer;
 use crate::config::Config;
 use crate::downloads::DownloadRegistry;
-use crate::mpris::{MprisCommand, MprisUpdate};
+use crate::mpris::MprisUpdate;
 use crate::playlists::PlaylistStore;
 use crate::types::{Track as RustTrack, TrackSource};
 
@@ -69,24 +69,7 @@ impl PlayQueue {
     }
 }
 
-#[derive(Default)]
-struct CachedPlaybackState {
-    current_view: i32,
-    is_playing: bool,
-    progress: f32,
-    duration_secs: f32,
-    volume: f32,
-    track_loading: bool,
-    can_go_back: bool,
-    can_go_forward: bool,
-    current_title: String,
-    current_artist: String,
-    current_track_id: String,
-    elapsed_text: String,
-    total_text: String,
-    loading: bool,
-    notification: String,
-}
+pub type EventFn = Box<dyn FnOnce(&mut Backend) + Send + 'static>;
 
 pub struct Backend {
     pub audio: AudioPlayer,
@@ -108,7 +91,6 @@ pub struct Backend {
     pub loading: bool,
     pub track_loading: bool,
     pub mpris_update_tx: Option<mpsc::Sender<MprisUpdate>>,
-    pub mpris_cmd_rx: mpsc::Receiver<MprisCommand>,
     pub playlists: PlaylistStore,
     pub selected_playlist: Option<usize>,
     pub selected_playlist_name: String,
@@ -116,12 +98,12 @@ pub struct Backend {
     pub show_playlist_picker: Option<usize>,
     pub nav_history: Vec<View>,
     pub nav_history_pos: usize,
-    pub result_rx: mpsc::Receiver<BackendResult>,
     pub result_tx: mpsc::Sender<BackendResult>,
+    pub event_tx: mpsc::Sender<EventFn>,
+    pub event_rx: mpsc::Receiver<EventFn>,
     pub ui: slint::Weak<AppWindow>,
-    pub _timer: Option<slint::Timer>,
+    pub audio_timer: Option<slint::Timer>,
     pub focus_lost_ticks: u32,
-    pub pending_search_text: Option<String>,
     pub last_filtered_history: Vec<String>,
     pub selected_indices: Vec<usize>,
     pub clipboard: Vec<RustTrack>,
@@ -130,7 +112,6 @@ pub struct Backend {
     pub search_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     pub radio_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     pub playlist_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
-    cached_ui: CachedPlaybackState,
 }
 
 fn format_dur(dur: i32) -> String {
@@ -160,58 +141,52 @@ pub fn to_slint_track(t: &RustTrack, registry: &DownloadRegistry, selected: bool
 }
 
 impl Backend {
-    pub fn new(config: Config) -> (Self, mpsc::Sender<MprisCommand>) {
-        let (mpris_cmd_tx, mpris_cmd_rx) = mpsc::channel();
-        let (result_tx, result_rx) = mpsc::channel();
+    pub fn new(config: Config, result_tx: mpsc::Sender<BackendResult>) -> Self {
         let volume = config.volume;
+        let (event_tx, event_rx) = mpsc::channel();
 
-        (
-            Self {
-                audio: AudioPlayer::new(volume),
-                config,
-                current_view: View::Search,
-                search_query: String::new(),
-                search_results: Vec::new(),
-                search_offset: 0,
-                radio_tracks: Vec::new(),
-                radio_label: String::new(),
-                queue: PlayQueue::new(),
-                is_playing: false,
-                volume,
-                progress: 0.0,
-                duration: 0.0,
-                download_registry: DownloadRegistry::load(),
-                downloading_index: None,
-                notification: None,
-                loading: false,
-                track_loading: false,
-                mpris_update_tx: None,
-                mpris_cmd_rx,
-                playlists: PlaylistStore::load(),
-                selected_playlist: None,
-                selected_playlist_name: String::new(),
-                playlist_create_name: String::new(),
-                show_playlist_picker: None,
-                nav_history: vec![View::Search],
-                nav_history_pos: 0,
-                result_rx,
-                result_tx,
-                ui: slint::Weak::default(),
-                _timer: None,
-                focus_lost_ticks: 0,
-                pending_search_text: None,
-                last_filtered_history: Vec::new(),
-                selected_indices: Vec::new(),
-                clipboard: Vec::new(),
-                last_click_index: None,
-                last_click_time: std::time::Instant::now(),
-                search_model_handle: None,
-                radio_model_handle: None,
-                playlist_model_handle: None,
-                cached_ui: CachedPlaybackState::default(),
-            },
-            mpris_cmd_tx,
-        )
+        Self {
+            audio: AudioPlayer::new(volume),
+            config,
+            current_view: View::Search,
+            search_query: String::new(),
+            search_results: Vec::new(),
+            search_offset: 0,
+            radio_tracks: Vec::new(),
+            radio_label: String::new(),
+            queue: PlayQueue::new(),
+            is_playing: false,
+            volume,
+            progress: 0.0,
+            duration: 0.0,
+            download_registry: DownloadRegistry::load(),
+            downloading_index: None,
+            notification: None,
+            loading: false,
+            track_loading: false,
+            mpris_update_tx: None,
+            playlists: PlaylistStore::load(),
+            selected_playlist: None,
+            selected_playlist_name: String::new(),
+            playlist_create_name: String::new(),
+            show_playlist_picker: None,
+            nav_history: vec![View::Search],
+            nav_history_pos: 0,
+            result_tx,
+            event_tx,
+            event_rx,
+            ui: slint::Weak::default(),
+            audio_timer: None,
+            focus_lost_ticks: 0,
+            last_filtered_history: Vec::new(),
+            selected_indices: Vec::new(),
+            clipboard: Vec::new(),
+            last_click_index: None,
+            last_click_time: std::time::Instant::now(),
+            search_model_handle: None,
+            radio_model_handle: None,
+            playlist_model_handle: None,
+        }
     }
 
     pub fn get_track_at(&self, index: usize) -> Option<RustTrack> {
@@ -293,6 +268,74 @@ impl Backend {
         match track.source {
             TrackSource::YouTube => self.play_youtube_track(track),
             TrackSource::Local => self.play_local_track(track),
+        }
+        self.sync_current_track_ui();
+    }
+
+    pub fn process_result(&mut self, result: BackendResult) {
+        match result {
+            BackendResult::SearchResults(tracks) => {
+                self.search_results = tracks;
+                self.search_offset = self.search_results.len();
+                self.loading = false;
+                self.sync_search_model();
+                self.clear_notification();
+                if let Some(window) = self.ui.upgrade() {
+                    window.set_loading(false);
+                }
+            }
+            BackendResult::SearchResultsAppend(tracks) => {
+                self.search_offset += tracks.len();
+                self.search_results.extend(tracks);
+                self.loading = false;
+                self.sync_search_model();
+                self.clear_notification();
+            }
+            BackendResult::RadioResults(label, tracks) => {
+                self.radio_label = label;
+                self.radio_tracks = tracks;
+                self.loading = false;
+                self.current_view = View::Radio;
+                self.sync_radio_model();
+                self.update_nav_ui();
+                if let Some(window) = self.ui.upgrade() {
+                    window.set_loading(false);
+                }
+            }
+            BackendResult::DownloadComplete(_idx, url, path) => {
+                self.downloading_index = None;
+                self.download_registry.register(&url, &path);
+                self.sync_search_model();
+                self.sync_radio_model();
+                self.sync_playlist_content();
+                self.notify("Download complete!".into());
+            }
+            BackendResult::DownloadError(msg) => {
+                self.downloading_index = None;
+                eprintln!("[backend] Download error: {}", msg);
+            }
+        }
+    }
+
+    pub fn send_mpris_update(&self) {
+        if let Some(ref tx) = self.mpris_update_tx {
+            let track = self.queue.current();
+            let update = MprisUpdate {
+                playback_status: if self.is_playing {
+                    "Playing".into()
+                } else if track.is_some() {
+                    "Paused".into()
+                } else {
+                    "Stopped".into()
+                },
+                title: track.map(|t| t.title.clone()).unwrap_or_default(),
+                artist: track.map(|t| t.artist.clone()).unwrap_or_default(),
+                duration_secs: self.duration,
+                position_us: (self.progress * self.duration * 1_000_000.0) as i64,
+                volume: self.volume,
+                has_track: track.is_some(),
+            };
+            let _ = tx.send(update);
         }
     }
 }

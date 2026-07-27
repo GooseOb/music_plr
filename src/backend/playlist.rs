@@ -27,7 +27,9 @@ impl super::Backend {
             for t in tracks {
                 self.playlists.add_track(pl_idx, &t);
             }
-            self.notification = Some(format!(
+            self.sync_playlist_sidebar();
+            self.sync_playlist_content();
+            self.notify(format!(
                 "Added {} file{}",
                 count,
                 if count == 1 { "" } else { "s" }
@@ -39,15 +41,14 @@ impl super::Backend {
             for t in tracks {
                 self.playlists.add_track(0, &t);
             }
-            self.notification = Some(format!(
+            self.sync_playlist_sidebar();
+            self.sync_playlist_content();
+            self.notify(format!(
                 "Created playlist and added {} file{}",
                 count,
                 if count == 1 { "" } else { "s" }
             ));
         }
-        self.sync_playlist_sidebar();
-        self.sync_playlist_content();
-        self.update_playback_ui();
     }
 
     pub fn handle_create_playlist(&mut self) {
@@ -123,17 +124,16 @@ impl super::Backend {
             None => return,
         };
         self.playlists.add_track(playlist_idx, &track);
-        self.notification = Some(format!(
-            "Added to {}",
-            self.playlists.playlists[playlist_idx].name
-        ));
         self.show_playlist_picker = None;
         if let Some(window) = self.ui.upgrade() {
             window.set_show_picker(false);
         }
         self.sync_playlist_sidebar();
         self.sync_playlist_content();
-        self.update_playback_ui();
+        self.notify(format!(
+            "Added to {}",
+            self.playlists.playlists[playlist_idx].name
+        ));
     }
 
     pub fn handle_drag_add_to_playlist(&mut self, track_idx: usize, playlist_idx: usize) {
@@ -151,15 +151,14 @@ impl super::Backend {
             }
         }
 
-        self.notification = Some(format!(
+        self.sync_playlist_sidebar();
+        self.sync_playlist_content();
+        self.notify(format!(
             "Added {} track{} to {}",
             count,
             if count == 1 { "" } else { "s" },
             self.playlists.playlists[playlist_idx].name
         ));
-        self.sync_playlist_sidebar();
-        self.sync_playlist_content();
-        self.update_playback_ui();
     }
 
     pub fn handle_remove_from_playlist(&mut self, track_idx: usize) {

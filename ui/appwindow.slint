@@ -43,7 +43,7 @@ export component AppWindow inherits Window {
 
     in-out property <[string]> search-history-items;
     in-out property <bool> show-search-history: false;
-    in-out property <bool> search-has-focus: false;
+    in-out property <bool> search-has-focus;
     in-out property <string> elapsed-text;
     in-out property <string> total-text;
     in-out property <bool> show-context-menu: false;
@@ -109,6 +109,7 @@ export component AppWindow inherits Window {
     forward-focus: root-focus;
     min-width: 640px;
     min-height: 400px;
+    search-has-focus: search-text-input.has-focus;
 
     VerticalLayout {
         spacing: 0;
@@ -312,7 +313,7 @@ export component AppWindow inherits Window {
                                     player-playing: root.is-playing;
                                     in-playlist: false;
                                     context-open: root.show-context-menu && root.context-menu-idx == i;
-                                    clear-search-focus => { search-text-input.clear-focus(); }
+                                    clear-search-focus => { search-text-input.clear-focus(); root.show-search-history = false; }
                                     play-clicked(index) => { root.play-track(index); }
                                     row-clicked(index) => { root.toggle-select(index); }
                                     start-radio(index) => { root.start-radio(index); }
@@ -388,7 +389,7 @@ export component AppWindow inherits Window {
                                     player-playing: root.is-playing;
                                     in-playlist: true;
                                     context-open: root.show-context-menu && root.context-menu-idx == i;
-                                    clear-search-focus => { search-text-input.clear-focus(); }
+                                    clear-search-focus => { search-text-input.clear-focus(); root.show-search-history = false; }
                                     play-clicked(index) => { root.play-track(index); }
                                     row-clicked(index) => { root.toggle-select(index); }
                                     start-radio(index) => { root.start-radio(index); }
@@ -455,7 +456,7 @@ export component AppWindow inherits Window {
                                     player-playing: root.is-playing;
                                     in-playlist: false;
                                     context-open: root.show-context-menu && root.context-menu-idx == i;
-                                    clear-search-focus => { search-text-input.clear-focus(); }
+                                    clear-search-focus => { search-text-input.clear-focus(); root.show-search-history = false; }
                                     play-clicked(index) => { root.play-track(index); }
                                     row-clicked(index) => { root.toggle-select(index); }
                                     start-radio(index) => { root.start-radio(index); }
@@ -716,9 +717,9 @@ export component AppWindow inherits Window {
     }
 
     if root.show-search-history && root.search-history-items.length > 0 : Rectangle {
-        x: 216px;
-        y: 48px;
-        width: min(parent.width - 232px, 500px);
+        x: 220px;
+        y: 60px;
+        width: parent.width - 278px;
         height: min(root.search-history-items.length * 36px + 2px, 300px);
         background: Theme.bg-elevated;
         border-radius: Theme.radius-md;
@@ -726,6 +727,7 @@ export component AppWindow inherits Window {
         border-color: Theme.border;
 
         sh-fs := FocusScope {
+            focus-on-click: false;
             key-pressed(event) => {
                 if (event.text == Key.DownArrow) {
                     root.search-history-focused-index = (root.search-history-focused-index + 1).min(root.search-history-items.length - 1);
@@ -740,6 +742,10 @@ export component AppWindow inherits Window {
                 } else if (event.text == Key.Delete) {
                     root.delete-search-history(root.search-history-focused-index);
                     search-text-input.focus();
+                    accept
+                } else if (event.text == Key.Escape) {
+                    root.show-search-history = false;
+                    search-text-input.clear-focus();
                     accept
                 } else { reject }
             }
@@ -762,12 +768,12 @@ export component AppWindow inherits Window {
                         }
                     }
                     HorizontalLayout {
-                        padding: Theme.spacing-md;
+                        padding-left: Theme.spacing-md;
+                        padding-right: Theme.spacing-md;
                         spacing: Theme.spacing-xs;
-                        Text { text: h; color: Theme.fg; horizontal-stretch: 1; }
+                        Text { text: h; color: Theme.fg; horizontal-stretch: 1; vertical-alignment: center; }
                         Rectangle {
                             width: 28px;
-                            height: 24px;
                             VerticalLayout {
                                 alignment: center;
                                 DeleteIcon { colorize: Theme.fg; }

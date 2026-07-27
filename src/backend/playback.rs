@@ -18,16 +18,6 @@ impl super::Backend {
         self.play_track_internal(&track);
     }
 
-    pub fn handle_toggle_play_pause(&mut self) {
-        if self.is_playing {
-            self.audio.pause();
-            self.is_playing = false;
-        } else if self.queue.current().is_some() {
-            self.audio.resume();
-            self.is_playing = true;
-        }
-    }
-
     pub fn handle_next_track(&mut self) {
         if self.queue.next().is_none() {
             return;
@@ -50,16 +40,37 @@ impl super::Backend {
         self.play_track_internal(&track);
     }
 
+    pub fn handle_toggle_play_pause(&mut self) {
+        if self.is_playing {
+            self.audio.pause();
+            self.is_playing = false;
+        } else if self.queue.current().is_some() {
+            self.audio.resume();
+            self.is_playing = true;
+        }
+        if let Some(window) = self.ui.upgrade() {
+            window.set_is_playing(self.is_playing);
+        }
+    }
+
     pub fn handle_set_volume(&mut self, vol: f32) {
         self.volume = vol;
         self.config.volume = vol;
         self.audio.set_volume(vol);
         config::save_config(&self.config);
+        if let Some(window) = self.ui.upgrade() {
+            window.set_volume(vol);
+        }
     }
 
     pub fn handle_seek(&mut self, frac: f32) {
         let pos = std::time::Duration::from_secs_f32(frac * self.duration);
         self.progress = frac;
         self.audio.seek(pos);
+        if let Some(window) = self.ui.upgrade() {
+            window.set_progress(frac);
+            let elapsed = (self.progress * self.duration) as u32;
+            window.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
+        }
     }
 }

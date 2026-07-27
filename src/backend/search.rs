@@ -12,6 +12,7 @@ impl super::Backend {
         self.selected_playlist_name.clear();
         self.clear_selection();
         self.loading = true;
+        self.notify(format!("Searching: {query}"));
 
         self.config.search_history.retain(|h| h != &query);
         self.config.search_history.insert(0, query.clone());
@@ -38,6 +39,7 @@ impl super::Backend {
         let query = self.search_query.clone();
         let offset = self.search_offset;
         self.loading = true;
+        self.notify(format!("Loading more: {query}"));
         let result_tx = self.result_tx.clone();
         std::thread::spawn(move || match youtube::search(&query, offset) {
             Ok(videos) => {
@@ -59,7 +61,11 @@ impl super::Backend {
             .collect();
         if let Some(selected) = items.get(index) {
             self.search_query = selected.clone();
-            self.pending_search_text = Some(selected.clone());
+            if let Some(w) = self.ui.upgrade() {
+                w.set_search_input_text(selected.clone().into());
+                w.set_show_search_history(false);
+            }
+            self.handle_search_execute();
         }
     }
 

@@ -19,7 +19,6 @@ impl super::Backend {
         for &i in &indices {
             self.update_selection_row(i);
         }
-        self.update_playback_ui();
     }
 
     fn update_selection_row(&mut self, index: usize) {
@@ -60,7 +59,6 @@ impl super::Backend {
             self.selected_indices.push(index);
         }
         self.update_selection_row(index);
-        self.update_playback_ui();
     }
 
     pub fn handle_copy_selected(&mut self) {
@@ -72,19 +70,17 @@ impl super::Backend {
             }
         }
         if !self.clipboard.is_empty() {
-            self.notification = Some(format!(
+            self.notify(format!(
                 "Copied {} track{}",
                 self.clipboard.len(),
                 if self.clipboard.len() == 1 { "" } else { "s" }
             ));
-            self.update_playback_ui();
         }
     }
 
     pub fn handle_delete_selected(&mut self) {
         if self.selected_playlist.is_none() {
-            self.notification = Some("Only playlist tracks can be deleted".into());
-            self.update_playback_ui();
+            self.notify("Only playlist tracks can be deleted".into());
             return;
         }
         let pl_idx = match self.selected_playlist {
@@ -98,27 +94,24 @@ impl super::Backend {
         }
         let count = indices.len();
         self.clear_selection();
-        self.notification = Some(format!(
+        self.sync_playlist_content();
+        self.sync_playlist_sidebar();
+        self.notify(format!(
             "Deleted {} track{}",
             count,
             if count == 1 { "" } else { "s" }
         ));
-        self.sync_playlist_content();
-        self.sync_playlist_sidebar();
-        self.update_playback_ui();
     }
 
     pub fn handle_paste_clipboard(&mut self) {
         if self.clipboard.is_empty() {
-            self.notification = Some("Nothing to paste".into());
-            self.update_playback_ui();
+            self.notify("Nothing to paste".into());
             return;
         }
         let pl_idx = match self.selected_playlist {
             Some(i) => i,
             None => {
-                self.notification = Some("Select a playlist first".into());
-                self.update_playback_ui();
+                self.notify("Select a playlist first".into());
                 return;
             }
         };
@@ -126,13 +119,12 @@ impl super::Backend {
         for t in &self.clipboard {
             self.playlists.add_track(pl_idx, t);
         }
-        self.notification = Some(format!(
+        self.sync_playlist_content();
+        self.sync_playlist_sidebar();
+        self.notify(format!(
             "Pasted {} track{}",
             count,
             if count == 1 { "" } else { "s" }
         ));
-        self.sync_playlist_content();
-        self.sync_playlist_sidebar();
-        self.update_playback_ui();
     }
 }

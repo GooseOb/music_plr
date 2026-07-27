@@ -49,12 +49,11 @@ impl super::Backend {
         };
         if let Some(path) = self.download_registry.remove(&track.url) {
             let _ = std::fs::remove_file(&path);
-            self.notification = Some("Download removed".into());
+            self.notify("Download removed".into());
         }
         self.sync_search_model();
         self.sync_radio_model();
         self.sync_playlist_content();
-        self.update_playback_ui();
     }
 
     pub fn handle_download_current(&mut self) {
