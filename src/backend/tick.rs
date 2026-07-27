@@ -1,5 +1,6 @@
 use super::{to_slint_track, BackendResult, PlaylistInfo, Track, View};
 use crate::mpris::{MprisCommand, MprisUpdate};
+use std::rc::Rc;
 
 impl super::Backend {
     pub fn tick(&mut self) {
@@ -51,30 +52,35 @@ impl super::Backend {
             }
         }
 
-        let mut models_changed = false;
+        let mut need_search_sync = false;
+        let mut need_radio_sync = false;
+        let mut need_all_sync = false;
         while let Ok(result) = self.result_rx.try_recv() {
-            models_changed = true;
             match result {
                 BackendResult::SearchResults(tracks) => {
                     self.search_results = tracks;
                     self.search_offset = self.search_results.len();
                     self.loading = false;
+                    need_search_sync = true;
                 }
                 BackendResult::SearchResultsAppend(tracks) => {
                     self.search_offset += tracks.len();
                     self.search_results.extend(tracks);
                     self.loading = false;
+                    need_search_sync = true;
                 }
                 BackendResult::RadioResults(label, tracks) => {
                     self.radio_label = label;
                     self.radio_tracks = tracks;
                     self.loading = false;
                     self.current_view = View::Radio;
+                    need_radio_sync = true;
                 }
                 BackendResult::DownloadComplete(_idx, url, path) => {
                     self.downloading_index = None;
                     self.download_registry.register(&url, &path);
                     self.notification = Some("Download complete!".into());
+                    need_all_sync = true;
                 }
                 BackendResult::DownloadError(msg) => {
                     self.downloading_index = None;
@@ -135,8 +141,20 @@ impl super::Backend {
             self.handle_search_execute();
         }
 
-        if models_changed {
-            self.update_ui();
+        if need_all_sync {
+            self.sync_search_model();
+            self.sync_radio_model();
+            self.sync_playlist_content();
+        } else {
+            if need_search_sync {
+                self.sync_search_model();
+            }
+            if need_radio_sync {
+                self.sync_radio_model();
+            }
+        }
+        if need_search_sync || need_radio_sync || need_all_sync {
+            self.update_playback_ui();
         } else if !showing {
             self.update_playback_ui();
         }
@@ -146,63 +164,145 @@ impl super::Backend {
         let Some(window) = self.ui.upgrade() else {
             return;
         };
-        window.set_current_view(self.current_view as i32);
-        window.set_is_playing(self.is_playing);
-        window.set_progress(self.progress);
-        window.set_duration_secs(self.duration);
-        window.set_volume(self.volume);
-        window.set_track_loading(self.track_loading);
-        window.set_can_go_back(self.nav_history_pos > 0);
-        window.set_can_go_forward(self.nav_history_pos + 1 < self.nav_history.len());
+        let cached = &mut self.cached_ui;
+
+        let view = self.current_view as i32;
+        if cached.current_view != view {
+            cached.current_view = view;
+            window.set_current_view(view);
+        }
+
+        if cached.is_playing != self.is_playing {
+            cached.is_playing = self.is_playing;
+            window.set_is_playing(self.is_playing);
+        }
+
+        if cached.progress != self.progress {
+            cached.progress = self.progress;
+            window.set_progress(self.progress);
+        }
+
+        if cached.duration_secs != self.duration {
+            cached.duration_secs = self.duration;
+            window.set_duration_secs(self.duration);
+        }
+
+        if cached.volume != self.volume {
+            cached.volume = self.volume;
+            window.set_volume(self.volume);
+        }
+
+        if cached.track_loading != self.track_loading {
+            cached.track_loading = self.track_loading;
+            window.set_track_loading(self.track_loading);
+        }
+
+        let can_back = self.nav_history_pos > 0;
+        if cached.can_go_back != can_back {
+            cached.can_go_back = can_back;
+            window.set_can_go_back(can_back);
+        }
+
+        let can_forward = self.nav_history_pos + 1 < self.nav_history.len();
+        if cached.can_go_forward != can_forward {
+            cached.can_go_forward = can_forward;
+            window.set_can_go_forward(can_forward);
+        }
 
         if let Some(track) = self.queue.current() {
-            window.set_current_title(track.title.clone().into());
-            window.set_current_artist(track.artist.clone().into());
-            window.set_current_track_id(track.id.clone().into());
+            let title: String = track.title.clone();
+            if cached.current_title != title {
+                cached.current_title = title.clone();
+                window.set_current_title(title.into());
+            }
+            let artist: String = track.artist.clone();
+            if cached.current_artist != artist {
+                cached.current_artist = artist.clone();
+                window.set_current_artist(artist.into());
+            }
+            let id: String = track.id.clone();
+            if cached.current_track_id != id {
+                cached.current_track_id = id.clone();
+                window.set_current_track_id(id.into());
+            }
         } else {
-            window.set_current_title("".into());
-            window.set_current_artist("".into());
-            window.set_current_track_id("".into());
+            if !cached.current_title.is_empty() {
+                cached.current_title.clear();
+                window.set_current_title("".into());
+            }
+            if !cached.current_artist.is_empty() {
+                cached.current_artist.clear();
+                window.set_current_artist("".into());
+            }
+            if !cached.current_track_id.is_empty() {
+                cached.current_track_id.clear();
+                window.set_current_track_id("".into());
+            }
         }
 
         let elapsed = (self.progress * self.duration) as u32;
+        let elapsed_str = format!("{}:{:02}", elapsed / 60, elapsed % 60);
+        if cached.elapsed_text != elapsed_str {
+            cached.elapsed_text = elapsed_str.clone();
+            window.set_elapsed_text(elapsed_str.into());
+        }
+
         let total = self.duration as u32;
-        window.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
-        window.set_total_text(format!("{}:{:02}", total / 60, total % 60).into());
-        window.set_loading(self.loading);
-        window.set_notification(self.notification.as_deref().unwrap_or("").into());
+        let total_str = format!("{}:{:02}", total / 60, total % 60);
+        if cached.total_text != total_str {
+            cached.total_text = total_str.clone();
+            window.set_total_text(total_str.into());
+        }
+
+        if cached.loading != self.loading {
+            cached.loading = self.loading;
+            window.set_loading(self.loading);
+        }
+
+        let notif: String = self.notification.as_deref().unwrap_or("").into();
+        if cached.notification != notif {
+            cached.notification = notif.clone();
+            window.set_notification(notif.into());
+        }
     }
 
-    pub fn update_ui(&mut self) {
+    pub fn sync_search_model(&mut self) {
         let Some(window) = self.ui.upgrade() else {
             return;
         };
-        self.update_playback_ui();
-        self.update_search_history(&window);
-
         let registry = &self.download_registry;
-
-        let search_model: Vec<Track> = self
+        let model: Vec<Track> = self
             .search_results
             .iter()
             .enumerate()
             .map(|(i, t)| to_slint_track(t, registry, self.is_selected(i)))
             .collect();
-        let search_model_rc = std::rc::Rc::new(slint::VecModel::from(search_model));
-        self.search_model_handle = Some(search_model_rc.clone());
-        window.set_search_results(search_model_rc.into());
+        let rc = Rc::new(slint::VecModel::from(model));
+        self.search_model_handle = Some(rc.clone());
+        window.set_search_results(rc.into());
+    }
 
-        let radio_model: Vec<Track> = self
+    pub fn sync_radio_model(&mut self) {
+        let Some(window) = self.ui.upgrade() else {
+            return;
+        };
+        let registry = &self.download_registry;
+        let model: Vec<Track> = self
             .radio_tracks
             .iter()
             .enumerate()
             .map(|(i, t)| to_slint_track(t, registry, self.is_selected(i)))
             .collect();
-        let radio_model_rc = std::rc::Rc::new(slint::VecModel::from(radio_model));
-        self.radio_model_handle = Some(radio_model_rc.clone());
-        window.set_radio_tracks(radio_model_rc.into());
+        let rc = Rc::new(slint::VecModel::from(model));
+        self.radio_model_handle = Some(rc.clone());
+        window.set_radio_tracks(rc.into());
+    }
 
-        let playlist_list: Vec<PlaylistInfo> = self
+    pub fn sync_playlist_sidebar(&mut self) {
+        let Some(window) = self.ui.upgrade() else {
+            return;
+        };
+        let list: Vec<PlaylistInfo> = self
             .playlists
             .playlists
             .iter()
@@ -211,27 +311,32 @@ impl super::Backend {
                 track_count: pl.tracks.len() as i32,
             })
             .collect();
-        window.set_playlist_list(std::rc::Rc::new(slint::VecModel::from(playlist_list)).into());
-
-        let picker_names: Vec<slint::SharedString> = self
+        window.set_playlist_list(Rc::new(slint::VecModel::from(list)).into());
+        let names: Vec<slint::SharedString> = self
             .playlists
             .playlists
             .iter()
             .map(|pl| pl.name.clone().into())
             .collect();
-        window.set_picker_playlists(std::rc::Rc::new(slint::VecModel::from(picker_names)).into());
+        window.set_picker_playlists(Rc::new(slint::VecModel::from(names)).into());
+    }
 
+    pub fn sync_playlist_content(&mut self) {
+        let Some(window) = self.ui.upgrade() else {
+            return;
+        };
+        let registry = &self.download_registry;
         if let Some(idx) = self.selected_playlist {
             if let Some(pl) = self.playlists.playlists.get(idx) {
-                let pt_model: Vec<Track> = pl
+                let model: Vec<Track> = pl
                     .tracks
                     .iter()
                     .enumerate()
                     .map(|(i, t)| to_slint_track(t, registry, self.is_selected(i)))
                     .collect();
-                let pt_model_rc = std::rc::Rc::new(slint::VecModel::from(pt_model));
-                self.playlist_model_handle = Some(pt_model_rc.clone());
-                window.set_playlist_tracks(pt_model_rc.into());
+                let rc = Rc::new(slint::VecModel::from(model));
+                self.playlist_model_handle = Some(rc.clone());
+                window.set_playlist_tracks(rc.into());
                 window.set_selected_playlist_name(self.selected_playlist_name.clone().into());
                 window.set_selected_playlist(idx as i32);
                 window.set_playlist_create_name(self.playlist_create_name.clone().into());
@@ -241,8 +346,19 @@ impl super::Backend {
         self.playlist_model_handle = None;
         window.set_selected_playlist(-1);
         window.set_selected_playlist_name("".into());
-        window.set_playlist_tracks(std::rc::Rc::new(slint::VecModel::<Track>::from(vec![])).into());
+        window.set_playlist_tracks(Rc::new(slint::VecModel::<Track>::from(vec![])).into());
         window.set_playlist_create_name(self.playlist_create_name.clone().into());
+    }
+
+    pub fn update_ui(&mut self) {
+        self.update_playback_ui();
+        self.sync_search_model();
+        self.sync_radio_model();
+        self.sync_playlist_sidebar();
+        self.sync_playlist_content();
+        if let Some(window) = self.ui.upgrade() {
+            self.update_search_history(&window);
+        }
     }
 
     pub fn handle_navigate_to(&mut self, view: View) {

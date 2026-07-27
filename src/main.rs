@@ -275,6 +275,13 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     });
 
     let b = Rc::downgrade(backend);
+    window.on_drag_add_to_playlist(move |track_idx, playlist_idx| {
+        if let Some(b) = b.upgrade() {
+            b.borrow_mut().handle_drag_add_to_playlist(track_idx as usize, playlist_idx as usize);
+        }
+    });
+
+    let b = Rc::downgrade(backend);
     window.on_remove_from_playlist(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_remove_from_playlist(index as usize);
@@ -327,6 +334,14 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
         window.on_paste_clipboard(move || {
             if let Some(b) = b.upgrade() {
                 b.borrow_mut().handle_paste_clipboard();
+            }
+        });
+    }
+    {
+        let b = Rc::downgrade(backend);
+        window.on_clear_selection(move || {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_clear_selection();
             }
         });
     }

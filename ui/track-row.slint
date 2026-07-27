@@ -20,6 +20,9 @@ export component TrackRow {
     callback toggle-picker(int);
     callback download-or-delete(int);
     callback remove-from-playlist(int);
+    callback drag-started(int, length, length);
+    callback drag-moved(int, length, length);
+    callback drag-completed(int, length, length);
 
     property <bool> is-current: root.current-track-id != "" && root.current-track-id == track.id;
     property <bool> is-playing: is-current && root.player-playing;
@@ -32,10 +35,34 @@ export component TrackRow {
 
         touch-area := TouchArea {
             mouse-cursor: pointer;
+            property <bool> _pressed;
+            property <length> _start-x;
+            property <length> _start-y;
+            property <bool> _is-dragging;
+
             clicked => { root.clear-search-focus(); root.row-clicked(root.idx); }
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
                     root.right-clicked(root.idx, touch-area.absolute-position.x + touch-area.mouse-x, touch-area.absolute-position.y + touch-area.mouse-y);
+                } else if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                    _pressed = true;
+                    _is-dragging = false;
+                    _start-x = touch-area.mouse-x;
+                    _start-y = touch-area.mouse-y;
+                } else if (event.kind == PointerEventKind.move && _pressed && !_is-dragging) {
+                    if (touch-area.mouse-x - _start-x > 8px || _start-x - touch-area.mouse-x > 8px
+                        || touch-area.mouse-y - _start-y > 8px || _start-y - touch-area.mouse-y > 8px) {
+                        _is-dragging = true;
+                        root.drag-started(root.idx, touch-area.absolute-position.x + touch-area.mouse-x, touch-area.absolute-position.y + touch-area.mouse-y);
+                    }
+                } else if (event.kind == PointerEventKind.move && _pressed && _is-dragging) {
+                    root.drag-moved(root.idx, touch-area.absolute-position.x + touch-area.mouse-x, touch-area.absolute-position.y + touch-area.mouse-y);
+                } else if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
+                    if (_is-dragging) {
+                        root.drag-completed(root.idx, touch-area.absolute-position.x + touch-area.mouse-x, touch-area.absolute-position.y + touch-area.mouse-y);
+                    }
+                    _pressed = false;
+                    _is-dragging = false;
                 }
             }
         }

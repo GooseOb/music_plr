@@ -51,7 +51,10 @@ impl super::Backend {
             let _ = std::fs::remove_file(&path);
             self.notification = Some("Download removed".into());
         }
-        self.update_ui();
+        self.sync_search_model();
+        self.sync_radio_model();
+        self.sync_playlist_content();
+        self.update_playback_ui();
     }
 
     pub fn handle_download_current(&mut self) {

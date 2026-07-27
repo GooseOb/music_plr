@@ -10,6 +10,18 @@ impl super::Backend {
         self.selected_indices.clear();
     }
 
+    pub fn handle_clear_selection(&mut self) {
+        if self.selected_indices.is_empty() {
+            return;
+        }
+        let indices: Vec<usize> = self.selected_indices.clone();
+        self.selected_indices.clear();
+        for &i in &indices {
+            self.update_selection_row(i);
+        }
+        self.update_playback_ui();
+    }
+
     fn update_selection_row(&mut self, index: usize) {
         let tracks = self.get_current_tracks();
         if index >= tracks.len() {
@@ -65,14 +77,14 @@ impl super::Backend {
                 self.clipboard.len(),
                 if self.clipboard.len() == 1 { "" } else { "s" }
             ));
-            self.update_ui();
+            self.update_playback_ui();
         }
     }
 
     pub fn handle_delete_selected(&mut self) {
         if self.selected_playlist.is_none() {
             self.notification = Some("Only playlist tracks can be deleted".into());
-            self.update_ui();
+            self.update_playback_ui();
             return;
         }
         let pl_idx = match self.selected_playlist {
@@ -91,20 +103,22 @@ impl super::Backend {
             count,
             if count == 1 { "" } else { "s" }
         ));
-        self.update_ui();
+        self.sync_playlist_content();
+        self.sync_playlist_sidebar();
+        self.update_playback_ui();
     }
 
     pub fn handle_paste_clipboard(&mut self) {
         if self.clipboard.is_empty() {
             self.notification = Some("Nothing to paste".into());
-            self.update_ui();
+            self.update_playback_ui();
             return;
         }
         let pl_idx = match self.selected_playlist {
             Some(i) => i,
             None => {
                 self.notification = Some("Select a playlist first".into());
-                self.update_ui();
+                self.update_playback_ui();
                 return;
             }
         };
@@ -117,6 +131,8 @@ impl super::Backend {
             count,
             if count == 1 { "" } else { "s" }
         ));
-        self.update_ui();
+        self.sync_playlist_content();
+        self.sync_playlist_sidebar();
+        self.update_playback_ui();
     }
 }

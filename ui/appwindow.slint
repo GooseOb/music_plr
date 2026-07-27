@@ -54,6 +54,16 @@ export component AppWindow inherits Window {
     in-out property <bool> context-is-downloaded: false;
     in-out property <bool> context-in-playlist: false;
 
+    in-out property <bool> drag-active;
+    in-out property <int> drag-track-idx;
+    in-out property <length> drag-x;
+    in-out property <length> drag-y;
+    in-out property <int> drag-target-playlist: -1;
+    in-out property <bool> drag-over-sidebar;
+
+    in-out property <bool> show-delete-confirm;
+    in-out property <int> delete-confirm-index: -1;
+
     callback navigate-to(int);
     callback navigate-back();
     callback navigate-forward();
@@ -89,6 +99,8 @@ export component AppWindow inherits Window {
     callback start-radio(int);
     callback start-artist(int);
     callback download-or-delete(int);
+    callback drag-add-to-playlist(int, int);
+    callback clear-selection();
 
     title: "Music PLR";
     no-frame: false;
@@ -212,7 +224,7 @@ export component AppWindow inherits Window {
                         accepted => { create-playlist(); }
                     }
 
-                    Rectangle {
+                    playlist-list-area := Rectangle {
                         vertical-stretch: 1;
                         clip: true;
                         if playlist-list.length == 0 : Text {
@@ -229,8 +241,8 @@ export component AppWindow inherits Window {
                                     pl-name: pl.name;
                                     track-count: pl.track-count;
                                     selected: selected-playlist == i;
+                                    drag-over: root.drag-active && root.drag-target-playlist >= 0 && root.drag-target-playlist == i;
                                     clicked => { select-playlist(i); }
-                                    delete-clicked => { delete-playlist(i); }
                                 }
                             }
                         }
@@ -287,75 +299,135 @@ export component AppWindow inherits Window {
 
                     if loading : Text { text: "Searching..."; color: Theme.fg-secondary; }
 
-                    if !loading && search-results.length > 0 && selected-playlist < 0 && current-view != 1 : VerticalLayout {
-                        spacing: Theme.spacing-xs;
-                        Rectangle { height: Theme.spacing-xs; }
-                        ListView {
-                            vertical-stretch: 1;
-                            for t[i] in search-results: TrackRow {
-                                track: t;
-                                idx: i;
-                                keyboard-focused: search-fs.has-focus && root.search-focused-index == i;
-                                current-track-id: root.current-track-id;
-                                player-playing: root.is-playing;
-                                in-playlist: false;
-                                context-open: root.show-context-menu && root.context-menu-idx == i;
-                                clear-search-focus => { search-text-input.clear-focus(); }
-                                play-clicked(index) => { root.play-track(index); }
-                                row-clicked(index) => { root.toggle-select(index); }
-                                start-radio(index) => { root.start-radio(index); }
-                                start-artist(index) => { root.start-artist(index); }
-                                toggle-picker(index) => { root.toggle-picker(index); }
-                                download-or-delete(index) => { root.download-or-delete(index); }
-                                remove-from-playlist(index) => {}
-                                right-clicked(index, abs-x, abs-y) => {
-                                    root.context-menu-idx = index;
-                                    root.context-menu-x = abs-x;
-                                    root.context-menu-y = abs-y;
-                                    root.context-is-youtube = t.source == "youtube";
-                                    root.context-is-downloaded = t.is-downloaded;
-                                    root.context-in-playlist = false;
-                                    root.show-context-menu = true;
+                        if !loading && search-results.length > 0 && selected-playlist < 0 && current-view != 1 : VerticalLayout {
+                            spacing: Theme.spacing-xs;
+                            Rectangle { height: Theme.spacing-xs; }
+                            ListView {
+                                vertical-stretch: 1;
+                                for t[i] in search-results: TrackRow {
+                                    track: t;
+                                    idx: i;
+                                    keyboard-focused: search-fs.has-focus && root.search-focused-index == i;
+                                    current-track-id: root.current-track-id;
+                                    player-playing: root.is-playing;
+                                    in-playlist: false;
+                                    context-open: root.show-context-menu && root.context-menu-idx == i;
+                                    clear-search-focus => { search-text-input.clear-focus(); }
+                                    play-clicked(index) => { root.play-track(index); }
+                                    row-clicked(index) => { root.toggle-select(index); }
+                                    start-radio(index) => { root.start-radio(index); }
+                                    start-artist(index) => { root.start-artist(index); }
+                                    toggle-picker(index) => { root.toggle-picker(index); }
+                                    download-or-delete(index) => { root.download-or-delete(index); }
+                                    remove-from-playlist(index) => {}
+                                    right-clicked(index, abs-x, abs-y) => {
+                                        root.context-menu-idx = index;
+                                        root.context-menu-x = abs-x;
+                                        root.context-menu-y = abs-y;
+                                        root.context-is-youtube = t.source == "youtube";
+                                        root.context-is-downloaded = t.is-downloaded;
+                                        root.context-in-playlist = false;
+                                        root.show-context-menu = true;
+                                    }
+                                    drag-started(index, abs-x, abs-y) => {
+                                        root.drag-active = true;
+                                        root.drag-track-idx = index;
+                                        root.drag-x = abs-x;
+                                        root.drag-y = abs-y;
+                                    }
+                                    drag-moved(index, abs-x, abs-y) => {
+                                        root.drag-x = abs-x;
+                                        root.drag-y = abs-y;
+                                        root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
+                                        root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - playlist-list-area.absolute-position.y) / 44px)) : -1;
+                                    }
+                                    drag-completed(index, abs-x, abs-y) => {
+                                        if (root.drag-target-playlist >= 0) {
+                                            root.drag-add-to-playlist(index, root.drag-target-playlist);
+                                        }
+                                        root.drag-active = false;
+                                        root.drag-target-playlist = -1;
+                                        root.drag-over-sidebar = false;
+                                    }
                                 }
                             }
+                            Rectangle { height: Theme.spacing-xs; }
+                            Button { text: "Load more"; horizontal-stretch: 1; clicked => { search-load-more(); } }
                         }
-                        Rectangle { height: Theme.spacing-xs; }
-                        Button { text: "Load more"; horizontal-stretch: 1; clicked => { search-load-more(); } }
-                    }
 
                     if selected-playlist >= 0 : VerticalLayout {
                         spacing: Theme.spacing-sm;
-                        Text { text: selected-playlist-name; color: Theme.fg; }
-                        if playlist-tracks.length > 0 : ListView {
-                            vertical-stretch: 1;
-                            for t[i] in playlist-tracks: TrackRow {
-                                track: t;
-                                idx: i;
-                                keyboard-focused: playlist-fs.has-focus && root.playlist-focused-index == i;
-                                current-track-id: root.current-track-id;
-                                player-playing: root.is-playing;
-                                in-playlist: true;
-                                context-open: root.show-context-menu && root.context-menu-idx == i;
-                                clear-search-focus => { search-text-input.clear-focus(); }
-                                play-clicked(index) => { root.play-track(index); }
-                                row-clicked(index) => { root.toggle-select(index); }
-                                start-radio(index) => { root.start-radio(index); }
-                                start-artist(index) => { root.start-artist(index); }
-                                toggle-picker(index) => { root.toggle-picker(index); }
-                                download-or-delete(index) => { root.download-or-delete(index); }
-                                remove-from-playlist(index) => { root.remove-from-playlist(index); }
-                                right-clicked(index, abs-x, abs-y) => {
-                                    root.context-menu-idx = index;
-                                    root.context-menu-x = abs-x;
-                                    root.context-menu-y = abs-y;
-                                    root.context-is-youtube = t.source == "youtube";
-                                    root.context-is-downloaded = t.is-downloaded;
-                                    root.context-in-playlist = true;
-                                    root.show-context-menu = true;
+                        HorizontalLayout {
+                            spacing: Theme.spacing-sm;
+                            Text { text: selected-playlist-name; color: Theme.fg; horizontal-stretch: 1; }
+                            Rectangle {
+                                width: 120px; height: 28px; border-radius: Theme.radius-sm;
+                                background: del-pl-ta.has-hover ? Theme.bg-hover : transparent;
+                                animate background { duration: 150ms; }
+                                VerticalLayout { alignment: center;
+                                    Text { text: "Delete playlist"; color: Theme.warning; horizontal-alignment: center; }
+                                }
+                                del-pl-ta := TouchArea {
+                                    mouse-cursor: pointer;
+                                    pointer-event(event) => {
+                                        if (event.kind == PointerEventKind.up) {
+                                            root.delete-confirm-index = root.selected-playlist;
+                                            root.show-delete-confirm = true;
+                                        }
+                                    }
                                 }
                             }
                         }
-                        if playlist-tracks.length == 0 : Rectangle {
+                        if playlist-tracks.length > 0 : ListView {
+                            vertical-stretch: 1;
+                            for t[i] in playlist-tracks: TrackRow {
+                                    track: t;
+                                    idx: i;
+                                    keyboard-focused: playlist-fs.has-focus && root.playlist-focused-index == i;
+                                    current-track-id: root.current-track-id;
+                                    player-playing: root.is-playing;
+                                    in-playlist: true;
+                                    context-open: root.show-context-menu && root.context-menu-idx == i;
+                                    clear-search-focus => { search-text-input.clear-focus(); }
+                                    play-clicked(index) => { root.play-track(index); }
+                                    row-clicked(index) => { root.toggle-select(index); }
+                                    start-radio(index) => { root.start-radio(index); }
+                                    start-artist(index) => { root.start-artist(index); }
+                                    toggle-picker(index) => { root.toggle-picker(index); }
+                                    download-or-delete(index) => { root.download-or-delete(index); }
+                                    remove-from-playlist(index) => { root.remove-from-playlist(index); }
+                                    right-clicked(index, abs-x, abs-y) => {
+                                        root.context-menu-idx = index;
+                                        root.context-menu-x = abs-x;
+                                        root.context-menu-y = abs-y;
+                                        root.context-is-youtube = t.source == "youtube";
+                                        root.context-is-downloaded = t.is-downloaded;
+                                        root.context-in-playlist = true;
+                                        root.show-context-menu = true;
+                                    }
+                                    drag-started(index, abs-x, abs-y) => {
+                                        root.drag-active = true;
+                                        root.drag-track-idx = index;
+                                        root.drag-x = abs-x;
+                                        root.drag-y = abs-y;
+                                    }
+                                    drag-moved(index, abs-x, abs-y) => {
+                                        root.drag-x = abs-x;
+                                        root.drag-y = abs-y;
+                                        root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
+                                        root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - playlist-list-area.absolute-position.y) / 44px)) : -1;
+                                    }
+                                    drag-completed(index, abs-x, abs-y) => {
+                                        if (root.drag-target-playlist >= 0) {
+                                            root.drag-add-to-playlist(index, root.drag-target-playlist);
+                                        }
+                                        root.drag-active = false;
+                                        root.drag-target-playlist = -1;
+                                        root.drag-over-sidebar = false;
+                                    }
+                                }
+                            }
+                            if playlist-tracks.length == 0 : Rectangle {
                             vertical-stretch: 1;
                             VerticalLayout {
                                 alignment: center;
@@ -369,40 +441,60 @@ export component AppWindow inherits Window {
                     }
 
                     if selected-playlist < 0 && current-view == 1 : VerticalLayout {
-                        vertical-stretch: 1;
-                        spacing: Theme.spacing-xs;
-                        if radio-label != "" : Text { text: radio-label; color: Theme.fg; }
-                        if loading && radio-tracks.length == 0 : Text { text: "Loading recommendations..."; color: Theme.fg-secondary; }
-                        if radio-tracks.length > 0 : ListView {
                             vertical-stretch: 1;
-                            for t[i] in radio-tracks: TrackRow {
-                                track: t;
-                                idx: i;
-                                keyboard-focused: radio-fs.has-focus && root.radio-focused-index == i;
-                                current-track-id: root.current-track-id;
-                                player-playing: root.is-playing;
-                                in-playlist: false;
-                                context-open: root.show-context-menu && root.context-menu-idx == i;
-                                clear-search-focus => { search-text-input.clear-focus(); }
-                                play-clicked(index) => { root.play-track(index); }
-                                row-clicked(index) => { root.toggle-select(index); }
-                                start-radio(index) => { root.start-radio(index); }
-                                start-artist(index) => { root.start-artist(index); }
-                                toggle-picker(index) => { root.toggle-picker(index); }
-                                download-or-delete(index) => { root.download-or-delete(index); }
-                                remove-from-playlist(index) => {}
-                                right-clicked(index, abs-x, abs-y) => {
-                                    root.context-menu-idx = index;
-                                    root.context-menu-x = abs-x;
-                                    root.context-menu-y = abs-y;
-                                    root.context-is-youtube = t.source == "youtube";
-                                    root.context-is-downloaded = t.is-downloaded;
-                                    root.context-in-playlist = false;
-                                    root.show-context-menu = true;
+                            spacing: Theme.spacing-xs;
+                            if radio-label != "" : Text { text: radio-label; color: Theme.fg; }
+                            if loading && radio-tracks.length == 0 : Text { text: "Loading recommendations..."; color: Theme.fg-secondary; }
+                            if radio-tracks.length > 0 : ListView {
+                                vertical-stretch: 1;
+                                for t[i] in radio-tracks: TrackRow {
+                                    track: t;
+                                    idx: i;
+                                    keyboard-focused: radio-fs.has-focus && root.radio-focused-index == i;
+                                    current-track-id: root.current-track-id;
+                                    player-playing: root.is-playing;
+                                    in-playlist: false;
+                                    context-open: root.show-context-menu && root.context-menu-idx == i;
+                                    clear-search-focus => { search-text-input.clear-focus(); }
+                                    play-clicked(index) => { root.play-track(index); }
+                                    row-clicked(index) => { root.toggle-select(index); }
+                                    start-radio(index) => { root.start-radio(index); }
+                                    start-artist(index) => { root.start-artist(index); }
+                                    toggle-picker(index) => { root.toggle-picker(index); }
+                                    download-or-delete(index) => { root.download-or-delete(index); }
+                                    remove-from-playlist(index) => {}
+                                    right-clicked(index, abs-x, abs-y) => {
+                                        root.context-menu-idx = index;
+                                        root.context-menu-x = abs-x;
+                                        root.context-menu-y = abs-y;
+                                        root.context-is-youtube = t.source == "youtube";
+                                        root.context-is-downloaded = t.is-downloaded;
+                                        root.context-in-playlist = false;
+                                        root.show-context-menu = true;
+                                    }
+                                    drag-started(index, abs-x, abs-y) => {
+                                        root.drag-active = true;
+                                        root.drag-track-idx = index;
+                                        root.drag-x = abs-x;
+                                        root.drag-y = abs-y;
+                                    }
+                                    drag-moved(index, abs-x, abs-y) => {
+                                        root.drag-x = abs-x;
+                                        root.drag-y = abs-y;
+                                        root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
+                                        root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - playlist-list-area.absolute-position.y) / 44px)) : -1;
+                                    }
+                                    drag-completed(index, abs-x, abs-y) => {
+                                        if (root.drag-target-playlist >= 0) {
+                                            root.drag-add-to-playlist(index, root.drag-target-playlist);
+                                        }
+                                        root.drag-active = false;
+                                        root.drag-target-playlist = -1;
+                                        root.drag-over-sidebar = false;
+                                    }
                                 }
                             }
-                        }
-                        if radio-tracks.length == 0 && !loading : Text {
+                            if radio-tracks.length == 0 && !loading : Text {
                             text: "Search for a song first, then use Radio or Artist";
                             color: Theme.fg-secondary;
                         }
@@ -763,6 +855,62 @@ export component AppWindow inherits Window {
         }
     }
 
+    if root.show-delete-confirm : Rectangle {
+        background: Theme.overlay;
+        TouchArea {
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up) { root.show-delete-confirm = false; }
+            }
+        }
+        Rectangle {
+            width: 300px;
+            height: 140px;
+            background: Theme.bg-elevated;
+            border-radius: Theme.radius-lg;
+            border-width: 1px;
+            border-color: Theme.border;
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            VerticalLayout {
+                padding: Theme.spacing-xl;
+                spacing: Theme.spacing-md;
+                Text { text: "Delete playlist?"; color: Theme.fg; font-weight: 700; }
+                Text { text: "Tracks will not be deleted."; color: Theme.fg-secondary; }
+                HorizontalLayout {
+                    spacing: Theme.spacing-sm;
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    Rectangle { horizontal-stretch: 1; }
+                    Button { text: "Cancel"; clicked => { root.show-delete-confirm = false; } }
+                    Button { text: "Delete"; clicked => { root.delete-playlist(root.delete-confirm-index); root.show-delete-confirm = false; } }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+            }
+        }
+    }
+
+    if root.drag-active : Rectangle {
+        x: root.drag-x - 100px;
+        y: root.drag-y - 44px;
+        width: 200px;
+        height: 36px;
+        background: Theme.accent;
+        border-radius: Theme.radius-md;
+        border-width: 1px;
+        border-color: Theme.accent.brighter(0.2);
+        VerticalLayout {
+            alignment: center;
+            padding-left: Theme.spacing-md;
+            padding-right: Theme.spacing-md;
+            Text {
+                text: "+ Add to Playlist";
+                color: Theme.accent-fg;
+                font-weight: 700;
+                horizontal-alignment: center;
+            }
+        }
+    }
+
     if root.show-context-menu : Rectangle {
         background: transparent;
         TouchArea {
@@ -889,8 +1037,10 @@ export component AppWindow inherits Window {
             } else if (event.text == Key.Escape) {
                 if root.show-context-menu {
                     root.show-context-menu = false;
-                } else {
+                } else if show-search-history {
                     show-search-history = false;
+                } else {
+                    clear-selection();
                 }
                 root-focus.focus();
                 accept

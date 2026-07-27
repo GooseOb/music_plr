@@ -45,7 +45,9 @@ impl super::Backend {
                 if count == 1 { "" } else { "s" }
             ));
         }
-        self.update_ui();
+        self.sync_playlist_sidebar();
+        self.sync_playlist_content();
+        self.update_playback_ui();
     }
 
     pub fn handle_create_playlist(&mut self) {
@@ -57,7 +59,10 @@ impl super::Backend {
                 self.selected_playlist = Some(0);
             }
         }
-        self.update_ui();
+        self.sync_playlist_sidebar();
+        if self.selected_playlist.is_some() {
+            self.sync_playlist_content();
+        }
     }
 
     pub fn handle_delete_playlist(&mut self, index: usize) {
@@ -70,7 +75,8 @@ impl super::Backend {
             }
         }
         self.clear_selection();
-        self.update_ui();
+        self.sync_playlist_sidebar();
+        self.sync_playlist_content();
     }
 
     pub fn handle_select_playlist(&mut self, index: usize) {
@@ -90,7 +96,7 @@ impl super::Backend {
                 .unwrap_or_default();
         }
         self.clear_selection();
-        self.update_ui();
+        self.sync_playlist_content();
     }
 
     pub fn handle_toggle_picker(&mut self, index: usize) {
@@ -125,7 +131,35 @@ impl super::Backend {
         if let Some(window) = self.ui.upgrade() {
             window.set_show_picker(false);
         }
-        self.update_ui();
+        self.sync_playlist_sidebar();
+        self.sync_playlist_content();
+        self.update_playback_ui();
+    }
+
+    pub fn handle_drag_add_to_playlist(&mut self, track_idx: usize, playlist_idx: usize) {
+        let indices: Vec<usize> = if self.selected_indices.is_empty() {
+            vec![track_idx]
+        } else {
+            self.selected_indices.clone()
+        };
+
+        let mut count = 0;
+        for &i in &indices {
+            if let Some(track) = self.get_track_at(i) {
+                self.playlists.add_track(playlist_idx, &track);
+                count += 1;
+            }
+        }
+
+        self.notification = Some(format!(
+            "Added {} track{} to {}",
+            count,
+            if count == 1 { "" } else { "s" },
+            self.playlists.playlists[playlist_idx].name
+        ));
+        self.sync_playlist_sidebar();
+        self.sync_playlist_content();
+        self.update_playback_ui();
     }
 
     pub fn handle_remove_from_playlist(&mut self, track_idx: usize) {
@@ -133,6 +167,7 @@ impl super::Backend {
             self.playlists.remove_track(pl_idx, track_idx);
         }
         self.clear_selection();
-        self.update_ui();
+        self.sync_playlist_sidebar();
+        self.sync_playlist_content();
     }
 }

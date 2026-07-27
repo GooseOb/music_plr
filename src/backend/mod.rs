@@ -69,6 +69,25 @@ impl PlayQueue {
     }
 }
 
+#[derive(Default)]
+struct CachedPlaybackState {
+    current_view: i32,
+    is_playing: bool,
+    progress: f32,
+    duration_secs: f32,
+    volume: f32,
+    track_loading: bool,
+    can_go_back: bool,
+    can_go_forward: bool,
+    current_title: String,
+    current_artist: String,
+    current_track_id: String,
+    elapsed_text: String,
+    total_text: String,
+    loading: bool,
+    notification: String,
+}
+
 pub struct Backend {
     pub audio: AudioPlayer,
     pub config: Config,
@@ -111,6 +130,7 @@ pub struct Backend {
     pub search_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     pub radio_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     pub playlist_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
+    cached_ui: CachedPlaybackState,
 }
 
 fn format_dur(dur: i32) -> String {
@@ -188,6 +208,7 @@ impl Backend {
                 search_model_handle: None,
                 radio_model_handle: None,
                 playlist_model_handle: None,
+                cached_ui: CachedPlaybackState::default(),
             },
             mpris_cmd_tx,
         )
