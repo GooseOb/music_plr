@@ -66,6 +66,35 @@ impl PlaylistStore {
             }
         }
     }
+
+    pub fn move_tracks(&mut self, playlist_idx: usize, from_indices: &[usize], to_idx: usize) {
+        if let Some(pl) = self.playlists.get_mut(playlist_idx) {
+            let mut indices: Vec<usize> = from_indices.to_vec();
+            indices.sort_unstable();
+            indices.dedup();
+
+            if indices.is_empty() {
+                return;
+            }
+
+            let mut moved: Vec<Track> = Vec::new();
+            for &i in indices.iter().rev() {
+                if i < pl.tracks.len() {
+                    moved.push(pl.tracks.remove(i));
+                }
+            }
+            moved.reverse();
+
+            let removed_before = indices.iter().filter(|&&i| i < to_idx).count();
+            let target = (to_idx.saturating_sub(removed_before)).min(pl.tracks.len());
+
+            for (offset, track) in moved.into_iter().enumerate() {
+                pl.tracks.insert(target + offset, track);
+            }
+
+            self.save();
+        }
+    }
 }
 
 fn store_path() -> PathBuf {

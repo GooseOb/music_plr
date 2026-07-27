@@ -332,6 +332,13 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     });
 
     let b = Rc::downgrade(backend);
+    window.on_reorder_tracks(move |from_idx, to_idx| {
+        if let Some(b) = b.upgrade() {
+            b.borrow_mut().handle_reorder_tracks(from_idx as usize, to_idx as usize);
+        }
+    });
+
+    let b = Rc::downgrade(backend);
     window.on_remove_from_playlist(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_remove_from_playlist(index as usize);

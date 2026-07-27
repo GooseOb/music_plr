@@ -61,6 +61,13 @@ export component AppWindow inherits Window {
     in-out property <length> drag-y;
     in-out property <int> drag-target-playlist: -1;
     in-out property <bool> drag-over-sidebar;
+    in-out property <bool> drag-reordering;
+    in-out property <int> drop-idx: 0;
+    in-out property <length> drop-line-y: 0px;
+    in-out property <length> pl-scroll-pos;
+    in-out property <length> pl-listview-abs-x;
+    in-out property <length> pl-listview-abs-y;
+    in-out property <length> pl-listview-width;
 
     in-out property <bool> show-delete-confirm;
     in-out property <int> delete-confirm-index: -1;
@@ -101,6 +108,7 @@ export component AppWindow inherits Window {
     callback start-artist(int);
     callback download-or-delete(int);
     callback drag-add-to-playlist(int, int);
+    callback reorder-tracks(int, int);
     callback clear-selection();
     pure callback resolve-thumbnail(string) -> image;
 
@@ -382,7 +390,7 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
-                        if playlist-tracks.length > 0 : ListView {
+                        if playlist-tracks.length > 0 : pl-listview := ListView {
                             vertical-stretch: 1;
                             for t[i] in playlist-tracks: TrackRow {
                                     track: t;
@@ -415,20 +423,34 @@ export component AppWindow inherits Window {
                                         root.drag-track-idx = index;
                                         root.drag-x = abs-x;
                                         root.drag-y = abs-y;
+                                        root.drag-reordering = true;
+                                        root.pl-listview-abs-x = pl-listview.absolute-position.x;
+                                        root.pl-listview-abs-y = pl-listview.absolute-position.y;
+                                        root.pl-listview-width = pl-listview.width;
                                     }
                                     drag-moved(index, abs-x, abs-y) => {
+                                        root.drag-active = true;
                                         root.drag-x = abs-x;
                                         root.drag-y = abs-y;
                                         root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
                                         root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - playlist-list-area.absolute-position.y) / 44px)) : -1;
+                                        root.drag-reordering = abs-x > 200px;
+                                        if (root.drag-reordering) {
+                                            root.drop-idx = max(0, min(playlist-tracks.length, (abs-y - pl-listview.absolute-position.y - pl-listview.viewport-y) / 48px + 0.5));
+
+                                            root.drop-line-y = max(0px, min(pl-listview.height - 2px, root.drop-idx * 48px + pl-listview.viewport-y));
+                                        }
                                     }
                                     drag-completed(index, abs-x, abs-y) => {
                                         if (root.drag-target-playlist >= 0) {
                                             root.drag-add-to-playlist(index, root.drag-target-playlist);
+                                        } else if (root.drag-reordering) {
+                                            root.reorder-tracks(root.drag-track-idx, root.drop-idx);
                                         }
                                         root.drag-active = false;
                                         root.drag-target-playlist = -1;
                                         root.drag-over-sidebar = false;
+                                        root.drag-reordering = false;
                                     }
                                 }
                             }
@@ -916,7 +938,7 @@ export component AppWindow inherits Window {
         }
     }
 
-    if root.drag-active : Rectangle {
+    if root.drag-active && root.drag-over-sidebar : Rectangle {
         x: root.drag-x - 100px;
         y: root.drag-y - 44px;
         width: 200px;
@@ -936,6 +958,14 @@ export component AppWindow inherits Window {
                 horizontal-alignment: center;
             }
         }
+    }
+
+    if root.drag-active && root.drag-reordering : Rectangle {
+        x: root.pl-listview-abs-x;
+        y: root.pl-listview-abs-y + root.drop-line-y;
+        width: root.pl-listview-width;
+        height: 2px;
+        background: Theme.accent;
     }
 
     if root.show-context-menu : Rectangle {

@@ -184,4 +184,32 @@ impl super::Backend {
         self.sync_playlist_sidebar();
         self.sync_playlist_content();
     }
+
+    pub fn handle_reorder_tracks(&mut self, from_idx: usize, to_idx: usize) {
+        let pl_idx = match self.selected_playlist {
+            Some(i) => i,
+            None => return,
+        };
+
+        let indices = if self.selected_indices.is_empty() {
+            vec![from_idx]
+        } else if self.selected_indices.contains(&from_idx) {
+            self.selected_indices.clone()
+        } else {
+            self.selected_indices.clear();
+            vec![from_idx]
+        };
+
+        let count_before = indices.iter().filter(|&&i| i < to_idx).count();
+        let adj_target = to_idx.saturating_sub(count_before);
+
+        self.playlists.move_tracks(pl_idx, &indices, to_idx);
+
+        if !self.selected_indices.is_empty() {
+            self.selected_indices = (adj_target..adj_target + indices.len()).collect();
+        }
+
+        self.sync_playlist_sidebar();
+        self.sync_playlist_content();
+    }
 }
