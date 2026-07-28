@@ -115,6 +115,7 @@ pub struct Backend {
     pub search_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     pub radio_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     pub playlist_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
+    pub queue_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     pub stream_cache: StreamCache,
     pub pending_cache_id: Option<String>,
 }
@@ -208,6 +209,7 @@ impl Backend {
             search_model_handle: None,
             radio_model_handle: None,
             playlist_model_handle: None,
+            queue_model_handle: None,
         }
     }
 

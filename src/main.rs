@@ -356,6 +356,21 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     });
 
     let b = Rc::downgrade(backend);
+    window.on_reorder_queue(move |from_idx, to_idx| {
+        if let Some(b) = b.upgrade() {
+            b.borrow_mut()
+                .handle_reorder_queue(from_idx as usize, to_idx as usize);
+        }
+    });
+
+    let b = Rc::downgrade(backend);
+    window.on_remove_from_queue(move |index| {
+        if let Some(b) = b.upgrade() {
+            b.borrow_mut().handle_remove_from_queue(index as usize);
+        }
+    });
+
+    let b = Rc::downgrade(backend);
     window.on_close_picker(move || {
         if let Some(b) = b.upgrade() {
             let mut b = b.borrow_mut();
@@ -444,6 +459,13 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     window.on_download_or_delete(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_download_or_delete_at(index as usize);
+        }
+    });
+
+    let b = Rc::downgrade(backend);
+    window.on_play_queue_track(move |index| {
+        if let Some(b) = b.upgrade() {
+            b.borrow_mut().handle_play_from_queue(index as usize);
         }
     });
 

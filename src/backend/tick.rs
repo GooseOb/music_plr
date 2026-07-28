@@ -108,9 +108,11 @@ impl super::Backend {
             .iter()
             .enumerate()
             .skip(self.queue.current_index + 1)
-            .map(|(_, t)| to_slint_track(t, registry, false))
+            .map(|(i, t)| to_slint_track(t, registry, self.is_selected(i)))
             .collect();
-        window.set_queue_tracks(Rc::new(slint::VecModel::from(upcoming)).into());
+        let rc = Rc::new(slint::VecModel::from(upcoming));
+        self.queue_model_handle = Some(rc.clone());
+        window.set_queue_tracks(rc.into());
     }
 
     pub fn update_nav_ui(&mut self) {

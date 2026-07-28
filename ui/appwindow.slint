@@ -57,6 +57,7 @@ export component AppWindow inherits Window {
     in-out property <bool> context-is-youtube: false;
     in-out property <bool> context-is-downloaded: false;
     in-out property <bool> context-in-playlist: false;
+    in-out property <bool> context-in-queue: false;
 
     in-out property <bool> drag-possible;
     in-out property <bool> drag-active;
@@ -90,6 +91,7 @@ export component AppWindow inherits Window {
     callback search-execute();
     callback search-load-more();
     callback play-track(int);
+    callback play-queue-track(int);
     callback toggle-play-pause();
     callback next-track();
     callback previous-track();
@@ -121,6 +123,8 @@ export component AppWindow inherits Window {
     callback download-or-delete(int);
     callback drag-add-to-playlist(int, int);
     callback reorder-tracks(int, int);
+    callback reorder-queue(int, int);
+    callback remove-from-queue(int);
     callback clear-selection();
     pure callback resolve-thumbnail(string) -> image;
 
@@ -350,8 +354,27 @@ export component AppWindow inherits Window {
                     current-thumbnail: root.current-thumbnail;
                     current-title: root.current-title;
                     current-artist: root.current-artist;
+                    current-track-id: root.current-track-id;
+                    is-playing: root.is-playing;
                     toggle-queue() => { root.toggle-queue(); }
                     resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
+
+                    show-context-menu <=> root.show-context-menu;
+                    context-menu-idx <=> root.context-menu-idx;
+                    context-menu-x <=> root.context-menu-x;
+                    context-menu-y <=> root.context-menu-y;
+                    context-is-youtube <=> root.context-is-youtube;
+                    context-is-downloaded <=> root.context-is-downloaded;
+                    context-in-queue <=> root.context-in-queue;
+
+                    play-queue-track(i) => { root.play-queue-track(i); }
+                    toggle-select(i) => { root.toggle-select(i); }
+                    start-radio(i) => { root.start-radio(i); }
+                    start-artist(i) => { root.start-artist(i); }
+                    toggle-picker(i) => { root.toggle-picker(i); }
+                    download-or-delete(i) => { root.download-or-delete(i); }
+                    remove-from-queue(i) => { root.remove-from-queue(i); }
+                    reorder-queue(fi, ti) => { root.reorder-queue(fi, ti); }
                 }
             }
         }
@@ -505,6 +528,7 @@ export component AppWindow inherits Window {
             context-is-youtube <=> root.context-is-youtube;
             context-is-downloaded <=> root.context-is-downloaded;
             context-in-playlist <=> root.context-in-playlist;
+            context-in-queue <=> root.context-in-queue;
             parent-width: root.width;
             parent-height: root.height;
             start-radio(i) => { root.start-radio(i); root.show-context-menu = false; }
@@ -512,6 +536,7 @@ export component AppWindow inherits Window {
             toggle-picker(i) => { root.toggle-picker(i); root.show-context-menu = false; }
             download-or-delete(i) => { root.download-or-delete(i); root.show-context-menu = false; }
             remove-from-playlist(i) => { root.remove-from-playlist(i); root.show-context-menu = false; }
+            remove-from-queue(i) => { root.remove-from-queue(i); root.show-context-menu = false; }
         }
     }
 

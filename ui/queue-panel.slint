@@ -1,14 +1,45 @@
 import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Track } from "types.slint";
+import { TrackRow } from "track-row.slint";
 
 export component QueuePanel inherits Rectangle {
     in-out property <[Track]> queue-tracks;
     in property <image> current-thumbnail;
     in property <string> current-title;
     in property <string> current-artist;
+    in property <string> current-track-id;
+    in property <bool> is-playing;
+
+    in-out property <bool> show-context-menu;
+    in-out property <int> context-menu-idx: -1;
+    in-out property <length> context-menu-x: 0px;
+    in-out property <length> context-menu-y: 0px;
+    in-out property <bool> context-is-youtube: false;
+    in-out property <bool> context-is-downloaded: false;
+    in-out property <bool> context-in-queue: false;
+
+    property <bool> drag-possible: false;
+    property <bool> drag-active: false;
+    property <int> drag-track-idx: -1;
+    property <length> drag-x: 0px;
+    property <length> drag-y: 0px;
+    property <bool> drag-reordering: false;
+    property <int> drop-idx: 0;
+    property <length> drop-line-y: 0px;
+    property <length> qu-viewport-y;
+    property <length> qu-lv-y: 0px;
+    property <length> qu-listview-width;
 
     callback toggle-queue();
+    callback play-queue-track(int);
+    callback toggle-select(int);
+    callback start-radio(int);
+    callback start-artist(int);
+    callback toggle-picker(int);
+    callback download-or-delete(int);
+    callback remove-from-queue(int);
+    callback reorder-queue(int, int);
     pure callback resolve-thumbnail(string) -> image;
 
     VerticalLayout {
@@ -57,29 +88,112 @@ export component QueuePanel inherits Rectangle {
 
         Text { text: "Up Next"; color: Theme.accent; font-size: 12px; }
 
-        ListView {
+        qu-listview := ListView {
+            viewport-y <=> root.qu-viewport-y;
             vertical-stretch: 1;
-            for t[i] in root.queue-tracks: Rectangle {
-                height: 48px;
-                border-radius: Theme.radius-sm;
-                HorizontalLayout {
-                    spacing: Theme.spacing-sm;
-                    padding: Theme.spacing-xs;
-                    Rectangle {
-                        width: 36px; height: 36px;
-                        border-radius: Theme.radius-sm;
-                        background: Theme.accent;
-                        clip: true;
-                        Image {
-                            source: root.resolve-thumbnail(t.thumbnail);
-                            width: 36px; height: 36px;
-                            image-fit: cover;
+            for t[i] in root.queue-tracks: TrackRow {
+                track: t;
+                thumbnail-image: root.resolve-thumbnail(t.thumbnail);
+                idx: i;
+                current-track-id: root.current-track-id;
+                player-playing: root.is-playing;
+                in-playlist: false;
+                context-open: root.show-context-menu && root.context-menu-idx == i;
+
+                play-clicked(index) => { root.play-queue-track(index); }
+                row-clicked(index) => { root.toggle-select(index); }
+                start-radio(index) => { root.start-radio(index); }
+                start-artist(index) => { root.start-artist(index); }
+                toggle-picker(index) => { root.toggle-picker(index); }
+                download-or-delete(index) => { root.download-or-delete(index); }
+                remove-from-playlist(index) => { root.remove-from-queue(index); }
+                right-clicked(index, abs-x, abs-y) => {
+                    root.context-menu-idx = index;
+                    root.context-menu-x = abs-x;
+                    root.context-menu-y = abs-y;
+                    root.context-is-youtube = t.source == "youtube";
+                    root.context-is-downloaded = t.is-downloaded;
+                    root.context-in-queue = true;
+                    root.show-context-menu = true;
+                }
+                drag-pressed(index, abs-x, abs-y) => {
+                    root.drag-possible = true;
+                    root.drag-track-idx = index;
+                    root.drag-x = abs-x;
+                    root.drag-y = abs-y;
+                    root.qu-lv-y = qu-listview.y;
+                    root.qu-listview-width = qu-listview.width;
+                    root.drop-idx = index;
+                }
+                drag-moved(index, abs-x, abs-y) => {
+                    if (!root.drag-possible) { return; }
+                    if (!root.drag-active) {
+                        if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
+                            root.drag-active = true;
+                            root.drag-reordering = true;
+                        } else { return; }
+                    }
+                    root.drag-x = abs-x;
+                    root.drag-y = abs-y;
+                    if (root.drag-reordering) {
+                        let rel-y = abs-y - qu-listview.absolute-position.y;
+                        let edge-zone = 40px;
+                        if (rel-y < edge-zone) {
+                            root.qu-viewport-y = min(0px, root.qu-viewport-y + 8px);
+                        } else if (rel-y > qu-listview.height - edge-zone) {
+                            let max-scroll = -(max(0px, root.queue-tracks.length * 48px - qu-listview.height));
+                            root.qu-viewport-y = max(max-scroll, root.qu-viewport-y - 8px);
                         }
+                        root.drop-idx = max(0, min(root.queue-tracks.length, (rel-y - root.qu-viewport-y) / 48px + 0.5));
+                        root.drop-line-y = max(0px, min(qu-listview.height - 2px, root.drop-idx * 48px + root.qu-viewport-y));
                     }
-                    VerticalLayout {
-                        Text { text: t.title; color: Theme.fg; overflow: elide; }
-                        Text { text: t.artist; color: Theme.fg-secondary; overflow: elide; font-size: 12px; }
+                }
+                drag-completed(index, abs-x, abs-y) => {
+                    if (root.drag-active && root.drag-reordering && root.drop-idx != root.drag-track-idx) {
+                        root.reorder-queue(root.drag-track-idx, root.drop-idx);
                     }
+                    root.drag-active = false;
+                    root.drag-reordering = false;
+                    root.drag-possible = false;
+                }
+            }
+        }
+    }
+
+    if root.drag-active && root.drag-reordering : Rectangle {
+        x: 0px;
+        y: root.qu-lv-y + root.drop-line-y;
+        width: root.qu-listview-width;
+        height: 2px;
+        background: Theme.accent;
+    }
+
+    if root.drag-active : Rectangle {
+        background: transparent;
+        qu-overlay-ta := TouchArea {
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.move) {
+                    let my = qu-overlay-ta.mouse-y;
+                    if (root.drag-reordering) {
+                        let rel-y = my - root.qu-lv-y;
+                        let edge-zone = 40px;
+                        if (rel-y < edge-zone) {
+                            root.qu-viewport-y = min(0px, root.qu-viewport-y + 8px);
+                        } else if (rel-y > root.height - root.qu-lv-y - edge-zone) {
+                            let available = root.height - root.qu-lv-y;
+                            let max-scroll = -(max(0px, root.queue-tracks.length * 48px - available));
+                            root.qu-viewport-y = max(max-scroll, root.qu-viewport-y - 8px);
+                        }
+                        root.drop-idx = max(0, min(root.queue-tracks.length, (rel-y - root.qu-viewport-y) / 48px + 0.5));
+                        root.drop-line-y = max(0px, min(root.height - root.qu-lv-y - 2px, root.drop-idx * 48px + root.qu-viewport-y));
+                    }
+                } else if (event.kind == PointerEventKind.up) {
+                    if (root.drag-reordering && root.drop-idx != root.drag-track-idx) {
+                        root.reorder-queue(root.drag-track-idx, root.drop-idx);
+                    }
+                    root.drag-active = false;
+                    root.drag-reordering = false;
+                    root.drag-possible = false;
                 }
             }
         }

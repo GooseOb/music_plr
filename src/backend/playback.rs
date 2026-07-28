@@ -73,4 +73,41 @@ impl super::Backend {
             window.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
         }
     }
+
+    pub fn handle_reorder_queue(&mut self, from_rel: usize, to_rel: usize) {
+        let offset = self.queue.current_index + 1;
+        let abs_from = offset + from_rel;
+        let mut abs_to = offset + to_rel;
+        if abs_from >= self.queue.tracks.len() || abs_to > self.queue.tracks.len() {
+            return;
+        }
+        let track = self.queue.tracks.remove(abs_from);
+        if abs_to > abs_from {
+            abs_to -= 1;
+        }
+        self.queue.tracks.insert(abs_to, track);
+        self.sync_queue_ui();
+    }
+
+    pub fn handle_remove_from_queue(&mut self, rel_idx: usize) {
+        let offset = self.queue.current_index + 1;
+        let abs_idx = offset + rel_idx;
+        if abs_idx < self.queue.tracks.len() {
+            self.queue.tracks.remove(abs_idx);
+            self.sync_queue_ui();
+        }
+    }
+
+    pub fn handle_play_from_queue(&mut self, rel_idx: usize) {
+        let abs_idx = self.queue.current_index + 1 + rel_idx;
+        if abs_idx >= self.queue.tracks.len() {
+            return;
+        }
+        self.queue.current_index = abs_idx;
+        let track = match self.queue.current() {
+            Some(t) => t.clone(),
+            None => return,
+        };
+        self.play_track_internal(&track);
+    }
 }

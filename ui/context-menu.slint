@@ -7,6 +7,7 @@ export component ContextMenu inherits Rectangle {
     in-out property <bool> context-is-youtube;
     in-out property <bool> context-is-downloaded;
     in-out property <bool> context-in-playlist;
+    in-out property <bool> context-in-queue;
     in property <length> parent-width;
     in property <length> parent-height;
 
@@ -15,11 +16,14 @@ export component ContextMenu inherits Rectangle {
     callback toggle-picker(int);
     callback download-or-delete(int);
     callback remove-from-playlist(int);
+    callback remove-from-queue(int);
+
+    property <bool> show-remove: root.context-in-playlist || root.context-in-queue;
 
     x: max(0px, min(root.context-menu-x, parent-width - 190px));
-    y: max(0px, min(root.context-menu-y, parent-height - max(40px, Theme.spacing-xs * 2 + 36px + (root.context-is-youtube ? 108px : 0px) + (root.context-in-playlist ? 36px : 0px) - Theme.spacing-xs)));
+    y: max(0px, min(root.context-menu-y, parent-height - max(40px, Theme.spacing-xs * 2 + 36px + (root.context-is-youtube ? 108px : 0px) + (root.show-remove ? 36px : 0px) - Theme.spacing-xs)));
     width: 190px;
-    height: max(40px, Theme.spacing-xs * 2 + 36px + (root.context-is-youtube ? 108px : 0px) + (root.context-in-playlist ? 36px : 0px) - Theme.spacing-xs);
+    height: max(40px, Theme.spacing-xs * 2 + 36px + (root.context-is-youtube ? 108px : 0px) + (root.show-remove ? 36px : 0px) - Theme.spacing-xs);
     background: Theme.bg-elevated;
     border-radius: Theme.radius-md;
     border-width: 1px;
@@ -103,17 +107,35 @@ export component ContextMenu inherits Rectangle {
         if root.context-in-playlist : Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
-            background: remove-touch.has-hover ? Theme.bg-hover : transparent;
+            background: remove-pl-touch.has-hover ? Theme.bg-hover : transparent;
             HorizontalLayout {
                 padding-left: Theme.spacing-md;
                 padding-right: Theme.spacing-md;
                 Text { text: "Remove from Playlist"; color: Theme.fg; vertical-alignment: center; }
             }
-            remove-touch := TouchArea {
+            remove-pl-touch := TouchArea {
                 mouse-cursor: pointer;
                 pointer-event(event) => {
                     if (event.kind == PointerEventKind.up) {
                         root.remove-from-playlist(root.context-menu-idx);
+                    }
+                }
+            }
+        }
+        if root.context-in-queue : Rectangle {
+            height: 32px;
+            border-radius: Theme.radius-sm;
+            background: remove-q-touch.has-hover ? Theme.bg-hover : transparent;
+            HorizontalLayout {
+                padding-left: Theme.spacing-md;
+                padding-right: Theme.spacing-md;
+                Text { text: "Remove from Queue"; color: Theme.fg; vertical-alignment: center; }
+            }
+            remove-q-touch := TouchArea {
+                mouse-cursor: pointer;
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.up) {
+                        root.remove-from-queue(root.context-menu-idx);
                     }
                 }
             }
