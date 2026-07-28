@@ -446,4 +446,15 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
             b.borrow_mut().handle_download_or_delete_at(index as usize);
         }
     });
+
+    let b = Rc::downgrade(backend);
+    window.on_toggle_queue(move || {
+        if let Some(b) = b.upgrade() {
+            let mut b = b.borrow_mut();
+            b.show_queue = !b.show_queue;
+            if let Some(w) = b.ui.upgrade() {
+                w.set_show_queue(b.show_queue);
+            }
+        }
+    });
 }

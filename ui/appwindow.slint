@@ -1,6 +1,6 @@
 import { Button, LineEdit, Slider, ListView, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, SearchIcon, NavIcon, VolumeIcon, DeleteIcon, DownloadIcon, FolderIcon } from "icons.slint";
+import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, SearchIcon, NavIcon, VolumeIcon, DeleteIcon, DownloadIcon, FolderIcon, QueueListIcon } from "icons.slint";
 import { TrackRow } from "track-row.slint";
 import { PlaylistCard } from "playlist-card.slint";
 import { Track, PlaylistInfo } from "types.slint";
@@ -72,9 +72,13 @@ export component AppWindow inherits Window {
     in-out property <length> pl-viewport-y;
     in-out property <length> pl-listview-height;
 
+    in-out property <bool> show-queue;
+    in-out property <[Track]> queue-tracks;
+
     in-out property <bool> show-delete-confirm;
     in-out property <int> delete-confirm-index: -1;
 
+    callback toggle-queue();
     callback navigate-to(int);
     callback navigate-back();
     callback navigate-forward();
@@ -271,7 +275,7 @@ export component AppWindow inherits Window {
 
             Rectangle {
                 background: Theme.bg;
-                horizontal-stretch: 1;
+                horizontal-stretch: 4;
                 min-width: 400px;
 
                 VerticalLayout {
@@ -639,6 +643,86 @@ export component AppWindow inherits Window {
                     }
                 }
             }
+
+        if root.show-queue : Rectangle {
+            horizontal-stretch: 1;
+            min-width: 240px;
+            clip: true;
+            background: Theme.bg-secondary;
+            VerticalLayout {
+                padding: Theme.spacing-md;
+                spacing: Theme.spacing-xs;
+
+                HorizontalLayout {
+                    spacing: Theme.spacing-sm;
+                    Text { text: "Queue"; color: Theme.fg; font-weight: 700; }
+                    Rectangle { horizontal-stretch: 1; }
+                    Text {
+                        text: "×"; color: Theme.fg-secondary;
+                        vertical-alignment: center;
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { toggle-queue(); }
+                        }
+                    }
+                }
+
+                Text { text: "Now Playing"; color: Theme.accent; font-size: 12px; }
+
+                Rectangle {
+                    height: 56px;
+                    HorizontalLayout {
+                        spacing: Theme.spacing-sm;
+                        Rectangle {
+                            width: 48px; height: 48px;
+                            border-radius: Theme.radius-sm;
+                            background: Theme.accent;
+                            clip: true;
+                            Image {
+                                source: current-thumbnail;
+                                width: 48px; height: 48px;
+                                image-fit: cover;
+                            }
+                        }
+                        VerticalLayout {
+                            Text { text: current-title; color: Theme.fg; overflow: elide; }
+                            Text { text: current-artist; color: Theme.fg-secondary; overflow: elide; }
+                        }
+                    }
+                }
+
+                Rectangle { height: 1px; background: Theme.border; }
+
+                Text { text: "Up Next"; color: Theme.accent; font-size: 12px; }
+
+                ListView {
+                    vertical-stretch: 1;
+                    for t[i] in root.queue-tracks: Rectangle {
+                        height: 48px;
+                        border-radius: Theme.radius-sm;
+                        HorizontalLayout {
+                            spacing: Theme.spacing-sm;
+                            padding: Theme.spacing-xs;
+                            Rectangle {
+                                width: 36px; height: 36px;
+                                border-radius: Theme.radius-sm;
+                                background: Theme.accent;
+                                clip: true;
+                                Image {
+                                    source: root.resolve-thumbnail(t.thumbnail);
+                                    width: 36px; height: 36px;
+                                    image-fit: cover;
+                                }
+                            }
+                            VerticalLayout {
+                                Text { text: t.title; color: Theme.fg; overflow: elide; }
+                                Text { text: t.artist; color: Theme.fg-secondary; overflow: elide; font-size: 12px; }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         }
 
         Rectangle {
@@ -794,6 +878,23 @@ export component AppWindow inherits Window {
                         maximum: 1;
                         value: volume;
                         changed(value) => { set-volume(value); }
+                    }
+                }
+
+                Rectangle {
+                    width: 30px; height: 30px;
+                    border-radius: Theme.radius-sm;
+                    background: queue-btn-ta.has-hover || root.show-queue ? Theme.accent : transparent;
+                    animate background { duration: 150ms; }
+                    VerticalLayout {
+                        alignment: center;
+                        QueueListIcon { colorize: root.show-queue ? Theme.accent-fg : Theme.fg; }
+                    }
+                    queue-btn-ta := TouchArea {
+                        mouse-cursor: pointer;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) { toggle-queue(); }
+                        }
                     }
                 }
             }

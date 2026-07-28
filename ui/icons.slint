@@ -121,3 +121,17 @@ export component VolumeIcon {
         }
     }
 }
+
+export component QueueListIcon {
+    in property <brush> colorize: Theme.fg;
+    Rectangle {
+        width: 18px; height: 18px;
+        VerticalLayout {
+            spacing: 3px;
+            padding: 2px;
+            Rectangle { height: 2px; border-radius: 1px; background: colorize; }
+            Rectangle { height: 2px; border-radius: 1px; background: colorize; }
+            Rectangle { height: 2px; border-radius: 1px; background: colorize; }
+        }
+    }
+}

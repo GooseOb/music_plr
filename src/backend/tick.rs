@@ -90,6 +90,23 @@ impl super::Backend {
         window.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
         let total = self.duration as u32;
         window.set_total_text(format!("{}:{:02}", total / 60, total % 60).into());
+        self.sync_queue_ui();
+    }
+
+    pub fn sync_queue_ui(&mut self) {
+        let Some(window) = self.ui.upgrade() else {
+            return;
+        };
+        let registry = &self.download_registry;
+        let upcoming: Vec<Track> = self
+            .queue
+            .tracks
+            .iter()
+            .enumerate()
+            .skip(self.queue.current_index + 1)
+            .map(|(_, t)| to_slint_track(t, registry, false))
+            .collect();
+        window.set_queue_tracks(Rc::new(slint::VecModel::from(upcoming)).into());
     }
 
     pub fn update_nav_ui(&mut self) {
