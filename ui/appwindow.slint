@@ -1,8 +1,6 @@
 import { Button, LineEdit, Slider, ListView, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { SearchIcon } from "icons.slint";
-import { TrackRow } from "track-row.slint";
-import { PlaylistCard } from "playlist-card.slint";
 import { Track, PlaylistInfo } from "types.slint";
 import { Sidebar } from "sidebar.slint";
 import { PlayBar } from "playbar.slint";
@@ -11,6 +9,9 @@ import { ContextMenu } from "context-menu.slint";
 import { SearchHistory } from "search-history.slint";
 import { PickerDialog } from "picker-dialog.slint";
 import { DeleteConfirm } from "delete-confirm.slint";
+import { SearchView } from "search-view.slint";
+import { PlaylistView } from "playlist-view.slint";
+import { RadioView } from "radio-view.slint";
 
 export component AppWindow inherits Window {
     in-out property <int> current-view;
@@ -38,12 +39,6 @@ export component AppWindow inherits Window {
     in-out property <[Track]> playlist-tracks;
     in-out property <[string]> picker-playlists;
 
-    in-out property <int> search-focused-index: 0;
-    in-out property <int> playlist-focused-index: 0;
-    in-out property <int> radio-focused-index: 0;
-    in-out property <int> search-history-focused-index: 0;
-    in-out property <int> picker-focused-index: 0;
-
     in-out property <bool> show-picker;
     in-out property <int> picker-track-idx;
     in-out property <int> selected-playlist;
@@ -54,6 +49,7 @@ export component AppWindow inherits Window {
     in-out property <bool> search-has-focus;
     in-out property <string> elapsed-text;
     in-out property <string> total-text;
+
     in-out property <bool> show-context-menu: false;
     in-out property <int> context-menu-idx: -1;
     in-out property <length> context-menu-x: 0px;
@@ -72,11 +68,10 @@ export component AppWindow inherits Window {
     in-out property <bool> drag-reordering;
     in-out property <int> drop-idx: 0;
     in-out property <length> drop-line-y: 0px;
-    in-out property <length> pl-scroll-pos;
+    in-out property <length> pl-viewport-y;
     in-out property <length> pl-listview-abs-x;
     in-out property <length> pl-listview-abs-y;
     in-out property <length> pl-listview-width;
-    in-out property <length> pl-viewport-y;
     in-out property <length> pl-listview-height;
 
     in-out property <bool> show-queue;
@@ -84,6 +79,9 @@ export component AppWindow inherits Window {
 
     in-out property <bool> show-delete-confirm;
     in-out property <int> delete-confirm-index: -1;
+
+    in-out property <int> picker-focused-index: 0;
+    in-out property <int> search-history-focused-index: 0;
 
     callback toggle-queue();
     callback navigate-to(int);
@@ -202,260 +200,127 @@ export component AppWindow inherits Window {
 
                     if loading : Text { text: "Searching..."; color: Theme.fg-secondary; }
 
-                        if !loading && search-results.length > 0 && selected-playlist < 0 && current-view != 1 : VerticalLayout {
-                            spacing: Theme.spacing-xs;
-                            Rectangle { height: Theme.spacing-xs; }
-                            ListView {
-                                vertical-stretch: 1;
-                                for t[i] in search-results: TrackRow {
-                                    track: t;
-                                    thumbnail-image: root.resolve-thumbnail(t.thumbnail);
-                                    idx: i;
-                                    keyboard-focused: search-fs.has-focus && root.search-focused-index == i;
-                                    current-track-id: root.current-track-id;
-                                    player-playing: root.is-playing;
-                                    in-playlist: false;
-                                    context-open: root.show-context-menu && root.context-menu-idx == i;
-                                    clear-search-focus => { search-text-input.clear-focus(); root.show-search-history = false; }
-                                    play-clicked(index) => { root.play-track(index); }
-                                    row-clicked(index) => { root.toggle-select(index); }
-                                    start-radio(index) => { root.start-radio(index); }
-                                    start-artist(index) => { root.start-artist(index); }
-                                    toggle-picker(index) => { root.toggle-picker(index); }
-                                    download-or-delete(index) => { root.download-or-delete(index); }
-                                    remove-from-playlist(index) => {}
-                                    right-clicked(index, abs-x, abs-y) => {
-                                        root.context-menu-idx = index;
-                                        root.context-menu-x = abs-x;
-                                        root.context-menu-y = abs-y;
-                                        root.context-is-youtube = t.source == "youtube";
-                                        root.context-is-downloaded = t.is-downloaded;
-                                        root.context-in-playlist = false;
-                                        root.show-context-menu = true;
-                                    }
-                                    drag-pressed(index, abs-x, abs-y) => {
-                                        root.drag-possible = true;
-                                        root.drag-track-idx = index;
-                                        root.drag-x = abs-x;
-                                        root.drag-y = abs-y;
-                                    }
-                                    drag-moved(index, abs-x, abs-y) => {
-                                        if (!root.drag-possible) { return; }
-                                        if (!root.drag-active) {
-                                            if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
-                                                root.drag-active = true;
-                                            } else { return; }
-                                        }
-                                        root.drag-x = abs-x;
-                                        root.drag-y = abs-y;
-                                        root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
-                                        root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - sidebar.list-abs-y) / 44px)) : -1;
-                                    }
-                                    drag-completed(index, abs-x, abs-y) => {
-                                        if (root.drag-active) {
-                                            if (root.drag-target-playlist >= 0) {
-                                                root.drag-add-to-playlist(index, root.drag-target-playlist);
-                                            }
-                                            root.drag-active = false;
-                                            root.drag-target-playlist = -1;
-                                            root.drag-over-sidebar = false;
-                                        }
-                                        root.drag-possible = false;
-                                    }
-                                }
-                            }
-                            Rectangle { height: Theme.spacing-xs; }
-                            Button { text: "Load more"; horizontal-stretch: 1; clicked => { search-load-more(); } }
-                        }
+                    if !loading && search-results.length > 0 && selected-playlist < 0 && current-view != 1 : SearchView {
+                        search-results: root.search-results;
+                        loading: root.loading;
+                        current-track-id: root.current-track-id;
+                        is-playing: root.is-playing;
+                        playlist-count: root.playlist-list.length;
+                        sidebar-list-abs-y: sidebar.list-abs-y;
 
-                    if selected-playlist >= 0 : VerticalLayout {
-                        spacing: Theme.spacing-sm;
-                        HorizontalLayout {
-                            spacing: Theme.spacing-sm;
-                            Text { text: selected-playlist-name; color: Theme.fg; horizontal-stretch: 1; }
-                            Rectangle {
-                                width: 120px; height: 28px; border-radius: Theme.radius-sm;
-                                background: del-pl-ta.has-hover ? Theme.bg-hover : transparent;
-                                animate background { duration: 150ms; }
-                                VerticalLayout { alignment: center;
-                                    Text { text: "Delete playlist"; color: Theme.warning; horizontal-alignment: center; }
-                                }
-                                del-pl-ta := TouchArea {
-                                    mouse-cursor: pointer;
-                                    pointer-event(event) => {
-                                        if (event.kind == PointerEventKind.up) {
-                                            root.delete-confirm-index = root.selected-playlist;
-                                            root.show-delete-confirm = true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                            pl-listview := ListView {
-                                viewport-y <=> root.pl-viewport-y;
-                                vertical-stretch: 1;
-                                visible: playlist-tracks.length > 0;
-                                for t[i] in playlist-tracks: TrackRow {
-                                        track: t;
-                                        thumbnail-image: root.resolve-thumbnail(t.thumbnail);
-                                        idx: i;
-                                        keyboard-focused: playlist-fs.has-focus && root.playlist-focused-index == i;
-                                        current-track-id: root.current-track-id;
-                                        player-playing: root.is-playing;
-                                        in-playlist: true;
-                                        context-open: root.show-context-menu && root.context-menu-idx == i;
-                                        clear-search-focus => { search-text-input.clear-focus(); root.show-search-history = false; }
-                                        play-clicked(index) => { root.play-track(index); }
-                                        row-clicked(index) => { root.toggle-select(index); }
-                                        start-radio(index) => { root.start-radio(index); }
-                                        start-artist(index) => { root.start-artist(index); }
-                                        toggle-picker(index) => { root.toggle-picker(index); }
-                                        download-or-delete(index) => { root.download-or-delete(index); }
-                                        remove-from-playlist(index) => { root.remove-from-playlist(index); }
-                                        right-clicked(index, abs-x, abs-y) => {
-                                            root.context-menu-idx = index;
-                                            root.context-menu-x = abs-x;
-                                            root.context-menu-y = abs-y;
-                                            root.context-is-youtube = t.source == "youtube";
-                                            root.context-is-downloaded = t.is-downloaded;
-                                            root.context-in-playlist = true;
-                                            root.show-context-menu = true;
-                                        }
-                                        drag-pressed(index, abs-x, abs-y) => {
-                                            root.drag-possible = true;
-                                            root.drag-track-idx = index;
-                                            root.drag-x = abs-x;
-                                            root.drag-y = abs-y;
-                                            root.pl-listview-abs-x = pl-listview.absolute-position.x;
-                                            root.pl-listview-abs-y = pl-listview.absolute-position.y;
-                                            root.pl-listview-width = pl-listview.width;
-                                            root.pl-listview-height = pl-listview.height;
-                                            root.drop-idx = index;
-                                        }
-                                        drag-moved(index, abs-x, abs-y) => {
-                                            if (!root.drag-possible) { return; }
-                                            if (!root.drag-active) {
-                                                if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
-                                                    root.drag-active = true;
-                                                    root.drag-reordering = true;
-                                                } else { return; }
-                                            }
-                                            root.drag-x = abs-x;
-                                            root.drag-y = abs-y;
-                                            root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
-                                            root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - sidebar.list-abs-y) / 44px)) : -1;
-                                            root.drag-reordering = abs-x > 200px;
-                                            if (root.drag-reordering) {
-                                                let rel-y = abs-y - pl-listview.absolute-position.y;
-                                                let edge-zone = 40px;
-                                                if (rel-y < edge-zone) {
-                                                    pl-listview.viewport-y = min(0px, pl-listview.viewport-y + 8px);
-                                                } else if (rel-y > pl-listview.height - edge-zone) {
-                                                    let max-scroll = -(max(0px, playlist-tracks.length * 48px - pl-listview.height));
-                                                    pl-listview.viewport-y = max(max-scroll, pl-listview.viewport-y - 8px);
-                                                }
-                                                root.drop-idx = max(0, min(playlist-tracks.length, (rel-y - pl-listview.viewport-y) / 48px + 0.5));
-                                                root.drop-line-y = max(0px, min(pl-listview.height - 2px, root.drop-idx * 48px + pl-listview.viewport-y));
-                                            }
-                                        }
-                                        drag-completed(index, abs-x, abs-y) => {
-                                            if (root.drag-active) {
-                                                if (root.drag-target-playlist >= 0) {
-                                                    root.drag-add-to-playlist(index, root.drag-target-playlist);
-                                                } else if (root.drag-reordering && root.drop-idx != root.drag-track-idx) {
-                                                    root.reorder-tracks(root.drag-track-idx, root.drop-idx);
-                                                }
-                                                root.drag-active = false;
-                                                root.drag-target-playlist = -1;
-                                                root.drag-over-sidebar = false;
-                                                root.drag-reordering = false;
-                                            }
-                                            root.drag-possible = false;
-                                        }
-                                    }
-                                }
+                        show-context-menu <=> root.show-context-menu;
+                        context-menu-idx <=> root.context-menu-idx;
+                        context-menu-x <=> root.context-menu-x;
+                        context-menu-y <=> root.context-menu-y;
+                        context-is-youtube <=> root.context-is-youtube;
+                        context-is-downloaded <=> root.context-is-downloaded;
+                        context-in-playlist <=> root.context-in-playlist;
 
-                            if playlist-tracks.length == 0 : Rectangle {
-                            vertical-stretch: 1;
-                            VerticalLayout {
-                                alignment: center;
-                                Text {
-                                    text: "No tracks yet. Add local music or add from Search.";
-                                    color: Theme.fg-secondary;
-                                }
-                            }
-                        }
-                        Button { text: "Add Local Music"; horizontal-stretch: 1; clicked => { add-local-music(); } }
+                        drag-possible <=> root.drag-possible;
+                        drag-active <=> root.drag-active;
+                        drag-track-idx <=> root.drag-track-idx;
+                        drag-x <=> root.drag-x;
+                        drag-y <=> root.drag-y;
+                        drag-target-playlist <=> root.drag-target-playlist;
+                        drag-over-sidebar <=> root.drag-over-sidebar;
+
+                        clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
+                        play-track(i) => { root.play-track(i); }
+                        toggle-select(i) => { root.toggle-select(i); }
+                        start-radio(i) => { root.start-radio(i); }
+                        start-artist(i) => { root.start-artist(i); }
+                        toggle-picker(i) => { root.toggle-picker(i); }
+                        download-or-delete(i) => { root.download-or-delete(i); }
+                        search-load-more() => { root.search-load-more(); }
+                        drag-add-to-playlist(ti, pi) => { root.drag-add-to-playlist(ti, pi); }
+                        resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
                     }
 
-                    if selected-playlist < 0 && current-view == 1 : VerticalLayout {
-                            vertical-stretch: 1;
-                            spacing: Theme.spacing-xs;
-                            if radio-label != "" : Text { text: radio-label; color: Theme.fg; }
-                            if loading && radio-tracks.length == 0 : Text { text: "Loading recommendations..."; color: Theme.fg-secondary; }
-                            if radio-tracks.length > 0 : ListView {
-                                vertical-stretch: 1;
-                                for t[i] in radio-tracks: TrackRow {
-                                    track: t;
-                                    thumbnail-image: root.resolve-thumbnail(t.thumbnail);
-                                    idx: i;
-                                    keyboard-focused: radio-fs.has-focus && root.radio-focused-index == i;
-                                    current-track-id: root.current-track-id;
-                                    player-playing: root.is-playing;
-                                    in-playlist: false;
-                                    context-open: root.show-context-menu && root.context-menu-idx == i;
-                                    clear-search-focus => { search-text-input.clear-focus(); root.show-search-history = false; }
-                                    play-clicked(index) => { root.play-track(index); }
-                                    row-clicked(index) => { root.toggle-select(index); }
-                                    start-radio(index) => { root.start-radio(index); }
-                                    start-artist(index) => { root.start-artist(index); }
-                                    toggle-picker(index) => { root.toggle-picker(index); }
-                                    download-or-delete(index) => { root.download-or-delete(index); }
-                                    remove-from-playlist(index) => {}
-                                    right-clicked(index, abs-x, abs-y) => {
-                                        root.context-menu-idx = index;
-                                        root.context-menu-x = abs-x;
-                                        root.context-menu-y = abs-y;
-                                        root.context-is-youtube = t.source == "youtube";
-                                        root.context-is-downloaded = t.is-downloaded;
-                                        root.context-in-playlist = false;
-                                        root.show-context-menu = true;
-                                    }
-                                    drag-pressed(index, abs-x, abs-y) => {
-                                        root.drag-possible = true;
-                                        root.drag-track-idx = index;
-                                        root.drag-x = abs-x;
-                                        root.drag-y = abs-y;
-                                    }
-                                    drag-moved(index, abs-x, abs-y) => {
-                                        if (!root.drag-possible) { return; }
-                                        if (!root.drag-active) {
-                                            if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
-                                                root.drag-active = true;
-                                            } else { return; }
-                                        }
-                                        root.drag-x = abs-x;
-                                        root.drag-y = abs-y;
-                                        root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
-                                        root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - sidebar.list-abs-y) / 44px)) : -1;
-                                    }
-                                    drag-completed(index, abs-x, abs-y) => {
-                                        if (root.drag-active) {
-                                            if (root.drag-target-playlist >= 0) {
-                                                root.drag-add-to-playlist(index, root.drag-target-playlist);
-                                            }
-                                            root.drag-active = false;
-                                            root.drag-target-playlist = -1;
-                                            root.drag-over-sidebar = false;
-                                        }
-                                        root.drag-possible = false;
-                                    }
-                                }
-                            }
-                            if radio-tracks.length == 0 && !loading : Text {
-                            text: "Search for a song first, then use Radio or Artist";
-                            color: Theme.fg-secondary;
+                    if selected-playlist >= 0 : PlaylistView {
+                        playlist-tracks: root.playlist-tracks;
+                        selected-playlist-name: root.selected-playlist-name;
+                        current-track-id: root.current-track-id;
+                        is-playing: root.is-playing;
+                        playlist-count: root.playlist-list.length;
+                        sidebar-list-abs-y: sidebar.list-abs-y;
+
+                        show-context-menu <=> root.show-context-menu;
+                        context-menu-idx <=> root.context-menu-idx;
+                        context-menu-x <=> root.context-menu-x;
+                        context-menu-y <=> root.context-menu-y;
+                        context-is-youtube <=> root.context-is-youtube;
+                        context-is-downloaded <=> root.context-is-downloaded;
+                        context-in-playlist <=> root.context-in-playlist;
+
+                        drag-possible <=> root.drag-possible;
+                        drag-active <=> root.drag-active;
+                        drag-track-idx <=> root.drag-track-idx;
+                        drag-x <=> root.drag-x;
+                        drag-y <=> root.drag-y;
+                        drag-target-playlist <=> root.drag-target-playlist;
+                        drag-over-sidebar <=> root.drag-over-sidebar;
+
+                        drag-reordering <=> root.drag-reordering;
+                        drop-idx <=> root.drop-idx;
+                        drop-line-y <=> root.drop-line-y;
+                        pl-viewport-y <=> root.pl-viewport-y;
+                        pl-listview-abs-x <=> root.pl-listview-abs-x;
+                        pl-listview-abs-y <=> root.pl-listview-abs-y;
+                        pl-listview-width <=> root.pl-listview-width;
+                        pl-listview-height <=> root.pl-listview-height;
+
+                        clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
+                        play-track(i) => { root.play-track(i); }
+                        toggle-select(i) => { root.toggle-select(i); }
+                        start-radio(i) => { root.start-radio(i); }
+                        start-artist(i) => { root.start-artist(i); }
+                        toggle-picker(i) => { root.toggle-picker(i); }
+                        download-or-delete(i) => { root.download-or-delete(i); }
+                        remove-from-playlist(i) => { root.remove-from-playlist(i); }
+                        add-local-music() => { root.add-local-music(); }
+                        delete-playlist() => {
+                            root.delete-confirm-index = root.selected-playlist;
+                            root.show-delete-confirm = true;
                         }
+                        drag-add-to-playlist(ti, pi) => { root.drag-add-to-playlist(ti, pi); }
+                        reorder-tracks(fi, ti) => { root.reorder-tracks(fi, ti); }
+                        resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
+                    }
+
+                    if selected-playlist < 0 && current-view == 1 : RadioView {
+                        radio-tracks: root.radio-tracks;
+                        radio-label: root.radio-label;
+                        loading: root.loading;
+                        current-track-id: root.current-track-id;
+                        is-playing: root.is-playing;
+                        playlist-count: root.playlist-list.length;
+                        sidebar-list-abs-y: sidebar.list-abs-y;
+
+                        show-context-menu <=> root.show-context-menu;
+                        context-menu-idx <=> root.context-menu-idx;
+                        context-menu-x <=> root.context-menu-x;
+                        context-menu-y <=> root.context-menu-y;
+                        context-is-youtube <=> root.context-is-youtube;
+                        context-is-downloaded <=> root.context-is-downloaded;
+                        context-in-playlist <=> root.context-in-playlist;
+
+                        drag-possible <=> root.drag-possible;
+                        drag-active <=> root.drag-active;
+                        drag-track-idx <=> root.drag-track-idx;
+                        drag-x <=> root.drag-x;
+                        drag-y <=> root.drag-y;
+                        drag-target-playlist <=> root.drag-target-playlist;
+                        drag-over-sidebar <=> root.drag-over-sidebar;
+
+                        clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
+                        play-track(i) => { root.play-track(i); }
+                        toggle-select(i) => { root.toggle-select(i); }
+                        start-radio(i) => { root.start-radio(i); }
+                        start-artist(i) => { root.start-artist(i); }
+                        toggle-picker(i) => { root.toggle-picker(i); }
+                        download-or-delete(i) => { root.download-or-delete(i); }
+                        drag-add-to-playlist(ti, pi) => { root.drag-add-to-playlist(ti, pi); }
+                        resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
                     }
 
                     if search-results.length == 0 && selected-playlist < 0 && current-view != 1 && !loading : Rectangle {
@@ -469,80 +334,22 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
-
-                search-fs := FocusScope {
-                    width: 0px; height: 0px;
-                    focus-on-click: false;
-                    key-pressed(event) => {
-                        if (event.text == Key.DownArrow) {
-                            root.search-focused-index = (root.search-focused-index + 1).min(search-results.length - 1);
-                            accept
-                        } else if (event.text == Key.UpArrow) {
-                            root.search-focused-index = (root.search-focused-index - 1).max(0);
-                            accept
-                        } else if (event.text == Key.Return) {
-                            root.play-track(root.search-focused-index);
-                            accept
-                        } else if (event.text == Key.Delete) {
-                            root.download-or-delete(root.search-focused-index);
-                            accept
-                        } else { reject }
-                    }
-                }
-                playlist-fs := FocusScope {
-                    width: 0px; height: 0px;
-                    focus-on-click: false;
-                    key-pressed(event) => {
-                        if (event.text == Key.DownArrow) {
-                            root.playlist-focused-index = (root.playlist-focused-index + 1).min(playlist-tracks.length - 1);
-                            accept
-                        } else if (event.text == Key.UpArrow) {
-                            root.playlist-focused-index = (root.playlist-focused-index - 1).max(0);
-                            accept
-                        } else if (event.text == Key.Return) {
-                            root.play-track(root.playlist-focused-index);
-                            accept
-                        } else if (event.text == Key.Delete) {
-                            root.remove-from-playlist(root.playlist-focused-index);
-                            accept
-                        } else { reject }
-                    }
-                }
-                radio-fs := FocusScope {
-                    width: 0px; height: 0px;
-                    focus-on-click: false;
-                    key-pressed(event) => {
-                        if (event.text == Key.DownArrow) {
-                            root.radio-focused-index = (root.radio-focused-index + 1).min(radio-tracks.length - 1);
-                            accept
-                        } else if (event.text == Key.UpArrow) {
-                            root.radio-focused-index = (root.radio-focused-index - 1).max(0);
-                            accept
-                        } else if (event.text == Key.Return) {
-                            root.play-track(root.radio-focused-index);
-                            accept
-                        } else if (event.text == Key.Delete) {
-                            root.download-or-delete(root.radio-focused-index);
-                            accept
-                        } else { reject }
-                    }
-                }
             }
 
-        if root.show-queue : Rectangle {
-            horizontal-stretch: 1;
-            min-width: 240px;
-            clip: true;
-            background: Theme.bg-secondary;
-            QueuePanel {
-                queue-tracks <=> root.queue-tracks;
-                current-thumbnail: root.current-thumbnail;
-                current-title: root.current-title;
-                current-artist: root.current-artist;
-                toggle-queue() => { root.toggle-queue(); }
-                resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
+            if root.show-queue : Rectangle {
+                horizontal-stretch: 1;
+                min-width: 240px;
+                clip: true;
+                background: Theme.bg-secondary;
+                QueuePanel {
+                    queue-tracks <=> root.queue-tracks;
+                    current-thumbnail: root.current-thumbnail;
+                    current-title: root.current-title;
+                    current-artist: root.current-artist;
+                    toggle-queue() => { root.toggle-queue(); }
+                    resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
+                }
             }
-        }
         }
 
         PlayBar {

@@ -1,0 +1,193 @@
+import { Button, ListView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Track } from "types.slint";
+import { TrackRow } from "track-row.slint";
+
+export component PlaylistView {
+    in property <[Track]> playlist-tracks;
+    in property <string> selected-playlist-name;
+    in property <string> current-track-id;
+    in property <bool> is-playing;
+
+    in property <int> playlist-count;
+    in property <length> sidebar-list-abs-y;
+
+    in-out property <bool> show-context-menu;
+    in-out property <int> context-menu-idx: -1;
+    in-out property <length> context-menu-x: 0px;
+    in-out property <length> context-menu-y: 0px;
+    in-out property <bool> context-is-youtube: false;
+    in-out property <bool> context-is-downloaded: false;
+    in-out property <bool> context-in-playlist: false;
+
+    in-out property <bool> drag-possible;
+    in-out property <bool> drag-active;
+    in-out property <int> drag-track-idx;
+    in-out property <length> drag-x;
+    in-out property <length> drag-y;
+    in-out property <int> drag-target-playlist: -1;
+    in-out property <bool> drag-over-sidebar;
+
+    in-out property <bool> drag-reordering;
+    in-out property <int> drop-idx: 0;
+    in-out property <length> drop-line-y: 0px;
+    in-out property <length> pl-viewport-y;
+    in-out property <length> pl-listview-abs-x;
+    in-out property <length> pl-listview-abs-y;
+    in-out property <length> pl-listview-width;
+    in-out property <length> pl-listview-height;
+
+    callback clear-search-focus();
+    callback play-track(int);
+    callback toggle-select(int);
+    callback start-radio(int);
+    callback start-artist(int);
+    callback toggle-picker(int);
+    callback download-or-delete(int);
+    callback remove-from-playlist(int);
+    callback add-local-music();
+    callback delete-playlist();
+    callback drag-add-to-playlist(int, int);
+    callback reorder-tracks(int, int);
+    pure callback resolve-thumbnail(string) -> image;
+
+    property <int> focused-index: 0;
+
+    VerticalLayout {
+        spacing: Theme.spacing-sm;
+        HorizontalLayout {
+            spacing: Theme.spacing-sm;
+            Text { text: root.selected-playlist-name; color: Theme.fg; horizontal-stretch: 1; }
+            Rectangle {
+                width: 120px; height: 28px; border-radius: Theme.radius-sm;
+                background: del-pl-ta.has-hover ? Theme.bg-hover : transparent;
+                animate background { duration: 150ms; }
+                VerticalLayout { alignment: center;
+                    Text { text: "Delete playlist"; color: Theme.warning; horizontal-alignment: center; }
+                }
+                del-pl-ta := TouchArea {
+                    mouse-cursor: pointer;
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up) {
+                            root.delete-playlist();
+                        }
+                    }
+                }
+            }
+        }
+        pl-listview := ListView {
+            viewport-y <=> root.pl-viewport-y;
+            vertical-stretch: 1;
+            visible: playlist-tracks.length > 0;
+            for t[i] in root.playlist-tracks: TrackRow {
+                track: t;
+                thumbnail-image: root.resolve-thumbnail(t.thumbnail);
+                idx: i;
+                keyboard-focused: playlist-fs.has-focus && root.focused-index == i;
+                current-track-id: root.current-track-id;
+                player-playing: root.is-playing;
+                in-playlist: true;
+                context-open: root.show-context-menu && root.context-menu-idx == i;
+                clear-search-focus => { root.clear-search-focus(); }
+                play-clicked(index) => { root.play-track(index); }
+                row-clicked(index) => { root.toggle-select(index); }
+                start-radio(index) => { root.start-radio(index); }
+                start-artist(index) => { root.start-artist(index); }
+                toggle-picker(index) => { root.toggle-picker(index); }
+                download-or-delete(index) => { root.download-or-delete(index); }
+                remove-from-playlist(index) => { root.remove-from-playlist(index); }
+                right-clicked(index, abs-x, abs-y) => {
+                    root.context-menu-idx = index;
+                    root.context-menu-x = abs-x;
+                    root.context-menu-y = abs-y;
+                    root.context-is-youtube = t.source == "youtube";
+                    root.context-is-downloaded = t.is-downloaded;
+                    root.context-in-playlist = true;
+                    root.show-context-menu = true;
+                }
+                drag-pressed(index, abs-x, abs-y) => {
+                    root.drag-possible = true;
+                    root.drag-track-idx = index;
+                    root.drag-x = abs-x;
+                    root.drag-y = abs-y;
+                    root.pl-listview-abs-x = pl-listview.absolute-position.x;
+                    root.pl-listview-abs-y = pl-listview.absolute-position.y;
+                    root.pl-listview-width = pl-listview.width;
+                    root.pl-listview-height = pl-listview.height;
+                    root.drop-idx = index;
+                }
+                drag-moved(index, abs-x, abs-y) => {
+                    if (!root.drag-possible) { return; }
+                    if (!root.drag-active) {
+                        if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
+                            root.drag-active = true;
+                            root.drag-reordering = true;
+                        } else { return; }
+                    }
+                    root.drag-x = abs-x;
+                    root.drag-y = abs-y;
+                    root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
+                    root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && root.playlist-count > 0 ? max(0, min(root.playlist-count - 1, (abs-y - root.sidebar-list-abs-y) / 44px)) : -1;
+                    root.drag-reordering = abs-x > 200px;
+                    if (root.drag-reordering) {
+                        let rel-y = abs-y - pl-listview.absolute-position.y;
+                        let edge-zone = 40px;
+                        if (rel-y < edge-zone) {
+                            root.pl-viewport-y = min(0px, root.pl-viewport-y + 8px);
+                        } else if (rel-y > pl-listview.height - edge-zone) {
+                            let max-scroll = -(max(0px, root.playlist-tracks.length * 48px - pl-listview.height));
+                            root.pl-viewport-y = max(max-scroll, root.pl-viewport-y - 8px);
+                        }
+                        root.drop-idx = max(0, min(root.playlist-tracks.length, (rel-y - root.pl-viewport-y) / 48px + 0.5));
+                        root.drop-line-y = max(0px, min(pl-listview.height - 2px, root.drop-idx * 48px + root.pl-viewport-y));
+                    }
+                }
+                drag-completed(index, abs-x, abs-y) => {
+                    if (root.drag-active) {
+                        if (root.drag-target-playlist >= 0) {
+                            root.drag-add-to-playlist(index, root.drag-target-playlist);
+                        } else if (root.drag-reordering && root.drop-idx != root.drag-track-idx) {
+                            root.reorder-tracks(root.drag-track-idx, root.drop-idx);
+                        }
+                        root.drag-active = false;
+                        root.drag-target-playlist = -1;
+                        root.drag-over-sidebar = false;
+                        root.drag-reordering = false;
+                    }
+                    root.drag-possible = false;
+                }
+            }
+        }
+        if root.playlist-tracks.length == 0 : Rectangle {
+            vertical-stretch: 1;
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: "No tracks yet. Add local music or add from Search.";
+                    color: Theme.fg-secondary;
+                }
+            }
+        }
+        Button { text: "Add Local Music"; horizontal-stretch: 1; clicked => { root.add-local-music(); } }
+    }
+
+    playlist-fs := FocusScope {
+        width: 0px; height: 0px;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == Key.DownArrow) {
+                root.focused-index = (root.focused-index + 1).min(playlist-tracks.length - 1);
+                accept
+            } else if (event.text == Key.UpArrow) {
+                root.focused-index = (root.focused-index - 1).max(0);
+                accept
+            } else if (event.text == Key.Return) {
+                root.play-track(root.focused-index);
+                accept
+            } else if (event.text == Key.Delete) {
+                root.remove-from-playlist(root.focused-index);
+                accept
+            } else { reject }
+        }
+    }
+}
