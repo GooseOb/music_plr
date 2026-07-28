@@ -26,6 +26,10 @@ impl super::Backend {
             }
         }
 
+        if s.stream_finished && !s.is_playing && !self.track_loading {
+            self.handle_next_track();
+        }
+
         self.send_mpris_update();
 
         if let Some(window) = self.ui.upgrade() {

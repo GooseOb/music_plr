@@ -396,6 +396,9 @@ impl AudioPlayer {
                         } else if s.empty() {
                             st.is_playing = false;
                             st.progress = 0.0;
+                            if !stream_active {
+                                st.stream_finished = true;
+                            }
                         }
                     }
                 }
