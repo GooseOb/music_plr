@@ -40,6 +40,7 @@ fn main() {
     setup_result_processor(event_tx.clone(), result_rx);
     setup_mpris_processor(event_tx, mpris_cmd_rx);
     setup_audio_tick(&backend);
+    setup_auto_scroll_tick(&window);
 
     setup_callbacks(&window, &backend);
 
@@ -84,8 +85,7 @@ fn setup_mpris_processor(
                     MprisCommand::SetVolume(vol) => b.handle_set_volume(vol),
                     MprisCommand::Seek(delta_us) => {
                         let current_progress = b.progress;
-                        let delta_frac =
-                            delta_us as f32 / 1_000_000.0 / b.duration.max(0.001);
+                        let delta_frac = delta_us as f32 / 1_000_000.0 / b.duration.max(0.001);
                         let new_frac = (current_progress + delta_frac).clamp(0.0, 1.0);
                         b.handle_seek(new_frac);
                     }
@@ -114,6 +114,8 @@ fn setup_audio_tick(backend: &Rc<RefCell<Backend>>) {
         }
     }
 }
+
+fn setup_auto_scroll_tick(_window: &backend::AppWindow) {}
 
 fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) {
     let b = Rc::downgrade(backend);
@@ -278,10 +280,16 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     window.on_add_local_music(move || {
         if let Some(b) = b.upgrade() {
             let files = rfd::FileDialog::new()
-                .add_filter("Audio", &["mp3", "flac", "wav", "ogg", "m4a", "aac", "opus", "wma"])
+                .add_filter(
+                    "Audio",
+                    &["mp3", "flac", "wav", "ogg", "m4a", "aac", "opus", "wma"],
+                )
                 .pick_files();
             if let Some(files) = files {
-                let paths: Vec<String> = files.iter().map(|p| p.to_string_lossy().to_string()).collect();
+                let paths: Vec<String> = files
+                    .iter()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .collect();
                 b.borrow_mut().handle_add_local_music(paths);
             }
         }
@@ -327,14 +335,16 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     let b = Rc::downgrade(backend);
     window.on_drag_add_to_playlist(move |track_idx, playlist_idx| {
         if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_drag_add_to_playlist(track_idx as usize, playlist_idx as usize);
+            b.borrow_mut()
+                .handle_drag_add_to_playlist(track_idx as usize, playlist_idx as usize);
         }
     });
 
     let b = Rc::downgrade(backend);
     window.on_reorder_tracks(move |from_idx, to_idx| {
         if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_reorder_tracks(from_idx as usize, to_idx as usize);
+            b.borrow_mut()
+                .handle_reorder_tracks(from_idx as usize, to_idx as usize);
         }
     });
 

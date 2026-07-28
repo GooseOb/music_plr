@@ -123,10 +123,7 @@ impl PlayerInterface {
                 zvariant::Value::from(vec![d.artist.clone()]),
             );
             if d.duration_us > 0 {
-                map.insert(
-                    "mpris:length".into(),
-                    zvariant::Value::from(d.duration_us),
-                );
+                map.insert("mpris:length".into(), zvariant::Value::from(d.duration_us));
             }
         }
         map
@@ -191,10 +188,7 @@ impl PlayerInterface {
     }
 }
 
-pub fn start(
-    cmd_tx: mpsc::Sender<MprisCommand>,
-    update_rx: mpsc::Receiver<MprisUpdate>,
-) {
+pub fn start(cmd_tx: mpsc::Sender<MprisCommand>, update_rx: mpsc::Receiver<MprisUpdate>) {
     std::thread::spawn(move || {
         let rt = match tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -233,10 +227,7 @@ pub fn start(
             });
 
             let media_player2 = MediaPlayer2;
-            let player = PlayerInterface {
-                data,
-                cmd_tx,
-            };
+            let player = PlayerInterface { data, cmd_tx };
 
             if let Err(e) = conn
                 .object_server()
@@ -256,10 +247,7 @@ pub fn start(
                 return;
             }
 
-            if let Err(e) = conn
-                .request_name("org.mpris.MediaPlayer2.music_plr")
-                .await
-            {
+            if let Err(e) = conn.request_name("org.mpris.MediaPlayer2.music_plr").await {
                 eprintln!("[mpris] Failed to request D-Bus name: {}", e);
                 return;
             }

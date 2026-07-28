@@ -55,6 +55,7 @@ export component AppWindow inherits Window {
     in-out property <bool> context-is-downloaded: false;
     in-out property <bool> context-in-playlist: false;
 
+    in-out property <bool> drag-possible;
     in-out property <bool> drag-active;
     in-out property <int> drag-track-idx;
     in-out property <length> drag-x;
@@ -68,6 +69,8 @@ export component AppWindow inherits Window {
     in-out property <length> pl-listview-abs-x;
     in-out property <length> pl-listview-abs-y;
     in-out property <length> pl-listview-width;
+    in-out property <length> pl-viewport-y;
+    in-out property <length> pl-listview-height;
 
     in-out property <bool> show-delete-confirm;
     in-out property <int> delete-confirm-index: -1;
@@ -77,6 +80,7 @@ export component AppWindow inherits Window {
     callback navigate-forward();
     callback search-execute();
     callback search-load-more();
+    pl-viewport-y <=> pl-listview.viewport-y;
     callback play-track(int);
     callback toggle-play-pause();
     callback next-track();
@@ -341,25 +345,34 @@ export component AppWindow inherits Window {
                                         root.context-in-playlist = false;
                                         root.show-context-menu = true;
                                     }
-                                    drag-started(index, abs-x, abs-y) => {
-                                        root.drag-active = true;
+                                    drag-pressed(index, abs-x, abs-y) => {
+                                        root.drag-possible = true;
                                         root.drag-track-idx = index;
                                         root.drag-x = abs-x;
                                         root.drag-y = abs-y;
                                     }
                                     drag-moved(index, abs-x, abs-y) => {
+                                        if (!root.drag-possible) { return; }
+                                        if (!root.drag-active) {
+                                            if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
+                                                root.drag-active = true;
+                                            } else { return; }
+                                        }
                                         root.drag-x = abs-x;
                                         root.drag-y = abs-y;
                                         root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
                                         root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - playlist-list-area.absolute-position.y) / 44px)) : -1;
                                     }
                                     drag-completed(index, abs-x, abs-y) => {
-                                        if (root.drag-target-playlist >= 0) {
-                                            root.drag-add-to-playlist(index, root.drag-target-playlist);
+                                        if (root.drag-active) {
+                                            if (root.drag-target-playlist >= 0) {
+                                                root.drag-add-to-playlist(index, root.drag-target-playlist);
+                                            }
+                                            root.drag-active = false;
+                                            root.drag-target-playlist = -1;
+                                            root.drag-over-sidebar = false;
                                         }
-                                        root.drag-active = false;
-                                        root.drag-target-playlist = -1;
-                                        root.drag-over-sidebar = false;
+                                        root.drag-possible = false;
                                     }
                                 }
                             }
@@ -367,7 +380,8 @@ export component AppWindow inherits Window {
                             Button { text: "Load more"; horizontal-stretch: 1; clicked => { search-load-more(); } }
                         }
 
-                    if selected-playlist >= 0 : VerticalLayout {
+                    pl-playlist-area := VerticalLayout {
+                        visible: selected-playlist >= 0;
                         spacing: Theme.spacing-sm;
                         HorizontalLayout {
                             spacing: Theme.spacing-sm;
@@ -390,70 +404,89 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
-                        if playlist-tracks.length > 0 : pl-listview := ListView {
-                            vertical-stretch: 1;
-                            for t[i] in playlist-tracks: TrackRow {
-                                    track: t;
-                                    thumbnail-image: root.resolve-thumbnail(t.thumbnail);
-                                    idx: i;
-                                    keyboard-focused: playlist-fs.has-focus && root.playlist-focused-index == i;
-                                    current-track-id: root.current-track-id;
-                                    player-playing: root.is-playing;
-                                    in-playlist: true;
-                                    context-open: root.show-context-menu && root.context-menu-idx == i;
-                                    clear-search-focus => { search-text-input.clear-focus(); root.show-search-history = false; }
-                                    play-clicked(index) => { root.play-track(index); }
-                                    row-clicked(index) => { root.toggle-select(index); }
-                                    start-radio(index) => { root.start-radio(index); }
-                                    start-artist(index) => { root.start-artist(index); }
-                                    toggle-picker(index) => { root.toggle-picker(index); }
-                                    download-or-delete(index) => { root.download-or-delete(index); }
-                                    remove-from-playlist(index) => { root.remove-from-playlist(index); }
-                                    right-clicked(index, abs-x, abs-y) => {
-                                        root.context-menu-idx = index;
-                                        root.context-menu-x = abs-x;
-                                        root.context-menu-y = abs-y;
-                                        root.context-is-youtube = t.source == "youtube";
-                                        root.context-is-downloaded = t.is-downloaded;
-                                        root.context-in-playlist = true;
-                                        root.show-context-menu = true;
-                                    }
-                                    drag-started(index, abs-x, abs-y) => {
-                                        root.drag-active = true;
-                                        root.drag-track-idx = index;
-                                        root.drag-x = abs-x;
-                                        root.drag-y = abs-y;
-                                        root.drag-reordering = true;
-                                        root.pl-listview-abs-x = pl-listview.absolute-position.x;
-                                        root.pl-listview-abs-y = pl-listview.absolute-position.y;
-                                        root.pl-listview-width = pl-listview.width;
-                                    }
-                                    drag-moved(index, abs-x, abs-y) => {
-                                        root.drag-active = true;
-                                        root.drag-x = abs-x;
-                                        root.drag-y = abs-y;
-                                        root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
-                                        root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - playlist-list-area.absolute-position.y) / 44px)) : -1;
-                                        root.drag-reordering = abs-x > 200px;
-                                        if (root.drag-reordering) {
-                                            root.drop-idx = max(0, min(playlist-tracks.length, (abs-y - pl-listview.absolute-position.y - pl-listview.viewport-y) / 48px + 0.5));
-
-                                            root.drop-line-y = max(0px, min(pl-listview.height - 2px, root.drop-idx * 48px + pl-listview.viewport-y));
+                            pl-listview := ListView {
+                                vertical-stretch: 1;
+                                visible: playlist-tracks.length > 0;
+                                for t[i] in playlist-tracks: TrackRow {
+                                        track: t;
+                                        thumbnail-image: root.resolve-thumbnail(t.thumbnail);
+                                        idx: i;
+                                        keyboard-focused: playlist-fs.has-focus && root.playlist-focused-index == i;
+                                        current-track-id: root.current-track-id;
+                                        player-playing: root.is-playing;
+                                        in-playlist: true;
+                                        context-open: root.show-context-menu && root.context-menu-idx == i;
+                                        clear-search-focus => { search-text-input.clear-focus(); root.show-search-history = false; }
+                                        play-clicked(index) => { root.play-track(index); }
+                                        row-clicked(index) => { root.toggle-select(index); }
+                                        start-radio(index) => { root.start-radio(index); }
+                                        start-artist(index) => { root.start-artist(index); }
+                                        toggle-picker(index) => { root.toggle-picker(index); }
+                                        download-or-delete(index) => { root.download-or-delete(index); }
+                                        remove-from-playlist(index) => { root.remove-from-playlist(index); }
+                                        right-clicked(index, abs-x, abs-y) => {
+                                            root.context-menu-idx = index;
+                                            root.context-menu-x = abs-x;
+                                            root.context-menu-y = abs-y;
+                                            root.context-is-youtube = t.source == "youtube";
+                                            root.context-is-downloaded = t.is-downloaded;
+                                            root.context-in-playlist = true;
+                                            root.show-context-menu = true;
                                         }
-                                    }
-                                    drag-completed(index, abs-x, abs-y) => {
-                                        if (root.drag-target-playlist >= 0) {
-                                            root.drag-add-to-playlist(index, root.drag-target-playlist);
-                                        } else if (root.drag-reordering) {
-                                            root.reorder-tracks(root.drag-track-idx, root.drop-idx);
+                                        drag-pressed(index, abs-x, abs-y) => {
+                                            root.drag-possible = true;
+                                            root.drag-track-idx = index;
+                                            root.drag-x = abs-x;
+                                            root.drag-y = abs-y;
+                                            root.pl-listview-abs-x = pl-listview.absolute-position.x;
+                                            root.pl-listview-abs-y = pl-listview.absolute-position.y;
+                                            root.pl-listview-width = pl-listview.width;
+                                            root.pl-listview-height = pl-listview.height;
+                                            root.drop-idx = index;
                                         }
-                                        root.drag-active = false;
-                                        root.drag-target-playlist = -1;
-                                        root.drag-over-sidebar = false;
-                                        root.drag-reordering = false;
+                                        drag-moved(index, abs-x, abs-y) => {
+                                            if (!root.drag-possible) { return; }
+                                            if (!root.drag-active) {
+                                                if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
+                                                    root.drag-active = true;
+                                                    root.drag-reordering = true;
+                                                } else { return; }
+                                            }
+                                            root.drag-x = abs-x;
+                                            root.drag-y = abs-y;
+                                            root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
+                                            root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - playlist-list-area.absolute-position.y) / 44px)) : -1;
+                                            root.drag-reordering = abs-x > 200px;
+                                            if (root.drag-reordering) {
+                                                let rel-y = abs-y - pl-listview.absolute-position.y;
+                                                let edge-zone = 40px;
+                                                if (rel-y < edge-zone) {
+                                                    pl-listview.viewport-y = min(0px, pl-listview.viewport-y + 8px);
+                                                } else if (rel-y > pl-listview.height - edge-zone) {
+                                                    let max-scroll = -(max(0px, playlist-tracks.length * 48px - pl-listview.height));
+                                                    pl-listview.viewport-y = max(max-scroll, pl-listview.viewport-y - 8px);
+                                                }
+                                                root.drop-idx = max(0, min(playlist-tracks.length, (rel-y - pl-listview.viewport-y) / 48px + 0.5));
+                                                root.drop-line-y = max(0px, min(pl-listview.height - 2px, root.drop-idx * 48px + pl-listview.viewport-y));
+                                            }
+                                        }
+                                        drag-completed(index, abs-x, abs-y) => {
+                                            if (root.drag-active) {
+                                                if (root.drag-target-playlist >= 0) {
+                                                    root.drag-add-to-playlist(index, root.drag-target-playlist);
+                                                } else if (root.drag-reordering && root.drop-idx != root.drag-track-idx) {
+                                                    root.reorder-tracks(root.drag-track-idx, root.drop-idx);
+                                                }
+                                                root.drag-active = false;
+                                                root.drag-target-playlist = -1;
+                                                root.drag-over-sidebar = false;
+                                                root.drag-reordering = false;
+                                            }
+                                            root.drag-possible = false;
+                                        }
                                     }
                                 }
-                            }
+
                             if playlist-tracks.length == 0 : Rectangle {
                             vertical-stretch: 1;
                             VerticalLayout {
@@ -500,25 +533,34 @@ export component AppWindow inherits Window {
                                         root.context-in-playlist = false;
                                         root.show-context-menu = true;
                                     }
-                                    drag-started(index, abs-x, abs-y) => {
-                                        root.drag-active = true;
+                                    drag-pressed(index, abs-x, abs-y) => {
+                                        root.drag-possible = true;
                                         root.drag-track-idx = index;
                                         root.drag-x = abs-x;
                                         root.drag-y = abs-y;
                                     }
                                     drag-moved(index, abs-x, abs-y) => {
+                                        if (!root.drag-possible) { return; }
+                                        if (!root.drag-active) {
+                                            if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
+                                                root.drag-active = true;
+                                            } else { return; }
+                                        }
                                         root.drag-x = abs-x;
                                         root.drag-y = abs-y;
                                         root.drag-over-sidebar = abs-x >= 0px && abs-x <= 200px;
                                         root.drag-target-playlist = abs-x >= 0px && abs-x <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (abs-y - playlist-list-area.absolute-position.y) / 44px)) : -1;
                                     }
                                     drag-completed(index, abs-x, abs-y) => {
-                                        if (root.drag-target-playlist >= 0) {
-                                            root.drag-add-to-playlist(index, root.drag-target-playlist);
+                                        if (root.drag-active) {
+                                            if (root.drag-target-playlist >= 0) {
+                                                root.drag-add-to-playlist(index, root.drag-target-playlist);
+                                            }
+                                            root.drag-active = false;
+                                            root.drag-target-playlist = -1;
+                                            root.drag-over-sidebar = false;
                                         }
-                                        root.drag-active = false;
-                                        root.drag-target-playlist = -1;
-                                        root.drag-over-sidebar = false;
+                                        root.drag-possible = false;
                                     }
                                 }
                             }
@@ -966,6 +1008,49 @@ export component AppWindow inherits Window {
         width: root.pl-listview-width;
         height: 2px;
         background: Theme.accent;
+    }
+
+    if root.drag-active : Rectangle {
+        background: transparent;
+        overlay-ta := TouchArea {
+            mouse-cursor: move;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.move) {
+                    let mx = overlay-ta.mouse-x;
+                    let my = overlay-ta.mouse-y;
+                    root.drag-x = mx;
+                    root.drag-y = my;
+                    root.drag-over-sidebar = mx >= 0px && mx <= 200px;
+                    root.drag-target-playlist = mx >= 0px && mx <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (my - playlist-list-area.absolute-position.y) / 44px)) : -1;
+                    if (root.selected-playlist >= 0) {
+                        root.drag-reordering = mx > 200px;
+                        if (root.drag-reordering) {
+                            let rel-y = my - root.pl-listview-abs-y;
+                            let edge-zone = 40px;
+                            if (rel-y < edge-zone) {
+                                pl-listview.viewport-y = min(0px, pl-listview.viewport-y + 8px);
+                            } else if (rel-y > root.pl-listview-height - edge-zone) {
+                                let max-scroll = -(max(0px, playlist-tracks.length * 48px - root.pl-listview-height));
+                                pl-listview.viewport-y = max(max-scroll, pl-listview.viewport-y - 8px);
+                            }
+                            root.drop-idx = max(0, min(playlist-tracks.length, (rel-y - pl-listview.viewport-y) / 48px + 0.5));
+                            root.drop-line-y = max(0px, min(root.pl-listview-height - 2px, root.drop-idx * 48px + pl-listview.viewport-y));
+                        }
+                    }
+                } else if (event.kind == PointerEventKind.up) {
+                    if (root.drag-target-playlist >= 0) {
+                        root.drag-add-to-playlist(root.drag-track-idx, root.drag-target-playlist);
+                    } else if (root.drag-reordering && root.drop-idx != root.drag-track-idx) {
+                        root.reorder-tracks(root.drag-track-idx, root.drop-idx);
+                    }
+                    root.drag-active = false;
+                    root.drag-target-playlist = -1;
+                    root.drag-over-sidebar = false;
+                    root.drag-reordering = false;
+                    root.drag-possible = false;
+                }
+            }
+        }
     }
 
     if root.show-context-menu : Rectangle {
