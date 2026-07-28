@@ -1,0 +1,198 @@
+import { Button, Slider } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, VolumeIcon, QueueListIcon } from "icons.slint";
+
+export component PlayBar {
+    in-out property <image> current-thumbnail;
+    in-out property <string> current-title;
+    in-out property <string> current-artist;
+    in-out property <bool> is-playing;
+    in-out property <float> progress;
+    in-out property <float> volume;
+    in-out property <string> elapsed-text;
+    in-out property <string> total-text;
+    in-out property <bool> track-loading;
+    in-out property <bool> show-queue;
+
+    callback toggle-play-pause();
+    callback previous-track();
+    callback next-track();
+    callback seek(float);
+    callback set-volume(float);
+    callback toggle-queue();
+
+    Rectangle {
+        height: 80px;
+        horizontal-stretch: 1;
+        background: Theme.playbar-bg;
+        HorizontalLayout {
+            padding-top: Theme.spacing-md;
+            padding-bottom: Theme.spacing-md;
+            padding-left: Theme.spacing-xl;
+            padding-right: Theme.spacing-xl;
+            spacing: Theme.spacing-xs;
+
+            HorizontalLayout {
+                width: 200px;
+                spacing: Theme.spacing-sm;
+                Rectangle {
+                    width: 56px;
+                    height: 56px;
+                    border-radius: Theme.radius-sm;
+                    background: Theme.accent;
+                    clip: true;
+                    Image {
+                        source: current-thumbnail;
+                        width: 56px;
+                        height: 56px;
+                        image-fit: cover;
+                    }
+                }
+                VerticalLayout {
+                    Text {
+                        text: current-title;
+                        color: Theme.fg;
+                        overflow: elide;
+                    }
+                    Text {
+                        text: current-artist;
+                        color: Theme.fg-secondary;
+                        overflow: elide;
+                    }
+                }
+            }
+
+            if track-loading : Text { text: "Loading track..."; color: Theme.warning; }
+            if !track-loading : VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: Theme.spacing-xs;
+                alignment: stretch;
+
+                HorizontalLayout {
+                    spacing: Theme.spacing-md;
+                    alignment: center;
+                    Rectangle {
+                        width: 30px; height: 30px;
+                        border-radius: Theme.radius-sm;
+                        background: prev-fs.has-focus ? Theme.bg-hover : prev-ta.has-hover ? Theme.bg-hover : transparent;
+                        animate background { duration: 150ms; }
+                        VerticalLayout {
+                            alignment: center;
+                            SkipBackIcon { colorize: Theme.fg; }
+                        }
+                        prev-fs := FocusScope {
+                            width: 0px; height: 0px;
+                            focus-on-click: false;
+                            key-pressed(event) => {
+                                if (event.text == Key.Return || event.text == " ") {
+                                    previous-track(); accept
+                                } else { reject }
+                            }
+                        }
+                        prev-ta := TouchArea {
+                            mouse-cursor: pointer;
+                            pointer-event(event) => {
+                                if (event.kind == PointerEventKind.up) { previous-track(); }
+                            }
+                        }
+                    }
+                    Rectangle {
+                        width: 36px; height: 36px;
+                        border-radius: Theme.radius-md;
+                        background: play-fs.has-focus ? Theme.bg-hover : Theme.accent;
+                        VerticalLayout {
+                            alignment: center;
+                            if is-playing : PauseIcon { colorize: Theme.accent-fg; }
+                            if !is-playing : PlayIcon { colorize: Theme.accent-fg; }
+                        }
+                        play-fs := FocusScope {
+                            width: 0px; height: 0px;
+                            focus-on-click: false;
+                            key-pressed(event) => {
+                                if (event.text == Key.Return || event.text == " ") {
+                                    toggle-play-pause(); accept
+                                } else { reject }
+                            }
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            pointer-event(event) => {
+                                if (event.kind == PointerEventKind.up) { toggle-play-pause(); }
+                            }
+                        }
+                    }
+                    Rectangle {
+                        width: 30px; height: 30px;
+                        border-radius: Theme.radius-sm;
+                        background: next-fs.has-focus ? Theme.bg-hover : next-ta.has-hover ? Theme.bg-hover : transparent;
+                        animate background { duration: 150ms; }
+                        VerticalLayout {
+                            alignment: center;
+                            SkipForwardIcon { colorize: Theme.fg; }
+                        }
+                        next-fs := FocusScope {
+                            width: 0px; height: 0px;
+                            focus-on-click: false;
+                            key-pressed(event) => {
+                                if (event.text == Key.Return || event.text == " ") {
+                                    next-track(); accept
+                                } else { reject }
+                            }
+                        }
+                        next-ta := TouchArea {
+                            mouse-cursor: pointer;
+                            pointer-event(event) => {
+                                if (event.kind == PointerEventKind.up) { next-track(); }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    horizontal-stretch: 1;
+                    spacing: Theme.spacing-xs;
+                    Text { text: elapsed-text; color: Theme.fg-secondary; }
+                    Slider {
+                        horizontal-stretch: 1;
+                        minimum: 0;
+                        maximum: 1;
+                        value <=> root.progress;
+                        changed(value) => { root.seek(value); }
+                    }
+                    Text { text: total-text; color: Theme.fg-secondary; }
+                }
+            }
+
+            HorizontalLayout {
+                width: 120px;
+                spacing: Theme.spacing-xs;
+                alignment: center;
+                VolumeIcon { colorize: Theme.fg-secondary; }
+                Slider {
+                    width: 80px;
+                    minimum: 0;
+                    maximum: 1;
+                    value: volume;
+                    changed(value) => { set-volume(value); }
+                }
+            }
+
+            Rectangle {
+                width: 30px; height: 30px;
+                border-radius: Theme.radius-sm;
+                background: queue-btn-ta.has-hover || root.show-queue ? Theme.accent : transparent;
+                animate background { duration: 150ms; }
+                VerticalLayout {
+                    alignment: center;
+                    QueueListIcon { colorize: root.show-queue ? Theme.accent-fg : Theme.fg; }
+                }
+                queue-btn-ta := TouchArea {
+                    mouse-cursor: pointer;
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up) { toggle-queue(); }
+                    }
+                }
+            }
+        }
+    }
+}

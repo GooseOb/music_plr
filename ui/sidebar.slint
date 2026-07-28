@@ -1,0 +1,163 @@
+import { Button, LineEdit, ListView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { NavIcon, DeleteIcon } from "icons.slint";
+import { PlaylistInfo } from "types.slint";
+import { PlaylistCard } from "playlist-card.slint";
+
+export component Sidebar {
+    in-out property <[PlaylistInfo]> playlist-list;
+    in-out property <int> selected-playlist;
+    in-out property <string> playlist-create-name;
+    in-out property <string> notification;
+    in-out property <bool> can-go-back;
+    in-out property <bool> can-go-forward;
+    in-out property <bool> drag-active;
+    in-out property <int> drag-target-playlist;
+
+    callback create-playlist();
+    callback select-playlist(int);
+    callback navigate-back();
+    callback navigate-forward();
+    callback playlist-name-changed(string);
+
+    in-out property <length> list-abs-y;
+    list-abs-y: playlist-list-area.absolute-position.y;
+
+    Rectangle {
+        width: 200px;
+        background: Theme.bg-secondary;
+        VerticalLayout {
+            padding: Theme.spacing-lg;
+            spacing: Theme.spacing-sm;
+
+            Text {
+                text: "Music PLR";
+                color: Theme.accent;
+            }
+
+            Rectangle { height: 1px; background: Theme.border; }
+
+            HorizontalLayout {
+                spacing: Theme.spacing-xs;
+                Rectangle {
+                    background: back-fs.has-focus ? Theme.bg-hover : can-go-back ? transparent : Theme.border;
+                    border-radius: Theme.radius-sm;
+                    horizontal-stretch: 1;
+                    height: 22px;
+                    VerticalLayout {
+                        alignment: center;
+                        NavIcon {
+                            colorize: can-go-back ? Theme.fg : Theme.fg-muted;
+                            flipped: true;
+                        }
+                    }
+                    back-fs := FocusScope {
+                        width: 0px; height: 0px;
+                        focus-on-click: false;
+                        enabled: can-go-back;
+                        key-pressed(event) => {
+                            if (event.text == Key.Return || event.text == " ") {
+                                navigate-back(); accept
+                            } else { reject }
+                        }
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        enabled: can-go-back;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) { navigate-back(); }
+                        }
+                    }
+                }
+                Rectangle {
+                    background: forward-fs.has-focus ? Theme.bg-hover : can-go-forward ? transparent : Theme.border;
+                    border-radius: Theme.radius-sm;
+                    horizontal-stretch: 1;
+                    height: 22px;
+                    VerticalLayout {
+                        alignment: center;
+                        NavIcon {
+                            colorize: can-go-forward ? Theme.fg : Theme.fg-muted;
+                            flipped: false;
+                        }
+                    }
+                    forward-fs := FocusScope {
+                        width: 0px; height: 0px;
+                        focus-on-click: false;
+                        enabled: can-go-forward;
+                        key-pressed(event) => {
+                            if (event.text == Key.Return || event.text == " ") {
+                                navigate-forward(); accept
+                            } else { reject }
+                        }
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        enabled: can-go-forward;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) { navigate-forward(); }
+                        }
+                    }
+                }
+            }
+
+            Rectangle { height: 1px; background: Theme.border; }
+
+            HorizontalLayout {
+                spacing: Theme.spacing-xs;
+                Text { text: "Playlists"; color: Theme.accent; }
+                Rectangle { horizontal-stretch: 1; }
+                Rectangle {
+                    width: 28px; height: 28px; border-radius: Theme.radius-sm; background: add-pl-touch.has-hover ? Theme.bg-hover : Theme.accent;
+                    animate background { duration: 150ms; }
+                    VerticalLayout { alignment: center;
+                        HorizontalLayout { alignment: center;
+                            Text { text: "+"; color: Theme.accent-fg; }
+                        }
+                    }
+                    add-pl-touch := TouchArea {
+                        mouse-cursor: pointer;
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) { create-playlist(); }
+                        }
+                    }
+                }
+            }
+            LineEdit {
+                text: playlist-create-name;
+                placeholder-text: "New playlist...";
+                edited => { playlist-name-changed(self.text); }
+                accepted => { create-playlist(); }
+            }
+
+            playlist-list-area := Rectangle {
+                vertical-stretch: 1;
+                clip: true;
+                if playlist-list.length == 0 : Text {
+                    text: "No playlists";
+                    color: Theme.fg-secondary;
+                    x: 0;
+                    y: 0;
+                }
+                if playlist-list.length > 0 : ListView {
+                    vertical-stretch: 1;
+                    for pl[i] in playlist-list: VerticalLayout {
+                        padding-bottom: Theme.spacing-sm;
+                        PlaylistCard {
+                            pl-name: pl.name;
+                            track-count: pl.track-count;
+                            selected: selected-playlist == i;
+                            drag-over: root.drag-active && root.drag-target-playlist >= 0 && root.drag-target-playlist == i;
+                            clicked => { select-playlist(i); }
+                        }
+                    }
+                }
+            }
+
+            if notification != "" : Text {
+                text: notification;
+                color: Theme.warning;
+            }
+        }
+    }
+}

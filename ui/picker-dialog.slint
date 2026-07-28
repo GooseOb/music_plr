@@ -1,0 +1,76 @@
+import { Button, ListView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+
+export component PickerDialog inherits Rectangle {
+    in-out property <bool> show-picker;
+    in-out property <[string]> picker-playlists;
+    in-out property <int> picker-focused-index;
+
+    callback add-to-playlist(int);
+    callback close-picker();
+
+    background: Theme.overlay;
+    TouchArea {
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.up) { close-picker(); }
+        }
+    }
+    Rectangle {
+        width: 300px;
+        height: 400px;
+        background: Theme.bg-elevated;
+        border-radius: Theme.radius-lg;
+        border-width: 1px;
+        border-color: Theme.border;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        VerticalLayout {
+            padding: Theme.spacing-xl;
+            spacing: Theme.spacing-md;
+            Text { text: "Add to Playlist"; color: Theme.fg; }
+            if picker-playlists.length == 0 : Text {
+                text: "No playlists. Create one first.";
+                color: Theme.fg-secondary;
+            }
+            picker-fs := FocusScope {
+                key-pressed(event) => {
+                    if (event.text == Key.DownArrow) {
+                        root.picker-focused-index = (root.picker-focused-index + 1).min(picker-playlists.length - 1);
+                        accept
+                    } else if (event.text == Key.UpArrow) {
+                        root.picker-focused-index = (root.picker-focused-index - 1).max(0);
+                        accept
+                    } else if (event.text == Key.Return) {
+                        root.add-to-playlist(root.picker-focused-index);
+                        accept
+                    } else if (event.text == Key.Escape) {
+                        close-picker();
+                        accept
+                    } else { reject }
+                }
+                ListView {
+                    vertical-stretch: 1;
+                    for pl[i] in picker-playlists: Rectangle {
+                        border-radius: Theme.radius-md;
+                        background: picker-fs.has-focus && root.picker-focused-index == i ? Theme.bg-hover.brighter(0.1) : tp.has-hover ? Theme.bg-hover : Theme.bg-elevated;
+                        border-width: picker-fs.has-focus && root.picker-focused-index == i ? 1px : 0px;
+                        border-color: Theme.accent;
+                        animate background { duration: 150ms; }
+                        tp := TouchArea {
+                            mouse-cursor: pointer;
+                            pointer-event(event) => {
+                                if (event.kind == PointerEventKind.up) { add-to-playlist(i); }
+                            }
+                        }
+                        HorizontalLayout {
+                            padding: Theme.spacing-md;
+                            Text { text: pl; color: Theme.fg; }
+                        }
+                    }
+                }
+            }
+            Button { text: "Cancel"; horizontal-stretch: 1; clicked => { close-picker(); } }
+        }
+    }
+}

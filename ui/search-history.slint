@@ -1,0 +1,74 @@
+import { ListView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { DeleteIcon } from "icons.slint";
+
+export component SearchHistory {
+    in-out property <[string]> search-history-items;
+    in-out property <int> search-history-focused-index;
+
+    callback selected(int);
+    callback delete-item(int);
+    callback close();
+
+    sh-fs := FocusScope {
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == Key.DownArrow) {
+                root.search-history-focused-index = (root.search-history-focused-index + 1).min(root.search-history-items.length - 1);
+                accept
+            } else if (event.text == Key.UpArrow) {
+                root.search-history-focused-index = (root.search-history-focused-index - 1).max(0);
+                accept
+            } else if (event.text == Key.Return) {
+                root.selected(root.search-history-focused-index);
+                accept
+            } else if (event.text == Key.Delete) {
+                root.delete-item(root.search-history-focused-index);
+                accept
+            } else if (event.text == Key.Escape) {
+                root.close();
+                accept
+            } else { reject }
+        }
+
+        ListView {
+            vertical-stretch: 1;
+            for h[i] in root.search-history-items: Rectangle {
+                height: 36px;
+                border-radius: Theme.radius-md;
+                background: sh-fs.has-focus && root.search-history-focused-index == i ? Theme.bg-hover.brighter(0.1) : Theme.bg-hover;
+                border-width: sh-fs.has-focus && root.search-history-focused-index == i ? 1px : 0px;
+                border-color: Theme.accent;
+                TouchArea {
+                    mouse-cursor: pointer;
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up) {
+                            root.selected(i);
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    padding-left: Theme.spacing-md;
+                    padding-right: Theme.spacing-md;
+                    spacing: Theme.spacing-xs;
+                    Text { text: h; color: Theme.fg; horizontal-stretch: 1; vertical-alignment: center; }
+                    Rectangle {
+                        width: 28px;
+                        VerticalLayout {
+                            alignment: center;
+                            DeleteIcon { colorize: Theme.fg; }
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            pointer-event(event) => {
+                                if (event.kind == PointerEventKind.up) {
+                                    root.delete-item(i);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

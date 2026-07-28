@@ -1,0 +1,42 @@
+import { Button } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+
+export component DeleteConfirm inherits Rectangle {
+    in-out property <bool> show-delete-confirm;
+    in-out property <int> delete-confirm-index;
+
+    callback delete-playlist(int);
+    callback close();
+
+    background: Theme.overlay;
+    TouchArea {
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.up) { root.show-delete-confirm = false; root.close(); }
+        }
+    }
+    Rectangle {
+        width: 300px;
+        height: 140px;
+        background: Theme.bg-elevated;
+        border-radius: Theme.radius-lg;
+        border-width: 1px;
+        border-color: Theme.border;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        VerticalLayout {
+            padding: Theme.spacing-xl;
+            spacing: Theme.spacing-md;
+            Text { text: "Delete playlist?"; color: Theme.fg; font-weight: 700; }
+            Text { text: "Tracks will not be deleted."; color: Theme.fg-secondary; }
+            HorizontalLayout {
+                spacing: Theme.spacing-sm;
+                alignment: center;
+                horizontal-stretch: 1;
+                Rectangle { horizontal-stretch: 1; }
+                Button { text: "Cancel"; clicked => { root.show-delete-confirm = false; root.close(); } }
+                Button { text: "Delete"; clicked => { root.delete-playlist(root.delete-confirm-index); root.show-delete-confirm = false; root.close(); } }
+                Rectangle { horizontal-stretch: 1; }
+            }
+        }
+    }
+}

@@ -1,0 +1,87 @@
+import { ListView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Track } from "types.slint";
+
+export component QueuePanel inherits Rectangle {
+    in-out property <[Track]> queue-tracks;
+    in property <image> current-thumbnail;
+    in property <string> current-title;
+    in property <string> current-artist;
+
+    callback toggle-queue();
+    pure callback resolve-thumbnail(string) -> image;
+
+    VerticalLayout {
+        padding: Theme.spacing-md;
+        spacing: Theme.spacing-xs;
+
+        HorizontalLayout {
+            spacing: Theme.spacing-sm;
+            Text { text: "Queue"; color: Theme.fg; font-weight: 700; }
+            Rectangle { horizontal-stretch: 1; }
+            Text {
+                text: "×"; color: Theme.fg-secondary;
+                vertical-alignment: center;
+                TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { toggle-queue(); }
+                }
+            }
+        }
+
+        Text { text: "Now Playing"; color: Theme.accent; font-size: 12px; }
+
+        Rectangle {
+            height: 56px;
+            HorizontalLayout {
+                spacing: Theme.spacing-sm;
+                Rectangle {
+                    width: 48px; height: 48px;
+                    border-radius: Theme.radius-sm;
+                    background: Theme.accent;
+                    clip: true;
+                    Image {
+                        source: current-thumbnail;
+                        width: 48px; height: 48px;
+                        image-fit: cover;
+                    }
+                }
+                VerticalLayout {
+                    Text { text: current-title; color: Theme.fg; overflow: elide; }
+                    Text { text: current-artist; color: Theme.fg-secondary; overflow: elide; }
+                }
+            }
+        }
+
+        Rectangle { height: 1px; background: Theme.border; }
+
+        Text { text: "Up Next"; color: Theme.accent; font-size: 12px; }
+
+        ListView {
+            vertical-stretch: 1;
+            for t[i] in root.queue-tracks: Rectangle {
+                height: 48px;
+                border-radius: Theme.radius-sm;
+                HorizontalLayout {
+                    spacing: Theme.spacing-sm;
+                    padding: Theme.spacing-xs;
+                    Rectangle {
+                        width: 36px; height: 36px;
+                        border-radius: Theme.radius-sm;
+                        background: Theme.accent;
+                        clip: true;
+                        Image {
+                            source: root.resolve-thumbnail(t.thumbnail);
+                            width: 36px; height: 36px;
+                            image-fit: cover;
+                        }
+                    }
+                    VerticalLayout {
+                        Text { text: t.title; color: Theme.fg; overflow: elide; }
+                        Text { text: t.artist; color: Theme.fg-secondary; overflow: elide; font-size: 12px; }
+                    }
+                }
+            }
+        }
+    }
+}
