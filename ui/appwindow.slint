@@ -129,9 +129,9 @@ export component AppWindow inherits Window {
     background: Theme.bg;
     default-font-size: 14px;
     forward-focus: root-focus;
-    min-width: 640px;
     min-height: 400px;
     search-has-focus: search-text-input.has-focus;
+    min-width: sidebar.sidebar-width + 400px;
 
     VerticalLayout {
         spacing: 0;
@@ -141,6 +141,7 @@ export component AppWindow inherits Window {
             vertical-stretch: 1;
 
             sidebar := Sidebar {
+                width: sidebar.sidebar-width;
                 playlist-list <=> root.playlist-list;
                 selected-playlist <=> root.selected-playlist;
                 playlist-create-name <=> root.playlist-create-name;
@@ -207,6 +208,7 @@ export component AppWindow inherits Window {
                         is-playing: root.is-playing;
                         playlist-count: root.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
+                        sidebar-width: sidebar.sidebar-width;
 
                         show-context-menu <=> root.show-context-menu;
                         context-menu-idx <=> root.context-menu-idx;
@@ -243,6 +245,7 @@ export component AppWindow inherits Window {
                         is-playing: root.is-playing;
                         playlist-count: root.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
+                        sidebar-width: sidebar.sidebar-width;
 
                         show-context-menu <=> root.show-context-menu;
                         context-menu-idx <=> root.context-menu-idx;
@@ -295,6 +298,7 @@ export component AppWindow inherits Window {
                         is-playing: root.is-playing;
                         playlist-count: root.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
+                        sidebar-width: sidebar.sidebar-width;
 
                         show-context-menu <=> root.show-context-menu;
                         context-menu-idx <=> root.context-menu-idx;
@@ -373,9 +377,9 @@ export component AppWindow inherits Window {
     }
 
     if root.show-search-history && root.search-history-items.length > 0 : Rectangle {
-        x: 220px;
+        x: sidebar.sidebar-width + 20px;
         y: 60px;
-        width: parent.width - 278px;
+        width: parent.width - sidebar.sidebar-width - 78px;
         height: min(root.search-history-items.length * 36px + 2px, 300px);
         background: Theme.bg-elevated;
         border-radius: Theme.radius-md;
@@ -415,9 +419,9 @@ export component AppWindow inherits Window {
     }
 
     if root.drag-active && root.drag-over-sidebar : Rectangle {
-        x: root.drag-x - 100px;
+        x: root.drag-x - sidebar.sidebar-width / 2;
         y: root.drag-y - 44px;
-        width: 200px;
+        width: sidebar.sidebar-width;
         height: 36px;
         background: Theme.accent;
         border-radius: Theme.radius-md;
@@ -454,10 +458,10 @@ export component AppWindow inherits Window {
                     let my = overlay-ta.mouse-y;
                     root.drag-x = mx;
                     root.drag-y = my;
-                    root.drag-over-sidebar = mx >= 0px && mx <= 200px;
-                    root.drag-target-playlist = mx >= 0px && mx <= 200px && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (my - sidebar.list-abs-y) / 44px)) : -1;
+                    root.drag-over-sidebar = mx >= 0px && mx <= sidebar.sidebar-width;
+                    root.drag-target-playlist = mx >= 0px && mx <= sidebar.sidebar-width && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (my - sidebar.list-abs-y) / 44px)) : -1;
                     if (root.selected-playlist >= 0) {
-                        root.drag-reordering = mx > 200px;
+                        root.drag-reordering = mx > sidebar.sidebar-width;
                         if (root.drag-reordering) {
                             let rel-y = my - root.pl-listview-abs-y;
                             let edge-zone = 40px;

@@ -22,9 +22,10 @@ export component Sidebar {
 
     in-out property <length> list-abs-y;
     list-abs-y: playlist-list-area.absolute-position.y;
+    in property <length> sidebar-width: 300px;
 
-    Rectangle {
-        width: 200px;
+    sidebar-root := Rectangle {
+        width: sidebar-width;
         background: Theme.bg-secondary;
         VerticalLayout {
             padding: Theme.spacing-lg;
