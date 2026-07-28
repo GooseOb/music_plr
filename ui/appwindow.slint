@@ -80,7 +80,6 @@ export component AppWindow inherits Window {
     callback navigate-forward();
     callback search-execute();
     callback search-load-more();
-    pl-viewport-y <=> pl-listview.viewport-y;
     callback play-track(int);
     callback toggle-play-pause();
     callback next-track();
@@ -380,8 +379,7 @@ export component AppWindow inherits Window {
                             Button { text: "Load more"; horizontal-stretch: 1; clicked => { search-load-more(); } }
                         }
 
-                    pl-playlist-area := VerticalLayout {
-                        visible: selected-playlist >= 0;
+                    if selected-playlist >= 0 : VerticalLayout {
                         spacing: Theme.spacing-sm;
                         HorizontalLayout {
                             spacing: Theme.spacing-sm;
@@ -405,6 +403,7 @@ export component AppWindow inherits Window {
                             }
                         }
                             pl-listview := ListView {
+                                viewport-y <=> root.pl-viewport-y;
                                 vertical-stretch: 1;
                                 visible: playlist-tracks.length > 0;
                                 for t[i] in playlist-tracks: TrackRow {
@@ -1028,13 +1027,13 @@ export component AppWindow inherits Window {
                             let rel-y = my - root.pl-listview-abs-y;
                             let edge-zone = 40px;
                             if (rel-y < edge-zone) {
-                                pl-listview.viewport-y = min(0px, pl-listview.viewport-y + 8px);
+                                root.pl-viewport-y = min(0px, root.pl-viewport-y + 8px);
                             } else if (rel-y > root.pl-listview-height - edge-zone) {
                                 let max-scroll = -(max(0px, playlist-tracks.length * 48px - root.pl-listview-height));
-                                pl-listview.viewport-y = max(max-scroll, pl-listview.viewport-y - 8px);
+                                root.pl-viewport-y = max(max-scroll, root.pl-viewport-y - 8px);
                             }
-                            root.drop-idx = max(0, min(playlist-tracks.length, (rel-y - pl-listview.viewport-y) / 48px + 0.5));
-                            root.drop-line-y = max(0px, min(root.pl-listview-height - 2px, root.drop-idx * 48px + pl-listview.viewport-y));
+                            root.drop-idx = max(0, min(playlist-tracks.length, (rel-y - root.pl-viewport-y) / 48px + 0.5));
+                            root.drop-line-y = max(0px, min(root.pl-listview-height - 2px, root.drop-idx * 48px + root.pl-viewport-y));
                         }
                     }
                 } else if (event.kind == PointerEventKind.up) {
