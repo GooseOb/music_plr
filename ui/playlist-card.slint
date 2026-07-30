@@ -28,9 +28,9 @@ export component PlaylistCard {
 
         TouchArea {
             mouse-cursor: pointer;
-            pointer-event(event) => {
-                if (event.kind == PointerEventKind.up) { root.clicked(); }
-            }
+			clicked => {
+				root.clicked();
+			}
         }
         HorizontalLayout {
             padding: Theme.spacing-md;

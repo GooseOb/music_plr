@@ -10,8 +10,9 @@ export component DeleteConfirm inherits Rectangle {
 
     background: Theme.overlay;
     TouchArea {
-        pointer-event(event) => {
-            if (event.kind == PointerEventKind.up) { root.show-delete-confirm = false; root.close(); }
+        clicked => {
+			root.show-delete-confirm = false;
+			root.close();
         }
     }
     Rectangle {

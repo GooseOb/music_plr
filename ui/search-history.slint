@@ -41,11 +41,9 @@ export component SearchHistory {
                 border-color: Theme.accent;
                 TouchArea {
                     mouse-cursor: pointer;
-                    pointer-event(event) => {
-                        if (event.kind == PointerEventKind.up) {
-                            root.selected(i);
-                        }
-                    }
+					clicked => {
+						root.selected(i);
+					}
                 }
                 HorizontalLayout {
                     padding-left: Theme.spacing-md;

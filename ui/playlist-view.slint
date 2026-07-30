@@ -68,11 +68,9 @@ export component PlaylistView {
                 }
                 del-pl-ta := TouchArea {
                     mouse-cursor: pointer;
-                    pointer-event(event) => {
-                        if (event.kind == PointerEventKind.up) {
-                            root.delete-playlist();
-                        }
-                    }
+					clicked => {
+						root.delete-playlist();
+					}
                 }
             }
         }

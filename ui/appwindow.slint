@@ -195,9 +195,7 @@ export component AppWindow inherits Window {
                             }
                             TouchArea {
                                 mouse-cursor: pointer;
-                                pointer-event(event) => {
-                                    if (event.kind == PointerEventKind.up) { search-execute(); }
-                                }
+								clicked => search-execute();
                             }
                         }
                     }
@@ -474,8 +472,8 @@ export component AppWindow inherits Window {
     if root.show-context-menu : Rectangle {
         background: transparent;
         TouchArea {
-            pointer-event(event) => {
-                if (event.kind == PointerEventKind.up) { root.show-context-menu = false; }
+            clicked => {
+                root.show-context-menu = false;
             }
         }
         ContextMenu {

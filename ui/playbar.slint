@@ -91,8 +91,8 @@ export component PlayBar {
                         }
                         prev-ta := TouchArea {
                             mouse-cursor: pointer;
-                            pointer-event(event) => {
-                                if (event.kind == PointerEventKind.up) { previous-track(); }
+                            clicked => {
+                                previous-track();
                             }
                         }
                     }
@@ -116,8 +116,8 @@ export component PlayBar {
                         }
                         TouchArea {
                             mouse-cursor: pointer;
-                            pointer-event(event) => {
-                                if (event.kind == PointerEventKind.up) { toggle-play-pause(); }
+                            clicked => {
+                                toggle-play-pause();
                             }
                         }
                     }
@@ -141,8 +141,8 @@ export component PlayBar {
                         }
                         next-ta := TouchArea {
                             mouse-cursor: pointer;
-                            pointer-event(event) => {
-                                if (event.kind == PointerEventKind.up) { next-track(); }
+                            clicked => {
+                                next-track();
                             }
                         }
                     }
@@ -188,9 +188,9 @@ export component PlayBar {
                 }
                 queue-btn-ta := TouchArea {
                     mouse-cursor: pointer;
-                    pointer-event(event) => {
-                        if (event.kind == PointerEventKind.up) { toggle-queue(); }
-                    }
+					clicked => {
+						toggle-queue();
+					}
                 }
             }
         }

@@ -12,8 +12,8 @@ export component PickerDialog inherits Rectangle {
     background: Theme.overlay;
     TouchArea {
         mouse-cursor: pointer;
-        pointer-event(event) => {
-            if (event.kind == PointerEventKind.up) { close-picker(); }
+        clicked => {
+			close-picker();
         }
     }
     Rectangle {
@@ -59,8 +59,8 @@ export component PickerDialog inherits Rectangle {
                         animate background { duration: 150ms; }
                         tp := TouchArea {
                             mouse-cursor: pointer;
-                            pointer-event(event) => {
-                                if (event.kind == PointerEventKind.up) { add-to-playlist(i); }
+                            clicked => {
+								add-to-playlist(i);
                             }
                         }
                         HorizontalLayout {
