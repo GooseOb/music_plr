@@ -167,35 +167,4 @@ export component QueuePanel inherits Rectangle {
         height: 2px;
         background: Theme.accent;
     }
-
-    if root.drag-active : Rectangle {
-        background: transparent;
-        qu-overlay-ta := TouchArea {
-            pointer-event(event) => {
-                if (event.kind == PointerEventKind.move) {
-                    let my = qu-overlay-ta.mouse-y;
-                    if (root.drag-reordering) {
-                        let rel-y = my - root.qu-lv-y;
-                        let edge-zone = 40px;
-                        if (rel-y < edge-zone) {
-                            root.qu-viewport-y = min(0px, root.qu-viewport-y + 8px);
-                        } else if (rel-y > root.height - root.qu-lv-y - edge-zone) {
-                            let available = root.height - root.qu-lv-y;
-                            let max-scroll = -(max(0px, root.queue-tracks.length * 48px - available));
-                            root.qu-viewport-y = max(max-scroll, root.qu-viewport-y - 8px);
-                        }
-                        root.drop-idx = max(0, min(root.queue-tracks.length, (rel-y - root.qu-viewport-y) / 48px + 0.5));
-                        root.drop-line-y = max(0px, min(root.height - root.qu-lv-y - 2px, root.drop-idx * 48px + root.qu-viewport-y));
-                    }
-                } else if (event.kind == PointerEventKind.up) {
-                    if (root.drag-reordering && root.drop-idx != root.drag-track-idx) {
-                        root.reorder-queue(root.drag-track-idx, root.drop-idx);
-                    }
-                    root.drag-active = false;
-                    root.drag-reordering = false;
-                    root.drag-possible = false;
-                }
-            }
-        }
-    }
 }

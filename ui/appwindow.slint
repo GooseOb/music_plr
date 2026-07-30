@@ -471,49 +471,6 @@ export component AppWindow inherits Window {
         background: Theme.accent;
     }
 
-    if root.drag-active : Rectangle {
-        background: transparent;
-        overlay-ta := TouchArea {
-            mouse-cursor: move;
-            pointer-event(event) => {
-                if (event.kind == PointerEventKind.move) {
-                    let mx = overlay-ta.mouse-x;
-                    let my = overlay-ta.mouse-y;
-                    root.drag-x = mx;
-                    root.drag-y = my;
-                    root.drag-over-sidebar = mx >= 0px && mx <= sidebar.sidebar-width;
-                    root.drag-target-playlist = mx >= 0px && mx <= sidebar.sidebar-width && playlist-list.length > 0 ? max(0, min(playlist-list.length - 1, (my - sidebar.list-abs-y) / 44px)) : -1;
-                    if (root.selected-playlist >= 0) {
-                        root.drag-reordering = mx > sidebar.sidebar-width;
-                        if (root.drag-reordering) {
-                            let rel-y = my - root.pl-listview-abs-y;
-                            let edge-zone = 40px;
-                            if (rel-y < edge-zone) {
-                                root.pl-viewport-y = min(0px, root.pl-viewport-y + 8px);
-                            } else if (rel-y > root.pl-listview-height - edge-zone) {
-                                let max-scroll = -(max(0px, playlist-tracks.length * 48px - root.pl-listview-height));
-                                root.pl-viewport-y = max(max-scroll, root.pl-viewport-y - 8px);
-                            }
-                            root.drop-idx = max(0, min(playlist-tracks.length, (rel-y - root.pl-viewport-y) / 48px + 0.5));
-                            root.drop-line-y = max(0px, min(root.pl-listview-height - 2px, root.drop-idx * 48px + root.pl-viewport-y));
-                        }
-                    }
-                } else if (event.kind == PointerEventKind.up) {
-                    if (root.drag-target-playlist >= 0) {
-                        root.drag-add-to-playlist(root.drag-track-idx, root.drag-target-playlist);
-                    } else if (root.drag-reordering && root.drop-idx != root.drag-track-idx) {
-                        root.reorder-tracks(root.drag-track-idx, root.drop-idx);
-                    }
-                    root.drag-active = false;
-                    root.drag-target-playlist = -1;
-                    root.drag-over-sidebar = false;
-                    root.drag-reordering = false;
-                    root.drag-possible = false;
-                }
-            }
-        }
-    }
-
     if root.show-context-menu : Rectangle {
         background: transparent;
         TouchArea {
