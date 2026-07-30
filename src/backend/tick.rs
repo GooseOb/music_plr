@@ -1,4 +1,5 @@
-use super::{to_slint_track, PlaylistInfo, Track, View};
+use super::{to_slint_track, PlaybackState, PlaylistInfo, Track, View};
+use slint::ComponentHandle;
 use std::rc::Rc;
 
 impl super::Backend {
@@ -33,14 +34,15 @@ impl super::Backend {
         self.send_mpris_update();
 
         if let Some(window) = self.ui.upgrade() {
-            window.set_is_playing(self.is_playing);
-            window.set_progress(self.progress);
-            window.set_duration_secs(self.duration);
-            window.set_track_loading(self.track_loading);
+            let playback = window.global::<PlaybackState>();
+            playback.set_is_playing(self.is_playing);
+            playback.set_progress(self.progress);
+            playback.set_duration_secs(self.duration);
+            playback.set_track_loading(self.track_loading);
             let elapsed = (self.progress * self.duration) as u32;
-            window.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
+            playback.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
             let total = self.duration as u32;
-            window.set_total_text(format!("{}:{:02}", total / 60, total % 60).into());
+            playback.set_total_text(format!("{}:{:02}", total / 60, total % 60).into());
         }
 
         if let Some(window) = self.ui.upgrade() {
@@ -65,10 +67,11 @@ impl super::Backend {
         let Some(window) = self.ui.upgrade() else {
             return;
         };
+        let playback = window.global::<PlaybackState>();
         if let Some(track) = self.queue.current() {
-            window.set_current_title(track.title.clone().into());
-            window.set_current_artist(track.artist.clone().into());
-            window.set_current_track_id(track.id.clone().into());
+            playback.set_current_title(track.title.clone().into());
+            playback.set_current_artist(track.artist.clone().into());
+            playback.set_current_track_id(track.id.clone().into());
             let thumb_img = if track.source == crate::types::TrackSource::YouTube {
                 let cached = crate::thumbnails::thumbnail_path(&track.id);
                 if cached.exists() {
@@ -79,21 +82,21 @@ impl super::Backend {
             } else {
                 slint::Image::default()
             };
-            window.set_current_thumbnail(thumb_img);
+            playback.set_current_thumbnail(thumb_img);
         } else {
-            window.set_current_title("".into());
-            window.set_current_artist("".into());
-            window.set_current_track_id("".into());
-            window.set_current_thumbnail(slint::Image::default());
+            playback.set_current_title("".into());
+            playback.set_current_artist("".into());
+            playback.set_current_track_id("".into());
+            playback.set_current_thumbnail(slint::Image::default());
         }
-        window.set_is_playing(self.is_playing);
-        window.set_duration_secs(self.duration);
-        window.set_track_loading(self.track_loading);
-        window.set_progress(self.progress);
+        playback.set_is_playing(self.is_playing);
+        playback.set_duration_secs(self.duration);
+        playback.set_track_loading(self.track_loading);
+        playback.set_progress(self.progress);
         let elapsed = (self.progress * self.duration) as u32;
-        window.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
+        playback.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
         let total = self.duration as u32;
-        window.set_total_text(format!("{}:{:02}", total / 60, total % 60).into());
+        playback.set_total_text(format!("{}:{:02}", total / 60, total % 60).into());
         self.sync_queue_ui();
     }
 
@@ -226,7 +229,7 @@ impl super::Backend {
         self.sync_current_track_ui();
         self.update_nav_ui();
         if let Some(window) = self.ui.upgrade() {
-            window.set_volume(self.volume);
+            window.global::<PlaybackState>().set_volume(self.volume);
             window.set_loading(self.loading);
             window.set_notification(self.notification.as_deref().unwrap_or("").into());
         }

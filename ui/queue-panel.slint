@@ -2,14 +2,10 @@ import { ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Track } from "types.slint";
 import { TrackRow } from "track-row.slint";
+import { PlaybackState } from "playback-state.slint";
 
 export component QueuePanel inherits Rectangle {
     in-out property <[Track]> queue-tracks;
-    in property <image> current-thumbnail;
-    in property <string> current-title;
-    in property <string> current-artist;
-    in property <string> current-track-id;
-    in property <bool> is-playing;
 
     in-out property <bool> show-context-menu;
     in-out property <int> context-menu-idx: -1;
@@ -32,7 +28,6 @@ export component QueuePanel inherits Rectangle {
     property <length> qu-listview-width;
 
     callback toggle-queue();
-    callback play-queue-track(int);
     callback toggle-select(int);
     callback start-radio(int);
     callback start-artist(int);
@@ -72,14 +67,14 @@ export component QueuePanel inherits Rectangle {
                     background: Theme.accent;
                     clip: true;
                     Image {
-                        source: current-thumbnail;
+                        source: PlaybackState.current-thumbnail;
                         width: 48px; height: 48px;
                         image-fit: cover;
                     }
                 }
                 VerticalLayout {
-                    Text { text: current-title; color: Theme.fg; overflow: elide; }
-                    Text { text: current-artist; color: Theme.fg-secondary; overflow: elide; }
+                    Text { text: PlaybackState.current-title; color: Theme.fg; overflow: elide; }
+                    Text { text: PlaybackState.current-artist; color: Theme.fg-secondary; overflow: elide; }
                 }
             }
         }
@@ -95,12 +90,10 @@ export component QueuePanel inherits Rectangle {
                 track: t;
                 thumbnail-image: root.resolve-thumbnail(t.thumbnail);
                 idx: i;
-                current-track-id: root.current-track-id;
-                player-playing: root.is-playing;
                 in-playlist: false;
+                in-queue: true;
                 context-open: root.show-context-menu && root.context-menu-idx == i;
 
-                play-clicked(index) => { root.play-queue-track(index); }
                 row-clicked(index) => { root.toggle-select(index); }
                 start-radio(index) => { root.start-radio(index); }
                 start-artist(index) => { root.start-artist(index); }

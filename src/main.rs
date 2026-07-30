@@ -9,7 +9,7 @@ mod thumbnails;
 mod types;
 mod youtube;
 
-use backend::{Backend, BackendResult};
+use backend::{Backend, BackendResult, PlaybackState};
 use slint::ComponentHandle;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -192,23 +192,27 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     });
 
     let b = Rc::downgrade(backend);
-    window.on_play_track(move |index| {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_play_track(index as usize);
-        }
-    });
+    window
+        .global::<PlaybackState>()
+        .on_play_track(move |index| {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_play_track(index as usize);
+            }
+        });
 
     {
         let b = Rc::downgrade(backend);
-        window.on_toggle_play_pause(move || {
-            if let Some(b) = b.upgrade() {
-                b.borrow_mut().handle_toggle_play_pause();
-            }
-        });
+        window
+            .global::<PlaybackState>()
+            .on_toggle_play_pause(move || {
+                if let Some(b) = b.upgrade() {
+                    b.borrow_mut().handle_toggle_play_pause();
+                }
+            });
     }
     {
         let b = Rc::downgrade(backend);
-        window.on_next_track(move || {
+        window.global::<PlaybackState>().on_next_track(move || {
             if let Some(b) = b.upgrade() {
                 b.borrow_mut().handle_next_track();
             }
@@ -216,7 +220,7 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     }
     {
         let b = Rc::downgrade(backend);
-        window.on_previous_track(move || {
+        window.global::<PlaybackState>().on_previous_track(move || {
             if let Some(b) = b.upgrade() {
                 b.borrow_mut().handle_previous_track();
             }
@@ -224,7 +228,7 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     }
     {
         let b = Rc::downgrade(backend);
-        window.on_set_volume(move |vol| {
+        window.global::<PlaybackState>().on_set_volume(move |vol| {
             if let Some(b) = b.upgrade() {
                 b.borrow_mut().handle_set_volume(vol);
             }
@@ -232,7 +236,7 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     }
     {
         let b = Rc::downgrade(backend);
-        window.on_seek(move |frac| {
+        window.global::<PlaybackState>().on_seek(move |frac| {
             if let Some(b) = b.upgrade() {
                 b.borrow_mut().handle_seek(frac);
             }
@@ -463,11 +467,13 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     });
 
     let b = Rc::downgrade(backend);
-    window.on_play_queue_track(move |index| {
-        if let Some(b) = b.upgrade() {
-            b.borrow_mut().handle_play_from_queue(index as usize);
-        }
-    });
+    window
+        .global::<PlaybackState>()
+        .on_play_queue_track(move |index| {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_play_from_queue(index as usize);
+            }
+        });
 
     let b = Rc::downgrade(backend);
     window.on_toggle_queue(move || {

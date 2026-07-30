@@ -1,20 +1,19 @@
 import { Theme } from "theme.slint";
 import { PlayIcon, PauseIcon, DownloadIcon, FolderIcon } from "icons.slint";
 import { Track } from "types.slint";
+import { PlaybackState } from "playback-state.slint";
 
 export component TrackRow {
     in property <Track> track;
     in property <int> idx;
-    in property <string> current-track-id;
-    in property <bool> player-playing;
     in property <bool> keyboard-focused;
     in property <bool> in-playlist;
+    in property <bool> in-queue: false;
     in property <bool> context-open: false;
 
     in property <image> thumbnail-image;
 
     callback clear-search-focus;
-    callback play-clicked(int);
     callback row-clicked(int);
     callback right-clicked(int, length, length);
     callback start-radio(int);
@@ -26,8 +25,8 @@ export component TrackRow {
     callback drag-moved(int, length, length);
     callback drag-completed(int, length, length);
 
-    property <bool> is-current: root.current-track-id != "" && root.current-track-id == track.id;
-    property <bool> is-playing: is-current && root.player-playing;
+    property <bool> is-current: PlaybackState.current-track-id != "" && PlaybackState.current-track-id == track.id;
+    property <bool> is-playing: is-current && PlaybackState.is-playing;
 
     Rectangle {
         horizontal-stretch: 1;
@@ -81,7 +80,13 @@ export component TrackRow {
                         }
                         play-click-area := TouchArea {
                             mouse-cursor: pointer;
-                            clicked => { root.play-clicked(root.idx); }
+                            clicked => {
+                                if root.in-queue {
+                                    PlaybackState.play-queue-track(root.idx);
+                                } else {
+                                    PlaybackState.play-track(root.idx);
+                                }
+                            }
                         }
                     }
                 }

@@ -2,12 +2,11 @@ import { Button, ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Track } from "types.slint";
 import { TrackRow } from "track-row.slint";
+import { PlaybackState } from "playback-state.slint";
 
 export component PlaylistView {
     in property <[Track]> playlist-tracks;
     in property <string> selected-playlist-name;
-    in property <string> current-track-id;
-    in property <bool> is-playing;
 
     in property <int> playlist-count;
     in property <length> sidebar-list-abs-y;
@@ -39,7 +38,6 @@ export component PlaylistView {
     in-out property <length> pl-listview-height;
 
     callback clear-search-focus();
-    callback play-track(int);
     callback toggle-select(int);
     callback start-radio(int);
     callback start-artist(int);
@@ -83,12 +81,10 @@ export component PlaylistView {
                 thumbnail-image: root.resolve-thumbnail(t.thumbnail);
                 idx: i;
                 keyboard-focused: playlist-fs.has-focus && root.focused-index == i;
-                current-track-id: root.current-track-id;
-                player-playing: root.is-playing;
                 in-playlist: true;
+                in-queue: false;
                 context-open: root.show-context-menu && root.context-menu-idx == i;
                 clear-search-focus => { root.clear-search-focus(); }
-                play-clicked(index) => { root.play-track(index); }
                 row-clicked(index) => { root.toggle-select(index); }
                 start-radio(index) => { root.start-radio(index); }
                 start-artist(index) => { root.start-artist(index); }
@@ -181,7 +177,7 @@ export component PlaylistView {
                 root.focused-index = (root.focused-index - 1).max(0);
                 accept
             } else if (event.text == Key.Return) {
-                root.play-track(root.focused-index);
+                PlaybackState.play-track(root.focused-index);
                 accept
             } else if (event.text == Key.Delete) {
                 root.remove-from-playlist(root.focused-index);

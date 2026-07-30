@@ -1,4 +1,6 @@
+use super::PlaybackState;
 use crate::config;
+use slint::ComponentHandle;
 
 impl super::Backend {
     pub fn handle_play_track(&mut self, index: usize) {
@@ -49,7 +51,9 @@ impl super::Backend {
             self.is_playing = true;
         }
         if let Some(window) = self.ui.upgrade() {
-            window.set_is_playing(self.is_playing);
+            window
+                .global::<PlaybackState>()
+                .set_is_playing(self.is_playing);
         }
     }
 
@@ -59,7 +63,7 @@ impl super::Backend {
         self.audio.set_volume(vol);
         config::save_config(&self.config);
         if let Some(window) = self.ui.upgrade() {
-            window.set_volume(vol);
+            window.global::<PlaybackState>().set_volume(vol);
         }
     }
 
@@ -68,9 +72,10 @@ impl super::Backend {
         self.progress = frac;
         self.audio.seek(pos);
         if let Some(window) = self.ui.upgrade() {
-            window.set_progress(frac);
+            let playback = window.global::<PlaybackState>();
+            playback.set_progress(frac);
             let elapsed = (self.progress * self.duration) as u32;
-            window.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
+            playback.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
         }
     }
 

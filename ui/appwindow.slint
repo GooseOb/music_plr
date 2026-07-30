@@ -9,6 +9,8 @@ import { ContextMenu } from "context-menu.slint";
 import { SearchHistory } from "search-history.slint";
 import { PickerDialog } from "picker-dialog.slint";
 import { DeleteConfirm } from "delete-confirm.slint";
+import { PlaybackState } from "playback-state.slint";
+export { PlaybackState }
 import { SearchView } from "search-view.slint";
 import { PlaylistView } from "playlist-view.slint";
 import { RadioView } from "radio-view.slint";
@@ -18,20 +20,10 @@ export component AppWindow inherits Window {
     in-out property <string> search-input-text;
     in-out property <string> playlist-create-name;
     in-out property <bool> loading;
-    in-out property <bool> track-loading;
     in-out property <string> notification;
     in-out property <string> radio-label;
     in-out property <bool> can-go-back;
     in-out property <bool> can-go-forward;
-
-    in-out property <string> current-track-id;
-    in-out property <bool> is-playing;
-    in-out property <float> progress;
-    in-out property <float> duration-secs;
-    in-out property <float> volume;
-    in-out property <string> current-title;
-    in-out property <string> current-artist;
-    in-out property <image> current-thumbnail;
 
     in-out property <[Track]> search-results;
     in-out property <[Track]> radio-tracks;
@@ -47,8 +39,6 @@ export component AppWindow inherits Window {
     in-out property <[string]> search-history-items;
     in-out property <bool> show-search-history: false;
     in-out property <bool> search-has-focus;
-    in-out property <string> elapsed-text;
-    in-out property <string> total-text;
 
     in-out property <bool> show-context-menu: false;
     in-out property <int> context-menu-idx: -1;
@@ -90,13 +80,6 @@ export component AppWindow inherits Window {
     callback navigate-forward();
     callback search-execute();
     callback search-load-more();
-    callback play-track(int);
-    callback play-queue-track(int);
-    callback toggle-play-pause();
-    callback next-track();
-    callback previous-track();
-    callback set-volume(float);
-    callback seek(float);
     callback start-song-radio(string);
     callback start-artist-radio(string);
     callback download-track(int);
@@ -206,8 +189,6 @@ export component AppWindow inherits Window {
                     if !loading && search-results.length > 0 && selected-playlist < 0 && current-view != 1 : SearchView {
                         search-results: root.search-results;
                         loading: root.loading;
-                        current-track-id: root.current-track-id;
-                        is-playing: root.is-playing;
                         playlist-count: root.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
@@ -229,7 +210,6 @@ export component AppWindow inherits Window {
                         drag-over-sidebar <=> root.drag-over-sidebar;
 
                         clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
-                        play-track(i) => { root.play-track(i); }
                         toggle-select(i) => { root.toggle-select(i); }
                         start-radio(i) => { root.start-radio(i); }
                         start-artist(i) => { root.start-artist(i); }
@@ -243,8 +223,6 @@ export component AppWindow inherits Window {
                     if selected-playlist >= 0 : PlaylistView {
                         playlist-tracks: root.playlist-tracks;
                         selected-playlist-name: root.selected-playlist-name;
-                        current-track-id: root.current-track-id;
-                        is-playing: root.is-playing;
                         playlist-count: root.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
@@ -275,7 +253,6 @@ export component AppWindow inherits Window {
                         pl-listview-height <=> root.pl-listview-height;
 
                         clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
-                        play-track(i) => { root.play-track(i); }
                         toggle-select(i) => { root.toggle-select(i); }
                         start-radio(i) => { root.start-radio(i); }
                         start-artist(i) => { root.start-artist(i); }
@@ -296,8 +273,6 @@ export component AppWindow inherits Window {
                         radio-tracks: root.radio-tracks;
                         radio-label: root.radio-label;
                         loading: root.loading;
-                        current-track-id: root.current-track-id;
-                        is-playing: root.is-playing;
                         playlist-count: root.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
@@ -319,7 +294,6 @@ export component AppWindow inherits Window {
                         drag-over-sidebar <=> root.drag-over-sidebar;
 
                         clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
-                        play-track(i) => { root.play-track(i); }
                         toggle-select(i) => { root.toggle-select(i); }
                         start-radio(i) => { root.start-radio(i); }
                         start-artist(i) => { root.start-artist(i); }
@@ -349,11 +323,6 @@ export component AppWindow inherits Window {
                 background: Theme.bg-secondary;
                 QueuePanel {
                     queue-tracks <=> root.queue-tracks;
-                    current-thumbnail: root.current-thumbnail;
-                    current-title: root.current-title;
-                    current-artist: root.current-artist;
-                    current-track-id: root.current-track-id;
-                    is-playing: root.is-playing;
                     toggle-queue() => { root.toggle-queue(); }
                     resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
 
@@ -365,7 +334,6 @@ export component AppWindow inherits Window {
                     context-is-downloaded <=> root.context-is-downloaded;
                     context-in-queue <=> root.context-in-queue;
 
-                    play-queue-track(i) => { root.play-queue-track(i); }
                     toggle-select(i) => { root.toggle-select(i); }
                     start-radio(i) => { root.start-radio(i); }
                     start-artist(i) => { root.start-artist(i); }
@@ -378,21 +346,7 @@ export component AppWindow inherits Window {
         }
 
         PlayBar {
-            current-thumbnail: root.current-thumbnail;
-            current-title: root.current-title;
-            current-artist: root.current-artist;
-            is-playing: root.is-playing;
-            progress <=> root.progress;
-            volume <=> root.volume;
-            elapsed-text: root.elapsed-text;
-            total-text: root.total-text;
-            track-loading: root.track-loading;
             show-queue: root.show-queue;
-            toggle-play-pause() => { root.toggle-play-pause(); }
-            previous-track() => { root.previous-track(); }
-            next-track() => { root.next-track(); }
-            seek(v) => { root.seek(v); }
-            set-volume(v) => { root.set-volume(v); }
             toggle-queue() => { root.toggle-queue(); }
         }
     }
@@ -498,7 +452,7 @@ export component AppWindow inherits Window {
     root-focus := FocusScope {
         capture-key-pressed(event) => {
             if (event.text == " ") {
-                toggle-play-pause();
+                PlaybackState.toggle-play-pause();
                 accept
             } else if (event.text == Key.Escape) {
                 if root.show-context-menu {

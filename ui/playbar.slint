@@ -1,24 +1,11 @@
 import { Button, Slider } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, VolumeIcon, QueueListIcon } from "icons.slint";
+import { PlaybackState } from "playback-state.slint";
 
-export component PlayBar {
-    in-out property <image> current-thumbnail;
-    in-out property <string> current-title;
-    in-out property <string> current-artist;
-    in-out property <bool> is-playing;
-    in-out property <float> progress;
-    in-out property <float> volume;
-    in-out property <string> elapsed-text;
-    in-out property <string> total-text;
-    in-out property <bool> track-loading;
+export component PlayBar inherits Rectangle {
     in-out property <bool> show-queue;
 
-    callback toggle-play-pause();
-    callback previous-track();
-    callback next-track();
-    callback seek(float);
-    callback set-volume(float);
     callback toggle-queue();
 
     Rectangle {
@@ -42,7 +29,7 @@ export component PlayBar {
                     background: Theme.accent;
                     clip: true;
                     Image {
-                        source: current-thumbnail;
+                        source: PlaybackState.current-thumbnail;
                         width: 56px;
                         height: 56px;
                         image-fit: cover;
@@ -50,20 +37,20 @@ export component PlayBar {
                 }
                 VerticalLayout {
                     Text {
-                        text: current-title;
+                        text: PlaybackState.current-title;
                         color: Theme.fg;
                         overflow: elide;
                     }
                     Text {
-                        text: current-artist;
+                        text: PlaybackState.current-artist;
                         color: Theme.fg-secondary;
                         overflow: elide;
                     }
                 }
             }
 
-            if track-loading : Text { text: "Loading track..."; color: Theme.warning; }
-            if !track-loading : VerticalLayout {
+            if PlaybackState.track-loading : Text { text: "Loading track..."; color: Theme.warning; }
+            if !PlaybackState.track-loading : VerticalLayout {
                 horizontal-stretch: 1;
                 spacing: Theme.spacing-xs;
                 alignment: stretch;
@@ -85,14 +72,14 @@ export component PlayBar {
                             focus-on-click: false;
                             key-pressed(event) => {
                                 if (event.text == Key.Return || event.text == " ") {
-                                    previous-track(); accept
+                                    PlaybackState.previous-track(); accept
                                 } else { reject }
                             }
                         }
                         prev-ta := TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
-                                previous-track();
+                                PlaybackState.previous-track();
                             }
                         }
                     }
@@ -102,22 +89,22 @@ export component PlayBar {
                         background: play-fs.has-focus ? Theme.bg-hover : Theme.accent;
                         VerticalLayout {
                             alignment: center;
-                            if is-playing : PauseIcon { colorize: Theme.accent-fg; }
-                            if !is-playing : PlayIcon { colorize: Theme.accent-fg; }
+                            if PlaybackState.is-playing : PauseIcon { colorize: Theme.accent-fg; }
+                            if !PlaybackState.is-playing : PlayIcon { colorize: Theme.accent-fg; }
                         }
                         play-fs := FocusScope {
                             width: 0px; height: 0px;
                             focus-on-click: false;
                             key-pressed(event) => {
                                 if (event.text == Key.Return || event.text == " ") {
-                                    toggle-play-pause(); accept
+                                    PlaybackState.toggle-play-pause(); accept
                                 } else { reject }
                             }
                         }
                         TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
-                                toggle-play-pause();
+                                PlaybackState.toggle-play-pause();
                             }
                         }
                     }
@@ -135,14 +122,14 @@ export component PlayBar {
                             focus-on-click: false;
                             key-pressed(event) => {
                                 if (event.text == Key.Return || event.text == " ") {
-                                    next-track(); accept
+                                    PlaybackState.next-track(); accept
                                 } else { reject }
                             }
                         }
                         next-ta := TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
-                                next-track();
+                                PlaybackState.next-track();
                             }
                         }
                     }
@@ -151,15 +138,15 @@ export component PlayBar {
                 HorizontalLayout {
                     horizontal-stretch: 1;
                     spacing: Theme.spacing-xs;
-                    Text { text: elapsed-text; color: Theme.fg-secondary; }
+                    Text { text: PlaybackState.elapsed-text; color: Theme.fg-secondary; }
                     Slider {
                         horizontal-stretch: 1;
                         minimum: 0;
                         maximum: 1;
-                        value <=> root.progress;
-                        changed(value) => { root.seek(value); }
+                        value <=> PlaybackState.progress;
+                        changed(value) => { PlaybackState.seek(value); }
                     }
-                    Text { text: total-text; color: Theme.fg-secondary; }
+                    Text { text: PlaybackState.total-text; color: Theme.fg-secondary; }
                 }
             }
 
@@ -172,8 +159,8 @@ export component PlayBar {
                     width: 80px;
                     minimum: 0;
                     maximum: 1;
-                    value: volume;
-                    changed(value) => { set-volume(value); }
+                    value <=> PlaybackState.volume;
+                    changed(value) => { PlaybackState.set-volume(value); }
                 }
             }
 
@@ -188,9 +175,9 @@ export component PlayBar {
                 }
                 queue-btn-ta := TouchArea {
                     mouse-cursor: pointer;
-					clicked => {
-						toggle-queue();
-					}
+                    clicked => {
+                        toggle-queue();
+                    }
                 }
             }
         }

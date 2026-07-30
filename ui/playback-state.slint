@@ -1,0 +1,21 @@
+export global PlaybackState {
+    in-out property <string> current-track-id;
+    in-out property <bool> is-playing;
+    in-out property <float> progress;
+    in-out property <float> duration-secs;
+    in-out property <float> volume;
+    in-out property <string> current-title;
+    in-out property <string> current-artist;
+    in-out property <image> current-thumbnail;
+    in-out property <string> elapsed-text;
+    in-out property <string> total-text;
+    in-out property <bool> track-loading;
+
+    callback toggle-play-pause();
+    callback next-track();
+    callback previous-track();
+    callback set-volume(float);
+    callback seek(float);
+    callback play-track(int);
+    callback play-queue-track(int);
+}
