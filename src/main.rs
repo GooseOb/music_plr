@@ -9,7 +9,7 @@ mod thumbnails;
 mod types;
 mod youtube;
 
-use backend::{Backend, BackendResult, PlaybackState};
+use backend::{Backend, BackendResult, NavigationState, PlaybackState};
 use slint::ComponentHandle;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -130,7 +130,7 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
 
     {
         let b = Rc::downgrade(backend);
-        window.on_navigate_back(move || {
+        window.global::<NavigationState>().on_navigate_back(move || {
             if let Some(b) = b.upgrade() {
                 b.borrow_mut().handle_navigate_back();
             }
@@ -138,7 +138,7 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     }
     {
         let b = Rc::downgrade(backend);
-        window.on_navigate_forward(move || {
+        window.global::<NavigationState>().on_navigate_forward(move || {
             if let Some(b) = b.upgrade() {
                 b.borrow_mut().handle_navigate_forward();
             }

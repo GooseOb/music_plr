@@ -15,6 +15,8 @@ import { ContextMenuState } from "context-menu-state.slint";
 export { ContextMenuState }
 import { DragState } from "drag-state.slint";
 export { DragState }
+import { NavigationState } from "navigation-state.slint";
+export { NavigationState }
 import { SearchView } from "search-view.slint";
 import { PlaylistView } from "playlist-view.slint";
 import { RadioView } from "radio-view.slint";
@@ -26,8 +28,6 @@ export component AppWindow inherits Window {
     in-out property <bool> loading;
     in-out property <string> notification;
     in-out property <string> radio-label;
-    in-out property <bool> can-go-back;
-    in-out property <bool> can-go-forward;
 
     in-out property <[Track]> search-results;
     in-out property <[Track]> radio-tracks;
@@ -55,8 +55,6 @@ export component AppWindow inherits Window {
 
     callback toggle-queue();
     callback navigate-to(int);
-    callback navigate-back();
-    callback navigate-forward();
     callback search-execute();
     callback search-load-more();
     callback start-song-radio(string);
@@ -112,12 +110,8 @@ export component AppWindow inherits Window {
                 selected-playlist <=> root.selected-playlist;
                 playlist-create-name <=> root.playlist-create-name;
                 notification <=> root.notification;
-                can-go-back <=> root.can-go-back;
-                can-go-forward <=> root.can-go-forward;
                 create-playlist() => { root.create-playlist(); }
                 select-playlist(i) => { root.select-playlist(i); }
-                navigate-back() => { root.navigate-back(); }
-                navigate-forward() => { root.navigate-forward(); }
                 playlist-name-changed(text) => { root.playlist-name-changed(text); }
             }
 

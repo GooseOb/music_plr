@@ -1,0 +1,7 @@
+export global NavigationState {
+    in-out property <bool> can-go-back;
+    in-out property <bool> can-go-forward;
+
+    callback navigate-back();
+    callback navigate-forward();
+}

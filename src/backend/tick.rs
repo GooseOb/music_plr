@@ -1,4 +1,4 @@
-use super::{to_slint_track, PlaybackState, PlaylistInfo, Track, View};
+use super::{to_slint_track, NavigationState, PlaybackState, PlaylistInfo, Track, View};
 use slint::ComponentHandle;
 use std::rc::Rc;
 
@@ -123,8 +123,9 @@ impl super::Backend {
             return;
         };
         window.set_current_view(self.current_view as i32);
-        window.set_can_go_back(self.nav_history_pos > 0);
-        window.set_can_go_forward(self.nav_history_pos + 1 < self.nav_history.len());
+        let nav = window.global::<NavigationState>();
+        nav.set_can_go_back(self.nav_history_pos > 0);
+        nav.set_can_go_forward(self.nav_history_pos + 1 < self.nav_history.len());
     }
 
     pub fn notify(&mut self, msg: String) {

@@ -4,19 +4,15 @@ import { NavIcon, DeleteIcon } from "icons.slint";
 import { PlaylistInfo } from "types.slint";
 import { PlaylistCard } from "playlist-card.slint";
 import { DragState } from "drag-state.slint";
+import { NavigationState } from "navigation-state.slint";
 
 export component Sidebar {
     in-out property <[PlaylistInfo]> playlist-list;
     in-out property <int> selected-playlist;
     in-out property <string> playlist-create-name;
     in-out property <string> notification;
-    in-out property <bool> can-go-back;
-    in-out property <bool> can-go-forward;
-
     callback create-playlist();
     callback select-playlist(int);
-    callback navigate-back();
-    callback navigate-forward();
     callback playlist-name-changed(string);
 
     in-out property <length> list-abs-y;
@@ -40,62 +36,62 @@ export component Sidebar {
             HorizontalLayout {
                 spacing: Theme.spacing-xs;
                 Rectangle {
-                    background: back-fs.has-focus ? Theme.bg-hover : can-go-back ? transparent : Theme.border;
+                    background: back-fs.has-focus ? Theme.bg-hover : NavigationState.can-go-back ? transparent : Theme.border;
                     border-radius: Theme.radius-sm;
                     horizontal-stretch: 1;
                     height: 22px;
                     VerticalLayout {
                         alignment: center;
                         NavIcon {
-                            colorize: can-go-back ? Theme.fg : Theme.fg-muted;
+                            colorize: NavigationState.can-go-back ? Theme.fg : Theme.fg-muted;
                             flipped: true;
                         }
                     }
                     back-fs := FocusScope {
                         width: 0px; height: 0px;
                         focus-on-click: false;
-                        enabled: can-go-back;
+                        enabled: NavigationState.can-go-back;
                         key-pressed(event) => {
                             if (event.text == Key.Return || event.text == " ") {
-                                navigate-back(); accept
+                                NavigationState.navigate-back(); accept
                             } else { reject }
                         }
                     }
                     TouchArea {
                         mouse-cursor: pointer;
-                        enabled: can-go-back;
+                        enabled: NavigationState.can-go-back;
 						clicked => {
-                            navigate-back();
+                            NavigationState.navigate-back();
                         }
                     }
                 }
                 Rectangle {
-                    background: forward-fs.has-focus ? Theme.bg-hover : can-go-forward ? transparent : Theme.border;
+                    background: forward-fs.has-focus ? Theme.bg-hover : NavigationState.can-go-forward ? transparent : Theme.border;
                     border-radius: Theme.radius-sm;
                     horizontal-stretch: 1;
                     height: 22px;
                     VerticalLayout {
                         alignment: center;
                         NavIcon {
-                            colorize: can-go-forward ? Theme.fg : Theme.fg-muted;
+                            colorize: NavigationState.can-go-forward ? Theme.fg : Theme.fg-muted;
                             flipped: false;
                         }
                     }
                     forward-fs := FocusScope {
                         width: 0px; height: 0px;
                         focus-on-click: false;
-                        enabled: can-go-forward;
+                        enabled: NavigationState.can-go-forward;
                         key-pressed(event) => {
                             if (event.text == Key.Return || event.text == " ") {
-                                navigate-forward(); accept
+                                NavigationState.navigate-forward(); accept
                             } else { reject }
                         }
                     }
                     TouchArea {
                         mouse-cursor: pointer;
-                        enabled: can-go-forward;
+                        enabled: NavigationState.can-go-forward;
                         pointer-event(event) => {
-                            if (event.kind == PointerEventKind.up) { navigate-forward(); }
+                            if (event.kind == PointerEventKind.up) { NavigationState.navigate-forward(); }
                         }
                     }
                 }
