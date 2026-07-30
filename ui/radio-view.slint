@@ -3,6 +3,8 @@ import { Theme } from "theme.slint";
 import { Track } from "types.slint";
 import { TrackRow } from "track-row.slint";
 import { PlaybackState } from "playback-state.slint";
+import { ContextMenuState } from "context-menu-state.slint";
+import { DragState } from "drag-state.slint";
 
 export component RadioView {
     in property <[Track]> radio-tracks;
@@ -12,22 +14,6 @@ export component RadioView {
     in property <int> playlist-count;
     in property <length> sidebar-list-abs-y;
     in property <length> sidebar-width;
-
-    in-out property <bool> show-context-menu;
-    in-out property <int> context-menu-idx: -1;
-    in-out property <length> context-menu-x: 0px;
-    in-out property <length> context-menu-y: 0px;
-    in-out property <bool> context-is-youtube: false;
-    in-out property <bool> context-is-downloaded: false;
-    in-out property <bool> context-in-playlist: false;
-
-    in-out property <bool> drag-possible;
-    in-out property <bool> drag-active;
-    in-out property <int> drag-track-idx;
-    in-out property <length> drag-x;
-    in-out property <length> drag-y;
-    in-out property <int> drag-target-playlist: -1;
-    in-out property <bool> drag-over-sidebar;
 
     callback clear-search-focus();
     callback toggle-select(int);
@@ -54,7 +40,6 @@ export component RadioView {
                 keyboard-focused: radio-fs.has-focus && root.focused-index == i;
                 in-playlist: false;
                 in-queue: false;
-                context-open: root.show-context-menu && root.context-menu-idx == i;
                 clear-search-focus => { root.clear-search-focus(); }
                 row-clicked(index) => { root.toggle-select(index); }
                 start-radio(index) => { root.start-radio(index); }
@@ -63,42 +48,42 @@ export component RadioView {
                 download-or-delete(index) => { root.download-or-delete(index); }
                 remove-from-playlist(index) => {}
                 right-clicked(index, abs-x, abs-y) => {
-                    root.context-menu-idx = index;
-                    root.context-menu-x = abs-x;
-                    root.context-menu-y = abs-y;
-                    root.context-is-youtube = t.source == "youtube";
-                    root.context-is-downloaded = t.is-downloaded;
-                    root.context-in-playlist = false;
-                    root.show-context-menu = true;
+                    ContextMenuState.idx = index;
+                    ContextMenuState.x = abs-x;
+                    ContextMenuState.y = abs-y;
+                    ContextMenuState.is-youtube = t.source == "youtube";
+                    ContextMenuState.is-downloaded = t.is-downloaded;
+                    ContextMenuState.in-playlist = false;
+                    ContextMenuState.show = true;
                 }
                 drag-pressed(index, abs-x, abs-y) => {
-                    root.drag-possible = true;
-                    root.drag-track-idx = index;
-                    root.drag-x = abs-x;
-                    root.drag-y = abs-y;
+                    DragState.possible = true;
+                    DragState.track-idx = index;
+                    DragState.x = abs-x;
+                    DragState.y = abs-y;
                 }
                 drag-moved(index, abs-x, abs-y) => {
-                    if (!root.drag-possible) { return; }
-                    if (!root.drag-active) {
-                        if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
-                            root.drag-active = true;
+                    if (!DragState.possible) { return; }
+                    if (!DragState.active) {
+                        if (abs-x - DragState.x > 5px || DragState.x - abs-x > 5px || abs-y - DragState.y > 5px || DragState.y - abs-y > 5px) {
+                            DragState.active = true;
                         } else { return; }
                     }
-                    root.drag-x = abs-x;
-                    root.drag-y = abs-y;
-                    root.drag-over-sidebar = abs-x >= 0px && abs-x <= root.sidebar-width;
-                    root.drag-target-playlist = abs-x >= 0px && abs-x <= root.sidebar-width && root.playlist-count > 0 ? max(0, min(root.playlist-count - 1, (abs-y - root.sidebar-list-abs-y) / 44px)) : -1;
+                    DragState.x = abs-x;
+                    DragState.y = abs-y;
+                    DragState.over-sidebar = abs-x >= 0px && abs-x <= root.sidebar-width;
+                    DragState.target-playlist = abs-x >= 0px && abs-x <= root.sidebar-width && root.playlist-count > 0 ? max(0, min(root.playlist-count - 1, (abs-y - root.sidebar-list-abs-y) / 44px)) : -1;
                 }
                 drag-completed(index, abs-x, abs-y) => {
-                    if (root.drag-active) {
-                        if (root.drag-target-playlist >= 0) {
-                            root.drag-add-to-playlist(index, root.drag-target-playlist);
+                    if (DragState.active) {
+                        if (DragState.target-playlist >= 0) {
+                            root.drag-add-to-playlist(index, DragState.target-playlist);
                         }
-                        root.drag-active = false;
-                        root.drag-target-playlist = -1;
-                        root.drag-over-sidebar = false;
+                        DragState.active = false;
+                        DragState.target-playlist = -1;
+                        DragState.over-sidebar = false;
                     }
-                    root.drag-possible = false;
+                    DragState.possible = false;
                 }
             }
         }

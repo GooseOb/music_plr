@@ -1,0 +1,20 @@
+export global DragState {
+    in-out property <bool> possible: false;
+    in-out property <bool> active: false;
+    in-out property <int> track-idx: -1;
+    in-out property <length> x: 0px;
+    in-out property <length> y: 0px;
+    in-out property <int> target-playlist: -1;
+    in-out property <bool> over-sidebar: false;
+    in-out property <bool> reordering: false;
+    in-out property <bool> in-queue: false;
+    in-out property <int> drop-idx: 0;
+    in-out property <length> drop-line-y: 0px;
+    in-out property <length> viewport-y;
+    in-out property <length> qu-viewport-y;
+    in-out property <length> lv-y: 0px;
+    in-out property <length> listview-abs-x;
+    in-out property <length> listview-abs-y;
+    in-out property <length> listview-width;
+    in-out property <length> listview-height;
+}

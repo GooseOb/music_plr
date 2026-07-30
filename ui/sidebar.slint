@@ -3,6 +3,7 @@ import { Theme } from "theme.slint";
 import { NavIcon, DeleteIcon } from "icons.slint";
 import { PlaylistInfo } from "types.slint";
 import { PlaylistCard } from "playlist-card.slint";
+import { DragState } from "drag-state.slint";
 
 export component Sidebar {
     in-out property <[PlaylistInfo]> playlist-list;
@@ -11,8 +12,6 @@ export component Sidebar {
     in-out property <string> notification;
     in-out property <bool> can-go-back;
     in-out property <bool> can-go-forward;
-    in-out property <bool> drag-active;
-    in-out property <int> drag-target-playlist;
 
     callback create-playlist();
     callback select-playlist(int);
@@ -148,7 +147,7 @@ export component Sidebar {
                             pl-name: pl.name;
                             track-count: pl.track-count;
                             selected: selected-playlist == i;
-                            drag-over: root.drag-active && root.drag-target-playlist >= 0 && root.drag-target-playlist == i;
+                            drag-over: DragState.active && DragState.target-playlist >= 0 && DragState.target-playlist == i;
                             clicked => { select-playlist(i); }
                         }
                     }

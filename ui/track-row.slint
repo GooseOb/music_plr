@@ -2,6 +2,7 @@ import { Theme } from "theme.slint";
 import { PlayIcon, PauseIcon, DownloadIcon, FolderIcon } from "icons.slint";
 import { Track } from "types.slint";
 import { PlaybackState } from "playback-state.slint";
+import { ContextMenuState } from "context-menu-state.slint";
 
 export component TrackRow {
     in property <Track> track;
@@ -9,7 +10,8 @@ export component TrackRow {
     in property <bool> keyboard-focused;
     in property <bool> in-playlist;
     in property <bool> in-queue: false;
-    in property <bool> context-open: false;
+
+    property <bool> context-open: ContextMenuState.show && ContextMenuState.idx == root.idx;
 
     in property <image> thumbnail-image;
 

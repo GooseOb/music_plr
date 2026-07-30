@@ -3,29 +3,11 @@ import { Theme } from "theme.slint";
 import { Track } from "types.slint";
 import { TrackRow } from "track-row.slint";
 import { PlaybackState } from "playback-state.slint";
+import { ContextMenuState } from "context-menu-state.slint";
+import { DragState } from "drag-state.slint";
 
 export component QueuePanel inherits Rectangle {
     in-out property <[Track]> queue-tracks;
-
-    in-out property <bool> show-context-menu;
-    in-out property <int> context-menu-idx: -1;
-    in-out property <length> context-menu-x: 0px;
-    in-out property <length> context-menu-y: 0px;
-    in-out property <bool> context-is-youtube: false;
-    in-out property <bool> context-is-downloaded: false;
-    in-out property <bool> context-in-queue: false;
-
-    property <bool> drag-possible: false;
-    property <bool> drag-active: false;
-    property <int> drag-track-idx: -1;
-    property <length> drag-x: 0px;
-    property <length> drag-y: 0px;
-    property <bool> drag-reordering: false;
-    property <int> drop-idx: 0;
-    property <length> drop-line-y: 0px;
-    property <length> qu-viewport-y;
-    property <length> qu-lv-y: 0px;
-    property <length> qu-listview-width;
 
     callback toggle-queue();
     callback toggle-select(int);
@@ -84,7 +66,7 @@ export component QueuePanel inherits Rectangle {
         Text { text: "Up Next"; color: Theme.accent; font-size: 12px; }
 
         qu-listview := ListView {
-            viewport-y <=> root.qu-viewport-y;
+            viewport-y <=> DragState.qu-viewport-y;
             vertical-stretch: 1;
             for t[i] in root.queue-tracks: TrackRow {
                 track: t;
@@ -92,7 +74,6 @@ export component QueuePanel inherits Rectangle {
                 idx: i;
                 in-playlist: false;
                 in-queue: true;
-                context-open: root.show-context-menu && root.context-menu-idx == i;
 
                 row-clicked(index) => { root.toggle-select(index); }
                 start-radio(index) => { root.start-radio(index); }
@@ -101,62 +82,63 @@ export component QueuePanel inherits Rectangle {
                 download-or-delete(index) => { root.download-or-delete(index); }
                 remove-from-playlist(index) => { root.remove-from-queue(index); }
                 right-clicked(index, abs-x, abs-y) => {
-                    root.context-menu-idx = index;
-                    root.context-menu-x = abs-x;
-                    root.context-menu-y = abs-y;
-                    root.context-is-youtube = t.source == "youtube";
-                    root.context-is-downloaded = t.is-downloaded;
-                    root.context-in-queue = true;
-                    root.show-context-menu = true;
+                    ContextMenuState.idx = index;
+                    ContextMenuState.x = abs-x;
+                    ContextMenuState.y = abs-y;
+                    ContextMenuState.is-youtube = t.source == "youtube";
+                    ContextMenuState.is-downloaded = t.is-downloaded;
+                    ContextMenuState.in-queue = true;
+                    ContextMenuState.show = true;
                 }
                 drag-pressed(index, abs-x, abs-y) => {
-                    root.drag-possible = true;
-                    root.drag-track-idx = index;
-                    root.drag-x = abs-x;
-                    root.drag-y = abs-y;
-                    root.qu-lv-y = qu-listview.y;
-                    root.qu-listview-width = qu-listview.width;
-                    root.drop-idx = index;
+                    DragState.possible = true;
+                    DragState.track-idx = index;
+                    DragState.x = abs-x;
+                    DragState.y = abs-y;
+                    DragState.in-queue = true;
+                    DragState.lv-y = qu-listview.y;
+                    DragState.listview-width = qu-listview.width;
+                    DragState.drop-idx = index;
                 }
                 drag-moved(index, abs-x, abs-y) => {
-                    if (!root.drag-possible) { return; }
-                    if (!root.drag-active) {
-                        if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
-                            root.drag-active = true;
-                            root.drag-reordering = true;
+                    if (!DragState.possible) { return; }
+                    if (!DragState.active) {
+                        if (abs-x - DragState.x > 5px || DragState.x - abs-x > 5px || abs-y - DragState.y > 5px || DragState.y - abs-y > 5px) {
+                            DragState.active = true;
+                            DragState.reordering = true;
                         } else { return; }
                     }
-                    root.drag-x = abs-x;
-                    root.drag-y = abs-y;
-                    if (root.drag-reordering) {
+                    DragState.x = abs-x;
+                    DragState.y = abs-y;
+                    if (DragState.reordering) {
                         let rel-y = abs-y - qu-listview.absolute-position.y;
                         let edge-zone = 40px;
                         if (rel-y < edge-zone) {
-                            root.qu-viewport-y = min(0px, root.qu-viewport-y + 8px);
+                            DragState.qu-viewport-y = min(0px, DragState.qu-viewport-y + 8px);
                         } else if (rel-y > qu-listview.height - edge-zone) {
                             let max-scroll = -(max(0px, root.queue-tracks.length * 48px - qu-listview.height));
-                            root.qu-viewport-y = max(max-scroll, root.qu-viewport-y - 8px);
+                            DragState.qu-viewport-y = max(max-scroll, DragState.qu-viewport-y - 8px);
                         }
-                        root.drop-idx = max(0, min(root.queue-tracks.length, (rel-y - root.qu-viewport-y) / 48px + 0.5));
-                        root.drop-line-y = max(0px, min(qu-listview.height - 2px, root.drop-idx * 48px + root.qu-viewport-y));
+                        DragState.drop-idx = max(0, min(root.queue-tracks.length, (rel-y - DragState.qu-viewport-y) / 48px + 0.5));
+                        DragState.drop-line-y = max(0px, min(qu-listview.height - 2px, DragState.drop-idx * 48px + DragState.qu-viewport-y));
                     }
                 }
                 drag-completed(index, abs-x, abs-y) => {
-                    if (root.drag-active && root.drag-reordering && root.drop-idx != root.drag-track-idx) {
-                        root.reorder-queue(root.drag-track-idx, root.drop-idx);
+                    if (DragState.active && DragState.reordering && DragState.drop-idx != DragState.track-idx) {
+                        root.reorder-queue(DragState.track-idx, DragState.drop-idx);
                     }
-                    root.drag-active = false;
-                    root.drag-reordering = false;
-                    root.drag-possible = false;
+                    DragState.active = false;
+                    DragState.reordering = false;
+                    DragState.possible = false;
                 }
             }
         }
     }
 
-    if root.drag-active && root.drag-reordering : Rectangle {
+    if DragState.active && DragState.reordering && DragState.in-queue : Rectangle {
         x: 0px;
-        y: root.qu-lv-y + root.drop-line-y;
-        width: root.qu-listview-width;
+        y: DragState.lv-y + DragState.drop-line-y;
+        width: DragState.listview-width;
         height: 2px;
         background: Theme.accent;
     }

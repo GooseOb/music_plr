@@ -1,13 +1,7 @@
 import { Theme } from "theme.slint";
+import { ContextMenuState } from "context-menu-state.slint";
 
 export component ContextMenu inherits Rectangle {
-    in-out property <int> context-menu-idx;
-    in-out property <length> context-menu-x;
-    in-out property <length> context-menu-y;
-    in-out property <bool> context-is-youtube;
-    in-out property <bool> context-is-downloaded;
-    in-out property <bool> context-in-playlist;
-    in-out property <bool> context-in-queue;
     in property <length> parent-width;
     in property <length> parent-height;
 
@@ -18,12 +12,12 @@ export component ContextMenu inherits Rectangle {
     callback remove-from-playlist(int);
     callback remove-from-queue(int);
 
-    property <bool> show-remove: root.context-in-playlist || root.context-in-queue;
+    property <bool> show-remove: ContextMenuState.in-playlist || ContextMenuState.in-queue;
 
-    x: max(0px, min(root.context-menu-x, parent-width - 190px));
-    y: max(0px, min(root.context-menu-y, parent-height - max(40px, Theme.spacing-xs * 2 + 36px + (root.context-is-youtube ? 108px : 0px) + (root.show-remove ? 36px : 0px) - Theme.spacing-xs)));
+    x: max(0px, min(ContextMenuState.x, parent-width - 190px));
+    y: max(0px, min(ContextMenuState.y, parent-height - max(40px, Theme.spacing-xs * 2 + 36px + (ContextMenuState.is-youtube ? 108px : 0px) + (root.show-remove ? 36px : 0px) - Theme.spacing-xs)));
     width: 190px;
-    height: max(40px, Theme.spacing-xs * 2 + 36px + (root.context-is-youtube ? 108px : 0px) + (root.show-remove ? 36px : 0px) - Theme.spacing-xs);
+    height: max(40px, Theme.spacing-xs * 2 + 36px + (ContextMenuState.is-youtube ? 108px : 0px) + (root.show-remove ? 36px : 0px) - Theme.spacing-xs);
     background: Theme.bg-elevated;
     border-radius: Theme.radius-md;
     border-width: 1px;
@@ -32,7 +26,7 @@ export component ContextMenu inherits Rectangle {
     VerticalLayout {
         padding: Theme.spacing-xs;
         spacing: Theme.spacing-xs;
-        if root.context-is-youtube : Rectangle {
+        if ContextMenuState.is-youtube : Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
             background: radio-touch.has-hover ? Theme.bg-hover : transparent;
@@ -44,11 +38,11 @@ export component ContextMenu inherits Rectangle {
             radio-touch := TouchArea {
                 mouse-cursor: pointer;
                 clicked => {
-					root.start-radio(root.context-menu-idx);
+					root.start-radio(ContextMenuState.idx);
                 }
             }
         }
-        if root.context-is-youtube : Rectangle {
+        if ContextMenuState.is-youtube : Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
             background: artist-touch.has-hover ? Theme.bg-hover : transparent;
@@ -60,7 +54,7 @@ export component ContextMenu inherits Rectangle {
             artist-touch := TouchArea {
                 mouse-cursor: pointer;
                 clicked => {
-					root.start-artist(root.context-menu-idx);
+					root.start-artist(ContextMenuState.idx);
                 }
             }
         }
@@ -76,27 +70,27 @@ export component ContextMenu inherits Rectangle {
             pl-touch := TouchArea {
                 mouse-cursor: pointer;
 				clicked => {
-					root.toggle-picker(root.context-menu-idx);
+					root.toggle-picker(ContextMenuState.idx);
 				}
             }
         }
-        if root.context-is-youtube : Rectangle {
+        if ContextMenuState.is-youtube : Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
             background: dl-touch.has-hover ? Theme.bg-hover : transparent;
             HorizontalLayout {
                 padding-left: Theme.spacing-md;
                 padding-right: Theme.spacing-md;
-                Text { text: root.context-is-downloaded ? "Delete Download" : "Download"; color: Theme.fg; vertical-alignment: center; }
+                Text { text: ContextMenuState.is-downloaded ? "Delete Download" : "Download"; color: Theme.fg; vertical-alignment: center; }
             }
             dl-touch := TouchArea {
                 mouse-cursor: pointer;
                 clicked => {
-					root.download-or-delete(root.context-menu-idx);
+					root.download-or-delete(ContextMenuState.idx);
                 }
             }
         }
-        if root.context-in-playlist : Rectangle {
+        if ContextMenuState.in-playlist : Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
             background: remove-pl-touch.has-hover ? Theme.bg-hover : transparent;
@@ -108,11 +102,11 @@ export component ContextMenu inherits Rectangle {
             remove-pl-touch := TouchArea {
                 mouse-cursor: pointer;
                 clicked => {
-					root.remove-from-playlist(root.context-menu-idx);
+					root.remove-from-playlist(ContextMenuState.idx);
                 }
             }
         }
-        if root.context-in-queue : Rectangle {
+        if ContextMenuState.in-queue : Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
             background: remove-q-touch.has-hover ? Theme.bg-hover : transparent;
@@ -124,7 +118,7 @@ export component ContextMenu inherits Rectangle {
             remove-q-touch := TouchArea {
                 mouse-cursor: pointer;
 				clicked => {
-					root.remove-from-queue(root.context-menu-idx);
+					root.remove-from-queue(ContextMenuState.idx);
 				}
             }
         }

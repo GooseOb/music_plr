@@ -3,6 +3,8 @@ import { Theme } from "theme.slint";
 import { Track } from "types.slint";
 import { TrackRow } from "track-row.slint";
 import { PlaybackState } from "playback-state.slint";
+import { ContextMenuState } from "context-menu-state.slint";
+import { DragState } from "drag-state.slint";
 
 export component PlaylistView {
     in property <[Track]> playlist-tracks;
@@ -11,31 +13,6 @@ export component PlaylistView {
     in property <int> playlist-count;
     in property <length> sidebar-list-abs-y;
     in property <length> sidebar-width;
-
-    in-out property <bool> show-context-menu;
-    in-out property <int> context-menu-idx: -1;
-    in-out property <length> context-menu-x: 0px;
-    in-out property <length> context-menu-y: 0px;
-    in-out property <bool> context-is-youtube: false;
-    in-out property <bool> context-is-downloaded: false;
-    in-out property <bool> context-in-playlist: false;
-
-    in-out property <bool> drag-possible;
-    in-out property <bool> drag-active;
-    in-out property <int> drag-track-idx;
-    in-out property <length> drag-x;
-    in-out property <length> drag-y;
-    in-out property <int> drag-target-playlist: -1;
-    in-out property <bool> drag-over-sidebar;
-
-    in-out property <bool> drag-reordering;
-    in-out property <int> drop-idx: 0;
-    in-out property <length> drop-line-y: 0px;
-    in-out property <length> pl-viewport-y;
-    in-out property <length> pl-listview-abs-x;
-    in-out property <length> pl-listview-abs-y;
-    in-out property <length> pl-listview-width;
-    in-out property <length> pl-listview-height;
 
     callback clear-search-focus();
     callback toggle-select(int);
@@ -73,7 +50,7 @@ export component PlaylistView {
             }
         }
         pl-listview := ListView {
-            viewport-y <=> root.pl-viewport-y;
+            viewport-y <=> DragState.viewport-y;
             vertical-stretch: 1;
             visible: playlist-tracks.length > 0;
             for t[i] in root.playlist-tracks: TrackRow {
@@ -83,7 +60,6 @@ export component PlaylistView {
                 keyboard-focused: playlist-fs.has-focus && root.focused-index == i;
                 in-playlist: true;
                 in-queue: false;
-                context-open: root.show-context-menu && root.context-menu-idx == i;
                 clear-search-focus => { root.clear-search-focus(); }
                 row-clicked(index) => { root.toggle-select(index); }
                 start-radio(index) => { root.start-radio(index); }
@@ -92,64 +68,65 @@ export component PlaylistView {
                 download-or-delete(index) => { root.download-or-delete(index); }
                 remove-from-playlist(index) => { root.remove-from-playlist(index); }
                 right-clicked(index, abs-x, abs-y) => {
-                    root.context-menu-idx = index;
-                    root.context-menu-x = abs-x;
-                    root.context-menu-y = abs-y;
-                    root.context-is-youtube = t.source == "youtube";
-                    root.context-is-downloaded = t.is-downloaded;
-                    root.context-in-playlist = true;
-                    root.show-context-menu = true;
+                    ContextMenuState.idx = index;
+                    ContextMenuState.x = abs-x;
+                    ContextMenuState.y = abs-y;
+                    ContextMenuState.is-youtube = t.source == "youtube";
+                    ContextMenuState.is-downloaded = t.is-downloaded;
+                    ContextMenuState.in-playlist = true;
+                    ContextMenuState.show = true;
                 }
                 drag-pressed(index, abs-x, abs-y) => {
-                    root.drag-possible = true;
-                    root.drag-track-idx = index;
-                    root.drag-x = abs-x;
-                    root.drag-y = abs-y;
-                    root.pl-listview-abs-x = pl-listview.absolute-position.x;
-                    root.pl-listview-abs-y = pl-listview.absolute-position.y;
-                    root.pl-listview-width = pl-listview.width;
-                    root.pl-listview-height = pl-listview.height;
-                    root.drop-idx = index;
+                    DragState.possible = true;
+                    DragState.track-idx = index;
+                    DragState.x = abs-x;
+                    DragState.y = abs-y;
+                    DragState.in-queue = false;
+                    DragState.listview-abs-x = pl-listview.absolute-position.x;
+                    DragState.listview-abs-y = pl-listview.absolute-position.y;
+                    DragState.listview-width = pl-listview.width;
+                    DragState.listview-height = pl-listview.height;
+                    DragState.drop-idx = index;
                 }
                 drag-moved(index, abs-x, abs-y) => {
-                    if (!root.drag-possible) { return; }
-                    if (!root.drag-active) {
-                        if (abs-x - root.drag-x > 5px || root.drag-x - abs-x > 5px || abs-y - root.drag-y > 5px || root.drag-y - abs-y > 5px) {
-                            root.drag-active = true;
-                            root.drag-reordering = true;
+                    if (!DragState.possible) { return; }
+                    if (!DragState.active) {
+                        if (abs-x - DragState.x > 5px || DragState.x - abs-x > 5px || abs-y - DragState.y > 5px || DragState.y - abs-y > 5px) {
+                            DragState.active = true;
+                            DragState.reordering = true;
                         } else { return; }
                     }
-                    root.drag-x = abs-x;
-                    root.drag-y = abs-y;
-                    root.drag-over-sidebar = abs-x >= 0px && abs-x <= root.sidebar-width;
-                    root.drag-target-playlist = abs-x >= 0px && abs-x <= root.sidebar-width && root.playlist-count > 0 ? max(0, min(root.playlist-count - 1, (abs-y - root.sidebar-list-abs-y) / 44px)) : -1;
-                    root.drag-reordering = abs-x > root.sidebar-width;
-                    if (root.drag-reordering) {
+                    DragState.x = abs-x;
+                    DragState.y = abs-y;
+                    DragState.over-sidebar = abs-x >= 0px && abs-x <= root.sidebar-width;
+                    DragState.target-playlist = abs-x >= 0px && abs-x <= root.sidebar-width && root.playlist-count > 0 ? max(0, min(root.playlist-count - 1, (abs-y - root.sidebar-list-abs-y) / 44px)) : -1;
+                    DragState.reordering = abs-x > root.sidebar-width;
+                    if (DragState.reordering) {
                         let rel-y = abs-y - pl-listview.absolute-position.y;
                         let edge-zone = 40px;
                         if (rel-y < edge-zone) {
-                            root.pl-viewport-y = min(0px, root.pl-viewport-y + 8px);
+                            DragState.viewport-y = min(0px, DragState.viewport-y + 8px);
                         } else if (rel-y > pl-listview.height - edge-zone) {
                             let max-scroll = -(max(0px, root.playlist-tracks.length * 48px - pl-listview.height));
-                            root.pl-viewport-y = max(max-scroll, root.pl-viewport-y - 8px);
+                            DragState.viewport-y = max(max-scroll, DragState.viewport-y - 8px);
                         }
-                        root.drop-idx = max(0, min(root.playlist-tracks.length, (rel-y - root.pl-viewport-y) / 48px + 0.5));
-                        root.drop-line-y = max(0px, min(pl-listview.height - 2px, root.drop-idx * 48px + root.pl-viewport-y));
+                        DragState.drop-idx = max(0, min(root.playlist-tracks.length, (rel-y - DragState.viewport-y) / 48px + 0.5));
+                        DragState.drop-line-y = max(0px, min(pl-listview.height - 2px, DragState.drop-idx * 48px + DragState.viewport-y));
                     }
                 }
                 drag-completed(index, abs-x, abs-y) => {
-                    if (root.drag-active) {
-                        if (root.drag-target-playlist >= 0) {
-                            root.drag-add-to-playlist(index, root.drag-target-playlist);
-                        } else if (root.drag-reordering && root.drop-idx != root.drag-track-idx) {
-                            root.reorder-tracks(root.drag-track-idx, root.drop-idx);
+                    if (DragState.active) {
+                        if (DragState.target-playlist >= 0) {
+                            root.drag-add-to-playlist(index, DragState.target-playlist);
+                        } else if (DragState.reordering && DragState.drop-idx != DragState.track-idx) {
+                            root.reorder-tracks(DragState.track-idx, DragState.drop-idx);
                         }
-                        root.drag-active = false;
-                        root.drag-target-playlist = -1;
-                        root.drag-over-sidebar = false;
-                        root.drag-reordering = false;
+                        DragState.active = false;
+                        DragState.target-playlist = -1;
+                        DragState.over-sidebar = false;
+                        DragState.reordering = false;
                     }
-                    root.drag-possible = false;
+                    DragState.possible = false;
                 }
             }
         }

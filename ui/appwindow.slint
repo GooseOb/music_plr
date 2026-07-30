@@ -11,6 +11,10 @@ import { PickerDialog } from "picker-dialog.slint";
 import { DeleteConfirm } from "delete-confirm.slint";
 import { PlaybackState } from "playback-state.slint";
 export { PlaybackState }
+import { ContextMenuState } from "context-menu-state.slint";
+export { ContextMenuState }
+import { DragState } from "drag-state.slint";
+export { DragState }
 import { SearchView } from "search-view.slint";
 import { PlaylistView } from "playlist-view.slint";
 import { RadioView } from "radio-view.slint";
@@ -39,31 +43,6 @@ export component AppWindow inherits Window {
     in-out property <[string]> search-history-items;
     in-out property <bool> show-search-history: false;
     in-out property <bool> search-has-focus;
-
-    in-out property <bool> show-context-menu: false;
-    in-out property <int> context-menu-idx: -1;
-    in-out property <length> context-menu-x: 0px;
-    in-out property <length> context-menu-y: 0px;
-    in-out property <bool> context-is-youtube: false;
-    in-out property <bool> context-is-downloaded: false;
-    in-out property <bool> context-in-playlist: false;
-    in-out property <bool> context-in-queue: false;
-
-    in-out property <bool> drag-possible;
-    in-out property <bool> drag-active;
-    in-out property <int> drag-track-idx;
-    in-out property <length> drag-x;
-    in-out property <length> drag-y;
-    in-out property <int> drag-target-playlist: -1;
-    in-out property <bool> drag-over-sidebar;
-    in-out property <bool> drag-reordering;
-    in-out property <int> drop-idx: 0;
-    in-out property <length> drop-line-y: 0px;
-    in-out property <length> pl-viewport-y;
-    in-out property <length> pl-listview-abs-x;
-    in-out property <length> pl-listview-abs-y;
-    in-out property <length> pl-listview-width;
-    in-out property <length> pl-listview-height;
 
     in-out property <bool> show-queue;
     in-out property <[Track]> queue-tracks;
@@ -135,8 +114,6 @@ export component AppWindow inherits Window {
                 notification <=> root.notification;
                 can-go-back <=> root.can-go-back;
                 can-go-forward <=> root.can-go-forward;
-                drag-active <=> root.drag-active;
-                drag-target-playlist <=> root.drag-target-playlist;
                 create-playlist() => { root.create-playlist(); }
                 select-playlist(i) => { root.select-playlist(i); }
                 navigate-back() => { root.navigate-back(); }
@@ -193,22 +170,6 @@ export component AppWindow inherits Window {
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
 
-                        show-context-menu <=> root.show-context-menu;
-                        context-menu-idx <=> root.context-menu-idx;
-                        context-menu-x <=> root.context-menu-x;
-                        context-menu-y <=> root.context-menu-y;
-                        context-is-youtube <=> root.context-is-youtube;
-                        context-is-downloaded <=> root.context-is-downloaded;
-                        context-in-playlist <=> root.context-in-playlist;
-
-                        drag-possible <=> root.drag-possible;
-                        drag-active <=> root.drag-active;
-                        drag-track-idx <=> root.drag-track-idx;
-                        drag-x <=> root.drag-x;
-                        drag-y <=> root.drag-y;
-                        drag-target-playlist <=> root.drag-target-playlist;
-                        drag-over-sidebar <=> root.drag-over-sidebar;
-
                         clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
                         toggle-select(i) => { root.toggle-select(i); }
                         start-radio(i) => { root.start-radio(i); }
@@ -226,31 +187,6 @@ export component AppWindow inherits Window {
                         playlist-count: root.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
-
-                        show-context-menu <=> root.show-context-menu;
-                        context-menu-idx <=> root.context-menu-idx;
-                        context-menu-x <=> root.context-menu-x;
-                        context-menu-y <=> root.context-menu-y;
-                        context-is-youtube <=> root.context-is-youtube;
-                        context-is-downloaded <=> root.context-is-downloaded;
-                        context-in-playlist <=> root.context-in-playlist;
-
-                        drag-possible <=> root.drag-possible;
-                        drag-active <=> root.drag-active;
-                        drag-track-idx <=> root.drag-track-idx;
-                        drag-x <=> root.drag-x;
-                        drag-y <=> root.drag-y;
-                        drag-target-playlist <=> root.drag-target-playlist;
-                        drag-over-sidebar <=> root.drag-over-sidebar;
-
-                        drag-reordering <=> root.drag-reordering;
-                        drop-idx <=> root.drop-idx;
-                        drop-line-y <=> root.drop-line-y;
-                        pl-viewport-y <=> root.pl-viewport-y;
-                        pl-listview-abs-x <=> root.pl-listview-abs-x;
-                        pl-listview-abs-y <=> root.pl-listview-abs-y;
-                        pl-listview-width <=> root.pl-listview-width;
-                        pl-listview-height <=> root.pl-listview-height;
 
                         clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
                         toggle-select(i) => { root.toggle-select(i); }
@@ -276,22 +212,6 @@ export component AppWindow inherits Window {
                         playlist-count: root.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
-
-                        show-context-menu <=> root.show-context-menu;
-                        context-menu-idx <=> root.context-menu-idx;
-                        context-menu-x <=> root.context-menu-x;
-                        context-menu-y <=> root.context-menu-y;
-                        context-is-youtube <=> root.context-is-youtube;
-                        context-is-downloaded <=> root.context-is-downloaded;
-                        context-in-playlist <=> root.context-in-playlist;
-
-                        drag-possible <=> root.drag-possible;
-                        drag-active <=> root.drag-active;
-                        drag-track-idx <=> root.drag-track-idx;
-                        drag-x <=> root.drag-x;
-                        drag-y <=> root.drag-y;
-                        drag-target-playlist <=> root.drag-target-playlist;
-                        drag-over-sidebar <=> root.drag-over-sidebar;
 
                         clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
                         toggle-select(i) => { root.toggle-select(i); }
@@ -325,14 +245,6 @@ export component AppWindow inherits Window {
                     queue-tracks <=> root.queue-tracks;
                     toggle-queue() => { root.toggle-queue(); }
                     resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
-
-                    show-context-menu <=> root.show-context-menu;
-                    context-menu-idx <=> root.context-menu-idx;
-                    context-menu-x <=> root.context-menu-x;
-                    context-menu-y <=> root.context-menu-y;
-                    context-is-youtube <=> root.context-is-youtube;
-                    context-is-downloaded <=> root.context-is-downloaded;
-                    context-in-queue <=> root.context-in-queue;
 
                     toggle-select(i) => { root.toggle-select(i); }
                     start-radio(i) => { root.start-radio(i); }
@@ -393,9 +305,9 @@ export component AppWindow inherits Window {
         delete-playlist(i) => { root.delete-playlist(i); }
     }
 
-    if root.drag-active && root.drag-over-sidebar : Rectangle {
-        x: root.drag-x - sidebar.sidebar-width / 2;
-        y: root.drag-y - 44px;
+    if DragState.active && DragState.over-sidebar : Rectangle {
+        x: DragState.x - sidebar.sidebar-width / 2;
+        y: DragState.y - 44px;
         width: sidebar.sidebar-width;
         height: 36px;
         background: Theme.accent;
@@ -415,37 +327,30 @@ export component AppWindow inherits Window {
         }
     }
 
-    if root.drag-active && root.drag-reordering : Rectangle {
-        x: root.pl-listview-abs-x;
-        y: root.pl-listview-abs-y + root.drop-line-y;
-        width: root.pl-listview-width;
+    if DragState.active && DragState.reordering && !DragState.in-queue : Rectangle {
+        x: DragState.listview-abs-x;
+        y: DragState.listview-abs-y + DragState.drop-line-y;
+        width: DragState.listview-width;
         height: 2px;
         background: Theme.accent;
     }
 
-    if root.show-context-menu : Rectangle {
+    if ContextMenuState.show : Rectangle {
         background: transparent;
         TouchArea {
             clicked => {
-                root.show-context-menu = false;
+                ContextMenuState.show = false;
             }
         }
         ContextMenu {
-            context-menu-idx <=> root.context-menu-idx;
-            context-menu-x <=> root.context-menu-x;
-            context-menu-y <=> root.context-menu-y;
-            context-is-youtube <=> root.context-is-youtube;
-            context-is-downloaded <=> root.context-is-downloaded;
-            context-in-playlist <=> root.context-in-playlist;
-            context-in-queue <=> root.context-in-queue;
             parent-width: root.width;
             parent-height: root.height;
-            start-radio(i) => { root.start-radio(i); root.show-context-menu = false; }
-            start-artist(i) => { root.start-artist(i); root.show-context-menu = false; }
-            toggle-picker(i) => { root.toggle-picker(i); root.show-context-menu = false; }
-            download-or-delete(i) => { root.download-or-delete(i); root.show-context-menu = false; }
-            remove-from-playlist(i) => { root.remove-from-playlist(i); root.show-context-menu = false; }
-            remove-from-queue(i) => { root.remove-from-queue(i); root.show-context-menu = false; }
+            start-radio(i) => { root.start-radio(i); ContextMenuState.show = false; }
+            start-artist(i) => { root.start-artist(i); ContextMenuState.show = false; }
+            toggle-picker(i) => { root.toggle-picker(i); ContextMenuState.show = false; }
+            download-or-delete(i) => { root.download-or-delete(i); ContextMenuState.show = false; }
+            remove-from-playlist(i) => { root.remove-from-playlist(i); ContextMenuState.show = false; }
+            remove-from-queue(i) => { root.remove-from-queue(i); ContextMenuState.show = false; }
         }
     }
 
@@ -455,8 +360,8 @@ export component AppWindow inherits Window {
                 PlaybackState.toggle-play-pause();
                 accept
             } else if (event.text == Key.Escape) {
-                if root.show-context-menu {
-                    root.show-context-menu = false;
+                if ContextMenuState.show {
+                    ContextMenuState.show = false;
                 } else if show-search-history {
                     show-search-history = false;
                 } else {
