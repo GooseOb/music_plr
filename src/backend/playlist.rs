@@ -1,4 +1,6 @@
 use crate::types::{Track as RustTrack, TrackSource};
+use super::PlaylistState;
+use slint::ComponentHandle;
 
 impl super::Backend {
     pub fn handle_add_local_music(&mut self, paths: Vec<String>) {
@@ -119,15 +121,16 @@ impl super::Backend {
         if self.show_playlist_picker == Some(index) {
             self.show_playlist_picker = None;
             if let Some(window) = self.ui.upgrade() {
-                window.set_show_picker(false);
+                window.global::<PlaylistState>().set_show_picker(false);
             }
         } else if self.playlists.playlists.is_empty() {
             self.notification = Some("Create a playlist first".into());
         } else {
             self.show_playlist_picker = Some(index);
             if let Some(window) = self.ui.upgrade() {
-                window.set_picker_track_idx(index as i32);
-                window.set_show_picker(true);
+                let playlist_state = window.global::<PlaylistState>();
+                playlist_state.set_picker_track_idx(index as i32);
+                playlist_state.set_show_picker(true);
             }
         }
     }
@@ -141,7 +144,7 @@ impl super::Backend {
         self.playlists.add_track(playlist_idx, &track);
         self.show_playlist_picker = None;
         if let Some(window) = self.ui.upgrade() {
-            window.set_show_picker(false);
+            window.global::<PlaylistState>().set_show_picker(false);
         }
         self.sync_playlist_sidebar();
         self.sync_playlist_content();

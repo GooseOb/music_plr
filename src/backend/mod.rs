@@ -1,5 +1,7 @@
 use std::sync::mpsc;
 
+use slint::ComponentHandle;
+
 use crate::audio::AudioPlayer;
 use crate::cache::StreamCache;
 use crate::config::Config;
@@ -335,7 +337,7 @@ impl Backend {
                 self.sync_search_model();
                 self.clear_notification();
                 if let Some(window) = self.ui.upgrade() {
-                    window.set_loading(false);
+                    window.global::<SearchState>().set_loading(false);
                 }
             }
             BackendResult::SearchResultsAppend(tracks) => {
@@ -353,7 +355,7 @@ impl Backend {
                 self.sync_radio_model();
                 self.update_nav_ui();
                 if let Some(window) = self.ui.upgrade() {
-                    window.set_loading(false);
+                    window.global::<SearchState>().set_loading(false);
                 }
             }
             BackendResult::DownloadComplete(_idx, url, path) => {

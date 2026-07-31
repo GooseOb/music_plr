@@ -17,63 +17,34 @@ import { DragState } from "drag-state.slint";
 export { DragState }
 import { NavigationState } from "navigation-state.slint";
 export { NavigationState }
+import { QueueState } from "queue-state.slint";
+export { QueueState }
+import { PlaylistState } from "playlist-state.slint";
+export { PlaylistState }
+import { SearchState } from "search-state.slint";
+export { SearchState }
 import { SearchView } from "search-view.slint";
 import { PlaylistView } from "playlist-view.slint";
 import { RadioView } from "radio-view.slint";
 
 export component AppWindow inherits Window {
     in-out property <int> current-view;
-    in-out property <string> search-input-text;
     in-out property <string> playlist-create-name;
-    in-out property <bool> loading;
     in-out property <string> notification;
     in-out property <string> radio-label;
 
-    in-out property <[Track]> search-results;
     in-out property <[Track]> radio-tracks;
-    in-out property <[PlaylistInfo]> playlist-list;
-    in-out property <[Track]> playlist-tracks;
-    in-out property <[string]> picker-playlists;
-
-    in-out property <bool> show-picker;
-    in-out property <int> picker-track-idx;
-    in-out property <int> selected-playlist;
-    in-out property <string> selected-playlist-name;
-
-    in-out property <[string]> search-history-items;
-    in-out property <bool> show-search-history: false;
-    in-out property <bool> search-has-focus;
-
-    in-out property <bool> show-queue;
-    in-out property <[Track]> queue-tracks;
-
-    in-out property <bool> show-delete-confirm;
-    in-out property <int> delete-confirm-index: -1;
 
     in-out property <int> picker-focused-index: 0;
-    in-out property <int> search-history-focused-index: 0;
+    in-out property <bool> search-has-focus;
 
-    callback toggle-queue();
     callback navigate-to(int);
-    callback search-execute();
-    callback search-load-more();
     callback start-song-radio(string);
     callback start-artist-radio(string);
     callback download-track(int);
     callback remove-download(int);
     callback download-current();
     callback add-local-music();
-    callback create-playlist();
-    callback delete-playlist(int);
-    callback select-playlist(int);
-    callback add-to-playlist(int);
-    callback remove-from-playlist(int);
-    callback toggle-picker(int);
-    callback close-picker();
-    callback search-input-changed(string);
-    callback playlist-name-changed(string);
-    callback search-history-selected(int);
-    callback delete-search-history(int);
     callback toggle-select(int);
     callback copy-selected();
     callback delete-selected();
@@ -106,13 +77,7 @@ export component AppWindow inherits Window {
 
             sidebar := Sidebar {
                 width: sidebar.sidebar-width;
-                playlist-list <=> root.playlist-list;
-                selected-playlist <=> root.selected-playlist;
-                playlist-create-name <=> root.playlist-create-name;
                 notification <=> root.notification;
-                create-playlist() => { root.create-playlist(); }
-                select-playlist(i) => { root.select-playlist(i); }
-                playlist-name-changed(text) => { root.playlist-name-changed(text); }
             }
 
             Rectangle {
@@ -127,11 +92,11 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         spacing: Theme.spacing-sm;
                         search-text-input := LineEdit {
-                            text: search-input-text;
+                            text: SearchState.search-input-text;
                             placeholder-text: "Search songs, artists, albums...";
                             horizontal-stretch: 1;
-                            edited => { search-input-changed(self.text); }
-                            accepted => { search-execute(); }
+                            edited => { SearchState.search-input-changed(self.text); }
+                            accepted => { SearchState.search-execute(); }
                         }
                         Rectangle {
                             width: 30px; height: 30px; border-radius: Theme.radius-sm; background: search-btn-fs.has-focus ? Theme.bg-hover : Theme.accent;
@@ -143,81 +108,75 @@ export component AppWindow inherits Window {
                                 focus-on-click: false;
                                 key-pressed(event) => {
                                     if (event.text == Key.Return || event.text == " ") {
-                                        search-execute(); accept
+                                        SearchState.search-execute(); accept
                                     } else { reject }
                                 }
                             }
                             TouchArea {
                                 mouse-cursor: pointer;
-								clicked => search-execute();
+								clicked => SearchState.search-execute();
                             }
                         }
                     }
                     Rectangle { height: Theme.spacing-md; }
 
-                    if loading : Text { text: "Searching..."; color: Theme.fg-secondary; }
+                    if SearchState.loading : Text { text: "Searching..."; color: Theme.fg-secondary; }
 
-                    if !loading && search-results.length > 0 && selected-playlist < 0 && current-view != 1 : SearchView {
-                        search-results: root.search-results;
-                        loading: root.loading;
-                        playlist-count: root.playlist-list.length;
+                    if !SearchState.loading && SearchState.search-results.length > 0 && PlaylistState.selected-playlist < 0 && current-view != 1 : SearchView {
+                        playlist-count: PlaylistState.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
 
-                        clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
+                        clear-search-focus() => { search-text-input.clear-focus(); SearchState.show-search-history = false; }
                         toggle-select(i) => { root.toggle-select(i); }
                         start-radio(i) => { root.start-radio(i); }
                         start-artist(i) => { root.start-artist(i); }
-                        toggle-picker(i) => { root.toggle-picker(i); }
+                        toggle-picker(i) => { PlaylistState.toggle-picker(i); }
                         download-or-delete(i) => { root.download-or-delete(i); }
-                        search-load-more() => { root.search-load-more(); }
                         drag-add-to-playlist(ti, pi) => { root.drag-add-to-playlist(ti, pi); }
                         resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
                     }
 
-                    if selected-playlist >= 0 : PlaylistView {
-                        playlist-tracks: root.playlist-tracks;
-                        selected-playlist-name: root.selected-playlist-name;
-                        playlist-count: root.playlist-list.length;
+                    if PlaylistState.selected-playlist >= 0 : PlaylistView {
+                        playlist-count: PlaylistState.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
 
-                        clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
+                        clear-search-focus() => { search-text-input.clear-focus(); SearchState.show-search-history = false; }
                         toggle-select(i) => { root.toggle-select(i); }
                         start-radio(i) => { root.start-radio(i); }
                         start-artist(i) => { root.start-artist(i); }
-                        toggle-picker(i) => { root.toggle-picker(i); }
+                        toggle-picker(i) => { PlaylistState.toggle-picker(i); }
                         download-or-delete(i) => { root.download-or-delete(i); }
-                        remove-from-playlist(i) => { root.remove-from-playlist(i); }
+                        remove-from-playlist(i) => { PlaylistState.remove-from-playlist(i); }
                         add-local-music() => { root.add-local-music(); }
                         delete-playlist() => {
-                            root.delete-confirm-index = root.selected-playlist;
-                            root.show-delete-confirm = true;
+                            PlaylistState.delete-confirm-index = PlaylistState.selected-playlist;
+                            PlaylistState.show-delete-confirm = true;
                         }
                         drag-add-to-playlist(ti, pi) => { root.drag-add-to-playlist(ti, pi); }
                         reorder-tracks(fi, ti) => { root.reorder-tracks(fi, ti); }
                         resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
                     }
 
-                    if selected-playlist < 0 && current-view == 1 : RadioView {
+                    if PlaylistState.selected-playlist < 0 && current-view == 1 : RadioView {
                         radio-tracks: root.radio-tracks;
                         radio-label: root.radio-label;
-                        loading: root.loading;
-                        playlist-count: root.playlist-list.length;
+                        playlist-count: PlaylistState.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
 
-                        clear-search-focus() => { search-text-input.clear-focus(); root.show-search-history = false; }
+                        clear-search-focus() => { search-text-input.clear-focus(); SearchState.show-search-history = false; }
                         toggle-select(i) => { root.toggle-select(i); }
                         start-radio(i) => { root.start-radio(i); }
                         start-artist(i) => { root.start-artist(i); }
-                        toggle-picker(i) => { root.toggle-picker(i); }
+                        toggle-picker(i) => { PlaylistState.toggle-picker(i); }
                         download-or-delete(i) => { root.download-or-delete(i); }
                         drag-add-to-playlist(ti, pi) => { root.drag-add-to-playlist(ti, pi); }
                         resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
                     }
 
-                    if search-results.length == 0 && selected-playlist < 0 && current-view != 1 && !loading : Rectangle {
+                    if SearchState.search-results.length == 0 && PlaylistState.selected-playlist < 0 && current-view != 1 && !SearchState.loading : Rectangle {
                         vertical-stretch: 1;
                         VerticalLayout {
                             alignment: center;
@@ -230,20 +189,18 @@ export component AppWindow inherits Window {
                 }
             }
 
-            if root.show-queue : Rectangle {
+            if QueueState.show-queue : Rectangle {
                 horizontal-stretch: 1;
                 min-width: 240px;
                 clip: true;
                 background: Theme.bg-secondary;
                 QueuePanel {
-                    queue-tracks <=> root.queue-tracks;
-                    toggle-queue() => { root.toggle-queue(); }
                     resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
 
                     toggle-select(i) => { root.toggle-select(i); }
                     start-radio(i) => { root.start-radio(i); }
                     start-artist(i) => { root.start-artist(i); }
-                    toggle-picker(i) => { root.toggle-picker(i); }
+                    toggle-picker(i) => { PlaylistState.toggle-picker(i); }
                     download-or-delete(i) => { root.download-or-delete(i); }
                     remove-from-queue(i) => { root.remove-from-queue(i); }
                     reorder-queue(fi, ti) => { root.reorder-queue(fi, ti); }
@@ -251,52 +208,42 @@ export component AppWindow inherits Window {
             }
         }
 
-        PlayBar {
-            show-queue: root.show-queue;
-            toggle-queue() => { root.toggle-queue(); }
-        }
+        PlayBar {}
     }
 
-    if root.show-search-history && root.search-history-items.length > 0 : Rectangle {
+    if SearchState.show-search-history && SearchState.search-history-items.length > 0 : Rectangle {
         x: sidebar.sidebar-width + 20px;
         y: 60px;
         width: parent.width - sidebar.sidebar-width - 78px;
-        height: min(root.search-history-items.length * 36px + 2px, 300px);
+        height: min(SearchState.search-history-items.length * 36px + 2px, 300px);
         background: Theme.bg-elevated;
         border-radius: Theme.radius-md;
         border-width: 1px;
         border-color: Theme.border;
 
         SearchHistory {
-            search-history-items <=> root.search-history-items;
-            search-history-focused-index <=> root.search-history-focused-index;
             selected(index) => {
-                search-input-text = root.search-history-items[index];
-                root.search-history-selected(index);
+                SearchState.search-input-text = SearchState.search-history-items[index];
+                SearchState.search-history-selected(index);
             }
             delete-item(index) => {
-                root.delete-search-history(index);
+                SearchState.delete-search-history(index);
                 search-text-input.focus();
             }
             close() => {
-                show-search-history = false;
+                SearchState.show-search-history = false;
                 search-text-input.clear-focus();
             }
         }
     }
 
-    if show-picker : PickerDialog {
-        show-picker <=> root.show-picker;
-        picker-playlists <=> root.picker-playlists;
-        picker-focused-index <=> root.picker-focused-index;
-        add-to-playlist(i) => { root.add-to-playlist(i); }
-        close-picker() => { root.close-picker(); }
+    if PlaylistState.show-picker : PickerDialog {
+        add-to-playlist(i) => { PlaylistState.add-to-playlist(i); }
+        close-picker() => { PlaylistState.close-picker(); }
     }
 
-    if root.show-delete-confirm : DeleteConfirm {
-        show-delete-confirm <=> root.show-delete-confirm;
-        delete-confirm-index <=> root.delete-confirm-index;
-        delete-playlist(i) => { root.delete-playlist(i); }
+    if PlaylistState.show-delete-confirm : DeleteConfirm {
+        delete-playlist(i) => { PlaylistState.delete-playlist(i); }
     }
 
     if DragState.active && DragState.over-sidebar : Rectangle {
@@ -341,9 +288,9 @@ export component AppWindow inherits Window {
             parent-height: root.height;
             start-radio(i) => { root.start-radio(i); ContextMenuState.show = false; }
             start-artist(i) => { root.start-artist(i); ContextMenuState.show = false; }
-            toggle-picker(i) => { root.toggle-picker(i); ContextMenuState.show = false; }
+            toggle-picker(i) => { PlaylistState.toggle-picker(i); ContextMenuState.show = false; }
             download-or-delete(i) => { root.download-or-delete(i); ContextMenuState.show = false; }
-            remove-from-playlist(i) => { root.remove-from-playlist(i); ContextMenuState.show = false; }
+            remove-from-playlist(i) => { PlaylistState.remove-from-playlist(i); ContextMenuState.show = false; }
             remove-from-queue(i) => { root.remove-from-queue(i); ContextMenuState.show = false; }
         }
     }
@@ -356,8 +303,8 @@ export component AppWindow inherits Window {
             } else if (event.text == Key.Escape) {
                 if ContextMenuState.show {
                     ContextMenuState.show = false;
-                } else if show-search-history {
-                    show-search-history = false;
+                } else if SearchState.show-search-history {
+                    SearchState.show-search-history = false;
                 } else {
                     clear-selection();
                 }

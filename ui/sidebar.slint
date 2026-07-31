@@ -5,12 +5,11 @@ import { PlaylistInfo } from "types.slint";
 import { PlaylistCard } from "playlist-card.slint";
 import { DragState } from "drag-state.slint";
 import { NavigationState } from "navigation-state.slint";
+import { PlaylistState } from "playlist-state.slint";
 
 export component Sidebar {
-    in-out property <[PlaylistInfo]> playlist-list;
-    in-out property <int> selected-playlist;
-    in-out property <string> playlist-create-name;
     in-out property <string> notification;
+
     callback create-playlist();
     callback select-playlist(int);
     callback playlist-name-changed(string);
@@ -114,37 +113,37 @@ export component Sidebar {
                     add-pl-touch := TouchArea {
                         mouse-cursor: pointer;
                         pointer-event(event) => {
-                            if (event.kind == PointerEventKind.up) { create-playlist(); }
+                            if (event.kind == PointerEventKind.up) { PlaylistState.create-playlist(); }
                         }
                     }
                 }
             }
             LineEdit {
-                text: playlist-create-name;
+                text: PlaylistState.playlist-create-name;
                 placeholder-text: "New playlist...";
-                edited => { playlist-name-changed(self.text); }
-                accepted => { create-playlist(); }
+                edited => { PlaylistState.playlist-name-changed(self.text); }
+                accepted => { PlaylistState.create-playlist(); }
             }
 
             playlist-list-area := Rectangle {
                 vertical-stretch: 1;
                 clip: true;
-                if playlist-list.length == 0 : Text {
+                if PlaylistState.playlist-list.length == 0 : Text {
                     text: "No playlists";
                     color: Theme.fg-secondary;
                     x: 0;
                     y: 0;
                 }
-                if playlist-list.length > 0 : ListView {
+                if PlaylistState.playlist-list.length > 0 : ListView {
                     vertical-stretch: 1;
-                    for pl[i] in playlist-list: VerticalLayout {
+                    for pl[i] in PlaylistState.playlist-list: VerticalLayout {
                         padding-bottom: Theme.spacing-sm;
                         PlaylistCard {
                             pl-name: pl.name;
                             track-count: pl.track-count;
-                            selected: selected-playlist == i;
+                            selected: PlaylistState.selected-playlist == i;
                             drag-over: DragState.active && DragState.target-playlist >= 0 && DragState.target-playlist == i;
-                            clicked => { select-playlist(i); }
+                            clicked => { PlaylistState.select-playlist(i); }
                         }
                     }
                 }

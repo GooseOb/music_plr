@@ -1,0 +1,24 @@
+import { Track, PlaylistInfo } from "types.slint";
+
+export global PlaylistState {
+    in-out property <[PlaylistInfo]> playlist-list;
+    in-out property <int> selected-playlist: -1;
+    in-out property <string> selected-playlist-name;
+    in-out property <string> playlist-create-name;
+    in-out property <[Track]> playlist-tracks;
+    in-out property <[string]> picker-playlists;
+    in-out property <bool> show-picker: false;
+    in-out property <int> picker-track-idx: 0;
+    in-out property <int> picker-focused-index: 0;
+    in-out property <bool> show-delete-confirm: false;
+    in-out property <int> delete-confirm-index: -1;
+
+    callback create-playlist();
+    callback delete-playlist(int);
+    callback select-playlist(int);
+    callback add-to-playlist(int);
+    callback remove-from-playlist(int);
+    callback toggle-picker(int);
+    callback close-picker();
+    callback playlist-name-changed(string);
+}

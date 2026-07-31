@@ -1,4 +1,4 @@
-use super::{to_slint_track, NavigationState, PlaybackState, PlaylistInfo, Track, View};
+use super::{to_slint_track, NavigationState, PlaybackState, QueueState, PlaylistInfo, PlaylistState, SearchState, Track, View};
 use slint::ComponentHandle;
 use std::rc::Rc;
 
@@ -46,15 +46,16 @@ impl super::Backend {
         }
 
         if let Some(window) = self.ui.upgrade() {
-            let showing = window.get_show_search_history();
+            let search_state = window.global::<SearchState>();
+            let showing = search_state.get_show_search_history();
             let has_focus = window.get_search_has_focus();
             if has_focus && !showing {
                 self.update_search_history(&window);
-                window.set_show_search_history(true);
+                search_state.set_show_search_history(true);
             } else if !has_focus && showing {
                 self.focus_lost_ticks += 1;
                 if self.focus_lost_ticks >= 2 {
-                    window.set_show_search_history(false);
+                    search_state.set_show_search_history(false);
                     self.focus_lost_ticks = 0;
                 }
             } else if has_focus {
@@ -115,7 +116,7 @@ impl super::Backend {
             .collect();
         let rc = Rc::new(slint::VecModel::from(upcoming));
         self.queue_model_handle = Some(rc.clone());
-        window.set_queue_tracks(rc.into());
+        window.global::<QueueState>().set_queue_tracks(rc.into());
     }
 
     pub fn update_nav_ui(&mut self) {
@@ -155,7 +156,7 @@ impl super::Backend {
             .collect();
         let rc = Rc::new(slint::VecModel::from(model));
         self.search_model_handle = Some(rc.clone());
-        window.set_search_results(rc.into());
+        window.global::<SearchState>().set_search_results(rc.into());
     }
 
     pub fn sync_radio_model(&mut self) {
@@ -187,14 +188,15 @@ impl super::Backend {
                 track_count: pl.tracks.len() as i32,
             })
             .collect();
-        window.set_playlist_list(Rc::new(slint::VecModel::from(list)).into());
+        let playlist_state = window.global::<PlaylistState>();
+        playlist_state.set_playlist_list(Rc::new(slint::VecModel::from(list)).into());
         let names: Vec<slint::SharedString> = self
             .playlists
             .playlists
             .iter()
             .map(|pl| pl.name.clone().into())
             .collect();
-        window.set_picker_playlists(Rc::new(slint::VecModel::from(names)).into());
+        playlist_state.set_picker_playlists(Rc::new(slint::VecModel::from(names)).into());
     }
 
     pub fn sync_playlist_content(&mut self) {
@@ -212,18 +214,20 @@ impl super::Backend {
                     .collect();
                 let rc = Rc::new(slint::VecModel::from(model));
                 self.playlist_model_handle = Some(rc.clone());
-                window.set_playlist_tracks(rc.into());
-                window.set_selected_playlist_name(self.selected_playlist_name.clone().into());
-                window.set_selected_playlist(idx as i32);
-                window.set_playlist_create_name(self.playlist_create_name.clone().into());
+                let playlist_state = window.global::<PlaylistState>();
+                playlist_state.set_playlist_tracks(rc.into());
+                playlist_state.set_selected_playlist_name(self.selected_playlist_name.clone().into());
+                playlist_state.set_selected_playlist(idx as i32);
+                playlist_state.set_playlist_create_name(self.playlist_create_name.clone().into());
                 return;
             }
         }
         self.playlist_model_handle = None;
-        window.set_selected_playlist(-1);
-        window.set_selected_playlist_name("".into());
-        window.set_playlist_tracks(Rc::new(slint::VecModel::<Track>::from(vec![])).into());
-        window.set_playlist_create_name(self.playlist_create_name.clone().into());
+        let playlist_state = window.global::<PlaylistState>();
+        playlist_state.set_selected_playlist(-1);
+        playlist_state.set_selected_playlist_name("".into());
+        playlist_state.set_playlist_tracks(Rc::new(slint::VecModel::<Track>::from(vec![])).into());
+        playlist_state.set_playlist_create_name(self.playlist_create_name.clone().into());
     }
 
     pub fn update_ui(&mut self) {
@@ -231,7 +235,7 @@ impl super::Backend {
         self.update_nav_ui();
         if let Some(window) = self.ui.upgrade() {
             window.global::<PlaybackState>().set_volume(self.volume);
-            window.set_loading(self.loading);
+            window.global::<SearchState>().set_loading(self.loading);
             window.set_notification(self.notification.as_deref().unwrap_or("").into());
         }
         self.sync_search_model();

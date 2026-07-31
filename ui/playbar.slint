@@ -2,6 +2,7 @@ import { Button, Slider } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, VolumeIcon, QueueListIcon } from "icons.slint";
 import { PlaybackState } from "playback-state.slint";
+import { QueueState } from "queue-state.slint";
 
 export component PlayBar inherits Rectangle {
     in-out property <bool> show-queue;
@@ -167,16 +168,16 @@ export component PlayBar inherits Rectangle {
             Rectangle {
                 width: 30px; height: 30px;
                 border-radius: Theme.radius-sm;
-                background: queue-btn-ta.has-hover || root.show-queue ? Theme.accent : transparent;
+                background: queue-btn-ta.has-hover || QueueState.show-queue ? Theme.accent : transparent;
                 animate background { duration: 150ms; }
                 VerticalLayout {
                     alignment: center;
-                    QueueListIcon { colorize: root.show-queue ? Theme.accent-fg : Theme.fg; }
+                    QueueListIcon { colorize: QueueState.show-queue ? Theme.accent-fg : Theme.fg; }
                 }
                 queue-btn-ta := TouchArea {
                     mouse-cursor: pointer;
                     clicked => {
-                        toggle-queue();
+                        QueueState.toggle-queue();
                     }
                 }
             }

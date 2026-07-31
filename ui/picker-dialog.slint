@@ -1,11 +1,8 @@
 import { Button, ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
+import { PlaylistState } from "playlist-state.slint";
 
 export component PickerDialog inherits Rectangle {
-    in-out property <bool> show-picker;
-    in-out property <[string]> picker-playlists;
-    in-out property <int> picker-focused-index;
-
     callback add-to-playlist(int);
     callback close-picker();
 
@@ -13,7 +10,7 @@ export component PickerDialog inherits Rectangle {
     TouchArea {
         mouse-cursor: pointer;
         clicked => {
-			close-picker();
+			PlaylistState.close-picker();
         }
     }
     Rectangle {
@@ -29,38 +26,38 @@ export component PickerDialog inherits Rectangle {
             padding: Theme.spacing-xl;
             spacing: Theme.spacing-md;
             Text { text: "Add to Playlist"; color: Theme.fg; }
-            if picker-playlists.length == 0 : Text {
+            if PlaylistState.picker-playlists.length == 0 : Text {
                 text: "No playlists. Create one first.";
                 color: Theme.fg-secondary;
             }
             picker-fs := FocusScope {
                 key-pressed(event) => {
                     if (event.text == Key.DownArrow) {
-                        root.picker-focused-index = (root.picker-focused-index + 1).min(picker-playlists.length - 1);
+                        PlaylistState.picker-focused-index = (PlaylistState.picker-focused-index + 1).min(PlaylistState.picker-playlists.length - 1);
                         accept
                     } else if (event.text == Key.UpArrow) {
-                        root.picker-focused-index = (root.picker-focused-index - 1).max(0);
+                        PlaylistState.picker-focused-index = (PlaylistState.picker-focused-index - 1).max(0);
                         accept
                     } else if (event.text == Key.Return) {
-                        root.add-to-playlist(root.picker-focused-index);
+                        PlaylistState.add-to-playlist(PlaylistState.picker-focused-index);
                         accept
                     } else if (event.text == Key.Escape) {
-                        close-picker();
+                        PlaylistState.close-picker();
                         accept
                     } else { reject }
                 }
                 ListView {
                     vertical-stretch: 1;
-                    for pl[i] in picker-playlists: Rectangle {
+                    for pl[i] in PlaylistState.picker-playlists: Rectangle {
                         border-radius: Theme.radius-md;
-                        background: picker-fs.has-focus && root.picker-focused-index == i ? Theme.bg-hover.brighter(0.1) : tp.has-hover ? Theme.bg-hover : Theme.bg-elevated;
-                        border-width: picker-fs.has-focus && root.picker-focused-index == i ? 1px : 0px;
+                        background: picker-fs.has-focus && PlaylistState.picker-focused-index == i ? Theme.bg-hover.brighter(0.1) : tp.has-hover ? Theme.bg-hover : Theme.bg-elevated;
+                        border-width: picker-fs.has-focus && PlaylistState.picker-focused-index == i ? 1px : 0px;
                         border-color: Theme.accent;
                         animate background { duration: 150ms; }
                         tp := TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
-								add-to-playlist(i);
+								PlaylistState.add-to-playlist(i);
                             }
                         }
                         HorizontalLayout {
@@ -70,7 +67,7 @@ export component PickerDialog inherits Rectangle {
                     }
                 }
             }
-            Button { text: "Cancel"; horizontal-stretch: 1; clicked => { close-picker(); } }
+            Button { text: "Cancel"; horizontal-stretch: 1; clicked => { PlaylistState.close-picker(); } }
         }
     }
 }

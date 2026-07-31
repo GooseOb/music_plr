@@ -5,11 +5,10 @@ import { TrackRow } from "track-row.slint";
 import { PlaybackState } from "playback-state.slint";
 import { ContextMenuState } from "context-menu-state.slint";
 import { DragState } from "drag-state.slint";
+import { PlaylistState } from "playlist-state.slint";
+import { SearchState } from "search-state.slint";
 
 export component SearchView {
-    in property <[Track]> search-results;
-    in property <bool> loading;
-
     in property <int> playlist-count;
     in property <length> sidebar-list-abs-y;
     in property <length> sidebar-width;
@@ -20,7 +19,6 @@ export component SearchView {
     callback start-artist(int);
     callback toggle-picker(int);
     callback download-or-delete(int);
-    callback search-load-more();
     callback drag-add-to-playlist(int, int);
     pure callback resolve-thumbnail(string) -> image;
 
@@ -31,7 +29,7 @@ export component SearchView {
         Rectangle { height: Theme.spacing-xs; }
         ListView {
             vertical-stretch: 1;
-            for t[i] in root.search-results: TrackRow {
+            for t[i] in SearchState.search-results: TrackRow {
                 track: t;
                 thumbnail-image: root.resolve-thumbnail(t.thumbnail);
                 idx: i;
@@ -86,7 +84,7 @@ export component SearchView {
             }
         }
         Rectangle { height: Theme.spacing-xs; }
-        if root.search-results.length > 0 : Button { text: "Load more"; horizontal-stretch: 1; clicked => { root.search-load-more(); } }
+        if SearchState.search-results.length > 0 : Button { text: "Load more"; horizontal-stretch: 1; clicked => { SearchState.search-load-more(); } }
     }
 
     search-fs := FocusScope {
@@ -94,7 +92,7 @@ export component SearchView {
         focus-on-click: false;
         key-pressed(event) => {
             if (event.text == Key.DownArrow) {
-                root.focused-index = (root.focused-index + 1).min(search-results.length - 1);
+                root.focused-index = (root.focused-index + 1).min(SearchState.search-results.length - 1);
                 accept
             } else if (event.text == Key.UpArrow) {
                 root.focused-index = (root.focused-index - 1).max(0);

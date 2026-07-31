@@ -9,7 +9,7 @@ mod thumbnails;
 mod types;
 mod youtube;
 
-use backend::{Backend, BackendResult, NavigationState, PlaybackState};
+use backend::{Backend, BackendResult, NavigationState, PlaylistState, PlaybackState, QueueState, SearchState};
 use slint::ComponentHandle;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -49,7 +49,7 @@ fn main() {
         let query = b.config.last_search_query.clone();
         b.search_query = query.clone();
         if let Some(w) = b.ui.upgrade() {
-            w.set_search_input_text(query.into());
+            w.global::<SearchState>().set_search_input_text(query.into());
         }
         b.handle_search_execute();
     }
@@ -146,23 +146,23 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     }
 
     let b = Rc::downgrade(backend);
-    window.on_search_input_changed(move |text| {
+    window.global::<SearchState>().on_search_input_changed(move |text| {
         if let Some(b) = b.upgrade() {
             let mut b = b.borrow_mut();
             b.search_query = text.to_string();
             if let Some(w) = b.ui.upgrade() {
                 b.update_search_history(&w);
-                w.set_show_search_history(true);
+                w.global::<SearchState>().set_show_search_history(true);
             }
         }
     });
 
     let b = Rc::downgrade(backend);
-    window.on_search_execute(move || {
+    window.global::<SearchState>().on_search_execute(move || {
         if let Some(b) = b.upgrade() {
             let mut b = b.borrow_mut();
             if let Some(w) = b.ui.upgrade() {
-                w.set_show_search_history(false);
+                w.global::<SearchState>().set_show_search_history(false);
             }
             b.handle_search_execute();
         }
@@ -170,7 +170,7 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
 
     {
         let b = Rc::downgrade(backend);
-        window.on_search_load_more(move || {
+        window.global::<SearchState>().on_search_load_more(move || {
             if let Some(b) = b.upgrade() {
                 b.borrow_mut().handle_search_load_more();
             }
@@ -178,14 +178,14 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     }
 
     let b = Rc::downgrade(backend);
-    window.on_search_history_selected(move |index| {
+    window.global::<SearchState>().on_search_history_selected(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_search_history_select(index as usize);
         }
     });
 
     let b = Rc::downgrade(backend);
-    window.on_delete_search_history(move |index| {
+    window.global::<SearchState>().on_delete_search_history(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_delete_search_history(index as usize);
         }
@@ -301,7 +301,7 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
 
     {
         let b = Rc::downgrade(backend);
-        window.on_create_playlist(move || {
+        window.global::<PlaylistState>().on_create_playlist(move || {
             if let Some(b) = b.upgrade() {
                 b.borrow_mut().handle_create_playlist();
             }
@@ -309,28 +309,28 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     }
 
     let b = Rc::downgrade(backend);
-    window.on_delete_playlist(move |index| {
+    window.global::<PlaylistState>().on_delete_playlist(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_delete_playlist(index as usize);
         }
     });
 
     let b = Rc::downgrade(backend);
-    window.on_select_playlist(move |index| {
+    window.global::<PlaylistState>().on_select_playlist(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_select_playlist(index as usize);
         }
     });
 
     let b = Rc::downgrade(backend);
-    window.on_toggle_picker(move |index| {
+    window.global::<PlaylistState>().on_toggle_picker(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_toggle_picker(index as usize);
         }
     });
 
     let b = Rc::downgrade(backend);
-    window.on_add_to_playlist(move |index| {
+    window.global::<PlaylistState>().on_add_to_playlist(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_add_to_playlist(index as usize);
         }
@@ -353,7 +353,7 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     });
 
     let b = Rc::downgrade(backend);
-    window.on_remove_from_playlist(move |index| {
+    window.global::<PlaylistState>().on_remove_from_playlist(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_remove_from_playlist(index as usize);
         }
@@ -375,18 +375,18 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
     });
 
     let b = Rc::downgrade(backend);
-    window.on_close_picker(move || {
+    window.global::<PlaylistState>().on_close_picker(move || {
         if let Some(b) = b.upgrade() {
             let mut b = b.borrow_mut();
             b.show_playlist_picker = None;
             if let Some(w) = b.ui.upgrade() {
-                w.set_show_picker(false);
+                w.global::<PlaylistState>().set_show_picker(false);
             }
         }
     });
 
     let b = Rc::downgrade(backend);
-    window.on_playlist_name_changed(move |text| {
+    window.global::<PlaylistState>().on_playlist_name_changed(move |text| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().playlist_create_name = text.to_string();
         }
@@ -476,12 +476,12 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
         });
 
     let b = Rc::downgrade(backend);
-    window.on_toggle_queue(move || {
+    window.global::<QueueState>().on_toggle_queue(move || {
         if let Some(b) = b.upgrade() {
             let mut b = b.borrow_mut();
             b.show_queue = !b.show_queue;
             if let Some(w) = b.ui.upgrade() {
-                w.set_show_queue(b.show_queue);
+                w.global::<QueueState>().set_show_queue(b.show_queue);
             }
         }
     });

@@ -1,0 +1,8 @@
+import { Track } from "types.slint";
+
+export global QueueState {
+    in-out property <bool> show-queue;
+    in-out property <[Track]> queue-tracks;
+
+    callback toggle-queue();
+}

@@ -1,4 +1,5 @@
-use super::{BackendResult, RustTrack};
+use super::{BackendResult, RustTrack, SearchState};
+use slint::ComponentHandle;
 use crate::config;
 use crate::thumbnails;
 use crate::youtube;
@@ -79,8 +80,9 @@ impl super::Backend {
         if let Some(selected) = items.get(index) {
             self.search_query = selected.clone();
             if let Some(w) = self.ui.upgrade() {
-                w.set_search_input_text(selected.clone().into());
-                w.set_show_search_history(false);
+                let search_state = w.global::<SearchState>();
+                search_state.set_search_input_text(selected.clone().into());
+                search_state.set_show_search_history(false);
             }
             self.handle_search_execute();
         }
@@ -111,7 +113,7 @@ impl super::Backend {
             self.last_filtered_history = filtered.clone();
             let slint_items: Vec<slint::SharedString> =
                 filtered.iter().map(|s| s.as_str().into()).collect();
-            window.set_search_history_items(
+            window.global::<SearchState>().set_search_history_items(
                 std::rc::Rc::new(slint::VecModel::from(slint_items)).into(),
             );
         }

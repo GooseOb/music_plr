@@ -5,11 +5,9 @@ import { TrackRow } from "track-row.slint";
 import { PlaybackState } from "playback-state.slint";
 import { ContextMenuState } from "context-menu-state.slint";
 import { DragState } from "drag-state.slint";
+import { PlaylistState } from "playlist-state.slint";
 
 export component PlaylistView {
-    in property <[Track]> playlist-tracks;
-    in property <string> selected-playlist-name;
-
     in property <int> playlist-count;
     in property <length> sidebar-list-abs-y;
     in property <length> sidebar-width;
@@ -33,7 +31,7 @@ export component PlaylistView {
         spacing: Theme.spacing-sm;
         HorizontalLayout {
             spacing: Theme.spacing-sm;
-            Text { text: root.selected-playlist-name; color: Theme.fg; horizontal-stretch: 1; }
+            Text { text: PlaylistState.selected-playlist-name; color: Theme.fg; horizontal-stretch: 1; }
             Rectangle {
                 width: 120px; height: 28px; border-radius: Theme.radius-sm;
                 background: del-pl-ta.has-hover ? Theme.bg-hover : transparent;
@@ -52,8 +50,8 @@ export component PlaylistView {
         pl-listview := ListView {
             viewport-y <=> DragState.viewport-y;
             vertical-stretch: 1;
-            visible: playlist-tracks.length > 0;
-            for t[i] in root.playlist-tracks: TrackRow {
+            visible: PlaylistState.playlist-tracks.length > 0;
+            for t[i] in PlaylistState.playlist-tracks: TrackRow {
                 track: t;
                 thumbnail-image: root.resolve-thumbnail(t.thumbnail);
                 idx: i;
@@ -107,10 +105,10 @@ export component PlaylistView {
                         if (rel-y < edge-zone) {
                             DragState.viewport-y = min(0px, DragState.viewport-y + 8px);
                         } else if (rel-y > pl-listview.height - edge-zone) {
-                            let max-scroll = -(max(0px, root.playlist-tracks.length * 48px - pl-listview.height));
+                            let max-scroll = -(max(0px, PlaylistState.playlist-tracks.length * 48px - pl-listview.height));
                             DragState.viewport-y = max(max-scroll, DragState.viewport-y - 8px);
                         }
-                        DragState.drop-idx = max(0, min(root.playlist-tracks.length, (rel-y - DragState.viewport-y) / 48px + 0.5));
+                        DragState.drop-idx = max(0, min(PlaylistState.playlist-tracks.length, (rel-y - DragState.viewport-y) / 48px + 0.5));
                         DragState.drop-line-y = max(0px, min(pl-listview.height - 2px, DragState.drop-idx * 48px + DragState.viewport-y));
                     }
                 }
@@ -130,7 +128,7 @@ export component PlaylistView {
                 }
             }
         }
-        if root.playlist-tracks.length == 0 : Rectangle {
+        if PlaylistState.playlist-tracks.length == 0 : Rectangle {
             vertical-stretch: 1;
             VerticalLayout {
                 alignment: center;
@@ -148,7 +146,7 @@ export component PlaylistView {
         focus-on-click: false;
         key-pressed(event) => {
             if (event.text == Key.DownArrow) {
-                root.focused-index = (root.focused-index + 1).min(playlist-tracks.length - 1);
+                root.focused-index = (root.focused-index + 1).min(PlaylistState.playlist-tracks.length - 1);
                 accept
             } else if (event.text == Key.UpArrow) {
                 root.focused-index = (root.focused-index - 1).max(0);

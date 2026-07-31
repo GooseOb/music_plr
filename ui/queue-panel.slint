@@ -5,9 +5,9 @@ import { TrackRow } from "track-row.slint";
 import { PlaybackState } from "playback-state.slint";
 import { ContextMenuState } from "context-menu-state.slint";
 import { DragState } from "drag-state.slint";
+import { QueueState } from "queue-state.slint";
 
 export component QueuePanel inherits Rectangle {
-    in-out property <[Track]> queue-tracks;
 
     callback toggle-queue();
     callback toggle-select(int);
@@ -68,7 +68,7 @@ export component QueuePanel inherits Rectangle {
         qu-listview := ListView {
             viewport-y <=> DragState.qu-viewport-y;
             vertical-stretch: 1;
-            for t[i] in root.queue-tracks: TrackRow {
+            for t[i] in QueueState.queue-tracks: TrackRow {
                 track: t;
                 thumbnail-image: root.resolve-thumbnail(t.thumbnail);
                 idx: i;
@@ -116,10 +116,10 @@ export component QueuePanel inherits Rectangle {
                         if (rel-y < edge-zone) {
                             DragState.qu-viewport-y = min(0px, DragState.qu-viewport-y + 8px);
                         } else if (rel-y > qu-listview.height - edge-zone) {
-                            let max-scroll = -(max(0px, root.queue-tracks.length * 48px - qu-listview.height));
+                            let max-scroll = -(max(0px, QueueState.queue-tracks.length * 48px - qu-listview.height));
                             DragState.qu-viewport-y = max(max-scroll, DragState.qu-viewport-y - 8px);
                         }
-                        DragState.drop-idx = max(0, min(root.queue-tracks.length, (rel-y - DragState.qu-viewport-y) / 48px + 0.5));
+                        DragState.drop-idx = max(0, min(QueueState.queue-tracks.length, (rel-y - DragState.qu-viewport-y) / 48px + 0.5));
                         DragState.drop-line-y = max(0px, min(qu-listview.height - 2px, DragState.drop-idx * 48px + DragState.qu-viewport-y));
                     }
                 }

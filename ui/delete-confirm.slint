@@ -1,17 +1,15 @@
 import { Button } from "std-widgets.slint";
 import { Theme } from "theme.slint";
+import { PlaylistState } from "playlist-state.slint";
 
 export component DeleteConfirm inherits Rectangle {
-    in-out property <bool> show-delete-confirm;
-    in-out property <int> delete-confirm-index;
-
     callback delete-playlist(int);
     callback close();
 
     background: Theme.overlay;
     TouchArea {
         clicked => {
-			root.show-delete-confirm = false;
+			PlaylistState.show-delete-confirm = false;
 			root.close();
         }
     }
@@ -34,8 +32,8 @@ export component DeleteConfirm inherits Rectangle {
                 alignment: center;
                 horizontal-stretch: 1;
                 Rectangle { horizontal-stretch: 1; }
-                Button { text: "Cancel"; clicked => { root.show-delete-confirm = false; root.close(); } }
-                Button { text: "Delete"; clicked => { root.delete-playlist(root.delete-confirm-index); root.show-delete-confirm = false; root.close(); } }
+                Button { text: "Cancel"; clicked => { PlaylistState.show-delete-confirm = false; root.close(); } }
+                Button { text: "Delete"; clicked => { PlaylistState.delete-playlist(PlaylistState.delete-confirm-index); PlaylistState.show-delete-confirm = false; root.close(); } }
                 Rectangle { horizontal-stretch: 1; }
             }
         }

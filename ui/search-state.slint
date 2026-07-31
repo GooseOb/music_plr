@@ -1,0 +1,17 @@
+import { Track } from "types.slint";
+
+export global SearchState {
+    in-out property <string> search-input-text;
+    in-out property <bool> loading;
+    in-out property <[Track]> search-results;
+    in-out property <bool> search-has-focus;
+    in-out property <bool> show-search-history;
+    in-out property <[string]> search-history-items;
+    in-out property <int> search-history-focused-index;
+
+    callback search-input-changed(string);
+    callback search-execute();
+    callback search-load-more();
+    callback search-history-selected(int);
+    callback delete-search-history(int);
+}
