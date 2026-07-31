@@ -130,6 +130,9 @@ impl AudioPlayer {
                                 s.stop();
                             }
                             output = None;
+                            if let Ok(mut st) = state_clone.lock() {
+                                st.stream_finished = false;
+                            }
 
                             let id = url
                                 .split("v=")
@@ -276,6 +279,9 @@ impl AudioPlayer {
                                 s.stop();
                             }
                             output = None;
+                            if let Ok(mut st) = state_clone.lock() {
+                                st.stream_finished = false;
+                            }
 
                             let id = cache_path
                                 .file_stem()
@@ -390,9 +396,7 @@ impl AudioPlayer {
                         } else if s.empty() {
                             st.is_playing = false;
                             st.progress = 0.0;
-                            if !stream_active {
-                                st.stream_finished = true;
-                            }
+                            st.stream_finished = true;
                         }
                     }
                 }
@@ -415,9 +419,6 @@ impl AudioPlayer {
                         ffmpeg.take();
                         ytdlp.take();
                         stream_active = false;
-                        if let Ok(mut st) = state_clone.lock() {
-                            st.stream_finished = true;
-                        }
                     }
                 }
 
