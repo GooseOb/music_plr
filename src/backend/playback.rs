@@ -1,4 +1,4 @@
-use super::PlaybackState;
+use super::{format_duration, PlaybackState};
 use crate::config;
 use slint::ComponentHandle;
 
@@ -75,7 +75,7 @@ impl super::Backend {
             let playback = window.global::<PlaybackState>();
             playback.set_progress(frac);
             let elapsed = (self.progress * self.duration) as u32;
-            playback.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
+            playback.set_elapsed_text(format_duration(elapsed).into());
         }
     }
 

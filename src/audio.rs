@@ -6,6 +6,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use tracing::{debug, warn};
 
 pub struct AudioPlayer {
     cmd_tx: Sender<PlayerCommand>,
@@ -64,7 +65,7 @@ impl AudioPlayer {
                 match cmd_rx.recv_timeout(Duration::from_millis(250)) {
                     Ok(cmd) => match cmd {
                         PlayerCommand::Play(bytes, expected_duration) => {
-                            eprintln!("[audio] Play command received, {} bytes", bytes.len());
+                            debug!("Play command received, {} bytes", bytes.len());
                             Self::kill_processes(
                                 &mut ffmpeg,
                                 &mut ytdlp,
@@ -113,9 +114,7 @@ impl AudioPlayer {
                         } => {
                             if let Some(ref current) = stream_url {
                                 if current == &url {
-                                    eprintln!(
-                                        "[audio] Ignoring duplicate StreamAndCache for same URL"
-                                    );
+                                    debug!("Ignoring duplicate StreamAndCache for same URL");
                                     continue;
                                 }
                             }
@@ -142,9 +141,7 @@ impl AudioPlayer {
                             let temp_path = temp_dir.join(format!("{}.wav", id));
                             let temp_str = temp_path.to_string_lossy().to_string();
 
-                            eprintln!(
-                                "[audio] Spawning yt-dlp, teeing raw output to cache + ffmpeg"
-                            );
+                            debug!("Spawning yt-dlp, teeing raw output to cache + ffmpeg");
 
                             let mut ytdlp_child = match Command::new("yt-dlp")
                                 .args([
@@ -164,7 +161,7 @@ impl AudioPlayer {
                             {
                                 Ok(c) => c,
                                 Err(e) => {
-                                    eprintln!("[audio] Failed to spawn yt-dlp: {}", e);
+                                    warn!("Failed to spawn yt-dlp: {}", e);
                                     continue;
                                 }
                             };
@@ -172,7 +169,7 @@ impl AudioPlayer {
                             let ytdlp_stdout = match ytdlp_child.stdout.take() {
                                 Some(s) => s,
                                 None => {
-                                    eprintln!("[audio] yt-dlp stdout not available");
+                                    warn!("yt-dlp stdout not available");
                                     continue;
                                 }
                             };
@@ -196,7 +193,7 @@ impl AudioPlayer {
                             {
                                 Ok(c) => c,
                                 Err(e) => {
-                                    eprintln!("[audio] Failed to spawn ffmpeg: {}", e);
+                                    warn!("Failed to spawn ffmpeg: {}", e);
                                     let _ = ytdlp_child.kill();
                                     let _ = std::fs::remove_file(&temp_path);
                                     continue;
@@ -206,7 +203,7 @@ impl AudioPlayer {
                             let ffmpeg_stdin = match ffmpeg_child.stdin.take() {
                                 Some(s) => s,
                                 None => {
-                                    eprintln!("[audio] ffmpeg stdin not available");
+                                    warn!("ffmpeg stdin not available");
                                     let _ = ytdlp_child.kill();
                                     let _ = ffmpeg_child.kill();
                                     let _ = std::fs::remove_file(&temp_path);
@@ -227,7 +224,7 @@ impl AudioPlayer {
                                 {
                                     Ok(f) => f,
                                     Err(e) => {
-                                        eprintln!("[audio] Failed to create cache file: {}", e);
+                                        warn!("Failed to create cache file: {}", e);
                                         return;
                                     }
                                 };
@@ -239,7 +236,7 @@ impl AudioPlayer {
                                         Ok(0) => break,
                                         Ok(n) => {
                                             if let Err(e) = cache_file.write_all(&buf[..n]) {
-                                                eprintln!("[audio] Cache write error: {}", e);
+                                                warn!("Cache write error: {}", e);
                                                 break;
                                             }
                                             if writer.write_all(&buf[..n]).is_err() {
@@ -248,7 +245,7 @@ impl AudioPlayer {
                                             }
                                         }
                                         Err(e) => {
-                                            eprintln!("[audio] yt-dlp read error: {}", e);
+                                            warn!("yt-dlp read error: {}", e);
                                             break;
                                         }
                                     }
@@ -289,10 +286,7 @@ impl AudioPlayer {
                             let temp_path = temp_dir.join(format!("{}.wav", id));
                             let temp_str = temp_path.to_string_lossy().to_string();
 
-                            eprintln!(
-                                "[audio] Playing cached file through ffmpeg: {:?}",
-                                cache_path
-                            );
+                            debug!("Playing cached file through ffmpeg: {:?}", cache_path);
 
                             // Pipe the cached file through stdin (sequential read)
                             // to handle truncated webm containers gracefully.
@@ -305,7 +299,7 @@ impl AudioPlayer {
                             {
                                 Ok(c) => c,
                                 Err(e) => {
-                                    eprintln!("[audio] Failed to spawn ffmpeg for cache: {}", e);
+                                    warn!("Failed to spawn ffmpeg for cache: {}", e);
                                     continue;
                                 }
                             };
@@ -313,7 +307,7 @@ impl AudioPlayer {
                             let ffmpeg_stdin = match ffmpeg_child.stdin.take() {
                                 Some(s) => s,
                                 None => {
-                                    eprintln!("[audio] ffmpeg stdin not available");
+                                    warn!("ffmpeg stdin not available");
                                     let _ = ffmpeg_child.kill();
                                     let _ = std::fs::remove_file(&temp_path);
                                     continue;
@@ -326,7 +320,7 @@ impl AudioPlayer {
                                 let file = match std::fs::File::open(&cache_path_clone) {
                                     Ok(f) => f,
                                     Err(e) => {
-                                        eprintln!("[audio] Failed to open cache: {}", e);
+                                        warn!("Failed to open cache: {}", e);
                                         return;
                                     }
                                 };
@@ -416,7 +410,7 @@ impl AudioPlayer {
 
                     if done {
                         if ffmpeg_exit.is_some_and(|s| !s.success()) {
-                            eprintln!("[audio] ffmpeg exited with error");
+                            warn!("ffmpeg exited with error");
                         }
                         ffmpeg.take();
                         ytdlp.take();
@@ -439,7 +433,7 @@ impl AudioPlayer {
                             .is_some();
 
                         if ready || exited {
-                            eprintln!("[audio] WAV ready, starting playback");
+                            debug!("WAV ready, starting playback");
                             if let Ok((stream, handle)) = rodio::OutputStream::try_default() {
                                 if let Ok(sink) = rodio::Sink::try_new(&handle) {
                                     if let Ok(file) = std::fs::File::open(path) {

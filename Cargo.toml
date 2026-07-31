@@ -17,6 +17,8 @@ anyhow = "1"
 ureq = "3"
 rfd = "0.15"
 zbus = { version = "4", default-features = false, features = ["tokio"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [build-dependencies]
 slint-build = "1"

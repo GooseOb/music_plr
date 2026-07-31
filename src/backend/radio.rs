@@ -1,6 +1,6 @@
-use super::{BackendResult, RustTrack};
-use crate::thumbnails;
+use super::{spawn_thumbnail_download_thread, BackendResult, RustTrack};
 use crate::youtube;
+use tracing::error;
 
 impl super::Backend {
     pub fn handle_start_song_radio(&mut self, track_name: String) {
@@ -12,25 +12,15 @@ impl super::Backend {
         std::thread::spawn(move || match youtube::search(&query, 0) {
             Ok(videos) => {
                 let tracks: Vec<RustTrack> = videos.into_iter().map(RustTrack::from).collect();
-                let thumb_tracks = tracks.clone();
-                let thumb_tx = result_tx.clone();
-                std::thread::spawn(move || {
-                    for t in &thumb_tracks {
-                        thumbnails::download(&t.id, &t.thumbnail);
-                    }
-                    let _ = thumb_tx.send(BackendResult::ThumbnailsReady);
-                });
+                spawn_thumbnail_download_thread(&tracks, result_tx.clone());
                 let _ = result_tx.send(BackendResult::RadioResults(
                     format!("Song Radio: {}", track_name),
                     tracks,
                 ));
             }
             Err(e) => {
-                eprintln!("[backend] Radio error: {}", e);
-                let _ = result_tx.send(BackendResult::RadioResults(
-                    format!("Song Radio: {}", track_name),
-                    Vec::new(),
-                ));
+                error!("Radio error: {}", e);
+                let _ = result_tx.send(BackendResult::SearchError(e.to_string()));
             }
         });
     }
@@ -44,25 +34,15 @@ impl super::Backend {
         std::thread::spawn(move || match youtube::search(&query, 0) {
             Ok(videos) => {
                 let tracks: Vec<RustTrack> = videos.into_iter().map(RustTrack::from).collect();
-                let thumb_tracks = tracks.clone();
-                let thumb_tx = result_tx.clone();
-                std::thread::spawn(move || {
-                    for t in &thumb_tracks {
-                        thumbnails::download(&t.id, &t.thumbnail);
-                    }
-                    let _ = thumb_tx.send(BackendResult::ThumbnailsReady);
-                });
+                spawn_thumbnail_download_thread(&tracks, result_tx.clone());
                 let _ = result_tx.send(BackendResult::RadioResults(
                     format!("Artist Radio: {}", artist_name),
                     tracks,
                 ));
             }
             Err(e) => {
-                eprintln!("[backend] Artist radio error: {}", e);
-                let _ = result_tx.send(BackendResult::RadioResults(
-                    format!("Artist Radio: {}", artist_name),
-                    Vec::new(),
-                ));
+                error!("Artist radio error: {}", e);
+                let _ = result_tx.send(BackendResult::SearchError(e.to_string()));
             }
         });
     }

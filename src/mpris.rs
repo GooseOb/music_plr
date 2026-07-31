@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::time::Duration;
+use tracing::{error, info, warn};
 use zbus::connection;
 use zbus::interface;
 use zbus::zvariant;
@@ -10,6 +11,8 @@ pub enum MprisCommand {
     TogglePlayPause,
     NextTrack,
     PreviousTrack,
+    Stop,
+    Play,
     SetVolume(f32),
     Seek(i64),
 }
@@ -92,11 +95,11 @@ impl PlayerInterface {
     }
 
     async fn stop(&self) {
-        let _ = self.cmd_tx.send(MprisCommand::TogglePlayPause);
+        let _ = self.cmd_tx.send(MprisCommand::Stop);
     }
 
     async fn play(&self) {
-        let _ = self.cmd_tx.send(MprisCommand::TogglePlayPause);
+        let _ = self.cmd_tx.send(MprisCommand::Play);
     }
 
     async fn seek(&self, offset: i64) {
@@ -196,7 +199,7 @@ pub fn start(cmd_tx: mpsc::Sender<MprisCommand>, update_rx: mpsc::Receiver<Mpris
         {
             Ok(rt) => rt,
             Err(e) => {
-                eprintln!("[mpris] Failed to create tokio runtime: {}", e);
+                warn!("Failed to create tokio runtime: {}", e);
                 return;
             }
         };
@@ -206,12 +209,12 @@ pub fn start(cmd_tx: mpsc::Sender<MprisCommand>, update_rx: mpsc::Receiver<Mpris
                 Ok(builder) => match builder.build().await {
                     Ok(c) => c,
                     Err(e) => {
-                        eprintln!("[mpris] Failed to connect to D-Bus session bus: {}", e);
+                        error!("Failed to connect to D-Bus session bus: {}", e);
                         return;
                     }
                 },
                 Err(e) => {
-                    eprintln!("[mpris] Failed to create D-Bus session builder: {}", e);
+                    error!("Failed to create D-Bus session builder: {}", e);
                     return;
                 }
             };
@@ -234,7 +237,7 @@ pub fn start(cmd_tx: mpsc::Sender<MprisCommand>, update_rx: mpsc::Receiver<Mpris
                 .at("/org/mpris/MediaPlayer2", media_player2)
                 .await
             {
-                eprintln!("[mpris] Failed to register MediaPlayer2: {}", e);
+                error!("Failed to register MediaPlayer2: {}", e);
                 return;
             }
 
@@ -243,16 +246,16 @@ pub fn start(cmd_tx: mpsc::Sender<MprisCommand>, update_rx: mpsc::Receiver<Mpris
                 .at("/org/mpris/MediaPlayer2", player)
                 .await
             {
-                eprintln!("[mpris] Failed to register Player: {}", e);
+                error!("Failed to register Player: {}", e);
                 return;
             }
 
             if let Err(e) = conn.request_name("org.mpris.MediaPlayer2.music_plr").await {
-                eprintln!("[mpris] Failed to request D-Bus name: {}", e);
+                error!("Failed to request D-Bus name: {}", e);
                 return;
             }
 
-            eprintln!("[mpris] MPRIS server started");
+            info!("MPRIS server started");
 
             loop {
                 while let Ok(update) = update_rx.try_recv() {

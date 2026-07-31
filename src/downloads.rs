@@ -16,6 +16,7 @@ impl DownloadRegistry {
             .unwrap_or_default()
     }
 
+    #[cfg(not(test))]
     pub fn save(&self) {
         let path = registry_path();
         if let Some(dir) = path.parent() {
@@ -25,6 +26,9 @@ impl DownloadRegistry {
             let _ = std::fs::write(&path, s);
         }
     }
+
+    #[cfg(test)]
+    pub fn save(&self) {}
 
     pub fn register(&mut self, url: &str, path: &str) {
         self.tracks.insert(url.to_string(), path.to_string());

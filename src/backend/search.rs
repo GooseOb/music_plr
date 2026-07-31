@@ -1,8 +1,8 @@
-use super::{BackendResult, RustTrack, SearchState};
-use slint::ComponentHandle;
+use super::{spawn_thumbnail_download_thread, BackendResult, RustTrack, SearchState};
 use crate::config;
-use crate::thumbnails;
 use crate::youtube;
+use slint::ComponentHandle;
+use tracing::error;
 
 impl super::Backend {
     pub fn handle_search_execute(&mut self) {
@@ -28,19 +28,12 @@ impl super::Backend {
         std::thread::spawn(move || match youtube::search(&query, 0) {
             Ok(videos) => {
                 let tracks: Vec<RustTrack> = videos.into_iter().map(RustTrack::from).collect();
-                let thumb_tracks = tracks.clone();
-                let thumb_tx = result_tx.clone();
-                std::thread::spawn(move || {
-                    for t in &thumb_tracks {
-                        thumbnails::download(&t.id, &t.thumbnail);
-                    }
-                    let _ = thumb_tx.send(BackendResult::ThumbnailsReady);
-                });
+                spawn_thumbnail_download_thread(&tracks, result_tx.clone());
                 let _ = result_tx.send(BackendResult::SearchResults(tracks));
             }
             Err(e) => {
-                eprintln!("[backend] Search error: {}", e);
-                let _ = result_tx.send(BackendResult::SearchResults(Vec::new()));
+                error!("Search error: {}", e);
+                let _ = result_tx.send(BackendResult::SearchError(e.to_string()));
             }
         });
     }
@@ -54,19 +47,12 @@ impl super::Backend {
         std::thread::spawn(move || match youtube::search(&query, offset) {
             Ok(videos) => {
                 let tracks: Vec<RustTrack> = videos.into_iter().map(RustTrack::from).collect();
-                let thumb_tracks = tracks.clone();
-                let thumb_tx = result_tx.clone();
-                std::thread::spawn(move || {
-                    for t in &thumb_tracks {
-                        thumbnails::download(&t.id, &t.thumbnail);
-                    }
-                    let _ = thumb_tx.send(BackendResult::ThumbnailsReady);
-                });
+                spawn_thumbnail_download_thread(&tracks, result_tx.clone());
                 let _ = result_tx.send(BackendResult::SearchResultsAppend(tracks));
             }
             Err(e) => {
-                eprintln!("[backend] Search load more error: {}", e);
-                let _ = result_tx.send(BackendResult::SearchResultsAppend(Vec::new()));
+                error!("Search load more error: {}", e);
+                let _ = result_tx.send(BackendResult::SearchError(e.to_string()));
             }
         });
     }

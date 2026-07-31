@@ -10,6 +10,8 @@ use crate::mpris::MprisUpdate;
 use crate::playlists::PlaylistStore;
 use crate::types::{Track as RustTrack, TrackSource};
 
+use tracing::{debug, error};
+
 slint::include_modules!();
 
 pub mod download;
@@ -25,8 +27,9 @@ pub enum BackendResult {
     SearchResults(Vec<RustTrack>),
     SearchResultsAppend(Vec<RustTrack>),
     RadioResults(String, Vec<RustTrack>),
-    DownloadComplete(usize, String, String),
+    DownloadComplete(String, String),
     DownloadError(String),
+    SearchError(String),
     ThumbnailsReady,
 }
 
@@ -122,15 +125,95 @@ pub struct Backend {
     pub pending_cache_id: Option<String>,
 }
 
-fn format_dur(dur: i32) -> String {
-    if dur > 0 {
-        format!("{}:{:02}", dur / 60, dur % 60)
+pub fn format_duration(secs: u32) -> String {
+    if secs > 0 {
+        format!("{}:{:02}", secs / 60, secs % 60)
     } else {
         "--:--".to_string()
     }
 }
 
-pub fn to_slint_track(t: &RustTrack, registry: &DownloadRegistry, selected: bool) -> Track {
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_duration_seconds() {
+        assert_eq!(format_duration(0), "--:--");
+        assert_eq!(format_duration(30), "0:30");
+        assert_eq!(format_duration(59), "0:59");
+    }
+
+    #[test]
+    fn format_duration_minutes() {
+        assert_eq!(format_duration(60), "1:00");
+        assert_eq!(format_duration(90), "1:30");
+        assert_eq!(format_duration(369), "6:09");
+        assert_eq!(format_duration(3600), "60:00");
+    }
+
+    #[test]
+    fn play_queue_next_and_previous() {
+        let mut q = PlayQueue::new();
+        q.tracks = vec![
+            RustTrack {
+                id: "1".into(),
+                title: "A".into(),
+                artist: "X".into(),
+                duration: 10,
+                url: "".into(),
+                source: TrackSource::YouTube,
+                thumbnail: "".into(),
+            },
+            RustTrack {
+                id: "2".into(),
+                title: "B".into(),
+                artist: "X".into(),
+                duration: 10,
+                url: "".into(),
+                source: TrackSource::YouTube,
+                thumbnail: "".into(),
+            },
+            RustTrack {
+                id: "3".into(),
+                title: "C".into(),
+                artist: "X".into(),
+                duration: 10,
+                url: "".into(),
+                source: TrackSource::YouTube,
+                thumbnail: "".into(),
+            },
+        ];
+        assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
+
+        assert_eq!(q.next(), Some(1));
+        assert_eq!(q.current().map(|t| t.id.as_str()), Some("2"));
+
+        assert_eq!(q.previous(), Some(0));
+        assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
+
+        assert_eq!(q.previous(), None);
+        assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
+
+        assert_eq!(q.next(), Some(1));
+        assert_eq!(q.next(), Some(2));
+        assert_eq!(q.current().map(|t| t.id.as_str()), Some("3"));
+        assert_eq!(q.next(), None);
+    }
+
+    #[test]
+    fn play_queue_empty() {
+        let q = PlayQueue::new();
+        assert!(q.current().is_none());
+    }
+}
+
+pub fn to_slint_track(
+    t: &RustTrack,
+    registry: &DownloadRegistry,
+    selected: bool,
+    downloading: bool,
+) -> Track {
     let thumb = if t.source == TrackSource::YouTube {
         let cached = crate::thumbnails::thumbnail_path(&t.id);
         if cached.exists() {
@@ -148,14 +231,14 @@ pub fn to_slint_track(t: &RustTrack, registry: &DownloadRegistry, selected: bool
         title: t.title.clone().into(),
         artist: t.artist.clone().into(),
         duration: t.duration as i32,
-        duration_text: format_dur(t.duration as i32).into(),
+        duration_text: format_duration(t.duration).into(),
         url: t.url.clone().into(),
         source: match t.source {
             TrackSource::YouTube => "youtube".into(),
             TrackSource::Local => "local".into(),
         },
         is_downloaded: registry.contains(&t.url),
-        is_downloading: false,
+        is_downloading: downloading,
         is_selected: selected,
         thumbnail: thumb.into(),
     }
@@ -166,6 +249,11 @@ impl Backend {
         let volume = config.volume;
         let (event_tx, event_rx) = mpsc::channel();
         let cache_max_mb = config.cache_max_size_mb;
+
+        debug!(
+            "Initializing Backend with volume={}, cache_max_mb={}",
+            volume, cache_max_mb
+        );
 
         Self {
             audio: AudioPlayer::new(volume),
@@ -266,7 +354,7 @@ impl Backend {
                         self.is_playing = true;
                     }
                     Err(e) => {
-                        eprintln!("[play] failed to read local file: {}", e);
+                        error!("Failed to read local file: {}", e);
                         self.download_registry.remove(&track_url);
                         self.cache_or_stream(&track_url, duration, &video_id);
                     }
@@ -288,14 +376,14 @@ impl Backend {
                     .map(|m| m.len() > 4096)
                     .unwrap_or(false)
             {
-                eprintln!("[play] Playing from cache: {:?}", cached_path);
+                debug!("Playing from cache: {:?}", cached_path);
                 self.track_loading = false;
                 self.audio.play_cached(cached_path, duration);
                 self.is_playing = true;
                 self.stream_cache.record_access(video_id);
                 return;
             }
-            eprintln!("[play] Cache too small or missing, removing and re-streaming");
+            debug!("Cache too small or missing, removing and re-streaming");
             self.stream_cache.remove(video_id);
         }
         self.play_stream_with_cache(track_url, duration, video_id);
@@ -358,7 +446,7 @@ impl Backend {
                     window.global::<SearchState>().set_loading(false);
                 }
             }
-            BackendResult::DownloadComplete(_idx, url, path) => {
+            BackendResult::DownloadComplete(url, path) => {
                 self.downloading_index = None;
                 self.download_registry.register(&url, &path);
                 self.sync_search_model();
@@ -368,7 +456,16 @@ impl Backend {
             }
             BackendResult::DownloadError(msg) => {
                 self.downloading_index = None;
-                eprintln!("[backend] Download error: {}", msg);
+                error!("Download error: {}", msg);
+                self.notify_error(msg);
+            }
+            BackendResult::SearchError(msg) => {
+                self.loading = false;
+                self.clear_notification();
+                if let Some(window) = self.ui.upgrade() {
+                    window.global::<SearchState>().set_loading(false);
+                }
+                self.notify_error(msg);
             }
             BackendResult::ThumbnailsReady => {
                 self.sync_search_model();
@@ -377,23 +474,31 @@ impl Backend {
             }
         }
     }
+}
 
-    pub fn spawn_thumbnail_downloads(&self, tracks: &[RustTrack]) {
-        let entries: Vec<(String, String)> = tracks
-            .iter()
-            .filter(|t| t.source == TrackSource::YouTube)
-            .map(|t| (t.id.clone(), t.thumbnail.clone()))
-            .collect();
-        if entries.is_empty() {
-            return;
+pub fn spawn_thumbnail_download_thread(
+    tracks: &[RustTrack],
+    result_tx: mpsc::Sender<BackendResult>,
+) {
+    let entries: Vec<(String, String)> = tracks
+        .iter()
+        .filter(|t| t.source == TrackSource::YouTube)
+        .map(|t| (t.id.clone(), t.thumbnail.clone()))
+        .collect();
+    if entries.is_empty() {
+        return;
+    }
+    std::thread::spawn(move || {
+        for (id, thumb) in &entries {
+            crate::thumbnails::download(id, thumb);
         }
-        let result_tx = self.result_tx.clone();
-        std::thread::spawn(move || {
-            for (id, thumb) in &entries {
-                crate::thumbnails::download(id, thumb);
-            }
-            let _ = result_tx.send(BackendResult::ThumbnailsReady);
-        });
+        let _ = result_tx.send(BackendResult::ThumbnailsReady);
+    });
+}
+
+impl Backend {
+    pub fn spawn_thumbnail_downloads(&self, tracks: &[RustTrack]) {
+        spawn_thumbnail_download_thread(tracks, self.result_tx.clone());
     }
 
     pub fn send_mpris_update(&self) {

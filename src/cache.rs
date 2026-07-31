@@ -92,10 +92,12 @@ impl StreamCache {
             let _ = std::fs::remove_file(&path);
             return false;
         }
-        if self.index.entries.contains_key(id) {
+        let now = now_secs();
+        if let Some(entry) = self.index.entries.get_mut(id) {
+            entry.last_accessed = now;
+            self.save();
             return true;
         }
-        let now = now_secs();
         self.index.entries.insert(
             id.to_string(),
             CacheEntry {

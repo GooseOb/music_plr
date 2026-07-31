@@ -1,4 +1,5 @@
 use super::BackendResult;
+use tracing::debug;
 
 impl super::Backend {
     fn safe_filename(&self, artist: &str, title: &str) -> String {
@@ -31,11 +32,14 @@ impl super::Backend {
         let track_url = track.url.clone();
         let result_tx = self.result_tx.clone();
         std::thread::spawn(move || {
+            debug!("Starting download: {}", track_url);
             match crate::youtube::download_audio(&track_url, &output_path) {
                 Ok(path) => {
-                    let _ = result_tx.send(BackendResult::DownloadComplete(index, track_url, path));
+                    debug!("Download complete: {}", path);
+                    let _ = result_tx.send(BackendResult::DownloadComplete(track_url, path));
                 }
                 Err(e) => {
+                    debug!("Download error: {}", e);
                     let _ = result_tx.send(BackendResult::DownloadError(e.to_string()));
                 }
             }
@@ -71,11 +75,14 @@ impl super::Backend {
         let track_url = track.url.clone();
         let result_tx = self.result_tx.clone();
         std::thread::spawn(move || {
+            debug!("Starting download (current track): {}", track_url);
             match crate::youtube::download_audio(&track_url, &output_path) {
                 Ok(path) => {
-                    let _ = result_tx.send(BackendResult::DownloadComplete(0, track_url, path));
+                    debug!("Download complete: {}", path);
+                    let _ = result_tx.send(BackendResult::DownloadComplete(track_url, path));
                 }
                 Err(e) => {
+                    debug!("Download error: {}", e);
                     let _ = result_tx.send(BackendResult::DownloadError(e.to_string()));
                 }
             }

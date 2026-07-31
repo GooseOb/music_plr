@@ -1,6 +1,7 @@
-use crate::types::{Track as RustTrack, TrackSource};
 use super::PlaylistState;
+use crate::types::{Track as RustTrack, TrackSource};
 use slint::ComponentHandle;
+use tracing::debug;
 
 impl super::Backend {
     pub fn handle_add_local_music(&mut self, paths: Vec<String>) {
@@ -85,7 +86,7 @@ impl super::Backend {
 
     pub fn handle_select_playlist(&mut self, index: usize) {
         if cfg!(debug_assertions) {
-            eprintln!("[backend] select playlist {}", index);
+            debug!("select playlist {}", index);
         }
         if self.selected_playlist == Some(index) {
             self.selected_playlist = None;
@@ -107,14 +108,6 @@ impl super::Backend {
         self.clear_selection();
         self.sync_playlist_content();
         self.spawn_thumbnail_downloads(&pl_tracks);
-        self.clear_selection();
-        self.sync_playlist_content();
-        if let Some(pl) = self
-            .selected_playlist
-            .and_then(|i| self.playlists.playlists.get(i))
-        {
-            self.spawn_thumbnail_downloads(&pl.tracks);
-        }
     }
 
     pub fn handle_toggle_picker(&mut self, index: usize) {

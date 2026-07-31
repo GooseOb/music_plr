@@ -73,3 +73,41 @@ pub fn fuzzy_match(query: &str, text: &str) -> bool {
     }
     qi.peek().is_none()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fuzzy_match_exact() {
+        assert!(fuzzy_match("hello", "hello"));
+    }
+
+    #[test]
+    fn fuzzy_match_subsequence() {
+        assert!(fuzzy_match("hlo", "hello"));
+        assert!(fuzzy_match("hlo", "Hello World"));
+    }
+
+    #[test]
+    fn fuzzy_match_empty_query() {
+        assert!(fuzzy_match("", "anything"));
+    }
+
+    #[test]
+    fn fuzzy_match_no_match() {
+        assert!(!fuzzy_match("xyz", "hello"));
+    }
+
+    #[test]
+    fn fuzzy_match_case_insensitive() {
+        assert!(fuzzy_match("HELLO", "hello"));
+        assert!(fuzzy_match("HeLlO", "HELLO"));
+    }
+
+    #[test]
+    fn fuzzy_match_partial() {
+        assert!(fuzzy_match("ell", "hello"));
+        assert!(!fuzzy_match("leh", "hello"));
+    }
+}

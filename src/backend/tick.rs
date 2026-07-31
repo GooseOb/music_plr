@@ -1,6 +1,31 @@
-use super::{to_slint_track, NavigationState, PlaybackState, QueueState, PlaylistInfo, PlaylistState, SearchState, Track, View};
+use super::{
+    format_duration, to_slint_track, NavigationState, PlaybackState, PlaylistInfo, PlaylistState,
+    QueueState, SearchState, Track, View,
+};
 use slint::ComponentHandle;
 use std::rc::Rc;
+use tracing::{debug, warn};
+
+fn build_track_model(
+    tracks: &[super::RustTrack],
+    registry: &super::DownloadRegistry,
+    selected_indices: &[usize],
+    downloading_index: Option<usize>,
+) -> Rc<slint::VecModel<Track>> {
+    let model: Vec<Track> = tracks
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            to_slint_track(
+                t,
+                registry,
+                selected_indices.contains(&i),
+                downloading_index == Some(i),
+            )
+        })
+        .collect();
+    Rc::new(slint::VecModel::from(model))
+}
 
 impl super::Backend {
     pub fn audio_tick(&mut self) {
@@ -18,9 +43,9 @@ impl super::Backend {
 
         if let Some(ref pending) = self.pending_cache_id.clone() {
             if s.stream_finished {
-                if self.stream_cache.path_for(pending).exists()
-                    && self.stream_cache.insert(pending) {
-                    eprintln!("[cache] Registered cached track: {}", pending);
+                if self.stream_cache.path_for(pending).exists() && self.stream_cache.insert(pending)
+                {
+                    debug!("Registered cached track: {}", pending);
                 }
                 self.pending_cache_id = None;
             }
@@ -39,9 +64,9 @@ impl super::Backend {
             playback.set_duration_secs(self.duration);
             playback.set_track_loading(self.track_loading);
             let elapsed = (self.progress * self.duration) as u32;
-            playback.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
+            playback.set_elapsed_text(format_duration(elapsed).into());
             let total = self.duration as u32;
-            playback.set_total_text(format!("{}:{:02}", total / 60, total % 60).into());
+            playback.set_total_text(format_duration(total).into());
         }
 
         if let Some(window) = self.ui.upgrade() {
@@ -94,9 +119,9 @@ impl super::Backend {
         playback.set_track_loading(self.track_loading);
         playback.set_progress(self.progress);
         let elapsed = (self.progress * self.duration) as u32;
-        playback.set_elapsed_text(format!("{}:{:02}", elapsed / 60, elapsed % 60).into());
+        playback.set_elapsed_text(format_duration(elapsed).into());
         let total = self.duration as u32;
-        playback.set_total_text(format!("{}:{:02}", total / 60, total % 60).into());
+        playback.set_total_text(format_duration(total).into());
         self.sync_queue_ui();
     }
 
@@ -104,16 +129,19 @@ impl super::Backend {
         let Some(window) = self.ui.upgrade() else {
             return;
         };
-        let registry = &self.download_registry;
-        let upcoming: Vec<Track> = self
+        let upcoming: Vec<super::RustTrack> = self
             .queue
             .tracks
             .iter()
-            .enumerate()
             .skip(self.queue.current_index + 1)
-            .map(|(i, t)| to_slint_track(t, registry, self.is_selected(i)))
+            .cloned()
             .collect();
-        let rc = Rc::new(slint::VecModel::from(upcoming));
+        let rc = build_track_model(
+            &upcoming,
+            &self.download_registry,
+            &self.selected_indices,
+            self.downloading_index,
+        );
         self.queue_model_handle = Some(rc.clone());
         window.global::<QueueState>().set_queue_tracks(rc.into());
     }
@@ -135,6 +163,14 @@ impl super::Backend {
         }
     }
 
+    pub fn notify_error(&mut self, msg: String) {
+        warn!("Backend error: {}", msg);
+        self.notification = Some(msg.clone());
+        if let Some(window) = self.ui.upgrade() {
+            window.set_notification(msg.into());
+        }
+    }
+
     pub fn clear_notification(&mut self) {
         self.notification = None;
         if let Some(window) = self.ui.upgrade() {
@@ -146,14 +182,12 @@ impl super::Backend {
         let Some(window) = self.ui.upgrade() else {
             return;
         };
-        let registry = &self.download_registry;
-        let model: Vec<Track> = self
-            .search_results
-            .iter()
-            .enumerate()
-            .map(|(i, t)| to_slint_track(t, registry, self.is_selected(i)))
-            .collect();
-        let rc = Rc::new(slint::VecModel::from(model));
+        let rc = build_track_model(
+            &self.search_results,
+            &self.download_registry,
+            &self.selected_indices,
+            self.downloading_index,
+        );
         self.search_model_handle = Some(rc.clone());
         window.global::<SearchState>().set_search_results(rc.into());
     }
@@ -162,14 +196,12 @@ impl super::Backend {
         let Some(window) = self.ui.upgrade() else {
             return;
         };
-        let registry = &self.download_registry;
-        let model: Vec<Track> = self
-            .radio_tracks
-            .iter()
-            .enumerate()
-            .map(|(i, t)| to_slint_track(t, registry, self.is_selected(i)))
-            .collect();
-        let rc = Rc::new(slint::VecModel::from(model));
+        let rc = build_track_model(
+            &self.radio_tracks,
+            &self.download_registry,
+            &self.selected_indices,
+            self.downloading_index,
+        );
         self.radio_model_handle = Some(rc.clone());
         window.set_radio_tracks(rc.into());
     }
@@ -202,20 +234,19 @@ impl super::Backend {
         let Some(window) = self.ui.upgrade() else {
             return;
         };
-        let registry = &self.download_registry;
         if let Some(idx) = self.selected_playlist {
             if let Some(pl) = self.playlists.playlists.get(idx) {
-                let model: Vec<Track> = pl
-                    .tracks
-                    .iter()
-                    .enumerate()
-                    .map(|(i, t)| to_slint_track(t, registry, self.is_selected(i)))
-                    .collect();
-                let rc = Rc::new(slint::VecModel::from(model));
+                let rc = build_track_model(
+                    &pl.tracks,
+                    &self.download_registry,
+                    &self.selected_indices,
+                    self.downloading_index,
+                );
                 self.playlist_model_handle = Some(rc.clone());
                 let playlist_state = window.global::<PlaylistState>();
                 playlist_state.set_playlist_tracks(rc.into());
-                playlist_state.set_selected_playlist_name(self.selected_playlist_name.clone().into());
+                playlist_state
+                    .set_selected_playlist_name(self.selected_playlist_name.clone().into());
                 playlist_state.set_selected_playlist(idx as i32);
                 playlist_state.set_playlist_create_name(self.playlist_create_name.clone().into());
                 return;

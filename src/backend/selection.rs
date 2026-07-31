@@ -36,7 +36,12 @@ impl super::Backend {
         if let Some(model) = model {
             if let Some(track) = tracks.get(index) {
                 let registry = &self.download_registry;
-                let t = to_slint_track(track, registry, self.is_selected(index));
+                let t = to_slint_track(
+                    track,
+                    registry,
+                    self.is_selected(index),
+                    self.downloading_index == Some(index),
+                );
                 model.set_row_data(index, t);
             }
         }
