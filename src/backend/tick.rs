@@ -18,10 +18,9 @@ impl super::Backend {
 
         if let Some(ref pending) = self.pending_cache_id.clone() {
             if s.stream_finished {
-                if self.stream_cache.path_for(pending).exists() {
-                    if self.stream_cache.insert(pending) {
-                        eprintln!("[cache] Registered cached track: {}", pending);
-                    }
+                if self.stream_cache.path_for(pending).exists()
+                    && self.stream_cache.insert(pending) {
+                    eprintln!("[cache] Registered cached track: {}", pending);
                 }
                 self.pending_cache_id = None;
             }

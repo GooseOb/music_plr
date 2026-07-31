@@ -1,15 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum TrackSource {
+    #[default]
     YouTube,
     Local,
-}
-
-impl Default for TrackSource {
-    fn default() -> Self {
-        Self::YouTube
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

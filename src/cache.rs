@@ -58,7 +58,7 @@ impl StreamCache {
             .unwrap_or_default();
 
         Self {
-            max_size_bytes: (max_size_mb as u64) * 1024 * 1024,
+            max_size_bytes: max_size_mb * 1024 * 1024,
             cache_dir,
             index_path,
             index,

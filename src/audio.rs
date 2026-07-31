@@ -242,7 +242,7 @@ impl AudioPlayer {
                                                 eprintln!("[audio] Cache write error: {}", e);
                                                 break;
                                             }
-                                            if let Err(_) = writer.write_all(&buf[..n]) {
+                                            if writer.write_all(&buf[..n]).is_err() {
                                                 // ffmpeg stdin closed (broken pipe) - OK
                                                 break;
                                             }
@@ -415,7 +415,7 @@ impl AudioPlayer {
                     };
 
                     if done {
-                        if ffmpeg_exit.map_or(false, |s| !s.success()) {
+                        if ffmpeg_exit.is_some_and(|s| !s.success()) {
                             eprintln!("[audio] ffmpeg exited with error");
                         }
                         ffmpeg.take();
