@@ -3,9 +3,6 @@ import { Theme } from "theme.slint";
 import { PlaylistState } from "playlist-state.slint";
 
 export component PickerDialog inherits Rectangle {
-    callback add-to-playlist(int);
-    callback close-picker();
-
     background: Theme.overlay;
     TouchArea {
         mouse-cursor: pointer;

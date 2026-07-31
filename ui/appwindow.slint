@@ -131,7 +131,6 @@ export component AppWindow inherits Window {
                         toggle-select(i) => { root.toggle-select(i); }
                         start-radio(i) => { root.start-radio(i); }
                         start-artist(i) => { root.start-artist(i); }
-                        toggle-picker(i) => { PlaylistState.toggle-picker(i); }
                         download-or-delete(i) => { root.download-or-delete(i); }
                         drag-add-to-playlist(ti, pi) => { root.drag-add-to-playlist(ti, pi); }
                         resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
@@ -146,14 +145,8 @@ export component AppWindow inherits Window {
                         toggle-select(i) => { root.toggle-select(i); }
                         start-radio(i) => { root.start-radio(i); }
                         start-artist(i) => { root.start-artist(i); }
-                        toggle-picker(i) => { PlaylistState.toggle-picker(i); }
                         download-or-delete(i) => { root.download-or-delete(i); }
-                        remove-from-playlist(i) => { PlaylistState.remove-from-playlist(i); }
                         add-local-music() => { root.add-local-music(); }
-                        delete-playlist() => {
-                            PlaylistState.delete-confirm-index = PlaylistState.selected-playlist;
-                            PlaylistState.show-delete-confirm = true;
-                        }
                         drag-add-to-playlist(ti, pi) => { root.drag-add-to-playlist(ti, pi); }
                         reorder-tracks(fi, ti) => { root.reorder-tracks(fi, ti); }
                         resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
@@ -170,7 +163,6 @@ export component AppWindow inherits Window {
                         toggle-select(i) => { root.toggle-select(i); }
                         start-radio(i) => { root.start-radio(i); }
                         start-artist(i) => { root.start-artist(i); }
-                        toggle-picker(i) => { PlaylistState.toggle-picker(i); }
                         download-or-delete(i) => { root.download-or-delete(i); }
                         drag-add-to-playlist(ti, pi) => { root.drag-add-to-playlist(ti, pi); }
                         resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
@@ -200,7 +192,6 @@ export component AppWindow inherits Window {
                     toggle-select(i) => { root.toggle-select(i); }
                     start-radio(i) => { root.start-radio(i); }
                     start-artist(i) => { root.start-artist(i); }
-                    toggle-picker(i) => { PlaylistState.toggle-picker(i); }
                     download-or-delete(i) => { root.download-or-delete(i); }
                     remove-from-queue(i) => { root.remove-from-queue(i); }
                     reorder-queue(fi, ti) => { root.reorder-queue(fi, ti); }
@@ -237,14 +228,9 @@ export component AppWindow inherits Window {
         }
     }
 
-    if PlaylistState.show-picker : PickerDialog {
-        add-to-playlist(i) => { PlaylistState.add-to-playlist(i); }
-        close-picker() => { PlaylistState.close-picker(); }
-    }
+    if PlaylistState.show-picker : PickerDialog {}
 
-    if PlaylistState.show-delete-confirm : DeleteConfirm {
-        delete-playlist(i) => { PlaylistState.delete-playlist(i); }
-    }
+    if PlaylistState.show-delete-confirm : DeleteConfirm {}
 
     if DragState.active && DragState.over-sidebar : Rectangle {
         x: DragState.x - sidebar.sidebar-width / 2;
@@ -288,9 +274,7 @@ export component AppWindow inherits Window {
             parent-height: root.height;
             start-radio(i) => { root.start-radio(i); ContextMenuState.show = false; }
             start-artist(i) => { root.start-artist(i); ContextMenuState.show = false; }
-            toggle-picker(i) => { PlaylistState.toggle-picker(i); ContextMenuState.show = false; }
             download-or-delete(i) => { root.download-or-delete(i); ContextMenuState.show = false; }
-            remove-from-playlist(i) => { PlaylistState.remove-from-playlist(i); ContextMenuState.show = false; }
             remove-from-queue(i) => { root.remove-from-queue(i); ContextMenuState.show = false; }
         }
     }

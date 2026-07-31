@@ -5,6 +5,7 @@ import { TrackRow } from "track-row.slint";
 import { PlaybackState } from "playback-state.slint";
 import { ContextMenuState } from "context-menu-state.slint";
 import { DragState } from "drag-state.slint";
+import { PlaylistState } from "playlist-state.slint";
 import { SearchState } from "search-state.slint";
 
 export component RadioView {
@@ -19,7 +20,6 @@ export component RadioView {
     callback toggle-select(int);
     callback start-radio(int);
     callback start-artist(int);
-    callback toggle-picker(int);
     callback download-or-delete(int);
     callback drag-add-to-playlist(int, int);
     pure callback resolve-thumbnail(string) -> image;
@@ -44,7 +44,7 @@ export component RadioView {
                 row-clicked(index) => { root.toggle-select(index); }
                 start-radio(index) => { root.start-radio(index); }
                 start-artist(index) => { root.start-artist(index); }
-                toggle-picker(index) => { root.toggle-picker(index); }
+                toggle-picker(index) => { PlaylistState.toggle-picker(index); }
                 download-or-delete(index) => { root.download-or-delete(index); }
                 remove-from-playlist(index) => {}
                 right-clicked(index, abs-x, abs-y) => {

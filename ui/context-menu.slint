@@ -1,5 +1,6 @@
 import { Theme } from "theme.slint";
 import { ContextMenuState } from "context-menu-state.slint";
+import { PlaylistState } from "playlist-state.slint";
 
 export component ContextMenu inherits Rectangle {
     in property <length> parent-width;
@@ -7,9 +8,7 @@ export component ContextMenu inherits Rectangle {
 
     callback start-radio(int);
     callback start-artist(int);
-    callback toggle-picker(int);
     callback download-or-delete(int);
-    callback remove-from-playlist(int);
     callback remove-from-queue(int);
 
     property <bool> show-remove: ContextMenuState.in-playlist || ContextMenuState.in-queue;
@@ -70,7 +69,7 @@ export component ContextMenu inherits Rectangle {
             pl-touch := TouchArea {
                 mouse-cursor: pointer;
 				clicked => {
-					root.toggle-picker(ContextMenuState.idx);
+					PlaylistState.toggle-picker(ContextMenuState.idx);
 				}
             }
         }
@@ -102,7 +101,7 @@ export component ContextMenu inherits Rectangle {
             remove-pl-touch := TouchArea {
                 mouse-cursor: pointer;
                 clicked => {
-					root.remove-from-playlist(ContextMenuState.idx);
+					PlaylistState.remove-from-playlist(ContextMenuState.idx);
                 }
             }
         }

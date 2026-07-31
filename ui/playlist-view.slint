@@ -16,11 +16,8 @@ export component PlaylistView {
     callback toggle-select(int);
     callback start-radio(int);
     callback start-artist(int);
-    callback toggle-picker(int);
     callback download-or-delete(int);
-    callback remove-from-playlist(int);
     callback add-local-music();
-    callback delete-playlist();
     callback drag-add-to-playlist(int, int);
     callback reorder-tracks(int, int);
     pure callback resolve-thumbnail(string) -> image;
@@ -42,7 +39,8 @@ export component PlaylistView {
                 del-pl-ta := TouchArea {
                     mouse-cursor: pointer;
 					clicked => {
-						root.delete-playlist();
+						PlaylistState.delete-confirm-index = PlaylistState.selected-playlist;
+					PlaylistState.show-delete-confirm = true;
 					}
                 }
             }
@@ -62,9 +60,9 @@ export component PlaylistView {
                 row-clicked(index) => { root.toggle-select(index); }
                 start-radio(index) => { root.start-radio(index); }
                 start-artist(index) => { root.start-artist(index); }
-                toggle-picker(index) => { root.toggle-picker(index); }
+                toggle-picker(index) => { PlaylistState.toggle-picker(index); }
                 download-or-delete(index) => { root.download-or-delete(index); }
-                remove-from-playlist(index) => { root.remove-from-playlist(index); }
+                remove-from-playlist(index) => { PlaylistState.remove-from-playlist(index); }
                 right-clicked(index, abs-x, abs-y) => {
                     ContextMenuState.idx = index;
                     ContextMenuState.x = abs-x;
@@ -155,7 +153,7 @@ export component PlaylistView {
                 PlaybackState.play-track(root.focused-index);
                 accept
             } else if (event.text == Key.Delete) {
-                root.remove-from-playlist(root.focused-index);
+                PlaylistState.remove-from-playlist(root.focused-index);
                 accept
             } else { reject }
         }

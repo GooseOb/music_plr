@@ -17,7 +17,6 @@ export component SearchView {
     callback toggle-select(int);
     callback start-radio(int);
     callback start-artist(int);
-    callback toggle-picker(int);
     callback download-or-delete(int);
     callback drag-add-to-playlist(int, int);
     pure callback resolve-thumbnail(string) -> image;
@@ -40,7 +39,7 @@ export component SearchView {
                 row-clicked(index) => { root.toggle-select(index); }
                 start-radio(index) => { root.start-radio(index); }
                 start-artist(index) => { root.start-artist(index); }
-                toggle-picker(index) => { root.toggle-picker(index); }
+                toggle-picker(index) => { PlaylistState.toggle-picker(index); }
                 download-or-delete(index) => { root.download-or-delete(index); }
                 remove-from-playlist(index) => {}
                 right-clicked(index, abs-x, abs-y) => {

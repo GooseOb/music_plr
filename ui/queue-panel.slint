@@ -5,6 +5,7 @@ import { TrackRow } from "track-row.slint";
 import { PlaybackState } from "playback-state.slint";
 import { ContextMenuState } from "context-menu-state.slint";
 import { DragState } from "drag-state.slint";
+import { PlaylistState } from "playlist-state.slint";
 import { QueueState } from "queue-state.slint";
 
 export component QueuePanel inherits Rectangle {
@@ -13,7 +14,6 @@ export component QueuePanel inherits Rectangle {
     callback toggle-select(int);
     callback start-radio(int);
     callback start-artist(int);
-    callback toggle-picker(int);
     callback download-or-delete(int);
     callback remove-from-queue(int);
     callback reorder-queue(int, int);
@@ -78,7 +78,7 @@ export component QueuePanel inherits Rectangle {
                 row-clicked(index) => { root.toggle-select(index); }
                 start-radio(index) => { root.start-radio(index); }
                 start-artist(index) => { root.start-artist(index); }
-                toggle-picker(index) => { root.toggle-picker(index); }
+                toggle-picker(index) => { PlaylistState.toggle-picker(index); }
                 download-or-delete(index) => { root.download-or-delete(index); }
                 remove-from-playlist(index) => { root.remove-from-queue(index); }
                 right-clicked(index, abs-x, abs-y) => {
