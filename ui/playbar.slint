@@ -98,8 +98,10 @@ export component PlayBar inherits Rectangle {
 
                         prev-ta := TouchArea {
                             mouse-cursor: pointer;
-                            clicked => {
-                                PlaybackState.previous-track();
+                            pointer-event(event) => {
+                                if (event.kind == PointerEventKind.up) {
+                                    PlaybackState.previous-track();
+                                }
                             }
                         }
                     }
@@ -133,8 +135,10 @@ export component PlayBar inherits Rectangle {
 
                         TouchArea {
                             mouse-cursor: pointer;
-                            clicked => {
-                                PlaybackState.toggle-play-pause();
+                            pointer-event(event) => {
+                                if (event.kind == PointerEventKind.up) {
+                                    PlaybackState.toggle-play-pause();
+                                }
                             }
                         }
                     }
@@ -166,8 +170,10 @@ export component PlayBar inherits Rectangle {
 
                         next-ta := TouchArea {
                             mouse-cursor: pointer;
-                            clicked => {
-                                PlaybackState.next-track();
+                            pointer-event(event) => {
+                                if (event.kind == PointerEventKind.up) {
+                                    PlaybackState.next-track();
+                                }
                             }
                         }
                     }
@@ -228,8 +234,10 @@ export component PlayBar inherits Rectangle {
 
                 queue-btn-ta := TouchArea {
                     mouse-cursor: pointer;
-                    clicked => {
-                        QueueState.toggle-queue();
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up) {
+                            QueueState.toggle-queue();
+                        }
                     }
                 }
             }

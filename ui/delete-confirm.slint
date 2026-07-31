@@ -5,8 +5,10 @@ import { PlaylistState } from "playlist-state.slint";
 export component DeleteConfirm inherits Rectangle {
     background: Theme.overlay;
     TouchArea {
-        clicked => {
-            PlaylistState.show-delete-confirm = false;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.up) {
+                PlaylistState.show-delete-confirm = false;
+            }
         }
     }
 
@@ -43,7 +45,9 @@ export component DeleteConfirm inherits Rectangle {
 
                 Button {
                     text: "Cancel";
-                    clicked => { PlaylistState.show-delete-confirm = false; }
+                    clicked => {
+                    	PlaylistState.show-delete-confirm = false;
+                    }
                 }
 
                 Button {

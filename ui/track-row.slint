@@ -39,9 +39,11 @@ export component TrackRow {
         touch-area := TouchArea {
             mouse-cursor: pointer;
 
-            clicked => { root.clear-search-focus(); root.row-clicked(root.idx); }
             pointer-event(event) => {
-                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
+                    root.clear-search-focus();
+                    root.row-clicked(root.idx);
+                } else if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
                     root.right-clicked(root.idx, touch-area.absolute-position.x + touch-area.mouse-x, touch-area.absolute-position.y + touch-area.mouse-y);
                 } else if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
                     root.drag-pressed(root.idx, touch-area.absolute-position.x + touch-area.mouse-x, touch-area.absolute-position.y + touch-area.mouse-y);

@@ -41,8 +41,10 @@ export component ContextMenu inherits Rectangle {
 
             radio-touch := TouchArea {
                 mouse-cursor: pointer;
-                clicked => {
-                    root.start-radio(ContextMenuState.idx);
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.up) {
+                        root.start-radio(ContextMenuState.idx);
+                    }
                 }
             }
         }
@@ -62,8 +64,10 @@ export component ContextMenu inherits Rectangle {
 
             artist-touch := TouchArea {
                 mouse-cursor: pointer;
-                clicked => {
-                    root.start-artist(ContextMenuState.idx);
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.up) {
+                        root.start-artist(ContextMenuState.idx);
+                    }
                 }
             }
         }
@@ -83,8 +87,10 @@ export component ContextMenu inherits Rectangle {
 
             pl-touch := TouchArea {
                 mouse-cursor: pointer;
-                clicked => {
-                    PlaylistState.toggle-picker(ContextMenuState.idx);
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.up) {
+                        PlaylistState.toggle-picker(ContextMenuState.idx);
+                    }
                 }
             }
         }
@@ -105,8 +111,10 @@ export component ContextMenu inherits Rectangle {
 
             dl-touch := TouchArea {
                 mouse-cursor: pointer;
-                clicked => {
-                    root.download-or-delete(ContextMenuState.idx);
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.up) {
+                        root.download-or-delete(ContextMenuState.idx);
+                    }
                 }
             }
         }
@@ -126,8 +134,10 @@ export component ContextMenu inherits Rectangle {
 
             remove-pl-touch := TouchArea {
                 mouse-cursor: pointer;
-                clicked => {
-                    PlaylistState.remove-from-playlist(ContextMenuState.idx);
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.up) {
+                        PlaylistState.remove-from-playlist(ContextMenuState.idx);
+                    }
                 }
             }
         }
@@ -147,8 +157,10 @@ export component ContextMenu inherits Rectangle {
 
             remove-q-touch := TouchArea {
                 mouse-cursor: pointer;
-                clicked => {
-                    root.remove-from-queue(ContextMenuState.idx);
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.up) {
+                        root.remove-from-queue(ContextMenuState.idx);
+                    }
                 }
             }
         }

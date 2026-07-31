@@ -66,8 +66,10 @@ export component Sidebar {
                     TouchArea {
                         mouse-cursor: pointer;
                         enabled: NavigationState.can-go-back;
-                        clicked => {
-                            NavigationState.navigate-back();
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) {
+                                NavigationState.navigate-back();
+                            }
                         }
                     }
                 }

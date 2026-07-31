@@ -40,8 +40,10 @@ export component SearchHistory inherits Rectangle {
                     border-color: Theme.accent;
                     TouchArea {
                         mouse-cursor: pointer;
-                        clicked => {
-                            root.selected(i);
+                        pointer-event(event) => {
+                            if (event.kind == PointerEventKind.up) {
+                                root.selected(i);
+                            }
                         }
                     }
 
@@ -68,8 +70,10 @@ export component SearchHistory inherits Rectangle {
 
                             TouchArea {
                                 mouse-cursor: pointer;
-                                clicked => {
-                                    root.delete-item(i);
+                                pointer-event(event) => {
+                                    if (event.kind == PointerEventKind.up) {
+                                        root.delete-item(i);
+                                    }
                                 }
                             }
                         }

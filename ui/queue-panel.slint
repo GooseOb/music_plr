@@ -41,7 +41,11 @@ export component QueuePanel inherits Rectangle {
                 vertical-alignment: center;
                 TouchArea {
                     mouse-cursor: pointer;
-                    clicked => { toggle-queue(); }
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up) {
+                            root.toggle-queue();
+                        }
+                    }
                 }
             }
         }

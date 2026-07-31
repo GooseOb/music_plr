@@ -6,8 +6,10 @@ export component PickerDialog inherits Rectangle {
     background: Theme.overlay;
     TouchArea {
         mouse-cursor: pointer;
-        clicked => {
-            PlaylistState.close-picker();
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.up) {
+                PlaylistState.close-picker();
+            }
         }
     }
 

@@ -30,8 +30,10 @@ export component PlaylistCard {
 
         TouchArea {
             mouse-cursor: pointer;
-            clicked => {
-                root.clicked();
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.up) {
+                    root.clicked();
+                }
             }
         }
 

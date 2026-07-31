@@ -52,9 +52,11 @@ export component PlaylistView {
 
                 del-pl-ta := TouchArea {
                     mouse-cursor: pointer;
-                    clicked => {
-                        PlaylistState.delete-confirm-index = PlaylistState.selected-playlist;
-                        PlaylistState.show-delete-confirm = true;
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up) {
+                            PlaylistState.delete-confirm-index = PlaylistState.selected-playlist;
+                            PlaylistState.show-delete-confirm = true;
+                        }
                     }
                 }
             }
