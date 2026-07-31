@@ -52,6 +52,12 @@ fn main() {
 
     setup_callbacks(&window, &backend);
 
+    {
+        let mut b = backend.borrow_mut();
+        b.restore_session();
+        b.update_ui();
+    }
+
     if !backend.borrow().config.last_search_query.is_empty() {
         let mut b = backend.borrow_mut();
         let query = b.config.last_search_query.clone();
@@ -60,13 +66,9 @@ fn main() {
             w.global::<SearchState>()
                 .set_search_input_text(query.into());
         }
-        b.handle_search_execute();
-    }
-
-    {
-        let mut b = backend.borrow_mut();
-        b.restore_session();
-        b.update_ui();
+        if b.current_view == backend::View::Search {
+            b.handle_search_execute();
+        }
     }
 
     let was_playing = backend.borrow().is_playing;

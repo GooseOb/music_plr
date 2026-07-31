@@ -1,4 +1,4 @@
-use super::{spawn_thumbnail_download_thread, BackendResult, RustTrack, SearchState};
+use super::{spawn_thumbnail_download_thread, BackendResult, RustTrack, SearchState, View};
 use crate::config;
 use crate::youtube;
 use slint::ComponentHandle;
@@ -13,6 +13,9 @@ impl super::Backend {
         self.selected_playlist = None;
         self.selected_playlist_name.clear();
         self.clear_selection();
+        self.current_view = View::Search;
+        self.update_nav_ui();
+        self.save_session();
         self.loading = true;
         self.notify(format!("Searching: {query}"));
 
