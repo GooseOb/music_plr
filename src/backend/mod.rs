@@ -491,8 +491,8 @@ pub fn spawn_thumbnail_download_thread(
     std::thread::spawn(move || {
         for (id, thumb) in &entries {
             crate::thumbnails::download(id, thumb);
+            let _ = result_tx.send(BackendResult::ThumbnailsReady);
         }
-        let _ = result_tx.send(BackendResult::ThumbnailsReady);
     });
 }
 
