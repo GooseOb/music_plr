@@ -438,6 +438,15 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
         });
 
     let b = Rc::downgrade(backend);
+    window
+        .global::<PlaylistState>()
+        .on_rename_playlist(move |name| {
+            if let Some(b) = b.upgrade() {
+                b.borrow_mut().handle_rename_playlist(name.to_string());
+            }
+        });
+
+    let b = Rc::downgrade(backend);
     window.on_toggle_select(move |index| {
         if let Some(b) = b.upgrade() {
             b.borrow_mut().handle_toggle_select(index as usize);

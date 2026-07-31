@@ -1,4 +1,4 @@
-import { Button, ListView } from "std-widgets.slint";
+import { Button, LineEdit, ListView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Track } from "types.slint";
 import { TrackRow } from "track-row.slint";
@@ -28,10 +28,11 @@ export component PlaylistView {
         spacing: Theme.spacing-sm;
         HorizontalLayout {
             spacing: Theme.spacing-sm;
-            Text {
-                text: PlaylistState.selected-playlist-name;
-                color: Theme.fg;
+            LineEdit {
+                text <=> PlaylistState.selected-playlist-name;
+                placeholder-text: "Playlist name";
                 horizontal-stretch: 1;
+                edited => { PlaylistState.rename-playlist(self.text); }
             }
 
             Rectangle {

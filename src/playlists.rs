@@ -62,6 +62,16 @@ impl PlaylistStore {
         }
     }
 
+    pub fn insert_track_at(&mut self, playlist_idx: usize, track: &Track, pos: usize) {
+        if let Some(pl) = self.playlists.get_mut(playlist_idx) {
+            if !pl.tracks.iter().any(|t| t.url == track.url) {
+                let pos = pos.min(pl.tracks.len());
+                pl.tracks.insert(pos, track.clone());
+                self.save();
+            }
+        }
+    }
+
     pub fn remove_track(&mut self, playlist_idx: usize, track_idx: usize) {
         if let Some(pl) = self.playlists.get_mut(playlist_idx) {
             if track_idx < pl.tracks.len() {
@@ -245,5 +255,97 @@ mod tests {
         store.create("Test");
         store.create("Test");
         assert_eq!(store.playlists.len(), 1);
+    }
+
+    #[test]
+    fn insert_track_at_top() {
+        let mut store = make_store(&["a", "b", "c"]);
+        let new_track = Track {
+            id: "new".to_string(),
+            title: "new".to_string(),
+            artist: "".to_string(),
+            duration: 0,
+            url: "new".to_string(),
+            source: crate::types::TrackSource::YouTube,
+            thumbnail: "".to_string(),
+        };
+        store.insert_track_at(0, &new_track, 0);
+        assert_eq!(
+            store.playlists[0]
+                .tracks
+                .iter()
+                .map(|t| t.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["new", "a", "b", "c"]
+        );
+    }
+
+    #[test]
+    fn insert_track_at_position() {
+        let mut store = make_store(&["a", "b", "c"]);
+        let new_track = Track {
+            id: "new".to_string(),
+            title: "new".to_string(),
+            artist: "".to_string(),
+            duration: 0,
+            url: "new".to_string(),
+            source: crate::types::TrackSource::YouTube,
+            thumbnail: "".to_string(),
+        };
+        store.insert_track_at(0, &new_track, 2);
+        assert_eq!(
+            store.playlists[0]
+                .tracks
+                .iter()
+                .map(|t| t.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "b", "new", "c"]
+        );
+    }
+
+    #[test]
+    fn insert_track_at_clamps_position() {
+        let mut store = make_store(&["a", "b", "c"]);
+        let new_track = Track {
+            id: "new".to_string(),
+            title: "new".to_string(),
+            artist: "".to_string(),
+            duration: 0,
+            url: "new".to_string(),
+            source: crate::types::TrackSource::YouTube,
+            thumbnail: "".to_string(),
+        };
+        store.insert_track_at(0, &new_track, 100);
+        assert_eq!(
+            store.playlists[0]
+                .tracks
+                .iter()
+                .map(|t| t.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "b", "c", "new"]
+        );
+    }
+
+    #[test]
+    fn insert_track_at_dedup_ignored() {
+        let mut store = make_store(&["a", "b", "c"]);
+        let dup_track = Track {
+            id: "a".to_string(),
+            title: "a".to_string(),
+            artist: "".to_string(),
+            duration: 0,
+            url: "a".to_string(),
+            source: crate::types::TrackSource::YouTube,
+            thumbnail: "".to_string(),
+        };
+        store.insert_track_at(0, &dup_track, 0);
+        assert_eq!(
+            store.playlists[0]
+                .tracks
+                .iter()
+                .map(|t| t.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "b", "c"]
+        );
     }
 }

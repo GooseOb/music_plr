@@ -128,7 +128,7 @@ export component Sidebar {
             HorizontalLayout {
                 spacing: Theme.spacing-xs;
                 LineEdit {
-                    text: PlaylistState.playlist-create-name;
+                    text <=> PlaylistState.playlist-create-name;
                     placeholder-text: "New playlist...";
                     edited => { PlaylistState.playlist-name-changed(self.text); }
                     accepted => { PlaylistState.create-playlist(); }

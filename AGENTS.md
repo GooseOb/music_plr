@@ -25,7 +25,7 @@ A music player with YouTube search, local playback, and MPRIS integration.
 ## Build & Run
 
 ```sh
-cargo build --release
+cargo build
 cargo run
 cargo fmt && cargo clippy
 cargo test

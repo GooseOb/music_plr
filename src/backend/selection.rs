@@ -121,8 +121,8 @@ impl super::Backend {
             }
         };
         let count = self.clipboard.len();
-        for t in &self.clipboard {
-            self.playlists.add_track(pl_idx, t);
+        for t in self.clipboard.iter().rev() {
+            self.playlists.insert_track_at(pl_idx, t, 0);
         }
         self.sync_playlist_content();
         self.sync_playlist_sidebar();

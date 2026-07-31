@@ -55,6 +55,19 @@ impl super::Backend {
         }
     }
 
+    pub fn handle_rename_playlist(&mut self, new_name: String) {
+        let trimmed = new_name.trim().to_string();
+        if let Some(pl_idx) = self.selected_playlist {
+            if let Some(pl) = self.playlists.playlists.get_mut(pl_idx) {
+                pl.name = trimmed.clone();
+            }
+            self.selected_playlist_name = trimmed;
+            self.sync_playlist_sidebar();
+            self.playlists.save();
+            self.save_session();
+        }
+    }
+
     pub fn handle_create_playlist(&mut self) {
         let name = self.playlist_create_name.trim().to_string();
         if !name.is_empty() {
@@ -158,9 +171,9 @@ impl super::Backend {
         };
 
         let mut count = 0;
-        for &i in &indices {
+        for &i in indices.iter().rev() {
             if let Some(track) = self.get_track_at(i) {
-                self.playlists.add_track(playlist_idx, &track);
+                self.playlists.insert_track_at(playlist_idx, &track, 0);
                 count += 1;
             }
         }
