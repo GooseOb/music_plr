@@ -68,10 +68,8 @@ export component SearchHistory inherits Rectangle {
 
                             TouchArea {
                                 mouse-cursor: pointer;
-                                pointer-event(event) => {
-                                    if (event.kind == PointerEventKind.up) {
-                                        root.delete-item(i);
-                                    }
+                                clicked => {
+                                    root.delete-item(i);
                                 }
                             }
                         }

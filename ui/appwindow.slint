@@ -230,7 +230,7 @@ export component AppWindow inherits Window {
     if SearchState.show-search-history && SearchState.search-history-items.length > 0: Rectangle {
         x: sidebar.sidebar-width + 20px;
         y: 60px;
-        width: parent.width - sidebar.sidebar-width - 78px;
+        width: search-text-input.width;
         height: min(SearchState.search-history-items.length * 36px + 2px, 300px);
         background: Theme.bg-elevated;
         border-radius: Theme.radius-md;
