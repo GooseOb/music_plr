@@ -102,8 +102,18 @@ export component Sidebar {
                 spacing: Theme.spacing-xs;
                 Text { text: "Playlists"; color: Theme.accent; }
                 Rectangle { horizontal-stretch: 1; }
+            }
+
+			HorizontalLayout {
+                spacing: Theme.spacing-xs;
+				LineEdit {
+					text: PlaylistState.playlist-create-name;
+					placeholder-text: "New playlist...";
+					edited => { PlaylistState.playlist-name-changed(self.text); }
+					accepted => { PlaylistState.create-playlist(); }
+				}
                 Rectangle {
-                    width: 28px; height: 28px; border-radius: Theme.radius-sm; background: add-pl-touch.has-hover ? Theme.bg-hover : Theme.accent;
+                    width: self.height; border-radius: Theme.radius-sm; background: add-pl-touch.has-hover ? Theme.bg-hover : Theme.accent;
                     animate background { duration: 150ms; }
                     VerticalLayout { alignment: center;
                         HorizontalLayout { alignment: center;
@@ -117,13 +127,7 @@ export component Sidebar {
                         }
                     }
                 }
-            }
-            LineEdit {
-                text: PlaylistState.playlist-create-name;
-                placeholder-text: "New playlist...";
-                edited => { PlaylistState.playlist-name-changed(self.text); }
-                accepted => { PlaylistState.create-playlist(); }
-            }
+			}
 
             playlist-list-area := Rectangle {
                 vertical-stretch: 1;
