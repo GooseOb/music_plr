@@ -10,6 +10,7 @@ use crate::mpris::MprisUpdate;
 use crate::playlists::PlaylistStore;
 use crate::types::{Track as RustTrack, TrackSource};
 
+use serde::{Deserialize, Serialize};
 use tracing::{debug, error};
 
 slint::include_modules!();
@@ -33,13 +34,14 @@ pub enum BackendResult {
     ThumbnailsReady,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum View {
+    #[default]
     Search,
     Radio,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlayQueue {
     pub tracks: Vec<RustTrack>,
     pub current_index: usize,
@@ -442,6 +444,7 @@ impl Backend {
                 self.current_view = View::Radio;
                 self.sync_radio_model();
                 self.update_nav_ui();
+                self.save_session();
                 if let Some(window) = self.ui.upgrade() {
                     window.global::<SearchState>().set_loading(false);
                 }
@@ -520,6 +523,41 @@ impl Backend {
                 has_track: track.is_some(),
             };
             let _ = tx.send(update);
+        }
+    }
+
+    pub fn save_session(&self) {
+        let state = crate::session::SessionState {
+            current_view: self.current_view,
+            queue: self.queue.clone(),
+            is_playing: self.is_playing,
+            selected_playlist: self.selected_playlist,
+            selected_playlist_name: self.selected_playlist_name.clone(),
+            show_queue: self.show_queue,
+        };
+        state.save();
+    }
+
+    pub fn restore_session(&mut self) {
+        let state = crate::session::SessionState::load();
+        self.current_view = state.current_view;
+        self.queue = state.queue;
+        self.is_playing = state.is_playing;
+        self.selected_playlist = state.selected_playlist;
+        self.selected_playlist_name = state.selected_playlist_name;
+        self.show_queue = state.show_queue;
+        self.nav_history = vec![self.current_view];
+        self.nav_history_pos = 0;
+    }
+
+    pub fn resume_playback(&mut self) {
+        if self.is_playing {
+            if let Some(track) = self.queue.current() {
+                let track = track.clone();
+                self.play_track_internal(&track);
+            } else {
+                self.is_playing = false;
+            }
         }
     }
 }

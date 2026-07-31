@@ -264,9 +264,13 @@ impl super::Backend {
         self.sync_current_track_ui();
         self.update_nav_ui();
         if let Some(window) = self.ui.upgrade() {
-            window.global::<PlaybackState>().set_volume(self.volume);
+            let playback = window.global::<PlaybackState>();
+            playback.set_volume(self.volume);
             window.global::<SearchState>().set_loading(self.loading);
             window.set_notification(self.notification.as_deref().unwrap_or("").into());
+            window
+                .global::<QueueState>()
+                .set_show_queue(self.show_queue);
         }
         self.sync_search_model();
         self.sync_radio_model();
@@ -284,6 +288,7 @@ impl super::Backend {
         self.nav_history_pos = self.nav_history.len() - 1;
         self.current_view = view;
         self.update_nav_ui();
+        self.save_session();
     }
 
     pub fn handle_navigate_back(&mut self) {
@@ -291,6 +296,7 @@ impl super::Backend {
             self.nav_history_pos -= 1;
             self.current_view = self.nav_history[self.nav_history_pos];
             self.update_nav_ui();
+            self.save_session();
         }
     }
 
@@ -299,6 +305,7 @@ impl super::Backend {
             self.nav_history_pos += 1;
             self.current_view = self.nav_history[self.nav_history_pos];
             self.update_nav_ui();
+            self.save_session();
         }
     }
 }

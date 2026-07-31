@@ -68,6 +68,7 @@ impl super::Backend {
         if self.selected_playlist.is_some() {
             self.sync_playlist_content();
         }
+        self.save_session();
     }
 
     pub fn handle_delete_playlist(&mut self, index: usize) {
@@ -82,6 +83,7 @@ impl super::Backend {
         self.clear_selection();
         self.sync_playlist_sidebar();
         self.sync_playlist_content();
+        self.save_session();
     }
 
     pub fn handle_select_playlist(&mut self, index: usize) {
@@ -108,6 +110,7 @@ impl super::Backend {
         self.clear_selection();
         self.sync_playlist_content();
         self.spawn_thumbnail_downloads(&pl_tracks);
+        self.save_session();
     }
 
     pub fn handle_toggle_picker(&mut self, index: usize) {

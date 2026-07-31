@@ -5,6 +5,7 @@ mod config;
 mod downloads;
 mod mpris;
 mod playlists;
+mod session;
 mod thumbnails;
 mod types;
 mod youtube;
@@ -62,7 +63,31 @@ fn main() {
         b.handle_search_execute();
     }
 
+    {
+        let mut b = backend.borrow_mut();
+        b.restore_session();
+        b.update_ui();
+    }
+
+    let was_playing = backend.borrow().is_playing;
+    if was_playing {
+        let mut b = backend.borrow_mut();
+        b.resume_playback();
+    }
+
+    let backend_weak = Rc::downgrade(&backend);
+    window.window().on_close_requested(move || {
+        if let Some(b) = backend_weak.upgrade() {
+            if let Ok(b) = b.try_borrow() {
+                b.save_session();
+            }
+        }
+        slint::CloseRequestResponse::HideWindow
+    });
+
     window.run().unwrap();
+
+    backend.borrow().save_session();
 }
 
 fn setup_result_processor(
@@ -495,6 +520,7 @@ fn setup_callbacks(window: &backend::AppWindow, backend: &Rc<RefCell<Backend>>) 
             if let Some(w) = b.ui.upgrade() {
                 w.global::<QueueState>().set_show_queue(b.show_queue);
             }
+            b.save_session();
         }
     });
 }

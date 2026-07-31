@@ -18,6 +18,7 @@ impl super::Backend {
         };
 
         self.play_track_internal(&track);
+        self.save_session();
     }
 
     pub fn handle_next_track(&mut self) {
@@ -29,6 +30,7 @@ impl super::Backend {
             None => return,
         };
         self.play_track_internal(&track);
+        self.save_session();
     }
 
     pub fn handle_previous_track(&mut self) {
@@ -40,6 +42,7 @@ impl super::Backend {
             None => return,
         };
         self.play_track_internal(&track);
+        self.save_session();
     }
 
     pub fn handle_toggle_play_pause(&mut self) {
@@ -55,6 +58,7 @@ impl super::Backend {
                 .global::<PlaybackState>()
                 .set_is_playing(self.is_playing);
         }
+        self.save_session();
     }
 
     pub fn handle_set_volume(&mut self, vol: f32) {
@@ -92,6 +96,7 @@ impl super::Backend {
         }
         self.queue.tracks.insert(abs_to, track);
         self.sync_queue_ui();
+        self.save_session();
     }
 
     pub fn handle_remove_from_queue(&mut self, rel_idx: usize) {
@@ -100,6 +105,7 @@ impl super::Backend {
         if abs_idx < self.queue.tracks.len() {
             self.queue.tracks.remove(abs_idx);
             self.sync_queue_ui();
+            self.save_session();
         }
     }
 
@@ -114,5 +120,6 @@ impl super::Backend {
             None => return,
         };
         self.play_track_internal(&track);
+        self.save_session();
     }
 }
