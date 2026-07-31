@@ -29,9 +29,15 @@ export component RadioView {
     VerticalLayout {
         vertical-stretch: 1;
         spacing: Theme.spacing-xs;
-        if root.radio-label != "" : Text { text: root.radio-label; color: Theme.fg; }
-        if SearchState.loading && root.radio-tracks.length == 0 : Text { text: "Loading recommendations..."; color: Theme.fg-secondary; }
-        if root.radio-tracks.length > 0 : ListView {
+        if root.radio-label != "": Text {
+            text: root.radio-label;
+            color: Theme.fg;
+        }
+        if SearchState.loading && root.radio-tracks.length == 0: Text {
+            text: "Loading recommendations...";
+            color: Theme.fg-secondary;
+        }
+        if root.radio-tracks.length > 0: ListView {
             vertical-stretch: 1;
             for t[i] in root.radio-tracks: TrackRow {
                 track: t;
@@ -87,14 +93,15 @@ export component RadioView {
                 }
             }
         }
-        if root.radio-tracks.length == 0 && !SearchState.loading : Text {
+        if root.radio-tracks.length == 0 && !SearchState.loading: Text {
             text: "Search for a song first, then use Radio or Artist";
             color: Theme.fg-secondary;
         }
     }
 
     radio-fs := FocusScope {
-        width: 0px; height: 0px;
+        width: 0px;
+        height: 0px;
         focus-on-click: false;
         key-pressed(event) => {
             if (event.text == Key.DownArrow) {

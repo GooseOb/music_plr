@@ -25,10 +25,19 @@ export component QueuePanel inherits Rectangle {
 
         HorizontalLayout {
             spacing: Theme.spacing-sm;
-            Text { text: "Queue"; color: Theme.fg; font-weight: 700; }
-            Rectangle { horizontal-stretch: 1; }
             Text {
-                text: "×"; color: Theme.fg-secondary;
+                text: "Queue";
+                color: Theme.fg;
+                font-weight: 700;
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+            }
+
+            Text {
+                text: "×";
+                color: Theme.fg-secondary;
                 vertical-alignment: center;
                 TouchArea {
                     mouse-cursor: pointer;
@@ -37,33 +46,56 @@ export component QueuePanel inherits Rectangle {
             }
         }
 
-        Text { text: "Now Playing"; color: Theme.accent; font-size: 12px; }
+        Text {
+            text: "Now Playing";
+            color: Theme.accent;
+            font-size: 12px;
+        }
 
         Rectangle {
             height: 56px;
             HorizontalLayout {
                 spacing: Theme.spacing-sm;
                 Rectangle {
-                    width: 48px; height: 48px;
+                    width: 48px;
+                    height: 48px;
                     border-radius: Theme.radius-sm;
                     background: Theme.accent;
                     clip: true;
                     Image {
                         source: PlaybackState.current-thumbnail;
-                        width: 48px; height: 48px;
+                        width: 48px;
+                        height: 48px;
                         image-fit: cover;
                     }
                 }
+
                 VerticalLayout {
-                    Text { text: PlaybackState.current-title; color: Theme.fg; overflow: elide; }
-                    Text { text: PlaybackState.current-artist; color: Theme.fg-secondary; overflow: elide; }
+                    Text {
+                        text: PlaybackState.current-title;
+                        color: Theme.fg;
+                        overflow: elide;
+                    }
+
+                    Text {
+                        text: PlaybackState.current-artist;
+                        color: Theme.fg-secondary;
+                        overflow: elide;
+                    }
                 }
             }
         }
 
-        Rectangle { height: 1px; background: Theme.border; }
+        Rectangle {
+            height: 1px;
+            background: Theme.border;
+        }
 
-        Text { text: "Up Next"; color: Theme.accent; font-size: 12px; }
+        Text {
+            text: "Up Next";
+            color: Theme.accent;
+            font-size: 12px;
+        }
 
         qu-listview := ListView {
             viewport-y <=> DragState.qu-viewport-y;
@@ -135,7 +167,7 @@ export component QueuePanel inherits Rectangle {
         }
     }
 
-    if DragState.active && DragState.reordering && DragState.in-queue : Rectangle {
+    if DragState.active && DragState.reordering && DragState.in-queue: Rectangle {
         x: 0px;
         y: DragState.lv-y + DragState.drop-line-y;
         width: DragState.listview-width;

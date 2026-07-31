@@ -17,26 +17,37 @@ export component PlaylistCard {
         animate background { duration: 150ms; }
 
         pl-fs := FocusScope {
-            width: 0px; height: 0px;
+            width: 0px;
+            height: 0px;
             focus-on-click: false;
             key-pressed(event) => {
                 if (event.text == Key.Return || event.text == " ") {
-                    root.clicked(); accept
+                    root.clicked();
+                    accept
                 } else { reject }
             }
         }
 
         TouchArea {
             mouse-cursor: pointer;
-			clicked => {
-				root.clicked();
-			}
+            clicked => {
+                root.clicked();
+            }
         }
+
         HorizontalLayout {
             padding: Theme.spacing-md;
             spacing: Theme.spacing-sm;
-            Text { text: pl-name; color: Theme.fg; horizontal-stretch: 1; }
-            Text { text: track-count == 1 ? "1 track" : "\{track-count} tracks"; color: Theme.fg-secondary; }
+            Text {
+                text: pl-name;
+                color: Theme.fg;
+                horizontal-stretch: 1;
+            }
+
+            Text {
+                text: track-count == 1 ? "1 track" : "\{track-count} tracks";
+                color: Theme.fg-secondary;
+            }
         }
     }
 }

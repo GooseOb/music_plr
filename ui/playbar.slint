@@ -1,6 +1,13 @@
 import { Button, Slider } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { PlayIcon, PauseIcon, SkipBackIcon, SkipForwardIcon, VolumeIcon, QueueListIcon } from "icons.slint";
+import {
+    PlayIcon,
+    PauseIcon,
+    SkipBackIcon,
+    SkipForwardIcon,
+    VolumeIcon,
+    QueueListIcon,
+} from "icons.slint";
 import { PlaybackState } from "playback-state.slint";
 import { QueueState } from "queue-state.slint";
 
@@ -36,12 +43,14 @@ export component PlayBar inherits Rectangle {
                         image-fit: cover;
                     }
                 }
+
                 VerticalLayout {
                     Text {
                         text: PlaybackState.current-title;
                         color: Theme.fg;
                         overflow: elide;
                     }
+
                     Text {
                         text: PlaybackState.current-artist;
                         color: Theme.fg-secondary;
@@ -50,8 +59,11 @@ export component PlayBar inherits Rectangle {
                 }
             }
 
-            if PlaybackState.track-loading : Text { text: "Loading track..."; color: Theme.warning; }
-            if !PlaybackState.track-loading : VerticalLayout {
+            if PlaybackState.track-loading: Text {
+                text: "Loading track...";
+                color: Theme.warning;
+            }
+            if !PlaybackState.track-loading: VerticalLayout {
                 horizontal-stretch: 1;
                 spacing: Theme.spacing-xs;
                 alignment: stretch;
@@ -60,23 +72,30 @@ export component PlayBar inherits Rectangle {
                     spacing: Theme.spacing-md;
                     alignment: center;
                     Rectangle {
-                        width: 30px; height: 30px;
+                        width: 30px;
+                        height: 30px;
                         border-radius: Theme.radius-sm;
                         background: prev-fs.has-focus ? Theme.bg-hover : prev-ta.has-hover ? Theme.bg-hover : transparent;
                         animate background { duration: 150ms; }
                         VerticalLayout {
                             alignment: center;
-                            SkipBackIcon { colorize: Theme.fg; }
+                            SkipBackIcon {
+                                colorize: Theme.fg;
+                            }
                         }
+
                         prev-fs := FocusScope {
-                            width: 0px; height: 0px;
+                            width: 0px;
+                            height: 0px;
                             focus-on-click: false;
                             key-pressed(event) => {
                                 if (event.text == Key.Return || event.text == " ") {
-                                    PlaybackState.previous-track(); accept
+                                    PlaybackState.previous-track();
+                                    accept
                                 } else { reject }
                             }
                         }
+
                         prev-ta := TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
@@ -84,24 +103,34 @@ export component PlayBar inherits Rectangle {
                             }
                         }
                     }
+
                     Rectangle {
-                        width: 36px; height: 36px;
+                        width: 36px;
+                        height: 36px;
                         border-radius: Theme.radius-md;
                         background: play-fs.has-focus ? Theme.bg-hover : Theme.accent;
                         VerticalLayout {
                             alignment: center;
-                            if PlaybackState.is-playing : PauseIcon { colorize: Theme.accent-fg; }
-                            if !PlaybackState.is-playing : PlayIcon { colorize: Theme.accent-fg; }
+                            if PlaybackState.is-playing: PauseIcon {
+                                colorize: Theme.accent-fg;
+                            }
+                            if !PlaybackState.is-playing: PlayIcon {
+                                colorize: Theme.accent-fg;
+                            }
                         }
+
                         play-fs := FocusScope {
-                            width: 0px; height: 0px;
+                            width: 0px;
+                            height: 0px;
                             focus-on-click: false;
                             key-pressed(event) => {
                                 if (event.text == Key.Return || event.text == " ") {
-                                    PlaybackState.toggle-play-pause(); accept
+                                    PlaybackState.toggle-play-pause();
+                                    accept
                                 } else { reject }
                             }
                         }
+
                         TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
@@ -109,24 +138,32 @@ export component PlayBar inherits Rectangle {
                             }
                         }
                     }
+
                     Rectangle {
-                        width: 30px; height: 30px;
+                        width: 30px;
+                        height: 30px;
                         border-radius: Theme.radius-sm;
                         background: next-fs.has-focus ? Theme.bg-hover : next-ta.has-hover ? Theme.bg-hover : transparent;
                         animate background { duration: 150ms; }
                         VerticalLayout {
                             alignment: center;
-                            SkipForwardIcon { colorize: Theme.fg; }
+                            SkipForwardIcon {
+                                colorize: Theme.fg;
+                            }
                         }
+
                         next-fs := FocusScope {
-                            width: 0px; height: 0px;
+                            width: 0px;
+                            height: 0px;
                             focus-on-click: false;
                             key-pressed(event) => {
                                 if (event.text == Key.Return || event.text == " ") {
-                                    PlaybackState.next-track(); accept
+                                    PlaybackState.next-track();
+                                    accept
                                 } else { reject }
                             }
                         }
+
                         next-ta := TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
@@ -139,7 +176,11 @@ export component PlayBar inherits Rectangle {
                 HorizontalLayout {
                     horizontal-stretch: 1;
                     spacing: Theme.spacing-xs;
-                    Text { text: PlaybackState.elapsed-text; color: Theme.fg-secondary; }
+                    Text {
+                        text: PlaybackState.elapsed-text;
+                        color: Theme.fg-secondary;
+                    }
+
                     Slider {
                         horizontal-stretch: 1;
                         minimum: 0;
@@ -147,7 +188,11 @@ export component PlayBar inherits Rectangle {
                         value <=> PlaybackState.progress;
                         changed(value) => { PlaybackState.seek(value); }
                     }
-                    Text { text: PlaybackState.total-text; color: Theme.fg-secondary; }
+
+                    Text {
+                        text: PlaybackState.total-text;
+                        color: Theme.fg-secondary;
+                    }
                 }
             }
 
@@ -155,7 +200,10 @@ export component PlayBar inherits Rectangle {
                 width: 120px;
                 spacing: Theme.spacing-xs;
                 alignment: center;
-                VolumeIcon { colorize: Theme.fg-secondary; }
+                VolumeIcon {
+                    colorize: Theme.fg-secondary;
+                }
+
                 Slider {
                     width: 80px;
                     minimum: 0;
@@ -166,14 +214,18 @@ export component PlayBar inherits Rectangle {
             }
 
             Rectangle {
-                width: 30px; height: 30px;
+                width: 30px;
+                height: 30px;
                 border-radius: Theme.radius-sm;
                 background: queue-btn-ta.has-hover || QueueState.show-queue ? Theme.accent : transparent;
                 animate background { duration: 150ms; }
                 VerticalLayout {
                     alignment: center;
-                    QueueListIcon { colorize: QueueState.show-queue ? Theme.accent-fg : Theme.fg; }
+                    QueueListIcon {
+                        colorize: QueueState.show-queue ? Theme.accent-fg : Theme.fg;
+                    }
                 }
+
                 queue-btn-ta := TouchArea {
                     mouse-cursor: pointer;
                     clicked => {

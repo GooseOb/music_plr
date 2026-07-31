@@ -6,9 +6,10 @@ export component DeleteConfirm inherits Rectangle {
     background: Theme.overlay;
     TouchArea {
         clicked => {
-			PlaylistState.show-delete-confirm = false;
+            PlaylistState.show-delete-confirm = false;
         }
     }
+
     Rectangle {
         width: 300px;
         height: 140px;
@@ -21,16 +22,38 @@ export component DeleteConfirm inherits Rectangle {
         VerticalLayout {
             padding: Theme.spacing-xl;
             spacing: Theme.spacing-md;
-            Text { text: "Delete playlist?"; color: Theme.fg; font-weight: 700; }
-            Text { text: "Tracks will not be deleted."; color: Theme.fg-secondary; }
+            Text {
+                text: "Delete playlist?";
+                color: Theme.fg;
+                font-weight: 700;
+            }
+
+            Text {
+                text: "Tracks will not be deleted.";
+                color: Theme.fg-secondary;
+            }
+
             HorizontalLayout {
                 spacing: Theme.spacing-sm;
                 alignment: center;
                 horizontal-stretch: 1;
-                Rectangle { horizontal-stretch: 1; }
-                Button { text: "Cancel"; clicked => { PlaylistState.show-delete-confirm = false; } }
-                Button { text: "Delete"; clicked => { PlaylistState.delete-playlist(PlaylistState.delete-confirm-index); PlaylistState.show-delete-confirm = false; } }
-                Rectangle { horizontal-stretch: 1; }
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
+
+                Button {
+                    text: "Cancel";
+                    clicked => { PlaylistState.show-delete-confirm = false; }
+                }
+
+                Button {
+                    text: "Delete";
+                    clicked => { PlaylistState.delete-playlist(PlaylistState.delete-confirm-index); PlaylistState.show-delete-confirm = false; }
+                }
+
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
             }
         }
     }

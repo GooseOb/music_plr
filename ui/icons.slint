@@ -18,42 +18,74 @@ export component IconBase {
 
 export component PlayIcon {
     in property <brush> colorize: Theme.accent-fg;
-    IconBase { colorize: root.colorize; icon-source: @image-url("../icons/play.svg"); size: Theme.icon-size-sm; }
+    IconBase {
+        colorize: root.colorize;
+        icon-source: @image-url("../icons/play.svg");
+        size: Theme.icon-size-sm;
+    }
 }
 
 export component PauseIcon {
     in property <brush> colorize: Theme.accent-fg;
-    IconBase { colorize: root.colorize; icon-source: @image-url("../icons/pause.svg"); size: Theme.icon-size-sm; }
+    IconBase {
+        colorize: root.colorize;
+        icon-source: @image-url("../icons/pause.svg");
+        size: Theme.icon-size-sm;
+    }
 }
 
 export component SkipBackIcon {
     in property <brush> colorize: Theme.fg;
-    IconBase { colorize: root.colorize; icon-source: @image-url("../icons/skip-back.svg"); size: Theme.icon-size-lg; }
+    IconBase {
+        colorize: root.colorize;
+        icon-source: @image-url("../icons/skip-back.svg");
+        size: Theme.icon-size-lg;
+    }
 }
 
 export component SkipForwardIcon {
     in property <brush> colorize: Theme.fg;
-    IconBase { colorize: root.colorize; icon-source: @image-url("../icons/skip-forward.svg"); size: Theme.icon-size-lg; }
+    IconBase {
+        colorize: root.colorize;
+        icon-source: @image-url("../icons/skip-forward.svg");
+        size: Theme.icon-size-lg;
+    }
 }
 
 export component SearchIcon {
     in property <brush> colorize: Theme.accent-fg;
-    IconBase { colorize: root.colorize; icon-source: @image-url("../icons/search.svg"); size: Theme.icon-size-md; }
+    IconBase {
+        colorize: root.colorize;
+        icon-source: @image-url("../icons/search.svg");
+        size: Theme.icon-size-md;
+    }
 }
 
 export component DownloadIcon {
     in property <brush> colorize: Theme.accent;
-    IconBase { colorize: root.colorize; icon-source: @image-url("../icons/download.svg"); size: Theme.icon-size-md; }
+    IconBase {
+        colorize: root.colorize;
+        icon-source: @image-url("../icons/download.svg");
+        size: Theme.icon-size-md;
+    }
 }
 
 export component FolderIcon {
     in property <brush> colorize: Theme.fg-secondary;
-    IconBase { colorize: root.colorize; icon-source: @image-url("../icons/folder.svg"); size: Theme.icon-size-md; }
+    IconBase {
+        colorize: root.colorize;
+        icon-source: @image-url("../icons/folder.svg");
+        size: Theme.icon-size-md;
+    }
 }
 
 export component DeleteIcon {
     in property <brush> colorize: Theme.fg-secondary;
-    IconBase { colorize: root.colorize; icon-source: @image-url("../icons/delete.svg"); size: Theme.icon-size-sm; }
+    IconBase {
+        colorize: root.colorize;
+        icon-source: @image-url("../icons/delete.svg");
+        size: Theme.icon-size-sm;
+    }
 }
 
 export component NavIcon {
@@ -69,7 +101,11 @@ export component NavIcon {
 
 export component VolumeIcon {
     in property <brush> colorize: Theme.fg-secondary;
-    IconBase { colorize: root.colorize; icon-source: @image-url("../icons/volume.svg"); size: Theme.icon-size-md; }
+    IconBase {
+        colorize: root.colorize;
+        icon-source: @image-url("../icons/volume.svg");
+        size: Theme.icon-size-md;
+    }
 }
 
 export component QueueListIcon {
@@ -80,9 +116,23 @@ export component QueueListIcon {
         VerticalLayout {
             spacing: 3px;
             padding: 2px;
-            Rectangle { height: 2px; border-radius: 1px; background: colorize; }
-            Rectangle { height: 2px; border-radius: 1px; background: colorize; }
-            Rectangle { height: 2px; border-radius: 1px; background: colorize; }
+            Rectangle {
+                height: 2px;
+                border-radius: 1px;
+                background: colorize;
+            }
+
+            Rectangle {
+                height: 2px;
+                border-radius: 1px;
+                background: colorize;
+            }
+
+            Rectangle {
+                height: 2px;
+                border-radius: 1px;
+                background: colorize;
+            }
         }
     }
 }

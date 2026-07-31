@@ -30,7 +30,10 @@ export component Sidebar {
                 color: Theme.accent;
             }
 
-            Rectangle { height: 1px; background: Theme.border; }
+            Rectangle {
+                height: 1px;
+                background: Theme.border;
+            }
 
             HorizontalLayout {
                 spacing: Theme.spacing-xs;
@@ -46,24 +49,29 @@ export component Sidebar {
                             flipped: true;
                         }
                     }
+
                     back-fs := FocusScope {
-                        width: 0px; height: 0px;
+                        width: 0px;
+                        height: 0px;
                         focus-on-click: false;
                         enabled: NavigationState.can-go-back;
                         key-pressed(event) => {
                             if (event.text == Key.Return || event.text == " ") {
-                                NavigationState.navigate-back(); accept
+                                NavigationState.navigate-back();
+                                accept
                             } else { reject }
                         }
                     }
+
                     TouchArea {
                         mouse-cursor: pointer;
                         enabled: NavigationState.can-go-back;
-						clicked => {
+                        clicked => {
                             NavigationState.navigate-back();
                         }
                     }
                 }
+
                 Rectangle {
                     background: forward-fs.has-focus ? Theme.bg-hover : NavigationState.can-go-forward ? transparent : Theme.border;
                     border-radius: Theme.radius-sm;
@@ -76,16 +84,20 @@ export component Sidebar {
                             flipped: false;
                         }
                     }
+
                     forward-fs := FocusScope {
-                        width: 0px; height: 0px;
+                        width: 0px;
+                        height: 0px;
                         focus-on-click: false;
                         enabled: NavigationState.can-go-forward;
                         key-pressed(event) => {
                             if (event.text == Key.Return || event.text == " ") {
-                                NavigationState.navigate-forward(); accept
+                                NavigationState.navigate-forward();
+                                accept
                             } else { reject }
                         }
                     }
+
                     TouchArea {
                         mouse-cursor: pointer;
                         enabled: NavigationState.can-go-forward;
@@ -96,30 +108,48 @@ export component Sidebar {
                 }
             }
 
-            Rectangle { height: 1px; background: Theme.border; }
+            Rectangle {
+                height: 1px;
+                background: Theme.border;
+            }
 
             HorizontalLayout {
                 spacing: Theme.spacing-xs;
-                Text { text: "Playlists"; color: Theme.accent; }
-                Rectangle { horizontal-stretch: 1; }
+                Text {
+                    text: "Playlists";
+                    color: Theme.accent;
+                }
+
+                Rectangle {
+                    horizontal-stretch: 1;
+                }
             }
 
-			HorizontalLayout {
+            HorizontalLayout {
                 spacing: Theme.spacing-xs;
-				LineEdit {
-					text: PlaylistState.playlist-create-name;
-					placeholder-text: "New playlist...";
-					edited => { PlaylistState.playlist-name-changed(self.text); }
-					accepted => { PlaylistState.create-playlist(); }
-				}
+                LineEdit {
+                    text: PlaylistState.playlist-create-name;
+                    placeholder-text: "New playlist...";
+                    edited => { PlaylistState.playlist-name-changed(self.text); }
+                    accepted => { PlaylistState.create-playlist(); }
+                }
+
                 Rectangle {
-                    width: self.height; border-radius: Theme.radius-sm; background: add-pl-touch.has-hover ? Theme.bg-hover : Theme.accent;
+                    width: self.height;
+                    border-radius: Theme.radius-sm;
+                    background: add-pl-touch.has-hover ? Theme.bg-hover : Theme.accent;
                     animate background { duration: 150ms; }
-                    VerticalLayout { alignment: center;
-                        HorizontalLayout { alignment: center;
-                            Text { text: "+"; color: Theme.accent-fg; }
+                    VerticalLayout {
+                        alignment: center;
+                        HorizontalLayout {
+                            alignment: center;
+                            Text {
+                                text: "+";
+                                color: Theme.accent-fg;
+                            }
                         }
                     }
+
                     add-pl-touch := TouchArea {
                         mouse-cursor: pointer;
                         pointer-event(event) => {
@@ -127,18 +157,18 @@ export component Sidebar {
                         }
                     }
                 }
-			}
+            }
 
             playlist-list-area := Rectangle {
                 vertical-stretch: 1;
                 clip: true;
-                if PlaylistState.playlist-list.length == 0 : Text {
+                if PlaylistState.playlist-list.length == 0: Text {
                     text: "No playlists";
                     color: Theme.fg-secondary;
                     x: 0;
                     y: 0;
                 }
-                if PlaylistState.playlist-list.length > 0 : ListView {
+                if PlaylistState.playlist-list.length > 0: ListView {
                     vertical-stretch: 1;
                     for pl[i] in PlaylistState.playlist-list: VerticalLayout {
                         padding-bottom: Theme.spacing-sm;
@@ -153,7 +183,7 @@ export component Sidebar {
                 }
             }
 
-            if notification != "" : Text {
+            if notification != "": Text {
                 text: notification;
                 color: Theme.warning;
             }

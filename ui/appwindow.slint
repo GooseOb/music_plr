@@ -1,4 +1,12 @@
-import { Button, LineEdit, Slider, ListView, ScrollView, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import {
+    Button,
+    LineEdit,
+    Slider,
+    ListView,
+    ScrollView,
+    VerticalBox,
+    HorizontalBox,
+} from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { SearchIcon } from "icons.slint";
 import { Track, PlaylistInfo } from "types.slint";
@@ -98,31 +106,48 @@ export component AppWindow inherits Window {
                             edited => { SearchState.search-input-changed(self.text); }
                             accepted => { SearchState.search-execute(); }
                         }
+
                         Rectangle {
-                            width: 30px; height: 30px; border-radius: Theme.radius-sm; background: search-btn-fs.has-focus ? Theme.bg-hover : Theme.accent;
-                            VerticalLayout { alignment: center;
-                                SearchIcon { colorize: Theme.accent-fg; }
+                            width: 30px;
+                            height: 30px;
+                            border-radius: Theme.radius-sm;
+                            background: search-btn-fs.has-focus ? Theme.bg-hover : Theme.accent;
+                            VerticalLayout {
+                                alignment: center;
+                                SearchIcon {
+                                    colorize: Theme.accent-fg;
+                                }
                             }
+
                             search-btn-fs := FocusScope {
-                                width: 0px; height: 0px;
+                                width: 0px;
+                                height: 0px;
                                 focus-on-click: false;
                                 key-pressed(event) => {
                                     if (event.text == Key.Return || event.text == " ") {
-                                        SearchState.search-execute(); accept
+                                        SearchState.search-execute();
+                                        accept
                                     } else { reject }
                                 }
                             }
+
                             TouchArea {
                                 mouse-cursor: pointer;
-								clicked => SearchState.search-execute();
+                                clicked => SearchState.search-execute();
                             }
                         }
                     }
-                    Rectangle { height: Theme.spacing-md; }
 
-                    if SearchState.loading : Text { text: "Searching..."; color: Theme.fg-secondary; }
+                    Rectangle {
+                        height: Theme.spacing-md;
+                    }
 
-                    if !SearchState.loading && SearchState.search-results.length > 0 && PlaylistState.selected-playlist < 0 && current-view != 1 : SearchView {
+                    if SearchState.loading: Text {
+                        text: "Searching...";
+                        color: Theme.fg-secondary;
+                    }
+
+                    if !SearchState.loading && SearchState.search-results.length > 0 && PlaylistState.selected-playlist < 0 && current-view != 1: SearchView {
                         playlist-count: PlaylistState.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
@@ -136,7 +161,7 @@ export component AppWindow inherits Window {
                         resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
                     }
 
-                    if PlaylistState.selected-playlist >= 0 : PlaylistView {
+                    if PlaylistState.selected-playlist >= 0: PlaylistView {
                         playlist-count: PlaylistState.playlist-list.length;
                         sidebar-list-abs-y: sidebar.list-abs-y;
                         sidebar-width: sidebar.sidebar-width;
@@ -152,7 +177,7 @@ export component AppWindow inherits Window {
                         resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
                     }
 
-                    if PlaylistState.selected-playlist < 0 && current-view == 1 : RadioView {
+                    if PlaylistState.selected-playlist < 0 && current-view == 1: RadioView {
                         radio-tracks: root.radio-tracks;
                         radio-label: root.radio-label;
                         playlist-count: PlaylistState.playlist-list.length;
@@ -168,7 +193,7 @@ export component AppWindow inherits Window {
                         resolve-thumbnail(url) => { return root.resolve-thumbnail(url); }
                     }
 
-                    if SearchState.search-results.length == 0 && PlaylistState.selected-playlist < 0 && current-view != 1 && !SearchState.loading : Rectangle {
+                    if SearchState.search-results.length == 0 && PlaylistState.selected-playlist < 0 && current-view != 1 && !SearchState.loading: Rectangle {
                         vertical-stretch: 1;
                         VerticalLayout {
                             alignment: center;
@@ -181,7 +206,7 @@ export component AppWindow inherits Window {
                 }
             }
 
-            if QueueState.show-queue : Rectangle {
+            if QueueState.show-queue: Rectangle {
                 horizontal-stretch: 1;
                 min-width: 240px;
                 clip: true;
@@ -199,10 +224,10 @@ export component AppWindow inherits Window {
             }
         }
 
-        PlayBar {}
+        PlayBar { }
     }
 
-    if SearchState.show-search-history && SearchState.search-history-items.length > 0 : Rectangle {
+    if SearchState.show-search-history && SearchState.search-history-items.length > 0: Rectangle {
         x: sidebar.sidebar-width + 20px;
         y: 60px;
         width: parent.width - sidebar.sidebar-width - 78px;
@@ -228,11 +253,11 @@ export component AppWindow inherits Window {
         }
     }
 
-    if PlaylistState.show-picker : PickerDialog {}
+    if PlaylistState.show-picker: PickerDialog { }
 
-    if PlaylistState.show-delete-confirm : DeleteConfirm {}
+    if PlaylistState.show-delete-confirm: DeleteConfirm { }
 
-    if DragState.active && DragState.over-sidebar : Rectangle {
+    if DragState.active && DragState.over-sidebar: Rectangle {
         x: DragState.x - sidebar.sidebar-width / 2;
         y: DragState.y - 44px;
         width: sidebar.sidebar-width;
@@ -254,7 +279,7 @@ export component AppWindow inherits Window {
         }
     }
 
-    if DragState.active && DragState.reordering && !DragState.in-queue : Rectangle {
+    if DragState.active && DragState.reordering && !DragState.in-queue: Rectangle {
         x: DragState.listview-abs-x;
         y: DragState.listview-abs-y + DragState.drop-line-y;
         width: DragState.listview-width;
@@ -262,13 +287,14 @@ export component AppWindow inherits Window {
         background: Theme.accent;
     }
 
-    if ContextMenuState.show : Rectangle {
+    if ContextMenuState.show: Rectangle {
         background: transparent;
         TouchArea {
             clicked => {
                 ContextMenuState.show = false;
             }
         }
+
         ContextMenu {
             parent-width: root.width;
             parent-height: root.height;

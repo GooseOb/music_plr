@@ -72,14 +72,19 @@ export component TrackRow {
                         animate background { duration: 150ms; }
                         VerticalLayout {
                             alignment: center;
-                            if (touch-area.has-hover || is-current || play-click-area.has-hover) && is-playing : PauseIcon { colorize: Theme.accent-fg; }
-                            if (touch-area.has-hover || is-current || play-click-area.has-hover) && !is-playing : PlayIcon { colorize: Theme.accent-fg; }
-                            if !(touch-area.has-hover || is-current || play-click-area.has-hover) : Text {
+                            if (touch-area.has-hover || is-current || play-click-area.has-hover) && is-playing: PauseIcon {
+                                colorize: Theme.accent-fg;
+                            }
+                            if (touch-area.has-hover || is-current || play-click-area.has-hover) && !is-playing: PlayIcon {
+                                colorize: Theme.accent-fg;
+                            }
+                            if !(touch-area.has-hover || is-current || play-click-area.has-hover): Text {
                                 text: "\{root.idx + 1}";
                                 color: Theme.fg-secondary;
                                 font-size: 12px;
                             }
                         }
+
                         play-click-area := TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
@@ -115,6 +120,7 @@ export component TrackRow {
                     color: Theme.fg;
                     overflow: elide;
                 }
+
                 Text {
                     text: track.artist;
                     color: Theme.fg-secondary;
@@ -125,8 +131,12 @@ export component TrackRow {
             VerticalLayout {
                 width: 24px;
                 alignment: center;
-                if track.is-downloaded : DownloadIcon { colorize: Theme.accent; }
-                if !track.is-downloaded && track.source != "youtube" : FolderIcon { colorize: Theme.fg-secondary; }
+                if track.is-downloaded: DownloadIcon {
+                    colorize: Theme.accent;
+                }
+                if !track.is-downloaded && track.source != "youtube": FolderIcon {
+                    colorize: Theme.fg-secondary;
+                }
             }
 
             VerticalLayout {

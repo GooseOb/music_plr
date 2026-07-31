@@ -25,35 +25,45 @@ export component ContextMenu inherits Rectangle {
     VerticalLayout {
         padding: Theme.spacing-xs;
         spacing: Theme.spacing-xs;
-        if ContextMenuState.is-youtube : Rectangle {
+        if ContextMenuState.is-youtube: Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
             background: radio-touch.has-hover ? Theme.bg-hover : transparent;
             HorizontalLayout {
                 padding-left: Theme.spacing-md;
                 padding-right: Theme.spacing-md;
-                Text { text: "Radio"; color: Theme.fg; vertical-alignment: center; }
+                Text {
+                    text: "Radio";
+                    color: Theme.fg;
+                    vertical-alignment: center;
+                }
             }
+
             radio-touch := TouchArea {
                 mouse-cursor: pointer;
                 clicked => {
-					root.start-radio(ContextMenuState.idx);
+                    root.start-radio(ContextMenuState.idx);
                 }
             }
         }
-        if ContextMenuState.is-youtube : Rectangle {
+        if ContextMenuState.is-youtube: Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
             background: artist-touch.has-hover ? Theme.bg-hover : transparent;
             HorizontalLayout {
                 padding-left: Theme.spacing-md;
                 padding-right: Theme.spacing-md;
-                Text { text: "Artist"; color: Theme.fg; vertical-alignment: center; }
+                Text {
+                    text: "Artist";
+                    color: Theme.fg;
+                    vertical-alignment: center;
+                }
             }
+
             artist-touch := TouchArea {
                 mouse-cursor: pointer;
                 clicked => {
-					root.start-artist(ContextMenuState.idx);
+                    root.start-artist(ContextMenuState.idx);
                 }
             }
         }
@@ -64,61 +74,82 @@ export component ContextMenu inherits Rectangle {
             HorizontalLayout {
                 padding-left: Theme.spacing-md;
                 padding-right: Theme.spacing-md;
-                Text { text: "Add to Playlist"; color: Theme.fg; vertical-alignment: center; }
+                Text {
+                    text: "Add to Playlist";
+                    color: Theme.fg;
+                    vertical-alignment: center;
+                }
             }
+
             pl-touch := TouchArea {
                 mouse-cursor: pointer;
-				clicked => {
-					PlaylistState.toggle-picker(ContextMenuState.idx);
-				}
+                clicked => {
+                    PlaylistState.toggle-picker(ContextMenuState.idx);
+                }
             }
         }
-        if ContextMenuState.is-youtube : Rectangle {
+
+        if ContextMenuState.is-youtube: Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
             background: dl-touch.has-hover ? Theme.bg-hover : transparent;
             HorizontalLayout {
                 padding-left: Theme.spacing-md;
                 padding-right: Theme.spacing-md;
-                Text { text: ContextMenuState.is-downloaded ? "Delete Download" : "Download"; color: Theme.fg; vertical-alignment: center; }
+                Text {
+                    text: ContextMenuState.is-downloaded ? "Delete Download" : "Download";
+                    color: Theme.fg;
+                    vertical-alignment: center;
+                }
             }
+
             dl-touch := TouchArea {
                 mouse-cursor: pointer;
                 clicked => {
-					root.download-or-delete(ContextMenuState.idx);
+                    root.download-or-delete(ContextMenuState.idx);
                 }
             }
         }
-        if ContextMenuState.in-playlist : Rectangle {
+        if ContextMenuState.in-playlist: Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
             background: remove-pl-touch.has-hover ? Theme.bg-hover : transparent;
             HorizontalLayout {
                 padding-left: Theme.spacing-md;
                 padding-right: Theme.spacing-md;
-                Text { text: "Remove from Playlist"; color: Theme.fg; vertical-alignment: center; }
+                Text {
+                    text: "Remove from Playlist";
+                    color: Theme.fg;
+                    vertical-alignment: center;
+                }
             }
+
             remove-pl-touch := TouchArea {
                 mouse-cursor: pointer;
                 clicked => {
-					PlaylistState.remove-from-playlist(ContextMenuState.idx);
+                    PlaylistState.remove-from-playlist(ContextMenuState.idx);
                 }
             }
         }
-        if ContextMenuState.in-queue : Rectangle {
+        if ContextMenuState.in-queue: Rectangle {
             height: 32px;
             border-radius: Theme.radius-sm;
             background: remove-q-touch.has-hover ? Theme.bg-hover : transparent;
             HorizontalLayout {
                 padding-left: Theme.spacing-md;
                 padding-right: Theme.spacing-md;
-                Text { text: "Remove from Queue"; color: Theme.fg; vertical-alignment: center; }
+                Text {
+                    text: "Remove from Queue";
+                    color: Theme.fg;
+                    vertical-alignment: center;
+                }
             }
+
             remove-q-touch := TouchArea {
                 mouse-cursor: pointer;
-				clicked => {
-					root.remove-from-queue(ContextMenuState.idx);
-				}
+                clicked => {
+                    root.remove-from-queue(ContextMenuState.idx);
+                }
             }
         }
     }

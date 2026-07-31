@@ -28,23 +28,37 @@ export component PlaylistView {
         spacing: Theme.spacing-sm;
         HorizontalLayout {
             spacing: Theme.spacing-sm;
-            Text { text: PlaylistState.selected-playlist-name; color: Theme.fg; horizontal-stretch: 1; }
+            Text {
+                text: PlaylistState.selected-playlist-name;
+                color: Theme.fg;
+                horizontal-stretch: 1;
+            }
+
             Rectangle {
-                width: 120px; height: 28px; border-radius: Theme.radius-sm;
+                width: 120px;
+                height: 28px;
+                border-radius: Theme.radius-sm;
                 background: del-pl-ta.has-hover ? Theme.bg-hover : transparent;
                 animate background { duration: 150ms; }
-                VerticalLayout { alignment: center;
-                    Text { text: "Delete playlist"; color: Theme.warning; horizontal-alignment: center; }
+                VerticalLayout {
+                    alignment: center;
+                    Text {
+                        text: "Delete playlist";
+                        color: Theme.warning;
+                        horizontal-alignment: center;
+                    }
                 }
+
                 del-pl-ta := TouchArea {
                     mouse-cursor: pointer;
-					clicked => {
-						PlaylistState.delete-confirm-index = PlaylistState.selected-playlist;
-					PlaylistState.show-delete-confirm = true;
-					}
+                    clicked => {
+                        PlaylistState.delete-confirm-index = PlaylistState.selected-playlist;
+                        PlaylistState.show-delete-confirm = true;
+                    }
                 }
             }
         }
+
         pl-listview := ListView {
             viewport-y <=> DragState.viewport-y;
             vertical-stretch: 1;
@@ -126,7 +140,8 @@ export component PlaylistView {
                 }
             }
         }
-        if PlaylistState.playlist-tracks.length == 0 : Rectangle {
+
+        if PlaylistState.playlist-tracks.length == 0: Rectangle {
             vertical-stretch: 1;
             VerticalLayout {
                 alignment: center;
@@ -136,11 +151,16 @@ export component PlaylistView {
                 }
             }
         }
-        Button { text: "Add Local Music"; horizontal-stretch: 1; clicked => { root.add-local-music(); } }
+        Button {
+            text: "Add Local Music";
+            horizontal-stretch: 1;
+            clicked => { root.add-local-music(); }
+        }
     }
 
     playlist-fs := FocusScope {
-        width: 0px; height: 0px;
+        width: 0px;
+        height: 0px;
         focus-on-click: false;
         key-pressed(event) => {
             if (event.text == Key.DownArrow) {

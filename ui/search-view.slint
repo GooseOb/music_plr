@@ -25,7 +25,10 @@ export component SearchView {
 
     VerticalLayout {
         spacing: Theme.spacing-xs;
-        Rectangle { height: Theme.spacing-xs; }
+        Rectangle {
+            height: Theme.spacing-xs;
+        }
+
         ListView {
             vertical-stretch: 1;
             for t[i] in SearchState.search-results: TrackRow {
@@ -82,12 +85,21 @@ export component SearchView {
                 }
             }
         }
-        Rectangle { height: Theme.spacing-xs; }
-        if SearchState.search-results.length > 0 : Button { text: "Load more"; horizontal-stretch: 1; clicked => { SearchState.search-load-more(); } }
+
+        Rectangle {
+            height: Theme.spacing-xs;
+        }
+
+        if SearchState.search-results.length > 0: Button {
+            text: "Load more";
+            horizontal-stretch: 1;
+            clicked => { SearchState.search-load-more(); }
+        }
     }
 
     search-fs := FocusScope {
-        width: 0px; height: 0px;
+        width: 0px;
+        height: 0px;
         focus-on-click: false;
         key-pressed(event) => {
             if (event.text == Key.DownArrow) {

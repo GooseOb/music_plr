@@ -44,17 +44,28 @@ export component SearchHistory inherits Rectangle {
                             root.selected(i);
                         }
                     }
+
                     HorizontalLayout {
                         padding-left: Theme.spacing-md;
                         padding-right: Theme.spacing-md;
                         spacing: Theme.spacing-xs;
-                        Text { text: h; color: Theme.fg; horizontal-stretch: 1; vertical-stretch: 1; vertical-alignment: center; }
+                        Text {
+                            text: h;
+                            color: Theme.fg;
+                            horizontal-stretch: 1;
+                            vertical-stretch: 1;
+                            vertical-alignment: center;
+                        }
+
                         Rectangle {
                             width: 28px;
                             VerticalLayout {
                                 alignment: center;
-                                DeleteIcon { colorize: Theme.fg; }
+                                DeleteIcon {
+                                    colorize: Theme.fg;
+                                }
                             }
+
                             TouchArea {
                                 mouse-cursor: pointer;
                                 pointer-event(event) => {

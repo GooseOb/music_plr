@@ -7,9 +7,10 @@ export component PickerDialog inherits Rectangle {
     TouchArea {
         mouse-cursor: pointer;
         clicked => {
-			PlaylistState.close-picker();
+            PlaylistState.close-picker();
         }
     }
+
     Rectangle {
         width: 300px;
         height: 400px;
@@ -22,8 +23,12 @@ export component PickerDialog inherits Rectangle {
         VerticalLayout {
             padding: Theme.spacing-xl;
             spacing: Theme.spacing-md;
-            Text { text: "Add to Playlist"; color: Theme.fg; }
-            if PlaylistState.picker-playlists.length == 0 : Text {
+            Text {
+                text: "Add to Playlist";
+                color: Theme.fg;
+            }
+
+            if PlaylistState.picker-playlists.length == 0: Text {
                 text: "No playlists. Create one first.";
                 color: Theme.fg-secondary;
             }
@@ -54,17 +59,26 @@ export component PickerDialog inherits Rectangle {
                         tp := TouchArea {
                             mouse-cursor: pointer;
                             clicked => {
-								PlaylistState.add-to-playlist(i);
+                                PlaylistState.add-to-playlist(i);
                             }
                         }
+
                         HorizontalLayout {
                             padding: Theme.spacing-md;
-                            Text { text: pl; color: Theme.fg; }
+                            Text {
+                                text: pl;
+                                color: Theme.fg;
+                            }
                         }
                     }
                 }
             }
-            Button { text: "Cancel"; horizontal-stretch: 1; clicked => { PlaylistState.close-picker(); } }
+
+            Button {
+                text: "Cancel";
+                horizontal-stretch: 1;
+                clicked => { PlaylistState.close-picker(); }
+            }
         }
     }
 }
