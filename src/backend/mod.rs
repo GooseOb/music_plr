@@ -125,6 +125,7 @@ pub struct Backend {
     pub queue_model_handle: Option<std::rc::Rc<slint::VecModel<Track>>>,
     pub stream_cache: StreamCache,
     pub pending_cache_id: Option<String>,
+    pub thumbnails_pending: bool,
 }
 
 pub fn format_duration(secs: u32) -> String {
@@ -261,6 +262,7 @@ impl Backend {
             audio: AudioPlayer::new(volume),
             stream_cache: StreamCache::new(cache_max_mb),
             pending_cache_id: None,
+            thumbnails_pending: false,
             config,
             current_view: View::Search,
             search_query: String::new(),
@@ -471,9 +473,7 @@ impl Backend {
                 self.notify_error(msg);
             }
             BackendResult::ThumbnailsReady => {
-                self.sync_search_model();
-                self.sync_radio_model();
-                self.sync_playlist_content();
+                self.thumbnails_pending = true;
             }
         }
     }

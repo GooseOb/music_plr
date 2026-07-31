@@ -33,6 +33,18 @@ impl super::Backend {
             f(self);
         }
 
+        if self.thumbnails_pending {
+            self.thumbnails_pending = false;
+            if self.selected_playlist.is_some() {
+                self.sync_playlist_content();
+            } else {
+                match self.current_view {
+                    View::Radio => self.sync_radio_model(),
+                    View::Search => self.sync_search_model(),
+                }
+            }
+        }
+
         let s = self.audio.get_state();
         self.is_playing = s.is_playing;
         self.progress = s.progress;
