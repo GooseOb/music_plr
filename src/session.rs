@@ -15,7 +15,7 @@ pub struct SessionState {
 impl Default for SessionState {
     fn default() -> Self {
         SessionState {
-            current_view: View::Search(String::new()),
+            current_view: View::Search,
             queue: PlayQueue::new(),
             is_playing: false,
             selected_playlist: None,
@@ -64,7 +64,7 @@ mod tests {
     #[test]
     fn session_state_default() {
         let state = SessionState::default();
-        assert_eq!(state.current_view, View::Search(String::new()));
+        assert_eq!(state.current_view, View::Search);
         assert!(state.queue.tracks.is_empty());
         assert!(!state.is_playing);
         assert_eq!(state.selected_playlist, None);
@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn session_state_round_trip() {
         let state = SessionState {
-            current_view: View::SongRadio("test song".into()),
+            current_view: View::SongRadio,
             queue: PlayQueue::default(),
             is_playing: true,
             selected_playlist: Some(2),
@@ -84,7 +84,7 @@ mod tests {
         };
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.current_view, View::SongRadio("test song".into()));
+        assert_eq!(restored.current_view, View::SongRadio);
         assert!(restored.is_playing);
         assert_eq!(restored.selected_playlist, Some(2));
         assert_eq!(restored.selected_playlist_name, "Test");

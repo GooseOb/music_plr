@@ -19,18 +19,22 @@ pub struct Track {
     pub thumbnail: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum View {
-    Search(String),
-    SongRadio(String),
-    ArtistRadio(String),
-    Playlist(usize),
+    #[default]
+    Search,
+    SongRadio,
+    ArtistRadio,
+    Playlist,
     Downloads,
 }
 
-impl Default for View {
-    fn default() -> Self {
-        View::Search(String::new())
+impl View {
+    // True for the text-list views (search/radio) whose scroll bounds and
+    // track data are keyed off the live `search_results` / `radio_tracks`
+    // fields rather than the playlist store.
+    pub fn is_search_like(&self) -> bool {
+        matches!(self, View::Search | View::SongRadio | View::ArtistRadio)
     }
 }
 

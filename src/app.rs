@@ -21,13 +21,36 @@ mod update;
 #[derive(Debug, Clone, Default)]
 pub struct NavEntry {
     pub view: View,
-    pub selected_playlist: Option<usize>,
-    pub playlist_name: String,
-    pub search_query: String,
-    pub radio_label: String,
-    pub search_results: Vec<Track>,
-    pub radio_tracks: Vec<Track>,
-    pub selected_indices: Vec<usize>,
+    pub snapshot: ViewSnapshot,
+}
+
+#[derive(Debug, Clone)]
+pub enum ViewSnapshot {
+    Search {
+        query: String,
+        results: Vec<Track>,
+        selection: Vec<usize>,
+    },
+    Radio {
+        label: String,
+        tracks: Vec<Track>,
+        selection: Vec<usize>,
+    },
+    Playlist {
+        playlist: Option<usize>,
+        playlist_name: String,
+        selection: Vec<usize>,
+    },
+}
+
+impl Default for ViewSnapshot {
+    fn default() -> Self {
+        ViewSnapshot::Search {
+            query: String::new(),
+            results: Vec::new(),
+            selection: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -135,8 +158,8 @@ pub struct MusicPlayer {
     pub current_view: View,
     pub search_query: String,
     pub search_results: Vec<Track>,
-    pub search_offset: usize,
     pub search_loading: bool,
+    pub search_exhausted: bool,
     pub show_search_history: bool,
     pub last_filtered_history: Vec<String>,
     pub search_history_focused_index: usize,
@@ -236,11 +259,11 @@ impl MusicPlayer {
             pending_cache_id: None,
             thumbnails_pending: false,
             config,
-            current_view: View::Search(String::new()),
+            current_view: View::Search,
             search_query: String::new(),
             search_results: Vec::new(),
-            search_offset: 0,
             search_loading: false,
+            search_exhausted: false,
             show_search_history: false,
             last_filtered_history: Vec::new(),
             search_history_focused_index: 0,
@@ -265,14 +288,12 @@ impl MusicPlayer {
             show_delete_confirm: false,
             delete_confirm_index: None,
             nav_history: vec![NavEntry {
-                view: View::Search(String::new()),
-                selected_playlist: None,
-                playlist_name: String::new(),
-                search_query: String::new(),
-                radio_label: String::new(),
-                search_results: Vec::new(),
-                radio_tracks: Vec::new(),
-                selected_indices: Vec::new(),
+                view: View::Search,
+                snapshot: ViewSnapshot::Search {
+                    query: String::new(),
+                    results: Vec::new(),
+                    selection: Vec::new(),
+                },
             }],
             nav_history_pos: 0,
             result_tx,
@@ -396,10 +417,7 @@ impl MusicPlayer {
                 if is_queue {
                     self.queue_list_bounds = Some(bounds);
                     self.queue_list_scroll = offset_y;
-                } else if matches!(
-                    self.current_view,
-                    View::Search(_) | View::SongRadio(_) | View::ArtistRadio(_)
-                ) {
+                } else if self.current_view.is_search_like() {
                     self.search_list_bounds = Some(bounds);
                     self.search_list_scroll = offset_y;
                 } else {

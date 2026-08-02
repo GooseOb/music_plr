@@ -7,6 +7,7 @@ use std::thread;
 use tracing::debug;
 
 const DOUBLE_CLICK_MS: u128 = 300;
+const SEARCH_PAGE_SIZE: usize = 10;
 
 pub fn spawn_thumbnail_download_thread(tracks: &[Track], result_tx: &mpsc::Sender<BackendResult>) {
     let entries: Vec<(String, String)> = tracks
@@ -108,21 +109,22 @@ impl MusicPlayer {
         match result {
             BackendResult::SearchResults(tracks) => {
                 self.search_results = tracks;
-                self.search_offset = self.search_results.len();
+                self.search_exhausted = self.search_results.len() < SEARCH_PAGE_SIZE;
                 self.search_loading = false;
-                if matches!(self.current_view, View::Search(_)) {
+                if matches!(self.current_view, View::Search) {
                     self.push_nav_entry();
                 }
                 spawn_thumbnail_download_thread(&self.search_results, &self.result_tx);
                 self.clear_notification();
             }
             BackendResult::SearchResultsAppend(tracks) => {
-                self.search_offset += tracks.len();
+                let exhausted = tracks.len() < SEARCH_PAGE_SIZE;
                 self.search_results.extend(tracks);
                 self.search_loading = false;
+                self.search_exhausted = exhausted;
                 if let Some(entry) = self.nav_history.get_mut(self.nav_history_pos) {
-                    if matches!(entry.view, View::Search(_)) {
-                        entry.search_results = self.search_results.clone();
+                    if let ViewSnapshot::Search { results, .. } = &mut entry.snapshot {
+                        *results = self.search_results.clone();
                     }
                 }
                 spawn_thumbnail_download_thread(&self.search_results, &self.result_tx);
@@ -132,7 +134,7 @@ impl MusicPlayer {
                 self.radio_label = label;
                 self.radio_tracks = tracks;
                 self.search_loading = false;
-                if matches!(self.current_view, View::SongRadio(_) | View::ArtistRadio(_)) {
+                if matches!(self.current_view, View::SongRadio | View::ArtistRadio) {
                     self.push_nav_entry();
                 }
                 self.save_session();
@@ -203,13 +205,7 @@ impl MusicPlayer {
         self.show_queue = state.show_queue;
         self.nav_history = vec![NavEntry {
             view: self.current_view.clone(),
-            selected_playlist: self.selected_playlist,
-            playlist_name: self.selected_playlist_name.clone(),
-            search_query: String::new(),
-            radio_label: String::new(),
-            search_results: Vec::new(),
-            radio_tracks: Vec::new(),
-            selected_indices: Vec::new(),
+            snapshot: self.snapshot_current(),
         }];
         self.nav_history_pos = 0;
     }
@@ -246,19 +242,66 @@ impl MusicPlayer {
         self.notification = None;
     }
 
+    fn snapshot_current(&self) -> ViewSnapshot {
+        match self.current_view {
+            View::Search => ViewSnapshot::Search {
+                query: self.search_query.clone(),
+                results: self.search_results.clone(),
+                selection: self.selected_indices.clone(),
+            },
+            View::SongRadio | View::ArtistRadio => ViewSnapshot::Radio {
+                label: self.radio_label.clone(),
+                tracks: self.radio_tracks.clone(),
+                selection: self.selected_indices.clone(),
+            },
+            View::Playlist | View::Downloads => ViewSnapshot::Playlist {
+                playlist: self.selected_playlist,
+                playlist_name: self.selected_playlist_name.clone(),
+                selection: self.selected_indices.clone(),
+            },
+        }
+    }
+
+    fn restore_nav_entry(&mut self, entry: &NavEntry) {
+        self.current_view = entry.view.clone();
+        match &entry.snapshot {
+            ViewSnapshot::Search {
+                query,
+                results,
+                selection,
+            } => {
+                self.search_query = query.clone();
+                self.search_results = results.clone();
+                self.selected_indices = selection.clone();
+            }
+            ViewSnapshot::Radio {
+                label,
+                tracks,
+                selection,
+            } => {
+                self.radio_label = label.clone();
+                self.radio_tracks = tracks.clone();
+                self.selected_indices = selection.clone();
+            }
+            ViewSnapshot::Playlist {
+                playlist,
+                playlist_name,
+                selection,
+            } => {
+                self.selected_playlist = *playlist;
+                self.selected_playlist_name = playlist_name.clone();
+                self.selected_indices = selection.clone();
+            }
+        }
+    }
+
     pub fn handle_navigate_to(&mut self, view: View) {
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.cleanup_drag_state();
 
         let back_entry = NavEntry {
             view: self.current_view.clone(),
-            selected_playlist: self.selected_playlist,
-            playlist_name: self.selected_playlist_name.clone(),
-            search_query: self.search_query.clone(),
-            radio_label: self.radio_label.clone(),
-            search_results: self.search_results.clone(),
-            radio_tracks: self.radio_tracks.clone(),
-            selected_indices: self.selected_indices.clone(),
+            snapshot: self.snapshot_current(),
         };
         self.nav_history.push(back_entry);
 
@@ -267,13 +310,7 @@ impl MusicPlayer {
 
         let new_entry = NavEntry {
             view: self.current_view.clone(),
-            selected_playlist: self.selected_playlist,
-            playlist_name: self.selected_playlist_name.clone(),
-            search_query: self.search_query.clone(),
-            radio_label: self.radio_label.clone(),
-            search_results: self.search_results.clone(),
-            radio_tracks: self.radio_tracks.clone(),
-            selected_indices: Vec::new(),
+            snapshot: self.snapshot_current(),
         };
         self.nav_history.push(new_entry);
 
@@ -289,15 +326,8 @@ impl MusicPlayer {
     pub fn handle_navigate_back(&mut self) {
         if self.nav_history_pos > 0 {
             self.nav_history_pos -= 1;
-            let entry = &self.nav_history[self.nav_history_pos];
-            self.current_view = entry.view.clone();
-            self.selected_playlist = entry.selected_playlist;
-            self.selected_playlist_name = entry.playlist_name.clone();
-            self.search_query = entry.search_query.clone();
-            self.radio_label = entry.radio_label.clone();
-            self.search_results = entry.search_results.clone();
-            self.radio_tracks = entry.radio_tracks.clone();
-            self.selected_indices = entry.selected_indices.clone();
+            let entry = self.nav_history[self.nav_history_pos].clone();
+            self.restore_nav_entry(&entry);
             self.save_session();
         }
     }
@@ -305,15 +335,8 @@ impl MusicPlayer {
     pub fn handle_navigate_forward(&mut self) {
         if self.nav_history_pos + 1 < self.nav_history.len() {
             self.nav_history_pos += 1;
-            let entry = &self.nav_history[self.nav_history_pos];
-            self.current_view = entry.view.clone();
-            self.selected_playlist = entry.selected_playlist;
-            self.selected_playlist_name = entry.playlist_name.clone();
-            self.search_query = entry.search_query.clone();
-            self.radio_label = entry.radio_label.clone();
-            self.search_results = entry.search_results.clone();
-            self.radio_tracks = entry.radio_tracks.clone();
-            self.selected_indices = entry.selected_indices.clone();
+            let entry = self.nav_history[self.nav_history_pos].clone();
+            self.restore_nav_entry(&entry);
             self.save_session();
         }
     }
@@ -575,9 +598,9 @@ impl MusicPlayer {
             return self.queue.tracks.get(index).cloned();
         }
         match &self.current_view {
-            View::Search(_) => self.search_results.get(index).cloned(),
-            View::SongRadio(_) | View::ArtistRadio(_) => self.radio_tracks.get(index).cloned(),
-            View::Playlist(_) | View::Downloads => self
+            View::Search => self.search_results.get(index).cloned(),
+            View::SongRadio | View::ArtistRadio => self.radio_tracks.get(index).cloned(),
+            View::Playlist | View::Downloads => self
                 .selected_playlist
                 .and_then(|sp| self.playlists.playlists.get(sp))
                 .and_then(|p| p.tracks.get(index))
@@ -590,9 +613,9 @@ impl MusicPlayer {
             return self.queue.tracks.len();
         }
         match &self.current_view {
-            View::Search(_) => self.search_results.len(),
-            View::SongRadio(_) | View::ArtistRadio(_) => self.radio_tracks.len(),
-            View::Playlist(_) | View::Downloads => self
+            View::Search => self.search_results.len(),
+            View::SongRadio | View::ArtistRadio => self.radio_tracks.len(),
+            View::Playlist | View::Downloads => self
                 .selected_playlist
                 .and_then(|sp| self.playlists.playlists.get(sp))
                 .map(|p| p.tracks.len())
@@ -601,16 +624,18 @@ impl MusicPlayer {
     }
 
     pub fn get_current_list_bounds(&self) -> Option<iced::Rectangle> {
-        match &self.current_view {
-            View::Search(_) | View::SongRadio(_) | View::ArtistRadio(_) => self.search_list_bounds,
-            View::Playlist(_) | View::Downloads => self.playlist_list_bounds,
+        if self.current_view.is_search_like() {
+            self.search_list_bounds
+        } else {
+            self.playlist_list_bounds
         }
     }
 
     pub fn get_current_list_scroll(&self) -> f32 {
-        match &self.current_view {
-            View::Search(_) | View::SongRadio(_) | View::ArtistRadio(_) => self.search_list_scroll,
-            View::Playlist(_) | View::Downloads => self.playlist_list_scroll,
+        if self.current_view.is_search_like() {
+            self.search_list_scroll
+        } else {
+            self.playlist_list_scroll
         }
     }
 
@@ -628,7 +653,7 @@ impl MusicPlayer {
                 if self.show_search_history {
                     self.show_search_history = false;
                 } else if self.selected_indices.is_empty() {
-                    self.handle_navigate_to(View::Search(self.search_query.clone()));
+                    self.handle_navigate_to(View::Search);
                 } else {
                     self.clear_selection();
                 }
@@ -672,11 +697,14 @@ impl MusicPlayer {
 
     pub fn handle_play_track(&mut self, index: usize, is_queue: bool) {
         if is_queue {
+            // Jump to the selected queue entry without discarding the
+            // tracks that precede it: the queue represents what's up next.
             if index < self.queue.tracks.len() {
-                let track = self.queue.tracks[index].clone();
-                self.queue.tracks.drain(0..index);
-                self.queue.current_index = 0;
-                self.play_track_internal(&track);
+                self.queue.current_index = index;
+                if let Some(t) = self.queue.current() {
+                    let t = t.clone();
+                    self.play_track_internal(&t);
+                }
             }
             return;
         }
@@ -718,32 +746,17 @@ impl MusicPlayer {
             return;
         }
 
-        let query_changed = match &self.current_view {
-            View::Search(q) => q != &self.search_query,
-            _ => true,
-        };
-        if query_changed {
-            if !matches!(self.current_view, View::Search(_)) {
-                let old_entry = NavEntry {
-                    view: self.current_view.clone(),
-                    selected_playlist: self.selected_playlist,
-                    playlist_name: self.selected_playlist_name.clone(),
-                    search_query: self.search_query.clone(),
-                    radio_label: self.radio_label.clone(),
-                    search_results: self.search_results.clone(),
-                    radio_tracks: self.radio_tracks.clone(),
-                    selected_indices: self.selected_indices.clone(),
-                };
-                self.nav_history.truncate(self.nav_history_pos + 1);
-                self.nav_history.push(old_entry);
-                self.nav_history_pos = self.nav_history.len() - 1;
-            }
-            self.current_view = View::Search(self.search_query.clone());
+        // Switch views: push the current view (if not already Search) as a
+        // back-target so Back can return to it. Re-searching on the Search
+        // view is handled by push_nav_entry() once results arrive.
+        if !matches!(self.current_view, View::Search) {
+            self.push_nav_entry();
         }
+        self.current_view = View::Search;
 
         self.search_loading = true;
+        self.search_exhausted = false;
         self.notify(format!("Searching for \"{}\"...", self.search_query));
-        self.search_offset = 0;
         self.search_results.clear();
         self.selected_indices.clear();
 
@@ -775,13 +788,7 @@ impl MusicPlayer {
     fn push_nav_entry(&mut self) {
         let entry = NavEntry {
             view: self.current_view.clone(),
-            selected_playlist: self.selected_playlist,
-            playlist_name: self.selected_playlist_name.clone(),
-            search_query: self.search_query.clone(),
-            radio_label: self.radio_label.clone(),
-            search_results: self.search_results.clone(),
-            radio_tracks: self.radio_tracks.clone(),
-            selected_indices: self.selected_indices.clone(),
+            snapshot: self.snapshot_current(),
         };
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.nav_history.push(entry);
@@ -801,16 +808,15 @@ impl MusicPlayer {
     }
 
     pub fn handle_search_load_more(&mut self) {
-        if self.search_loading {
-            return;
-        }
-        if self.search_offset >= self.search_results.len() {
+        // search_exhausted is set true when a page returned fewer than a full
+        // SEARCH_PAGE_SIZE, so there is nothing left to fetch.
+        if self.search_loading || self.search_exhausted || self.search_results.is_empty() {
             return;
         }
         self.search_loading = true;
 
         let query = self.search_query.clone();
-        let offset = self.search_offset;
+        let offset = self.search_results.len();
         let tx = self.result_tx.clone();
 
         std::thread::spawn(move || {
@@ -856,24 +862,27 @@ impl MusicPlayer {
                 .cloned()
                 .collect()
         };
+        if self.last_filtered_history.len() > self.config.max_search_history_visible {
+            self.last_filtered_history
+                .truncate(self.config.max_search_history_visible);
+        }
         self.search_history_focused_index = 0;
     }
 
     pub fn start_song_radio(&mut self, song_name: String) {
+        self.radio_label = format!("Radio: {}", song_name);
         self.search_loading = true;
         self.notify(format!("Generating radio for song: {}...", song_name));
-        self.handle_navigate_to(View::SongRadio(song_name.clone()));
+        self.handle_navigate_to(View::SongRadio);
 
         let tx = self.result_tx.clone();
+        let label = self.radio_label.clone();
         std::thread::spawn(move || {
             let result = crate::youtube::radio_song(&song_name);
             match result {
                 Ok(videos) => {
                     let tracks: Vec<Track> = videos.into_iter().map(|v| v.into()).collect();
-                    let _ = tx.send(BackendResult::RadioResults(
-                        format!("Radio: {}", song_name),
-                        tracks,
-                    ));
+                    let _ = tx.send(BackendResult::RadioResults(label, tracks));
                 }
                 Err(e) => {
                     let _ = tx.send(BackendResult::SearchError(e.to_string()));
@@ -883,20 +892,19 @@ impl MusicPlayer {
     }
 
     pub fn start_artist_radio(&mut self, artist_name: String) {
+        self.radio_label = format!("Radio: {}", artist_name);
         self.search_loading = true;
         self.notify(format!("Generating radio for artist: {}...", artist_name));
-        self.handle_navigate_to(View::ArtistRadio(artist_name.clone()));
+        self.handle_navigate_to(View::ArtistRadio);
 
         let tx = self.result_tx.clone();
+        let label = self.radio_label.clone();
         std::thread::spawn(move || {
             let result = crate::youtube::radio_artist(&artist_name);
             match result {
                 Ok(videos) => {
                     let tracks: Vec<Track> = videos.into_iter().map(|v| v.into()).collect();
-                    let _ = tx.send(BackendResult::RadioResults(
-                        format!("Radio: {}", artist_name),
-                        tracks,
-                    ));
+                    let _ = tx.send(BackendResult::RadioResults(label, tracks));
                 }
                 Err(e) => {
                     let _ = tx.send(BackendResult::SearchError(e.to_string()));
@@ -922,7 +930,7 @@ impl MusicPlayer {
             self.show_playlist_picker = None;
             self.clear_selection();
             self.cleanup_drag_state();
-            self.handle_navigate_to(View::Playlist(index));
+            self.handle_navigate_to(View::Playlist);
         }
     }
 
@@ -1105,9 +1113,10 @@ impl MusicPlayer {
             let track = track.clone();
             self.downloading_index = Some(index);
             self.notify(format!("Downloading \"{}\"...", track.title));
+            let download_dir = self.config.download_dir.clone();
             let tx = self.result_tx.clone();
             std::thread::spawn(move || {
-                let result = crate::youtube::download(&track.url);
+                let result = crate::youtube::download(&track.url, &download_dir);
                 match result {
                     Ok(path) => {
                         let _ = tx.send(BackendResult::DownloadComplete(track.url, path));
@@ -1163,7 +1172,7 @@ impl MusicPlayer {
             return;
         }
         match &self.current_view {
-            View::Playlist(_) | View::Downloads => {
+            View::Playlist | View::Downloads => {
                 if let Some(sp) = self.selected_playlist {
                     if sp < self.playlists.playlists.len() {
                         let indices: Vec<usize> = self.selected_indices.clone();
@@ -1261,7 +1270,7 @@ impl MusicPlayer {
             position: (self.cursor_pos.x, self.cursor_pos.y),
             is_youtube: track.source == TrackSource::YouTube,
             is_downloaded: self.download_registry.contains(&track.url),
-            in_playlist: matches!(self.current_view, View::Playlist(_)),
+            in_playlist: matches!(self.current_view, View::Playlist),
             is_queue,
         });
     }

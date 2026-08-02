@@ -218,7 +218,7 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     .width(Length::Fill);
 
     let nav_items: Vec<Element<'a, Message>> = vec![
-        sidebar_nav_item("Search", View::Search(String::new()), player, p),
+        sidebar_nav_item("Search", View::Search, player, p),
         sidebar_nav_item("Downloads", View::Downloads, player, p),
     ];
 
@@ -228,7 +228,8 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .iter()
         .enumerate()
         .map(|(i, pl)| {
-            let is_selected = matches!(player.current_view, View::Playlist(idx) if idx == i);
+            let is_selected = matches!(player.current_view, View::Playlist)
+                && player.selected_playlist == Some(i);
             let bg_color = if is_selected {
                 p.bg_current
             } else {
@@ -367,10 +368,10 @@ fn sidebar_nav_item<'a>(
     let text_color = if is_active { p.fg } else { p.fg_secondary };
     let bg_hover = p.bg_hover;
     let icon_name: &'a str = match &view {
-        View::Search(_) => "search.svg",
-        View::SongRadio(_) => "radio.svg",
-        View::ArtistRadio(_) => "radio.svg",
-        View::Playlist(_) => "music.svg",
+        View::Search => "search.svg",
+        View::SongRadio => "radio.svg",
+        View::ArtistRadio => "radio.svg",
+        View::Playlist => "music.svg",
         View::Downloads => "download.svg",
     };
 
@@ -413,9 +414,9 @@ fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let search_bar = view_search_bar(player);
 
     let content: Element<'a, Message> = match &player.current_view {
-        View::Search(_) => view_search(player),
-        View::SongRadio(_) | View::ArtistRadio(_) => view_search_radio(player),
-        View::Playlist(_) => view_playlist(player),
+        View::Search => view_search(player),
+        View::SongRadio | View::ArtistRadio => view_search_radio(player),
+        View::Playlist => view_playlist(player),
         View::Downloads => view_playlist(player),
     };
 
@@ -435,7 +436,7 @@ fn view_search_bar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let p = &player.palette;
     let is_search_view = matches!(
         player.current_view,
-        View::Search(_) | View::SongRadio(_) | View::ArtistRadio(_)
+        View::Search | View::SongRadio | View::ArtistRadio
     );
 
     let input = if is_search_view {
@@ -510,7 +511,7 @@ fn view_search<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     };
 
     let load_more = if !player.search_loading
-        && player.search_results.len() >= player.search_offset
+        && !player.search_exhausted
         && !player.search_results.is_empty()
     {
         let btn = Button::new(

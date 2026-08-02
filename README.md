@@ -76,11 +76,11 @@ src/
 ├── thumbnails.rs    # Thumbnail download cache
 ├── downloads.rs     # DownloadRegistry persistence
 ├── cache.rs         # StreamCache: LRU file cache with eviction
-├── config.rs        # confy config model + fuzzy_match
+├── config.rs        # confy config model
 ├── playlists.rs     # PlaylistStore persistence
 ├── session.rs       # Session state (view, queue, playlist selection) for restore
 ├── theme.rs         # Palette, layout constants, styling helpers
-├── types.rs         # Track, TrackSource, PlayQueue, View
+├── types.rs         # Track, TrackSource, PlayQueue, View (payload-free)
 ├── icons.rs         # Compile-time SVG icon embedding (match-based include_str!)
 └── util.rs         # format_duration, fuzzy_match
 ```
@@ -93,8 +93,9 @@ src/
   No `sync_*` methods, no callback forwarding, no `Rc<RefCell<Backend>>`.
 - **Async results via mpsc**: Background threads (search, download, thumbnails) send `BackendResult`
   variants through an mpsc channel, drained by the 250ms tick.
-- **Navigation history**: `NavEntry` records store full view state (including search/radio results)
-  for back/forward navigation. Capped at 20 entries.
+- **Navigation history**: A payload-free `View` identifies the active section; per-view
+  restorable state (query, cached search/radio results, selected playlist/indices) lives only
+  in each `NavEntry`'s `ViewSnapshot`, so history entries never carry unrelated data. Capped at 20 entries.
 
 ## License
 

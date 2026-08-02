@@ -170,7 +170,6 @@ impl AudioPlayer {
                                 }
                             };
 
-                            // Ensure cache directory exists
                             if let Some(dir) = cache_path.parent() {
                                 let _ = std::fs::create_dir_all(dir);
                             }
@@ -199,7 +198,6 @@ impl AudioPlayer {
                                                 break;
                                             }
                                             if writer.write_all(&buf[..n]).is_err() {
-                                                // ffmpeg stdin closed (broken pipe) - OK
                                                 break;
                                             }
                                         }
@@ -276,7 +274,6 @@ impl AudioPlayer {
                                 }
                             };
 
-                            // Feed cache file into ffmpeg stdin in a background thread
                             let cache_path_clone = cache_path.clone();
                             thread::spawn(move || {
                                 let file = match std::fs::File::open(&cache_path_clone) {
@@ -428,7 +425,6 @@ impl AudioPlayer {
                 }
             }
 
-            // Cleanup on thread exit
             if let Some(ref path) = temp_wav {
                 let _ = std::fs::remove_file(path);
             }

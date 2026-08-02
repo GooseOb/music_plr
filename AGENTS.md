@@ -32,9 +32,12 @@ cargo test
 
 ## Code Conventions
 
-- No comments in source code
-- **Single source of truth**: `MusicPlayer` in `app.rs` holds all application state (~30 fields).
-  `view()` is a pure function of `&MusicPlayer` — no `Rc<RefCell<Backend>>`, no sync methods.
+- Comments are allowed only where logic is genuinely non-obvious (the audio
+  process pipeline, drag-drop geometry, nav-history invariants); otherwise the
+  code should be self-documenting.
+- **Single source of truth**: `MusicPlayer` in `app.rs` holds all application
+  state (one large struct). `view()` is a pure function of `&MusicPlayer` — no
+  `Rc<RefCell<Backend>>`, no sync methods.
 - **`mpsc` channels** for cross-thread communication (backend results, MPRIS commands)
 - **`iced::application` builder**: `new()` / `update()` / `view()` / `subscription()` on `MusicPlayer`
 - **`Task` and `Subscription`** for async operations (timer tick, raw event listening)
@@ -58,11 +61,11 @@ src/
 ├── thumbnails.rs    # Thumbnail download cache
 ├── downloads.rs     # DownloadRegistry persistence
 ├── cache.rs         # StreamCache: LRU file cache with eviction
-├── config.rs        # confy config model + fuzzy_match
+├── config.rs        # confy config model
 ├── playlists.rs     # PlaylistStore persistence
 ├── session.rs       # Session state (view, queue, playlist selection) for restore
 ├── theme.rs         # Palette, layout constants, styling helpers (bg, button_style, slider_style)
-├── types.rs         # Track, TrackSource, PlayQueue, View
+├── types.rs         # Track, TrackSource, PlayQueue, View (payload-free) + View helpers
 ├── icons.rs         # Compile-time SVG icon embedding (match-based include_str!)
 └── util.rs         # format_duration, fuzzy_match
 ```
@@ -77,8 +80,9 @@ src/
   `process_result`.
 - **MPRIS commands**: The MPRIS D-Bus thread sends `MprisCommand` through a separate channel,
   processed by `process_mpris_command` during the tick.
-- **Navigation history**: `NavEntry` structs store full view state (view type, selected playlist,
-  search query, radio label, cached search/radio results) for back/forward navigation.
+- **Navigation history**: `View` is a payload-free selector; per-view restorable state (query,
+  cached search/radio results, selected playlist and selection) lives only in each `NavEntry`'s
+  `ViewSnapshot`, so history entries never carry data unrelated to their view.
   Capped at 20 entries.
 
 ## Data Flow
@@ -95,8 +99,11 @@ src/
 - `handle_navigate_to` pushes both back-target + new current state as two entries
 - `can_navigate_back() = nav_history_pos > 0`; disabled back button via `on_press_maybe(None)`
 - `can_navigate_forward() = nav_history_pos + 1 < nav_history.len()`
-- Search/radio results cached in `NavEntry` so back/forward restores correct content per query
-- `SearchResultsAppend` (Load More) updates current `NavEntry.search_results` in-place
+- Search/radio results cached in each `NavEntry`'s `ViewSnapshot` so back/forward restores
+  correct content per query
+- `SearchResultsAppend` (Load More) syncs the current `NavEntry`'s `ViewSnapshot` results
+  in-place
+- "Load More" is hidden once a page returned fewer than a full `SEARCH_PAGE_SIZE` (`search_exhausted`)
 
 ## UI Layout
 
@@ -124,7 +131,7 @@ src/
 
 ## Icons
 
-- `/home/gooseob/projects/music_plr/icons/` — 18 SVG files
+- `/home/gooseob/projects/music_plr/icons/` — 16 SVG files
 - `src/icons.rs` uses match-based `include_str!` to embed each icon at compile time
 
 ## Agent Skills
