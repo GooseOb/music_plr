@@ -421,7 +421,7 @@ impl MusicPlayer {
             }
         }
 
-        if cursor.x > crate::theme::SIDEBAR_WIDTH + 240.0 {
+        if cursor.x > crate::theme::SIDEBAR_WIDTH + crate::theme::QUEUE_MIN_WIDTH {
             return;
         }
 

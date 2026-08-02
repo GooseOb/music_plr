@@ -32,7 +32,7 @@ fn button_style(
         button::Style {
             background: Some(bg_color.into()),
             text_color,
-            border: iced::border::rounded(4.0),
+            border: iced::border::rounded(theme::RADIUS_SM),
             ..Default::default()
         }
     }
@@ -43,6 +43,14 @@ fn button_style_accent() -> impl Fn(&iced::Theme, button::Status) -> button::Sty
         Color::from_rgb8(0x2a, 0x2a, 0x34),
         Color::from_rgb8(0x3a, 0x3a, 0x44),
         Color::WHITE,
+    )
+}
+
+fn button_style_green() -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
+    button_style(
+        Color::from_rgb8(0x14, 0xc8, 0x84),
+        Color::from_rgba8(0x14, 0xc8, 0x84, 0.8),
+        Color::BLACK,
     )
 }
 
@@ -72,17 +80,21 @@ fn slider_style(
     }
 }
 
-fn thumbnail<'a>(track: &'a crate::types::Track, p: &theme::Palette) -> Element<'a, Message> {
+fn thumbnail<'a>(
+    track: &'a crate::types::Track,
+    p: &theme::Palette,
+    size: f32,
+) -> Element<'a, Message> {
     let thumb_path = crate::thumbnails::thumbnail_path(&track.id);
     let fallback_color = p.fg_muted;
     if thumb_path.exists() {
         image(iced::widget::image::Handle::from_path(thumb_path))
-            .width(Length::Fixed(theme::THUMBNAIL_SIZE))
-            .height(Length::Fixed(theme::THUMBNAIL_SIZE))
-            .content_fit(iced::ContentFit::Contain)
+            .width(Length::Fixed(size))
+            .height(Length::Fixed(size))
+            .content_fit(iced::ContentFit::Cover)
             .into()
     } else {
-        icons::icon("music.svg", fallback_color, theme::THUMBNAIL_SIZE).into()
+        icons::icon("music.svg", fallback_color, size).into()
     }
 }
 
@@ -133,11 +145,16 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message> {
 
 fn view_notification(player: &MusicPlayer) -> Element<'_, Message> {
     if let Some(msg) = &player.notification {
-        return Container::new(text(msg).size(13).color(Color::WHITE).center())
-            .width(Length::Fill)
-            .padding([6, 16])
-            .style(bg(player.palette.warning))
-            .into();
+        return Container::new(
+            text(msg)
+                .size(theme::TEXT_SIZE_DEFAULT)
+                .color(Color::WHITE)
+                .center(),
+        )
+        .width(Length::Fill)
+        .padding([theme::SPACING_XS, theme::SPACING_XL])
+        .style(bg(player.palette.warning))
+        .into();
     }
     Container::new(Row::new())
         .width(Length::Fill)
@@ -149,32 +166,38 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let p = &player.palette;
 
     let nav_buttons = Row::with_children(vec![
-        Button::new(Container::new(icons::icon("back.svg", p.fg, 16.0)).padding(4))
-            .padding(6)
-            .style(button_style_accent())
-            .width(Length::Fixed(36.0))
-            .height(Length::Fixed(28.0))
-            .on_press_maybe(if player.can_navigate_back() {
-                Some(Message::NavigateBack)
-            } else {
-                None
-            })
-            .into(),
-        Button::new(Container::new(icons::icon("forward.svg", p.fg, 16.0)).padding(4))
-            .padding(6)
-            .style(button_style_accent())
-            .width(Length::Fixed(36.0))
-            .height(Length::Fixed(28.0))
-            .on_press_maybe(if player.can_navigate_forward() {
-                Some(Message::NavigateForward)
-            } else {
-                None
-            })
-            .into(),
+        Button::new(
+            Container::new(icons::icon("back.svg", p.fg, theme::ICON_SIZE_MD)).center(Length::Fill),
+        )
+        .padding(6)
+        .style(button_style_accent())
+        .width(Length::Fill)
+        .height(Length::Fixed(theme::BUTTON_HEIGHT))
+        .on_press_maybe(if player.can_navigate_back() {
+            Some(Message::NavigateBack)
+        } else {
+            None
+        })
+        .into(),
+        Button::new(
+            Container::new(icons::icon("forward.svg", p.fg, theme::ICON_SIZE_MD))
+                .center(Length::Fill),
+        )
+        .padding(6)
+        .style(button_style_accent())
+        .width(Length::Fill)
+        .height(Length::Fixed(theme::BUTTON_HEIGHT))
+        .on_press_maybe(if player.can_navigate_forward() {
+            Some(Message::NavigateForward)
+        } else {
+            None
+        })
+        .into(),
     ])
-    .spacing(4)
+    .spacing(theme::SPACING_XS)
     .align_y(alignment::Vertical::Center)
-    .padding([4, 12]);
+    .padding([theme::SPACING_MD, theme::SPACING_XL])
+    .width(Length::Fill);
 
     let nav_items: Vec<Element<'a, Message>> = vec![
         sidebar_nav_item("Search", View::Search(String::new()), player, p),
@@ -199,11 +222,14 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
 
             Button::new(
                 Row::with_children(vec![
-                    icons::icon("music.svg", icon_color, 14.0).into(),
-                    text(&pl.name).size(13).color(text_color).into(),
+                    icons::icon("music.svg", icon_color, theme::ICON_SIZE_SM).into(),
+                    text(&pl.name)
+                        .size(theme::TEXT_SIZE_DEFAULT)
+                        .color(text_color)
+                        .into(),
                 ])
                 .spacing(10)
-                .padding([8, 12])
+                .padding([theme::SPACING_SM, theme::SPACING_MD])
                 .align_y(alignment::Vertical::Center)
                 .width(Length::Fill),
             )
@@ -221,7 +247,7 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                 button::Style {
                     background: Some(bg.into()),
                     text_color,
-                    border: iced::border::rounded(4.0),
+                    border: iced::border::rounded(theme::RADIUS_SM),
                     ..Default::default()
                 }
             })
@@ -234,12 +260,12 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         Container::new(
             text_input("New playlist name", &player.playlist_create_name)
                 .on_input(Message::NewPlaylistNameChanged)
-                .padding([6, 8])
-                .size(13),
+                .padding([theme::SPACING_XS, theme::SPACING_SM])
+                .size(theme::TEXT_SIZE_DEFAULT),
         )
         .width(Length::Fill)
         .into(),
-        Button::new(icons::icon("folder.svg", Color::WHITE, 14.0))
+        Button::new(icons::icon("folder.svg", Color::WHITE, theme::ICON_SIZE_SM))
             .padding(6)
             .style(button_style_accent())
             .on_press(Message::CreatePlaylist)
@@ -247,27 +273,34 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     ])
     .align_y(alignment::Vertical::Center)
     .spacing(6)
-    .padding([8, 12]);
+    .padding([theme::SPACING_SM, theme::SPACING_MD]);
 
     let import_btn = Button::new(
         Row::with_children(vec![
-            icons::icon("folder.svg", Color::WHITE, 14.0).into(),
-            text("Local Music").size(13).color(Color::WHITE).into(),
+            icons::icon("folder.svg", Color::WHITE, theme::ICON_SIZE_SM).into(),
+            text("Local Music")
+                .size(theme::TEXT_SIZE_DEFAULT)
+                .color(Color::WHITE)
+                .into(),
         ])
         .spacing(6)
         .align_y(alignment::Vertical::Center),
     )
-    .padding(8)
+    .padding(theme::SPACING_SM)
     .width(Length::Fill)
     .style(button_style_accent())
     .on_press(Message::AddLocalMusic);
 
     let sidebar_content = Column::with_children(vec![
         nav_buttons.into(),
+        Container::new(widget::rule::horizontal(1))
+            .width(Length::Fill)
+            .padding([theme::SPACING_SM, 0.0])
+            .into(),
         Column::with_children(nav_items).spacing(2).into(),
         Container::new(widget::rule::horizontal(1))
             .width(Length::Fill)
-            .padding([8, 0])
+            .padding([theme::SPACING_SM, 0.0])
             .into(),
         scrollable(
             Column::with_children(playlist_items)
@@ -279,7 +312,7 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .into(),
         Container::new(widget::rule::horizontal(1))
             .width(Length::Fill)
-            .padding([8, 0])
+            .padding([theme::SPACING_SM, 0.0])
             .into(),
         create_row.into(),
         import_btn.into(),
@@ -317,11 +350,14 @@ fn sidebar_nav_item<'a>(
 
     Button::new(
         Row::with_children(vec![
-            icons::icon(icon_name, icon_color, 16.0).into(),
-            text(name).size(13).color(text_color).into(),
+            icons::icon(icon_name, icon_color, theme::ICON_SIZE_MD).into(),
+            text(name)
+                .size(theme::TEXT_SIZE_DEFAULT)
+                .color(text_color)
+                .into(),
         ])
         .spacing(10)
-        .padding([10, 16])
+        .padding([theme::SPACING_LG, theme::SPACING_XL])
         .align_y(alignment::Vertical::Center)
         .width(Length::Fill),
     )
@@ -339,7 +375,7 @@ fn sidebar_nav_item<'a>(
         button::Style {
             background: Some(bg.into()),
             text_color,
-            border: iced::border::rounded(4.0),
+            border: iced::border::rounded(theme::RADIUS_LG),
             ..Default::default()
         }
     })
@@ -381,8 +417,8 @@ fn view_search_bar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             text_input("Search YouTube Music...", &player.search_query)
                 .on_input(Message::SearchInputChanged)
                 .on_submit(Message::SearchExecute)
-                .padding([8, 12])
-                .size(14),
+                .padding([theme::SPACING_SM, theme::SPACING_MD])
+                .size(theme::TEXT_SIZE_MD),
         )
         .width(Length::Fill)
         .into()
@@ -391,8 +427,8 @@ fn view_search_bar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             text_input("Search YouTube Music...", &player.search_query)
                 .on_input(Message::SearchInputChanged)
                 .on_submit(Message::GlobalSearchSubmit)
-                .padding([8, 12])
-                .size(14),
+                .padding([theme::SPACING_SM, theme::SPACING_MD])
+                .size(theme::TEXT_SIZE_MD),
         )
         .width(Length::Fill)
         .into()
@@ -401,9 +437,11 @@ fn view_search_bar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     Container::new(
         Row::with_children(vec![
             input,
-            Button::new(icons::icon("search.svg", Color::WHITE, 16.0))
-                .padding(8)
+            Button::new(icons::icon("search.svg", Color::WHITE, theme::ICON_SIZE_MD))
+                .padding(theme::SPACING_SM)
                 .style(button_style_accent())
+                .width(Length::Fixed(theme::SEARCH_BTN_SIZE))
+                .height(Length::Fixed(theme::SEARCH_BTN_SIZE))
                 .on_press(if is_search_view {
                     Message::SearchExecute
                 } else {
@@ -411,9 +449,9 @@ fn view_search_bar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                 })
                 .into(),
         ])
-        .spacing(8)
+        .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)
-        .padding([10, 16]),
+        .padding([theme::SPACING_LG, theme::SPACING_XL]),
     )
     .width(Length::Fill)
     .style(bg(p.bg_secondary))
@@ -433,13 +471,13 @@ fn view_search<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let track_list = if player.search_loading && player.search_results.is_empty() {
         Container::new(
             text("Searching...")
-                .size(14)
+                .size(theme::TEXT_SIZE_MD)
                 .color(player.palette.fg_secondary)
                 .center(),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .padding(24)
+        .padding(theme::SPACING_XL)
         .into()
     } else {
         view_track_list(&player.search_results, player, false)
@@ -449,11 +487,15 @@ fn view_search<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         && player.search_results.len() >= player.search_offset
         && !player.search_results.is_empty()
     {
-        let btn = Button::new(text("Load More").size(12).color(Color::WHITE))
-            .padding(8)
-            .style(button_style_accent())
-            .on_press(Message::SearchLoadMore);
-        Container::new(btn).padding(8).into()
+        let btn = Button::new(
+            text("Load More")
+                .size(theme::TEXT_SIZE_SM)
+                .color(Color::WHITE),
+        )
+        .padding(theme::SPACING_SM)
+        .style(button_style_accent())
+        .on_press(Message::SearchLoadMore);
+        Container::new(btn).padding(theme::SPACING_SM).into()
     } else {
         Container::new(Row::new()).height(Length::Fixed(0.0)).into()
     };
@@ -470,23 +512,23 @@ fn view_search_radio<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
 
     let header = Container::new(
         text(player.radio_label.clone())
-            .size(15)
+            .size(theme::TEXT_SIZE_DEFAULT)
             .color(p.fg)
             .width(Length::Fill)
             .center(),
     )
-    .padding([8, 16]);
+    .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
     let track_list = if player.search_loading && player.radio_tracks.is_empty() {
         Container::new(
             text("Generating radio...")
-                .size(14)
+                .size(theme::TEXT_SIZE_MD)
                 .color(p.fg_secondary)
                 .center(),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .padding(24)
+        .padding(theme::SPACING_XL)
         .into()
     } else {
         view_track_list(&player.radio_tracks, player, false)
@@ -503,9 +545,13 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let p = &player.palette;
 
     if player.last_filtered_history.is_empty() {
-        return Container::new(text("No recent searches").size(13).color(p.fg_secondary))
-            .padding([8, 32])
-            .into();
+        return Container::new(
+            text("No recent searches")
+                .size(theme::TEXT_SIZE_DEFAULT)
+                .color(p.fg_secondary),
+        )
+        .padding([theme::SPACING_SM, theme::SPACING_XL])
+        .into();
     }
 
     let items: Vec<Element<'a, Message>> = player
@@ -533,11 +579,14 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                 Row::with_children(vec![
                     Button::new(
                         Row::with_children(vec![
-                            icons::icon("search.svg", del_fg_muted, 12.0).into(),
-                            text(q).size(12).color(sel_fg_secondary).into(),
+                            icons::icon("search.svg", del_fg_muted, theme::ICON_SIZE_SM).into(),
+                            text(q)
+                                .size(theme::TEXT_SIZE_SM)
+                                .color(sel_fg_secondary)
+                                .into(),
                         ])
-                        .spacing(8)
-                        .padding([6, 12])
+                        .spacing(theme::SPACING_SM)
+                        .padding([theme::SPACING_XS, theme::SPACING_MD])
                         .align_y(alignment::Vertical::Center)
                         .width(Length::Fill),
                     )
@@ -555,13 +604,13 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                         button::Style {
                             background: Some(bg.into()),
                             text_color: sel_fg,
-                            border: iced::border::rounded(4.0),
+                            border: iced::border::rounded(theme::RADIUS_SM),
                             ..Default::default()
                         }
                     })
                     .on_press(Message::SearchHistorySelected(i))
                     .into(),
-                    Button::new(icons::icon("delete.svg", del_fg_muted, 12.0))
+                    Button::new(icons::icon("delete.svg", del_fg_muted, theme::ICON_SIZE_SM))
                         .padding(2)
                         .style(move |_, status| {
                             let bg = match status {
@@ -571,16 +620,16 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                             button::Style {
                                 background: Some(bg.into()),
                                 text_color: del_fg,
-                                border: iced::border::rounded(4.0),
+                                border: iced::border::rounded(theme::RADIUS_SM),
                                 ..Default::default()
                             }
                         })
                         .on_press(Message::DeleteSearchHistory(i))
-                        .width(Length::Fixed(24.0))
-                        .height(Length::Fixed(24.0))
+                        .width(Length::Fixed(theme::DELETE_BTN_SIZE))
+                        .height(Length::Fixed(theme::DELETE_BTN_SIZE))
                         .into(),
                 ])
-                .spacing(8)
+                .spacing(theme::SPACING_SM)
                 .align_y(alignment::Vertical::Center),
             )
             .width(Length::Fill)
@@ -591,7 +640,7 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
 
     Container::new(Column::with_children(items).spacing(0).width(Length::Fill))
         .width(Length::Fill)
-        .max_width(400.0)
+        .max_width(theme::MIN_TRACK_WIDTH)
         .style(bg(p.bg_secondary))
         .into()
 }
@@ -605,23 +654,23 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             Row::with_children(vec![
                 text_input(&pl.name, &player.selected_playlist_name)
                     .on_input(Message::RenamePlaylist)
-                    .size(16)
-                    .padding([4, 8])
+                    .size(theme::TEXT_SIZE_LG)
+                    .padding([theme::SPACING_XS, theme::SPACING_SM])
                     .into(),
                 text(format!("({} tracks)", track_count))
-                    .size(14)
+                    .size(theme::TEXT_SIZE_MD)
                     .color(p.fg_secondary)
                     .into(),
-                icons::icon("edit.svg", p.fg_muted, 14.0).into(),
-                Button::new(icons::icon("delete.svg", p.fg_muted, 14.0))
+                icons::icon("edit.svg", p.fg_muted, theme::ICON_SIZE_SM).into(),
+                Button::new(icons::icon("delete.svg", p.fg_muted, theme::ICON_SIZE_SM))
                     .padding(4)
                     .style(button_style_accent())
                     .on_press(Message::ShowDeleteConfirm(idx))
                     .into(),
             ])
-            .spacing(8)
+            .spacing(theme::SPACING_SM)
             .align_y(alignment::Vertical::Center)
-            .padding([12, 16])
+            .padding([theme::SPACING_MD, theme::SPACING_XL])
             .into()
         } else {
             Row::new().into()
@@ -629,10 +678,10 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     } else {
         Container::new(
             text("Select a playlist from the sidebar")
-                .size(14)
+                .size(theme::TEXT_SIZE_MD)
                 .color(p.fg_secondary),
         )
-        .padding(24)
+        .padding(theme::SPACING_XL)
         .into()
     };
 
@@ -670,13 +719,13 @@ fn view_track_list<'a>(
     if tracks.is_empty() {
         return Container::new(
             text("No tracks found")
-                .size(14)
+                .size(theme::TEXT_SIZE_MD)
                 .color(player.palette.fg_secondary)
                 .center(),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .padding(24)
+        .padding(theme::SPACING_XL)
         .into();
     }
 
@@ -716,28 +765,28 @@ fn view_track_row<'a>(
     let duration_text = crate::util::format_duration(track.duration);
 
     let leading: Element<'a, Message> = if is_hovered {
-        Button::new(icons::icon("play.svg", p.fg, 14.0))
-            .padding(2)
-            .style(button_style_accent())
+        Button::new(icons::icon("play.svg", Color::BLACK, theme::ICON_SIZE_LG))
+            .padding(6)
+            .style(button_style_green())
             .on_press(Message::PlayTrackAtIndex { index, is_queue })
             .into()
     } else {
         text((index + 1).to_string())
-            .size(12)
+            .size(theme::TEXT_SIZE_SM)
             .color(p.fg_secondary)
-            .width(Length::Fixed(24.0))
+            .width(Length::Fixed(theme::TRACK_LEADING_WIDTH))
             .center()
             .into()
     };
 
     let title_artist = Column::with_children(vec![
         text(track.title.clone())
-            .size(13)
+            .size(theme::TEXT_SIZE_DEFAULT)
             .color(p.fg)
             .width(Length::Fill)
             .into(),
         text(track.artist.clone())
-            .size(12)
+            .size(theme::TEXT_SIZE_SM)
             .color(p.fg_secondary)
             .width(Length::Fill)
             .into(),
@@ -745,21 +794,23 @@ fn view_track_row<'a>(
     .spacing(2);
 
     let content = Row::with_children(vec![
-        Container::new(leading).width(Length::Fixed(24.0)).into(),
-        Container::new(thumbnail(track, p))
+        Container::new(leading)
+            .width(Length::Fixed(theme::TRACK_LEADING_WIDTH))
+            .into(),
+        Container::new(thumbnail(track, p, theme::THUMBNAIL_SIZE))
             .width(Length::Fixed(theme::THUMBNAIL_SIZE))
             .height(Length::Fixed(theme::THUMBNAIL_SIZE))
             .into(),
         Container::new(title_artist).width(Length::Fill).into(),
         text(duration_text)
-            .size(12)
+            .size(theme::TEXT_SIZE_SM)
             .color(p.fg_secondary)
-            .width(Length::Fixed(48.0))
+            .width(Length::Fixed(theme::DURATION_WIDTH))
             .into(),
     ])
-    .spacing(10)
+    .spacing(theme::SPACING_SM)
     .align_y(alignment::Vertical::Center)
-    .padding([6, 10]);
+    .padding([theme::SPACING_XS, theme::SPACING_MD]);
 
     let track_area = MouseArea::new(content)
         .on_press(Message::TrackPressed { index, is_queue })
@@ -775,23 +826,30 @@ fn view_track_row<'a>(
 
 fn view_queue_panel<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let p = &player.palette;
-    let queue_width = (player.window_width * 0.2).max(theme::QUEUE_MIN_WIDTH);
+    let queue_width = (player.window_width * theme::QUEUE_WIDTH_RATIO).max(theme::QUEUE_MIN_WIDTH);
 
     let header = Container::new(
         Row::with_children(vec![
-            text("Queue").size(14).color(p.fg_secondary).into(),
-            icons::icon("sync.svg", p.fg_muted, 14.0).into(),
+            text("Queue")
+                .size(theme::TEXT_SIZE_MD)
+                .color(p.fg_secondary)
+                .into(),
+            icons::icon("sync.svg", p.fg_muted, theme::ICON_SIZE_SM).into(),
         ])
-        .spacing(8)
+        .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)
-        .padding([10, 14]),
+        .padding([theme::SPACING_SM, theme::SPACING_MD]),
     )
     .width(Length::Fill);
 
     let track_list = if player.queue.tracks.is_empty() {
-        Container::new(text("Queue is empty").size(12).color(p.fg_secondary))
-            .padding(16)
-            .into()
+        Container::new(
+            text("Queue is empty")
+                .size(theme::TEXT_SIZE_SM)
+                .color(p.fg_secondary),
+        )
+        .padding(theme::SPACING_LG)
+        .into()
     } else {
         view_track_list(&player.queue.tracks, player, true)
     };
@@ -821,48 +879,58 @@ fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     };
 
     let track_thumb: Element<'a, Message> = if let Some(t) = track {
-        thumbnail(t, p)
+        thumbnail(t, p, theme::PLAYBAR_THUMBNAIL_SIZE)
     } else {
-        icons::icon("music.svg", p.fg_muted, theme::THUMBNAIL_SIZE).into()
+        icons::icon("music.svg", p.fg_muted, theme::PLAYBAR_THUMBNAIL_SIZE).into()
     };
 
     let track_info = Column::with_children(vec![
-        text(title).size(13).color(p.fg).into(),
-        text(artist).size(11).color(p.fg_secondary).into(),
+        text(title)
+            .size(theme::TEXT_SIZE_DEFAULT)
+            .color(p.fg)
+            .into(),
+        text(artist)
+            .size(theme::TEXT_SIZE_SM)
+            .color(p.fg_secondary)
+            .into(),
     ])
     .spacing(2);
 
     let elapsed_text = text(player.elapsed_text.clone())
-        .size(11)
+        .size(theme::TEXT_SIZE_XS)
         .color(p.fg_secondary)
-        .width(Length::Fixed(48.0))
+        .width(Length::Fixed(theme::TIME_TEXT_WIDTH))
         .center();
 
     let total_text = text(player.total_text.clone())
-        .size(11)
+        .size(theme::TEXT_SIZE_XS)
         .color(p.fg_secondary)
-        .width(Length::Fixed(48.0))
+        .width(Length::Fixed(theme::TIME_TEXT_WIDTH))
         .center();
 
     let controls = Container::new(
         Row::with_children(vec![
-            Button::new(icons::icon("skip-back.svg", p.fg, 16.0))
+            Button::new(icons::icon("skip-back.svg", p.fg, theme::ICON_SIZE_MD))
                 .padding(6)
                 .style(button_style_accent())
                 .on_press(Message::PreviousTrack)
                 .into(),
-            Button::new(icons::icon(play_pause_icon, p.fg, 18.0))
-                .padding(8)
-                .style(button_style_accent())
-                .on_press(Message::TogglePlayPause)
-                .into(),
-            Button::new(icons::icon("skip-forward.svg", p.fg, 16.0))
+            Button::new(icons::icon(
+                play_pause_icon,
+                Color::BLACK,
+                theme::ICON_SIZE_LG,
+            ))
+            .padding(theme::SPACING_SM)
+            .style(button_style_green())
+            .on_press(Message::TogglePlayPause)
+            .into(),
+            Button::new(icons::icon("skip-forward.svg", p.fg, theme::ICON_SIZE_MD))
                 .padding(6)
                 .style(button_style_accent())
                 .on_press(Message::NextTrack)
                 .into(),
         ])
-        .spacing(8)
+        .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center),
     )
     .center_x(Length::Fill);
@@ -873,41 +941,41 @@ fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .style(slider_style(p.accent, p.bg_secondary));
 
     let controls_and_progress =
-        Column::with_children(vec![controls.into(), progress.into()]).spacing(4);
+        Column::with_children(vec![controls.into(), progress.into()]).spacing(theme::SPACING_XS);
 
     let volume_slider = slider(0.0..=1.0, player.volume, Message::SetVolume)
-        .width(Length::Fixed(80.0))
+        .width(Length::Fixed(theme::VOLUME_SLIDER_WIDTH))
         .step(0.01f32)
         .style(slider_style(p.accent, p.bg_secondary));
 
-    let queue_btn = Button::new(icons::icon("queue.svg", p.fg_muted, 16.0))
+    let queue_btn = Button::new(icons::icon("queue.svg", p.fg_muted, theme::ICON_SIZE_MD))
         .padding(6)
         .style(button_style_accent())
         .on_press(Message::ToggleQueue)
-        .width(Length::Fixed(36.0))
-        .height(Length::Fixed(28.0));
+        .width(Length::Fixed(theme::QUEUE_BTN_WIDTH))
+        .height(Length::Fixed(theme::BUTTON_HEIGHT));
 
     Container::new(
         Row::with_children(vec![
             Container::new(track_thumb)
-                .width(Length::Fixed(theme::THUMBNAIL_SIZE))
-                .height(Length::Fixed(theme::THUMBNAIL_SIZE))
+                .width(Length::Fixed(theme::PLAYBAR_THUMBNAIL_SIZE))
+                .height(Length::Fixed(theme::PLAYBAR_THUMBNAIL_SIZE))
                 .into(),
             Container::new(track_info)
-                .width(Length::Fixed(164.0))
+                .width(Length::Fixed(theme::PLAYBAR_TRACK_INFO_WIDTH))
                 .into(),
             Container::new(elapsed_text).into(),
             Container::new(controls_and_progress)
                 .width(Length::Fill)
                 .into(),
             Container::new(total_text).into(),
-            icons::icon("volume.svg", p.fg_secondary, 14.0).into(),
+            icons::icon("volume.svg", p.fg_secondary, theme::ICON_SIZE_SM).into(),
             volume_slider.into(),
             queue_btn.into(),
         ])
-        .spacing(12)
+        .spacing(theme::SPACING_MD)
         .align_y(alignment::Vertical::Center)
-        .padding([8, 12]),
+        .padding([theme::SPACING_SM, theme::SPACING_MD]),
     )
     .width(Length::Fill)
     .style(bg(p.bg_secondary))
@@ -917,6 +985,14 @@ fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
 fn transparent_bg() -> impl Fn(&iced::Theme) -> container::Style + 'static {
     |_| container::Style {
         background: None,
+        ..Default::default()
+    }
+}
+
+fn menu_bg(bg_color: Color) -> impl Fn(&iced::Theme) -> container::Style + 'static {
+    move |_| container::Style {
+        background: Some(bg_color.into()),
+        border: iced::border::rounded(theme::RADIUS_MD),
         ..Default::default()
     }
 }
@@ -1021,9 +1097,13 @@ fn view_context_menu<'a>(
         v
     };
 
-    let menu_content = Container::new(Column::with_children(items).spacing(2).padding(8))
-        .width(Length::Fixed(190.0))
-        .style(bg(p.bg_secondary));
+    let menu_content = Container::new(
+        Column::with_children(items)
+            .spacing(2)
+            .padding(theme::SPACING_SM),
+    )
+    .width(Length::Fixed(theme::CONTEXT_MENU_WIDTH))
+    .style(menu_bg(p.bg_secondary));
 
     let row = Row::with_children(vec![
         Container::new(Row::new())
@@ -1057,11 +1137,14 @@ fn menu_item<'a>(
     Container::new(
         Button::new(
             Row::with_children(vec![
-                icons::icon(icon, p.fg_muted, 12.0).into(),
-                text(label).size(13).color(p.fg).into(),
+                icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
+                text(label)
+                    .size(theme::TEXT_SIZE_DEFAULT)
+                    .color(p.fg)
+                    .into(),
             ])
-            .spacing(8)
-            .padding([6, 8])
+            .spacing(theme::SPACING_SM)
+            .padding([theme::SPACING_XS, theme::SPACING_SM])
             .align_y(alignment::Vertical::Center)
             .width(Length::Fill),
         )
@@ -1075,7 +1158,7 @@ fn menu_item<'a>(
             button::Style {
                 background: Some(bg.into()),
                 text_color: p.fg,
-                border: iced::border::rounded(4.0),
+                border: iced::border::rounded(theme::RADIUS_SM),
                 ..Default::default()
             }
         })
@@ -1104,11 +1187,14 @@ fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             let is_focused_copy = is_focused;
 
             Button::new(
-                Row::with_children(vec![text(&pl.name).size(13).color(p.fg).into()])
-                    .spacing(8)
-                    .padding([8, 12])
-                    .align_y(alignment::Vertical::Center)
-                    .width(Length::Fill),
+                Row::with_children(vec![text(&pl.name)
+                    .size(theme::TEXT_SIZE_DEFAULT)
+                    .color(p.fg)
+                    .into()])
+                .spacing(theme::SPACING_SM)
+                .padding([theme::SPACING_SM, theme::SPACING_MD])
+                .align_y(alignment::Vertical::Center)
+                .width(Length::Fill),
             )
             .width(Length::Fill)
             .padding(0)
@@ -1124,7 +1210,7 @@ fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                 button::Style {
                     background: Some(bg.into()),
                     text_color: p.fg,
-                    border: iced::border::rounded(4.0),
+                    border: iced::border::rounded(theme::RADIUS_SM),
                     ..Default::default()
                 }
             })
@@ -1133,26 +1219,30 @@ fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         })
         .collect();
 
-    let cancel_btn =
-        Button::new(Container::new(text("Cancel").size(12).color(Color::WHITE)).padding(4))
-            .padding(8)
-            .width(Length::Fixed(80.0))
-            .style(button_style_accent())
-            .on_press(Message::ClosePicker);
+    let cancel_btn = Button::new(
+        Container::new(text("Cancel").size(theme::TEXT_SIZE_SM).color(Color::WHITE)).padding(4),
+    )
+    .padding(theme::SPACING_SM)
+    .width(Length::Fixed(theme::BUTTON_WIDTH))
+    .style(button_style_accent())
+    .on_press(Message::ClosePicker);
 
     let dialog = Container::new(
         Column::with_children(vec![
-            text("Add to Playlist").size(16).color(p.fg).into(),
+            text("Add to Playlist")
+                .size(theme::TEXT_SIZE_LG)
+                .color(p.fg)
+                .into(),
             Column::with_children(items)
                 .spacing(0)
                 .width(Length::Fill)
                 .into(),
             cancel_btn.into(),
         ])
-        .spacing(8)
+        .spacing(theme::SPACING_SM)
         .padding(0),
     )
-    .width(Length::Fixed(300.0))
+    .width(Length::Fixed(theme::DIALOG_WIDTH))
     .height(Length::Fill)
     .style(bg(p.bg_secondary));
 
@@ -1166,37 +1256,42 @@ fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
 fn view_delete_confirm<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let p = &player.palette;
 
-    let cancel_btn =
-        Button::new(Container::new(text("Cancel").size(12).color(Color::WHITE)).padding(4))
-            .padding(8)
-            .width(Length::Fixed(80.0))
-            .style(button_style_accent())
-            .on_press(Message::HideDeleteConfirm);
+    let cancel_btn = Button::new(
+        Container::new(text("Cancel").size(theme::TEXT_SIZE_SM).color(Color::WHITE)).padding(4),
+    )
+    .padding(theme::SPACING_SM)
+    .width(Length::Fixed(theme::BUTTON_WIDTH))
+    .style(button_style_accent())
+    .on_press(Message::HideDeleteConfirm);
 
-    let delete_btn =
-        Button::new(Container::new(text("Delete").size(12).color(Color::WHITE)).padding(4))
-            .padding(8)
-            .width(Length::Fixed(80.0))
-            .style(button::danger)
-            .on_press(Message::ConfirmDeletePlaylist);
+    let delete_btn = Button::new(
+        Container::new(text("Delete").size(theme::TEXT_SIZE_SM).color(Color::WHITE)).padding(4),
+    )
+    .padding(theme::SPACING_SM)
+    .width(Length::Fixed(theme::BUTTON_WIDTH))
+    .style(button::danger)
+    .on_press(Message::ConfirmDeletePlaylist);
 
     let dialog = Container::new(
         Column::with_children(vec![
-            text("Delete playlist?").size(16).color(p.fg).into(),
+            text("Delete playlist?")
+                .size(theme::TEXT_SIZE_LG)
+                .color(p.fg)
+                .into(),
             text("Tracks will not be deleted.")
-                .size(13)
+                .size(theme::TEXT_SIZE_DEFAULT)
                 .color(p.fg_secondary)
                 .into(),
             Row::with_children(vec![cancel_btn.into(), delete_btn.into()])
-                .spacing(8)
+                .spacing(theme::SPACING_SM)
                 .align_y(alignment::Vertical::Center)
                 .into(),
         ])
-        .spacing(12)
-        .padding(24),
+        .spacing(theme::SPACING_MD)
+        .padding(theme::SPACING_XL),
     )
-    .width(Length::Fixed(300.0))
-    .height(Length::Fixed(140.0))
+    .width(Length::Fixed(theme::DIALOG_WIDTH))
+    .height(Length::Fixed(theme::DIALOG_HEIGHT))
     .style(bg(p.bg_secondary));
 
     Container::new(MouseArea::new(dialog))
