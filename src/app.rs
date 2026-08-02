@@ -48,13 +48,14 @@ pub struct ContextMenuState {
     pub is_youtube: bool,
     pub is_downloaded: bool,
     pub in_playlist: bool,
-    pub in_queue: bool,
+    pub is_queue: bool,
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
     Tick,
     WindowClose,
+    WindowResized(iced::Size),
     CursorMoved(Point),
     LeftButtonReleased,
     KeyPressed {
@@ -68,11 +69,23 @@ pub enum Message {
     SearchHistorySelected(usize),
     DeleteSearchHistory(usize),
 
-    TrackPressed(usize),
-    TrackHoverStart(usize),
-    TrackRightClicked(usize),
+    TrackPressed {
+        index: usize,
+        is_queue: bool,
+    },
+    TrackHoverStart {
+        index: usize,
+        is_queue: bool,
+    },
+    TrackRightClicked {
+        index: usize,
+        is_queue: bool,
+    },
     GlobalSearchSubmit,
-    PlayTrackAtIndex(usize),
+    PlayTrackAtIndex {
+        index: usize,
+        is_queue: bool,
+    },
     TogglePlayPause,
     NextTrack,
     PreviousTrack,
@@ -166,7 +179,8 @@ pub struct MusicPlayer {
 
     pub cursor_pos: Point,
     pub pressed_track: Option<usize>,
-    pub hovered_track: Option<usize>,
+    pub pressed_track_is_queue: bool,
+    pub hovered_track: Option<(usize, bool)>,
     pub drag_origin: Option<Point>,
     pub drag_active: bool,
 
@@ -183,6 +197,7 @@ pub struct MusicPlayer {
     pub playlist_list_scroll: f32,
     pub sidebar_bounds: Option<iced::Rectangle>,
     pub sidebar_list_scroll: f32,
+    pub window_width: f32,
 }
 
 impl Default for MusicPlayer {
@@ -252,6 +267,7 @@ impl MusicPlayer {
             mpris_update_tx: None,
             cursor_pos: Point::new(0.0, 0.0),
             pressed_track: None,
+            pressed_track_is_queue: false,
             hovered_track: None,
             drag_origin: None,
             drag_active: false,
@@ -265,6 +281,7 @@ impl MusicPlayer {
             playlist_list_scroll: 0.0,
             sidebar_bounds: None,
             sidebar_list_scroll: 0.0,
+            window_width: 1280.0,
             elapsed_text: String::new(),
             total_text: String::new(),
             selected_indices: Vec::new(),
@@ -308,6 +325,9 @@ impl MusicPlayer {
                 Some(Message::KeyPressed { key, modifiers })
             }
             iced::Event::Window(iced::window::Event::CloseRequested) => Some(Message::WindowClose),
+            iced::Event::Window(iced::window::Event::Resized(size)) => {
+                Some(Message::WindowResized(size))
+            }
             _ => None,
         }
     }
@@ -316,6 +336,10 @@ impl MusicPlayer {
         match message {
             Message::Tick => {
                 self.handle_tick();
+                Task::none()
+            }
+            Message::WindowResized(size) => {
+                self.window_width = size.width;
                 Task::none()
             }
             Message::WindowClose => {
@@ -366,26 +390,30 @@ impl MusicPlayer {
                 self.handle_delete_search_history(index);
                 Task::none()
             }
-            Message::TrackPressed(index) => {
-                self.handle_track_pressed(index);
+            Message::TrackPressed { index, is_queue } => {
+                self.handle_track_pressed(index, is_queue);
                 Task::none()
             }
-            Message::TrackHoverStart(index) => {
-                self.hovered_track = Some(index);
+            Message::TrackHoverStart { index, is_queue } => {
+                self.hovered_track = Some((index, is_queue));
                 Task::none()
             }
-            Message::TrackRightClicked(index) => {
-                self.hovered_track = None;
-                self.show_context_menu(index);
+            Message::TrackRightClicked { index, is_queue } => {
+                if !is_queue {
+                    self.hovered_track = None;
+                }
+                self.show_context_menu(index, is_queue);
                 Task::none()
             }
             Message::GlobalSearchSubmit => {
                 self.handle_global_search();
                 Task::none()
             }
-            Message::PlayTrackAtIndex(index) => {
-                self.hovered_track = None;
-                self.handle_play_track(index);
+            Message::PlayTrackAtIndex { index, is_queue } => {
+                if !is_queue {
+                    self.hovered_track = None;
+                }
+                self.handle_play_track(index, is_queue);
                 Task::none()
             }
             Message::TogglePlayPause => {
@@ -488,13 +516,23 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuPlayTrack(index) => {
+                let is_queue = self
+                    .context_menu
+                    .as_ref()
+                    .map(|m| m.is_queue)
+                    .unwrap_or(false);
                 self.context_menu = None;
                 self.pressed_track = None;
-                self.handle_play_track(index);
+                self.handle_play_track(index, is_queue);
                 Task::none()
             }
             Message::ContextMenuStartSongRadio(index) => {
-                let track = self.get_track_at(index);
+                let is_queue = self
+                    .context_menu
+                    .as_ref()
+                    .map(|m| m.is_queue)
+                    .unwrap_or(false);
+                let track = self.get_track_at(index, is_queue);
                 self.context_menu = None;
                 if let Some(t) = track {
                     self.start_song_radio(t.title.clone());
@@ -502,7 +540,12 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuStartArtistRadio(index) => {
-                let track = self.get_track_at(index);
+                let is_queue = self
+                    .context_menu
+                    .as_ref()
+                    .map(|m| m.is_queue)
+                    .unwrap_or(false);
+                let track = self.get_track_at(index, is_queue);
                 self.context_menu = None;
                 if let Some(t) = track {
                     self.start_artist_radio(t.artist.clone());
@@ -510,14 +553,19 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuDownloadOrDelete(index) => {
-                let track = self.get_track_at(index);
+                let is_queue = self
+                    .context_menu
+                    .as_ref()
+                    .map(|m| m.is_queue)
+                    .unwrap_or(false);
+                let track = self.get_track_at(index, is_queue);
                 self.context_menu = None;
                 self.pressed_track = None;
                 if let Some(track) = track {
                     if self.download_registry.contains(&track.url) {
-                        self.handle_remove_download(index);
+                        self.handle_remove_download(index, is_queue);
                     } else {
-                        self.handle_download_track(index);
+                        self.handle_download_track(index, is_queue);
                     }
                 }
                 Task::none()

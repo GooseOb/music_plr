@@ -21,18 +21,29 @@ fn bg(color: Color) -> impl Fn(&iced::Theme) -> container::Style + 'static {
 
 fn button_style(
     bg: Color,
+    bg_hover: Color,
     text_color: Color,
 ) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    move |_, _| button::Style {
-        background: Some(bg.into()),
-        text_color,
-        border: iced::border::rounded(4.0),
-        ..Default::default()
+    move |_, status| {
+        let bg_color = match status {
+            button::Status::Hovered | button::Status::Pressed => bg_hover,
+            _ => bg,
+        };
+        button::Style {
+            background: Some(bg_color.into()),
+            text_color,
+            border: iced::border::rounded(4.0),
+            ..Default::default()
+        }
     }
 }
 
 fn button_style_accent() -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    button_style(Color::from_rgb8(0x2a, 0x2a, 0x34), Color::WHITE)
+    button_style(
+        Color::from_rgb8(0x2a, 0x2a, 0x34),
+        Color::from_rgb8(0x3a, 0x3a, 0x44),
+        Color::WHITE,
+    )
 }
 
 fn slider_style(
@@ -182,24 +193,39 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             } else {
                 p.bg_secondary
             };
-            Container::new(
-                MouseArea::new(
-                    Row::with_children(vec![
-                        icons::icon("music.svg", p.fg_muted, 14.0).into(),
-                        text(&pl.name)
-                            .size(13)
-                            .color(if is_selected { p.fg } else { p.fg_secondary })
-                            .into(),
-                    ])
-                    .spacing(10)
-                    .padding([8, 12])
-                    .align_y(alignment::Vertical::Center),
-                )
-                .on_press(Message::SelectPlaylist(i)),
+            let icon_color = if is_selected { p.accent } else { p.fg_muted };
+            let text_color = if is_selected { p.fg } else { p.fg_secondary };
+            let bg_hover = p.bg_hover;
+
+            Button::new(
+                Row::with_children(vec![
+                    icons::icon("music.svg", icon_color, 14.0).into(),
+                    text(&pl.name).size(13).color(text_color).into(),
+                ])
+                .spacing(10)
+                .padding([8, 12])
+                .align_y(alignment::Vertical::Center)
+                .width(Length::Fill),
             )
             .width(Length::Fill)
-            .height(Length::Fixed(theme::SIDEBAR_ITEM_HEIGHT))
-            .style(bg(bg_color))
+            .padding(0)
+            .style(move |_, status| {
+                let bg = if is_selected {
+                    bg_color
+                } else {
+                    match status {
+                        button::Status::Hovered | button::Status::Pressed => bg_hover,
+                        _ => bg_color,
+                    }
+                };
+                button::Style {
+                    background: Some(bg.into()),
+                    text_color,
+                    border: iced::border::rounded(4.0),
+                    ..Default::default()
+                }
+            })
+            .on_press(Message::SelectPlaylist(i))
             .into()
         })
         .collect();
@@ -278,30 +304,46 @@ fn sidebar_nav_item<'a>(
     } else {
         p.bg_secondary
     };
-    let icon_name = match &view {
+    let icon_color = if is_active { p.accent } else { p.fg_muted };
+    let text_color = if is_active { p.fg } else { p.fg_secondary };
+    let bg_hover = p.bg_hover;
+    let icon_name: &'a str = match &view {
         View::Search(_) => "search.svg",
         View::SongRadio(_) => "radio.svg",
         View::ArtistRadio(_) => "radio.svg",
         View::Playlist(_) => "music.svg",
         View::Downloads => "download.svg",
     };
-    let icon_color = if is_active { p.accent } else { p.fg_muted };
-    let text_color = if is_active { p.fg } else { p.fg_secondary };
 
-    Container::new(
-        MouseArea::new(
-            Row::with_children(vec![
-                icons::icon(icon_name, icon_color, 16.0).into(),
-                text(name).size(13).color(text_color).into(),
-            ])
-            .spacing(10)
-            .padding([10, 16])
-            .align_y(alignment::Vertical::Center),
-        )
-        .on_press(Message::NavigateTo(view)),
+    Button::new(
+        Row::with_children(vec![
+            icons::icon(icon_name, icon_color, 16.0).into(),
+            text(name).size(13).color(text_color).into(),
+        ])
+        .spacing(10)
+        .padding([10, 16])
+        .align_y(alignment::Vertical::Center)
+        .width(Length::Fill),
     )
     .width(Length::Fill)
-    .style(bg(bg_color))
+    .padding(0)
+    .style(move |_, status| {
+        let bg = if is_active {
+            bg_color
+        } else {
+            match status {
+                button::Status::Hovered | button::Status::Pressed => bg_hover,
+                _ => bg_color,
+            }
+        };
+        button::Style {
+            background: Some(bg.into()),
+            text_color,
+            border: iced::border::rounded(4.0),
+            ..Default::default()
+        }
+    })
+    .on_press(Message::NavigateTo(view))
     .into()
 }
 
@@ -400,7 +442,7 @@ fn view_search<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .padding(24)
         .into()
     } else {
-        view_track_list(&player.search_results, player)
+        view_track_list(&player.search_results, player, false)
     };
 
     let load_more = if !player.search_loading
@@ -447,7 +489,7 @@ fn view_search_radio<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .padding(24)
         .into()
     } else {
-        view_track_list(&player.radio_tracks, player)
+        view_track_list(&player.radio_tracks, player, false)
     };
 
     Column::with_children(vec![header.into(), track_list])
@@ -477,29 +519,68 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             } else {
                 p.bg_secondary
             };
+            let bg_hover = p.bg_hover;
+            let is_focused_copy = is_focused;
+            let sel_fg = p.fg;
+            let sel_fg_secondary = if is_focused { p.fg } else { p.fg_secondary };
+            let sel_bg_hover = bg_hover;
+            let del_fg = p.fg;
+            let del_fg_muted = p.fg_muted;
+            let del_bg_hover = bg_hover;
+            let del_bg = bg_color;
+
             Container::new(
                 Row::with_children(vec![
-                    Container::new(
-                        MouseArea::new(
-                            Row::with_children(vec![
-                                icons::icon("search.svg", p.fg_muted, 12.0).into(),
-                                text(q)
-                                    .size(12)
-                                    .color(if is_focused { p.fg } else { p.fg_secondary })
-                                    .into(),
-                            ])
-                            .spacing(8),
-                        )
-                        .on_press(Message::SearchHistorySelected(i)),
+                    Button::new(
+                        Row::with_children(vec![
+                            icons::icon("search.svg", del_fg_muted, 12.0).into(),
+                            text(q).size(12).color(sel_fg_secondary).into(),
+                        ])
+                        .spacing(8)
+                        .padding([6, 12])
+                        .align_y(alignment::Vertical::Center)
+                        .width(Length::Fill),
                     )
                     .width(Length::Fill)
+                    .padding(0)
+                    .style(move |_, status| {
+                        let bg = if is_focused_copy {
+                            bg_color
+                        } else {
+                            match status {
+                                button::Status::Hovered | button::Status::Pressed => sel_bg_hover,
+                                _ => bg_color,
+                            }
+                        };
+                        button::Style {
+                            background: Some(bg.into()),
+                            text_color: sel_fg,
+                            border: iced::border::rounded(4.0),
+                            ..Default::default()
+                        }
+                    })
+                    .on_press(Message::SearchHistorySelected(i))
                     .into(),
-                    MouseArea::new(icons::icon("delete.svg", p.fg_muted, 12.0))
+                    Button::new(icons::icon("delete.svg", del_fg_muted, 12.0))
+                        .padding(2)
+                        .style(move |_, status| {
+                            let bg = match status {
+                                button::Status::Hovered | button::Status::Pressed => del_bg_hover,
+                                _ => del_bg,
+                            };
+                            button::Style {
+                                background: Some(bg.into()),
+                                text_color: del_fg,
+                                border: iced::border::rounded(4.0),
+                                ..Default::default()
+                            }
+                        })
                         .on_press(Message::DeleteSearchHistory(i))
+                        .width(Length::Fixed(24.0))
+                        .height(Length::Fixed(24.0))
                         .into(),
                 ])
                 .spacing(8)
-                .padding([6, 12])
                 .align_y(alignment::Vertical::Center),
             )
             .width(Length::Fill)
@@ -557,7 +638,7 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
 
     let track_list = if let Some(idx) = player.selected_playlist {
         if let Some(pl) = player.playlists.playlists.get(idx) {
-            view_track_list(&pl.tracks, player)
+            view_track_list(&pl.tracks, player, false)
         } else {
             Container::new(Row::new())
                 .width(Length::Fill)
@@ -584,6 +665,7 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
 fn view_track_list<'a>(
     tracks: &'a [crate::types::Track],
     player: &'a MusicPlayer,
+    is_queue: bool,
 ) -> Element<'a, Message> {
     if tracks.is_empty() {
         return Container::new(
@@ -601,7 +683,7 @@ fn view_track_list<'a>(
     let items: Vec<Element<'a, Message>> = tracks
         .iter()
         .enumerate()
-        .map(|(i, track)| view_track_row(track, i, player))
+        .map(|(i, track)| view_track_row(track, i, player, is_queue))
         .collect();
 
     Container::new(
@@ -618,11 +700,18 @@ fn view_track_row<'a>(
     track: &'a crate::types::Track,
     index: usize,
     player: &'a MusicPlayer,
+    is_queue: bool,
 ) -> Element<'a, Message> {
     let p = &player.palette;
     let is_selected = player.selected_indices.contains(&index);
-    let row_bg = if is_selected { p.bg_selected } else { p.bg };
-    let is_hovered = player.hovered_track == Some(index);
+    let is_hovered = player.hovered_track == Some((index, is_queue));
+    let row_bg = if is_selected {
+        p.bg_selected
+    } else if is_hovered {
+        p.bg_hover
+    } else {
+        p.bg
+    };
 
     let duration_text = crate::util::format_duration(track.duration);
 
@@ -630,7 +719,7 @@ fn view_track_row<'a>(
         Button::new(icons::icon("play.svg", p.fg, 14.0))
             .padding(2)
             .style(button_style_accent())
-            .on_press(Message::PlayTrackAtIndex(index))
+            .on_press(Message::PlayTrackAtIndex { index, is_queue })
             .into()
     } else {
         text((index + 1).to_string())
@@ -641,12 +730,7 @@ fn view_track_row<'a>(
             .into()
     };
 
-    let content = Row::with_children(vec![
-        Container::new(leading).width(Length::Fixed(24.0)).into(),
-        Container::new(thumbnail(track, p))
-            .width(Length::Fixed(theme::THUMBNAIL_SIZE))
-            .height(Length::Fixed(theme::THUMBNAIL_SIZE))
-            .into(),
+    let title_artist = Column::with_children(vec![
         text(track.title.clone())
             .size(13)
             .color(p.fg)
@@ -657,6 +741,16 @@ fn view_track_row<'a>(
             .color(p.fg_secondary)
             .width(Length::Fill)
             .into(),
+    ])
+    .spacing(2);
+
+    let content = Row::with_children(vec![
+        Container::new(leading).width(Length::Fixed(24.0)).into(),
+        Container::new(thumbnail(track, p))
+            .width(Length::Fixed(theme::THUMBNAIL_SIZE))
+            .height(Length::Fixed(theme::THUMBNAIL_SIZE))
+            .into(),
+        Container::new(title_artist).width(Length::Fill).into(),
         text(duration_text)
             .size(12)
             .color(p.fg_secondary)
@@ -668,9 +762,9 @@ fn view_track_row<'a>(
     .padding([6, 10]);
 
     let track_area = MouseArea::new(content)
-        .on_press(Message::TrackPressed(index))
-        .on_right_press(Message::TrackRightClicked(index))
-        .on_move(move |_| Message::TrackHoverStart(index));
+        .on_press(Message::TrackPressed { index, is_queue })
+        .on_right_press(Message::TrackRightClicked { index, is_queue })
+        .on_move(move |_| Message::TrackHoverStart { index, is_queue });
 
     Container::new(track_area)
         .width(Length::Fill)
@@ -681,6 +775,7 @@ fn view_track_row<'a>(
 
 fn view_queue_panel<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let p = &player.palette;
+    let queue_width = (player.window_width * 0.2).max(theme::QUEUE_MIN_WIDTH);
 
     let header = Container::new(
         Row::with_children(vec![
@@ -693,81 +788,20 @@ fn view_queue_panel<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     )
     .width(Length::Fill);
 
-    if player.queue.tracks.is_empty() {
-        let empty =
-            Container::new(text("Queue is empty").size(12).color(p.fg_secondary)).padding(16);
-        return Container::new(
-            Column::with_children(vec![header.into(), empty.into()])
-                .spacing(0)
-                .width(Length::Fill),
-        )
-        .width(Length::Fixed(theme::QUEUE_MIN_WIDTH))
-        .height(Length::Fill)
-        .style(bg(p.bg_secondary))
-        .into();
-    }
-
-    let items: Vec<Element<'a, Message>> = player
-        .queue
-        .tracks
-        .iter()
-        .enumerate()
-        .map(|(i, track)| {
-            let is_current = player.queue.current_index == i;
-            let row_bg = if is_current { p.bg_current } else { p.bg };
-
-            let duration_text = crate::util::format_duration(track.duration);
-            let title_color = if is_current { p.accent } else { p.fg };
-
-            let content = Row::with_children(vec![
-                Container::new(
-                    MouseArea::new(icons::icon("delete.svg", p.fg_muted, 12.0))
-                        .on_press(Message::ContextMenuRemoveFromQueue(i)),
-                )
-                .width(Length::Fixed(24.0))
-                .into(),
-                Container::new(thumbnail(track, p))
-                    .width(Length::Fixed(theme::THUMBNAIL_SIZE))
-                    .height(Length::Fixed(theme::THUMBNAIL_SIZE))
-                    .into(),
-                text(track.title.clone())
-                    .size(12)
-                    .color(title_color)
-                    .width(Length::Fill)
-                    .into(),
-                text(track.artist.clone())
-                    .size(11)
-                    .color(p.fg_secondary)
-                    .width(Length::Fill)
-                    .into(),
-                text(duration_text)
-                    .size(11)
-                    .color(p.fg_secondary)
-                    .width(Length::Fixed(48.0))
-                    .into(),
-            ])
-            .spacing(8)
-            .align_y(alignment::Vertical::Center)
-            .padding([6, 8]);
-
-            Container::new(content)
-                .width(Length::Fill)
-                .height(Length::Fixed(theme::ROW_HEIGHT))
-                .style(bg(row_bg))
-                .into()
-        })
-        .collect();
-
-    let list = scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
-        .width(Length::Fill)
-        .height(Length::Fill);
+    let track_list = if player.queue.tracks.is_empty() {
+        Container::new(text("Queue is empty").size(12).color(p.fg_secondary))
+            .padding(16)
+            .into()
+    } else {
+        view_track_list(&player.queue.tracks, player, true)
+    };
 
     Container::new(
-        Column::with_children(vec![header.into(), list.into()])
+        Column::with_children(vec![header.into(), track_list])
             .spacing(0)
             .width(Length::Fill),
     )
-    .width(Length::Fixed(theme::QUEUE_MIN_WIDTH))
+    .width(Length::Fixed(queue_width))
     .height(Length::Fill)
     .style(bg(p.bg_secondary))
     .into()
@@ -948,26 +982,24 @@ fn view_context_menu<'a>(
             );
         }
 
-        if menu.in_playlist {
-            v.push(
-                menu_item(
-                    "Remove from Playlist",
-                    "delete.svg",
-                    p,
-                    Message::ContextMenuRemoveFromPlaylist(menu.track_index),
-                )
-                .width(Length::Fill)
-                .into(),
-            );
-        }
-
-        if menu.in_queue {
+        if menu.is_queue {
             v.push(
                 menu_item(
                     "Remove from Queue",
                     "delete.svg",
                     p,
                     Message::ContextMenuRemoveFromQueue(menu.track_index),
+                )
+                .width(Length::Fill)
+                .into(),
+            );
+        } else if menu.in_playlist {
+            v.push(
+                menu_item(
+                    "Remove from Playlist",
+                    "delete.svg",
+                    p,
+                    Message::ContextMenuRemoveFromPlaylist(menu.track_index),
                 )
                 .width(Length::Fill)
                 .into(),
@@ -1007,23 +1039,38 @@ fn view_context_menu<'a>(
 fn menu_item<'a>(
     label: &'a str,
     icon: &'a str,
-    p: &theme::Palette,
+    p: &'a theme::Palette,
     on_press: Message,
 ) -> Container<'a, Message> {
     Container::new(
-        MouseArea::new(
+        Button::new(
             Row::with_children(vec![
                 icons::icon(icon, p.fg_muted, 12.0).into(),
                 text(label).size(13).color(p.fg).into(),
             ])
             .spacing(8)
             .padding([6, 8])
-            .align_y(alignment::Vertical::Center),
+            .align_y(alignment::Vertical::Center)
+            .width(Length::Fill),
         )
+        .width(Length::Fill)
+        .padding(0)
+        .style(move |_, status| {
+            let bg = match status {
+                button::Status::Hovered | button::Status::Pressed => p.bg_hover,
+                _ => p.bg_secondary,
+            };
+            button::Style {
+                background: Some(bg.into()),
+                text_color: p.fg,
+                border: iced::border::rounded(4.0),
+                ..Default::default()
+            }
+        })
         .on_press(on_press),
     )
     .width(Length::Fill)
-    .style(bg(p.bg_hover))
+    .style(bg(p.bg_secondary))
 }
 
 fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
@@ -1041,17 +1088,35 @@ fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             } else {
                 p.bg_secondary
             };
-            Container::new(
-                MouseArea::new(
-                    Row::with_children(vec![text(&pl.name).size(13).color(p.fg).into()])
-                        .spacing(8)
-                        .padding([8, 12])
-                        .align_y(alignment::Vertical::Center),
-                )
-                .on_press(Message::AddToPlaylist(i)),
+            let bg_hover = p.bg_hover;
+            let is_focused_copy = is_focused;
+
+            Button::new(
+                Row::with_children(vec![text(&pl.name).size(13).color(p.fg).into()])
+                    .spacing(8)
+                    .padding([8, 12])
+                    .align_y(alignment::Vertical::Center)
+                    .width(Length::Fill),
             )
             .width(Length::Fill)
-            .style(bg(bg_color))
+            .padding(0)
+            .style(move |_, status| {
+                let bg = if is_focused_copy {
+                    bg_color
+                } else {
+                    match status {
+                        button::Status::Hovered | button::Status::Pressed => bg_hover,
+                        _ => bg_color,
+                    }
+                };
+                button::Style {
+                    background: Some(bg.into()),
+                    text_color: p.fg,
+                    border: iced::border::rounded(4.0),
+                    ..Default::default()
+                }
+            })
+            .on_press(Message::AddToPlaylist(i))
             .into()
         })
         .collect();

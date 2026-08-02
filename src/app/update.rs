@@ -313,7 +313,8 @@ impl MusicPlayer {
 
     pub fn handle_left_release(&mut self) {
         if self.drag_active {
-            self.handle_drag_drop();
+            let is_queue = self.pressed_track_is_queue;
+            self.handle_drag_drop(is_queue);
             self.drag_active = false;
             self.drag_origin = None;
             self.pressed_track = None;
@@ -325,7 +326,7 @@ impl MusicPlayer {
         self.drag_origin = None;
     }
 
-    pub fn handle_track_pressed(&mut self, index: usize) {
+    pub fn handle_track_pressed(&mut self, index: usize, is_queue: bool) {
         let now = std::time::Instant::now();
         let is_double = self.last_click_index == Some(index)
             && now.duration_since(self.last_click_time).as_millis() < DOUBLE_CLICK_MS;
@@ -333,6 +334,7 @@ impl MusicPlayer {
         self.last_click_index = Some(index);
         self.last_click_time = now;
         self.pressed_track = Some(index);
+        self.pressed_track_is_queue = is_queue;
         self.drag_origin = Some(self.cursor_pos);
         self.drag_active = false;
         self.input_focused = false;
@@ -340,7 +342,7 @@ impl MusicPlayer {
         if is_double {
             self.pressed_track = None;
             self.drag_origin = None;
-            self.handle_play_track(index);
+            self.handle_play_track(index, is_queue);
         }
     }
 
@@ -352,7 +354,10 @@ impl MusicPlayer {
         }
     }
 
-    pub fn get_track_at(&self, index: usize) -> Option<Track> {
+    pub fn get_track_at(&self, index: usize, is_queue: bool) -> Option<Track> {
+        if is_queue {
+            return self.queue.tracks.get(index).cloned();
+        }
         match &self.current_view {
             View::Search(_) => self.search_results.get(index).cloned(),
             View::SongRadio(_) | View::ArtistRadio(_) => self.radio_tracks.get(index).cloned(),
@@ -364,7 +369,10 @@ impl MusicPlayer {
         }
     }
 
-    pub fn current_track_count(&self) -> usize {
+    pub fn current_track_count(&self, is_queue: bool) -> usize {
+        if is_queue {
+            return self.queue.tracks.len();
+        }
         match &self.current_view {
             View::Search(_) => self.search_results.len(),
             View::SongRadio(_) | View::ArtistRadio(_) => self.radio_tracks.len(),
@@ -376,7 +384,7 @@ impl MusicPlayer {
         }
     }
 
-    pub fn handle_drag_drop(&mut self) {
+    pub fn handle_drag_drop(&mut self, is_queue: bool) {
         let Some(track_idx) = self.pressed_track else {
             return;
         };
@@ -396,7 +404,7 @@ impl MusicPlayer {
                     };
                     let mut count = 0;
                     for &i in indices.iter().rev() {
-                        if let Some(track) = self.get_track_at(i) {
+                        if let Some(track) = self.get_track_at(i, is_queue) {
                             let track = track.clone();
                             self.playlists.insert_track_at(playlist_idx, &track, 0);
                             count += 1;
@@ -422,7 +430,7 @@ impl MusicPlayer {
             let y_offset = cursor.y - list_bounds.y;
             let drop_idx_raw =
                 ((y_offset + self.get_current_list_scroll()) / crate::theme::ROW_HEIGHT) as usize;
-            let count = self.current_track_count();
+            let count = self.current_track_count(false);
             if drop_idx_raw >= count {
                 return;
             }
@@ -480,15 +488,15 @@ impl MusicPlayer {
                 }
             }
             iced::keyboard::Key::Named(Named::ArrowDown) => {
-                let count = self.current_track_count();
+                let count = self.current_track_count(false);
                 if self.focused_list_index < count.saturating_sub(1) {
                     self.focused_list_index += 1;
                 }
             }
             iced::keyboard::Key::Named(Named::Enter) => {
-                let count = self.current_track_count();
+                let count = self.current_track_count(false);
                 if self.focused_list_index < count {
-                    self.handle_play_track(self.focused_list_index);
+                    self.handle_play_track(self.focused_list_index, false);
                 }
             }
             _ => {}
@@ -509,17 +517,26 @@ impl MusicPlayer {
         }
     }
 
-    pub fn handle_play_track(&mut self, index: usize) {
+    pub fn handle_play_track(&mut self, index: usize, is_queue: bool) {
+        if is_queue {
+            if index < self.queue.tracks.len() {
+                let track = self.queue.tracks[index].clone();
+                self.queue.tracks.drain(0..index);
+                self.queue.current_index = 0;
+                self.play_track_internal(&track);
+            }
+            return;
+        }
         self.clear_selection();
         self.selected_indices = vec![index];
-        if let Some(track) = self.get_track_at(index) {
+        if let Some(track) = self.get_track_at(index, false) {
             let track = track.clone();
             self.play_track_internal(&track);
             self.queue.clear();
             self.queue.enqueue(track);
-            let count = self.current_track_count();
+            let count = self.current_track_count(false);
             for i in (index + 1)..count {
-                if let Some(t) = self.get_track_at(i) {
+                if let Some(t) = self.get_track_at(i, false) {
                     self.queue.enqueue(t);
                 }
             }
@@ -834,7 +851,7 @@ impl MusicPlayer {
 
         let mut count = 0;
         for &i in indices.iter().rev() {
-            if let Some(track) = self.get_track_at(i) {
+            if let Some(track) = self.get_track_at(i, false) {
                 let track = track.clone();
                 self.playlists.insert_track_at(playlist_idx, &track, 0);
                 count += 1;
@@ -880,8 +897,8 @@ impl MusicPlayer {
         }
     }
 
-    pub fn handle_download_track(&mut self, index: usize) {
-        if let Some(track) = self.get_track_at(index) {
+    pub fn handle_download_track(&mut self, index: usize, is_queue: bool) {
+        if let Some(track) = self.get_track_at(index, is_queue) {
             let track = track.clone();
             self.downloading_index = Some(index);
             self.notify(format!("Downloading \"{}\"...", track.title));
@@ -900,8 +917,8 @@ impl MusicPlayer {
         }
     }
 
-    pub fn handle_remove_download(&mut self, index: usize) {
-        if let Some(track) = self.get_track_at(index) {
+    pub fn handle_remove_download(&mut self, index: usize, is_queue: bool) {
+        if let Some(track) = self.get_track_at(index, is_queue) {
             let url = track.url.clone();
             self.download_registry.remove(&url);
         }
@@ -910,7 +927,7 @@ impl MusicPlayer {
     pub fn handle_copy_selected(&mut self) {
         self.clipboard.clear();
         for &i in &self.selected_indices {
-            if let Some(track) = self.get_track_at(i) {
+            if let Some(track) = self.get_track_at(i, false) {
                 self.clipboard.push(track.clone());
             }
         }
@@ -1029,8 +1046,8 @@ impl MusicPlayer {
         }
     }
 
-    pub fn show_context_menu(&mut self, index: usize) {
-        let track = self.get_track_at(index);
+    pub fn show_context_menu(&mut self, index: usize, is_queue: bool) {
+        let track = self.get_track_at(index, is_queue);
         let Some(track) = track else {
             return;
         };
@@ -1041,7 +1058,7 @@ impl MusicPlayer {
             is_youtube: track.source == TrackSource::YouTube,
             is_downloaded: self.download_registry.contains(&track.url),
             in_playlist: matches!(self.current_view, View::Playlist(_)),
-            in_queue: self.show_queue,
+            is_queue,
         });
     }
 }
