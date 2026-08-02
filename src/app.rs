@@ -27,6 +27,7 @@ pub struct NavEntry {
     pub radio_label: String,
     pub search_results: Vec<Track>,
     pub radio_tracks: Vec<Track>,
+    pub selected_indices: Vec<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +59,15 @@ pub enum Message {
     WindowResized(iced::Size),
     CursorMoved(Point),
     LeftButtonReleased,
+    ListScrolled {
+        offset_y: f32,
+        bounds: iced::Rectangle,
+        is_queue: bool,
+    },
+    SidebarListScrolled {
+        offset_y: f32,
+        bounds: iced::Rectangle,
+    },
     KeyPressed {
         key: iced::keyboard::key::Key,
         modifiers: iced::keyboard::Modifiers,
@@ -183,10 +193,13 @@ pub struct MusicPlayer {
     pub hovered_track: Option<(usize, bool)>,
     pub drag_origin: Option<Point>,
     pub drag_active: bool,
+    pub drag_drop_target: Option<usize>,
+    pub sidebar_hover_playlist: Option<usize>,
 
     pub context_menu: Option<ContextMenuState>,
 
     pub focused_list_index: usize,
+    pub queue_selected_indices: Vec<usize>,
 
     pub palette: Palette,
 
@@ -194,6 +207,8 @@ pub struct MusicPlayer {
     pub search_list_scroll: f32,
     pub playlist_list_bounds: Option<iced::Rectangle>,
     pub playlist_list_scroll: f32,
+    pub queue_list_bounds: Option<iced::Rectangle>,
+    pub queue_list_scroll: f32,
     pub sidebar_bounds: Option<iced::Rectangle>,
     pub sidebar_list_scroll: f32,
     pub window_width: f32,
@@ -257,6 +272,7 @@ impl MusicPlayer {
                 radio_label: String::new(),
                 search_results: Vec::new(),
                 radio_tracks: Vec::new(),
+                selected_indices: Vec::new(),
             }],
             nav_history_pos: 0,
             result_tx,
@@ -270,13 +286,18 @@ impl MusicPlayer {
             hovered_track: None,
             drag_origin: None,
             drag_active: false,
+            drag_drop_target: None,
+            sidebar_hover_playlist: None,
             context_menu: None,
             focused_list_index: 0,
+            queue_selected_indices: Vec::new(),
             palette: Palette::dark(),
             search_list_bounds: None,
             search_list_scroll: 0.0,
             playlist_list_bounds: None,
             playlist_list_scroll: 0.0,
+            queue_list_bounds: None,
+            queue_list_scroll: 0.0,
             sidebar_bounds: None,
             sidebar_list_scroll: 0.0,
             window_width: 1280.0,
@@ -358,10 +379,38 @@ impl MusicPlayer {
                         }
                     }
                 }
+                if self.drag_active {
+                    return self.handle_drag_update();
+                }
                 Task::none()
             }
             Message::LeftButtonReleased => {
                 self.handle_left_release();
+                Task::none()
+            }
+            Message::ListScrolled {
+                offset_y,
+                bounds,
+                is_queue,
+            } => {
+                if is_queue {
+                    self.queue_list_bounds = Some(bounds);
+                    self.queue_list_scroll = offset_y;
+                } else if matches!(
+                    self.current_view,
+                    View::Search(_) | View::SongRadio(_) | View::ArtistRadio(_)
+                ) {
+                    self.search_list_bounds = Some(bounds);
+                    self.search_list_scroll = offset_y;
+                } else {
+                    self.playlist_list_bounds = Some(bounds);
+                    self.playlist_list_scroll = offset_y;
+                }
+                Task::none()
+            }
+            Message::SidebarListScrolled { offset_y, bounds } => {
+                self.sidebar_bounds = Some(bounds);
+                self.sidebar_list_scroll = offset_y;
                 Task::none()
             }
             Message::KeyPressed { key, modifiers } => {

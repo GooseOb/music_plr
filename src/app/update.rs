@@ -209,6 +209,7 @@ impl MusicPlayer {
             radio_label: String::new(),
             search_results: Vec::new(),
             radio_tracks: Vec::new(),
+            selected_indices: Vec::new(),
         }];
         self.nav_history_pos = 0;
     }
@@ -247,6 +248,7 @@ impl MusicPlayer {
 
     pub fn handle_navigate_to(&mut self, view: View) {
         self.nav_history.truncate(self.nav_history_pos + 1);
+        self.cleanup_drag_state();
 
         let back_entry = NavEntry {
             view: self.current_view.clone(),
@@ -256,10 +258,12 @@ impl MusicPlayer {
             radio_label: self.radio_label.clone(),
             search_results: self.search_results.clone(),
             radio_tracks: self.radio_tracks.clone(),
+            selected_indices: self.selected_indices.clone(),
         };
         self.nav_history.push(back_entry);
 
         self.current_view = view;
+        self.selected_indices.clear();
 
         let new_entry = NavEntry {
             view: self.current_view.clone(),
@@ -269,6 +273,7 @@ impl MusicPlayer {
             radio_label: self.radio_label.clone(),
             search_results: self.search_results.clone(),
             radio_tracks: self.radio_tracks.clone(),
+            selected_indices: Vec::new(),
         };
         self.nav_history.push(new_entry);
 
@@ -292,6 +297,7 @@ impl MusicPlayer {
             self.radio_label = entry.radio_label.clone();
             self.search_results = entry.search_results.clone();
             self.radio_tracks = entry.radio_tracks.clone();
+            self.selected_indices = entry.selected_indices.clone();
             self.save_session();
         }
     }
@@ -307,6 +313,7 @@ impl MusicPlayer {
             self.radio_label = entry.radio_label.clone();
             self.search_results = entry.search_results.clone();
             self.radio_tracks = entry.radio_tracks.clone();
+            self.selected_indices = entry.selected_indices.clone();
             self.save_session();
         }
     }
@@ -315,15 +322,223 @@ impl MusicPlayer {
         if self.drag_active {
             let is_queue = self.pressed_track_is_queue;
             self.handle_drag_drop(is_queue);
-            self.drag_active = false;
-            self.drag_origin = None;
-            self.pressed_track = None;
-            return;
+        } else if let Some(track_idx) = self.pressed_track {
+            let is_queue = self.pressed_track_is_queue;
+            self.toggle_selection(track_idx, is_queue);
         }
-        if let Some(idx) = self.pressed_track.take() {
-            self.toggle_selection(idx);
-        }
+        self.cleanup_drag_state();
+    }
+
+    fn cleanup_drag_state(&mut self) {
+        self.drag_active = false;
         self.drag_origin = None;
+        self.pressed_track = None;
+        self.drag_drop_target = None;
+        self.sidebar_hover_playlist = None;
+    }
+
+    pub fn selection(&self, is_queue: bool) -> &[usize] {
+        if is_queue {
+            &self.queue_selected_indices
+        } else {
+            &self.selected_indices
+        }
+    }
+
+    pub fn selection_mut(&mut self, is_queue: bool) -> &mut Vec<usize> {
+        if is_queue {
+            &mut self.queue_selected_indices
+        } else {
+            &mut self.selected_indices
+        }
+    }
+
+    pub fn handle_drag_update(&mut self) -> Task<Message> {
+        let cursor = self.cursor_pos;
+
+        self.sidebar_hover_playlist = None;
+        self.drag_drop_target = None;
+
+        if let Some(sidebar_bounds) = self.sidebar_bounds {
+            if cursor.x < sidebar_bounds.x + crate::theme::SIDEBAR_WIDTH {
+                let y_offset = cursor.y - sidebar_bounds.y;
+                if y_offset >= 0.0 {
+                    let playlist_idx = ((y_offset + self.sidebar_list_scroll)
+                        / crate::theme::SIDEBAR_ITEM_HEIGHT)
+                        as usize;
+                    if playlist_idx < self.playlists.playlists.len() {
+                        self.sidebar_hover_playlist = Some(playlist_idx);
+                    }
+                }
+                return Task::none();
+            }
+        }
+
+        let is_queue_drag = self.pressed_track_is_queue;
+        let (list_bounds, list_scroll, track_count) = if is_queue_drag && self.show_queue {
+            match (self.queue_list_bounds, self.queue_list_scroll) {
+                (Some(b), s) => (b, s, self.queue.tracks.len()),
+                _ => return Task::none(),
+            }
+        } else {
+            match (
+                self.get_current_list_bounds(),
+                self.get_current_list_scroll(),
+            ) {
+                (Some(b), s) => (b, s, self.current_track_count(false)),
+                (None, _) => return Task::none(),
+            }
+        };
+
+        let y_offset = cursor.y - list_bounds.y;
+        let row_pos = ((y_offset + list_scroll) / crate::theme::ROW_HEIGHT).max(0.0);
+        let row_idx = row_pos as usize;
+        let drop_idx = if row_idx < track_count && row_pos.fract() >= 0.5 {
+            row_idx + 1
+        } else {
+            row_idx
+        };
+        let drop_idx = drop_idx.min(track_count);
+
+        let sel = self.selection(is_queue_drag).to_vec();
+
+        if let (Some(min), Some(max)) = (sel.iter().copied().min(), sel.iter().copied().max()) {
+            if drop_idx > min && drop_idx < max {
+                self.drag_drop_target = None;
+                return Task::none();
+            }
+        }
+
+        self.drag_drop_target = Some(drop_idx);
+        self.handle_drag_autoscroll(list_bounds, list_scroll, is_queue_drag, track_count)
+    }
+
+    fn handle_drag_autoscroll(
+        &self,
+        list_bounds: iced::Rectangle,
+        current_scroll: f32,
+        is_queue: bool,
+        track_count: usize,
+    ) -> Task<Message> {
+        let cursor = self.cursor_pos;
+        let y_offset = cursor.y - list_bounds.y;
+        let list_height = list_bounds.height;
+
+        let total_height = track_count as f32 * crate::theme::ROW_HEIGHT;
+        let max_scroll = (total_height - list_height).max(0.0);
+
+        if max_scroll <= 0.0 {
+            return Task::none();
+        }
+
+        let edge_zone = crate::theme::DRAG_AUTO_SCROLL_ZONE;
+        let scroll_speed = crate::theme::DRAG_AUTO_SCROLL_SPEED;
+
+        let scroll_amount = if y_offset < edge_zone {
+            -scroll_speed
+        } else if y_offset > list_height - edge_zone {
+            scroll_speed
+        } else {
+            0.0
+        };
+
+        if scroll_amount == 0.0 {
+            return Task::none();
+        }
+
+        let new_scroll = (current_scroll + scroll_amount).clamp(0.0, max_scroll);
+        if (new_scroll - current_scroll).abs() < 0.1 {
+            return Task::none();
+        }
+
+        let list_id = if is_queue {
+            iced::widget::Id::new("queue_list")
+        } else {
+            iced::widget::Id::new("track_list")
+        };
+
+        iced::widget::operation::scroll_by::<Message>(
+            list_id,
+            iced::widget::operation::AbsoluteOffset {
+                x: 0.0,
+                y: scroll_amount,
+            },
+        )
+    }
+
+    pub fn handle_drag_drop(&mut self, is_queue: bool) {
+        let Some(track_idx) = self.pressed_track else {
+            return;
+        };
+
+        let cursor = self.cursor_pos;
+
+        let was_in_selection = {
+            let sel = self.selection(is_queue);
+            !sel.is_empty() && sel.contains(&track_idx)
+        };
+
+        let indices: Vec<usize> = if was_in_selection {
+            self.selection(is_queue).to_vec()
+        } else {
+            vec![track_idx]
+        };
+
+        if let Some(sidebar_bounds) = self.sidebar_bounds {
+            if cursor.x < sidebar_bounds.x + crate::theme::SIDEBAR_WIDTH {
+                let y_offset = cursor.y - sidebar_bounds.y;
+                if y_offset >= 0.0 {
+                    let playlist_idx = ((y_offset + self.sidebar_list_scroll)
+                        / crate::theme::SIDEBAR_ITEM_HEIGHT)
+                        as usize;
+                    if playlist_idx < self.playlists.playlists.len() {
+                        let mut count = 0;
+                        for &i in indices.iter().rev() {
+                            if let Some(track) = self.get_track_at(i, is_queue) {
+                                let track = track.clone();
+                                self.playlists.insert_track_at(playlist_idx, &track, 0);
+                                count += 1;
+                            }
+                        }
+                        self.playlists.save();
+                        let name = self.playlists.playlists[playlist_idx].name.clone();
+                        self.notify(format!(
+                            "Added {} track{} to {}",
+                            count,
+                            if count == 1 { "" } else { "s" },
+                            name
+                        ));
+                        return;
+                    }
+                }
+            }
+        }
+
+        if let Some(drop_idx) = self.drag_drop_target {
+            let min_idx = *indices.iter().min().unwrap();
+            let max_idx = *indices.iter().max().unwrap();
+            let is_valid_drop = drop_idx > max_idx || drop_idx < min_idx;
+
+            if is_queue {
+                let count = self.queue.tracks.len();
+                if drop_idx <= count && is_valid_drop {
+                    let new_positions = self.handle_reorder_queue(drop_idx, &indices);
+                    if was_in_selection {
+                        let sel = self.selection_mut(is_queue);
+                        *sel = new_positions;
+                    }
+                    self.save_session();
+                }
+            } else {
+                let count = self.current_track_count(false);
+                if drop_idx <= count && is_valid_drop {
+                    let new_positions = self.handle_reorder_tracks_selected(drop_idx, &indices);
+                    if was_in_selection {
+                        self.selected_indices = new_positions;
+                    }
+                }
+            }
+        }
     }
 
     pub fn handle_track_pressed(&mut self, index: usize, is_queue: bool) {
@@ -342,14 +557,16 @@ impl MusicPlayer {
             self.pressed_track = None;
             self.drag_origin = None;
             self.handle_play_track(index, is_queue);
+            self.toggle_selection(index, is_queue);
         }
     }
 
-    pub fn toggle_selection(&mut self, index: usize) {
-        if let Some(pos) = self.selected_indices.iter().position(|&i| i == index) {
-            self.selected_indices.remove(pos);
+    pub fn toggle_selection(&mut self, index: usize, is_queue: bool) {
+        let sel = self.selection_mut(is_queue);
+        if let Some(pos) = sel.iter().position(|&i| i == index) {
+            sel.remove(pos);
         } else {
-            self.selected_indices.push(index);
+            sel.push(index);
         }
     }
 
@@ -380,63 +597,6 @@ impl MusicPlayer {
                 .and_then(|sp| self.playlists.playlists.get(sp))
                 .map(|p| p.tracks.len())
                 .unwrap_or(0),
-        }
-    }
-
-    pub fn handle_drag_drop(&mut self, is_queue: bool) {
-        let Some(track_idx) = self.pressed_track else {
-            return;
-        };
-        let cursor = self.cursor_pos;
-
-        if let Some(sidebar_bounds) = self.sidebar_bounds {
-            if cursor.x < sidebar_bounds.x + crate::theme::SIDEBAR_WIDTH {
-                let y_offset = cursor.y - sidebar_bounds.y;
-                let playlist_idx = ((y_offset + self.sidebar_list_scroll)
-                    / crate::theme::SIDEBAR_ITEM_HEIGHT)
-                    as usize;
-                if playlist_idx < self.playlists.playlists.len() {
-                    let indices: Vec<usize> = if self.selected_indices.is_empty() {
-                        vec![track_idx]
-                    } else {
-                        self.selected_indices.clone()
-                    };
-                    let mut count = 0;
-                    for &i in indices.iter().rev() {
-                        if let Some(track) = self.get_track_at(i, is_queue) {
-                            let track = track.clone();
-                            self.playlists.insert_track_at(playlist_idx, &track, 0);
-                            count += 1;
-                        }
-                    }
-                    let name = self.playlists.playlists[playlist_idx].name.clone();
-                    self.notify(format!(
-                        "Added {} track{} to {}",
-                        count,
-                        if count == 1 { "" } else { "s" },
-                        name
-                    ));
-                    return;
-                }
-            }
-        }
-
-        if cursor.x > crate::theme::SIDEBAR_WIDTH + crate::theme::QUEUE_MIN_WIDTH {
-            return;
-        }
-
-        if let Some(list_bounds) = self.get_current_list_bounds() {
-            let y_offset = cursor.y - list_bounds.y;
-            let drop_idx_raw =
-                ((y_offset + self.get_current_list_scroll()) / crate::theme::ROW_HEIGHT) as usize;
-            let count = self.current_track_count(false);
-            if drop_idx_raw >= count {
-                return;
-            }
-            if drop_idx_raw == track_idx {
-                return;
-            }
-            self.handle_reorder_tracks(track_idx, drop_idx_raw);
         }
     }
 
@@ -520,8 +680,6 @@ impl MusicPlayer {
             }
             return;
         }
-        self.clear_selection();
-        self.selected_indices = vec![index];
         if let Some(track) = self.get_track_at(index, false) {
             let track = track.clone();
             self.play_track_internal(&track);
@@ -574,6 +732,7 @@ impl MusicPlayer {
                     radio_label: self.radio_label.clone(),
                     search_results: self.search_results.clone(),
                     radio_tracks: self.radio_tracks.clone(),
+                    selected_indices: self.selected_indices.clone(),
                 };
                 self.nav_history.truncate(self.nav_history_pos + 1);
                 self.nav_history.push(old_entry);
@@ -586,6 +745,7 @@ impl MusicPlayer {
         self.notify(format!("Searching for \"{}\"...", self.search_query));
         self.search_offset = 0;
         self.search_results.clear();
+        self.selected_indices.clear();
 
         if !self.config.search_history.contains(&self.search_query) {
             self.config.search_history.push(self.search_query.clone());
@@ -621,6 +781,7 @@ impl MusicPlayer {
             radio_label: self.radio_label.clone(),
             search_results: self.search_results.clone(),
             radio_tracks: self.radio_tracks.clone(),
+            selected_indices: self.selected_indices.clone(),
         };
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.nav_history.push(entry);
@@ -760,6 +921,7 @@ impl MusicPlayer {
             self.selected_playlist_name = self.playlists.playlists[index].name.clone();
             self.show_playlist_picker = None;
             self.clear_selection();
+            self.cleanup_drag_state();
             self.handle_navigate_to(View::Playlist(index));
         }
     }
@@ -868,17 +1030,67 @@ impl MusicPlayer {
         }
     }
 
-    pub fn handle_reorder_tracks(&mut self, from: usize, to: usize) {
+    pub fn handle_reorder_tracks_selected(
+        &mut self,
+        drop_idx: usize,
+        indices: &[usize],
+    ) -> Vec<usize> {
+        let mut new_positions = Vec::new();
         if let Some(sp) = self.selected_playlist {
             if sp < self.playlists.playlists.len() {
                 let tracks = &mut self.playlists.playlists[sp].tracks;
-                if from < tracks.len() && to < tracks.len() {
-                    let track = tracks.remove(from);
-                    tracks.insert(to, track);
+                let sorted_indices: Vec<usize> = {
+                    let mut s = indices.to_vec();
+                    s.sort_unstable();
+                    s
+                };
+                let extracted: Vec<Track> = sorted_indices
+                    .iter()
+                    .filter_map(|&i| tracks.get(i).cloned())
+                    .collect();
+                for &i in sorted_indices.iter().rev() {
+                    if i < tracks.len() {
+                        tracks.remove(i);
+                    }
+                }
+                let removed_before = sorted_indices.iter().filter(|&&i| i < drop_idx).count();
+                let adjusted_drop = (drop_idx - removed_before).min(tracks.len());
+                let new_count = extracted.len();
+                for (j, track) in extracted.into_iter().enumerate() {
+                    tracks.insert(adjusted_drop + j, track);
                 }
                 self.playlists.save();
+
+                new_positions = (adjusted_drop..adjusted_drop + new_count).collect();
             }
         }
+        new_positions
+    }
+
+    pub fn handle_reorder_queue(&mut self, drop_idx: usize, indices: &[usize]) -> Vec<usize> {
+        let sorted_indices: Vec<usize> = {
+            let mut s = indices.to_vec();
+            s.sort_unstable();
+            s
+        };
+        let extracted: Vec<Track> = sorted_indices
+            .iter()
+            .filter_map(|&i| self.queue.tracks.get(i).cloned())
+            .collect();
+        for &i in sorted_indices.iter().rev() {
+            if i < self.queue.tracks.len() {
+                self.queue.tracks.remove(i);
+            }
+        }
+        let removed_before = sorted_indices.iter().filter(|&&i| i < drop_idx).count();
+        let adjusted_drop = (drop_idx - removed_before).min(self.queue.tracks.len());
+        let new_count = extracted.len();
+        for (j, track) in extracted.into_iter().enumerate() {
+            self.queue.tracks.insert(adjusted_drop + j, track);
+        }
+        self.save_session();
+
+        (adjusted_drop..adjusted_drop + new_count).collect()
     }
 
     pub fn handle_remove_from_queue(&mut self, index: usize) {
@@ -978,6 +1190,7 @@ impl MusicPlayer {
 
     pub fn clear_selection(&mut self) {
         self.selected_indices.clear();
+        self.queue_selected_indices.clear();
         self.show_playlist_picker = None;
     }
 

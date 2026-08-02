@@ -12,6 +12,14 @@ use iced::{
 
 use super::{ContextMenuState, Message, MusicPlayer};
 
+fn scrollable_id(is_queue: bool) -> iced::widget::Id {
+    if is_queue {
+        iced::widget::Id::new("queue_list")
+    } else {
+        iced::widget::Id::new("track_list")
+    }
+}
+
 fn bg(color: Color) -> impl Fn(&iced::Theme) -> container::Style + 'static {
     move |_| container::Style {
         background: Some(color.into()),
@@ -96,6 +104,16 @@ fn thumbnail<'a>(
     } else {
         icons::icon("music.svg", fallback_color, size).into()
     }
+}
+
+fn drop_indicator(color: Color) -> Container<'static, Message> {
+    Container::new(Row::new())
+        .width(Length::Fill)
+        .height(Length::Fixed(crate::theme::DROP_LINE_HEIGHT))
+        .style(move |_| container::Style {
+            background: Some(color.into()),
+            ..Default::default()
+        })
 }
 
 pub fn view(player: &MusicPlayer) -> Element<'_, Message> {
@@ -219,6 +237,7 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             let icon_color = if is_selected { p.accent } else { p.fg_muted };
             let text_color = if is_selected { p.fg } else { p.fg_secondary };
             let bg_hover = p.bg_hover;
+            let is_hover = player.sidebar_hover_playlist == Some(i);
 
             Button::new(
                 Row::with_children(vec![
@@ -238,6 +257,8 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             .style(move |_, status| {
                 let bg = if is_selected {
                     bg_color
+                } else if is_hover {
+                    p.accent
                 } else {
                     match status {
                         button::Status::Hovered | button::Status::Pressed => bg_hover,
@@ -307,6 +328,11 @@ fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                 .spacing(0)
                 .width(Length::Fill),
         )
+        .id(iced::widget::Id::new("sidebar_playlist_list"))
+        .on_scroll(|vp| Message::SidebarListScrolled {
+            offset_y: vp.absolute_offset().y,
+            bounds: vp.bounds(),
+        })
         .width(Length::Fill)
         .height(Length::Fill)
         .into(),
@@ -729,14 +755,36 @@ fn view_track_list<'a>(
         .into();
     }
 
-    let items: Vec<Element<'a, Message>> = tracks
-        .iter()
-        .enumerate()
-        .map(|(i, track)| view_track_row(track, i, player, is_queue))
-        .collect();
+    let mut items: Vec<Element<'a, Message>> = Vec::with_capacity(tracks.len());
+    for (i, track) in tracks.iter().enumerate() {
+        if player.drag_active && player.pressed_track_is_queue == is_queue {
+            if let Some(drop_idx) = player.drag_drop_target {
+                if i == drop_idx {
+                    items.push(drop_indicator(player.palette.accent).into());
+                }
+            }
+        }
+        items.push(view_track_row(track, i, player, is_queue));
+    }
+
+    if player.drag_active && player.pressed_track_is_queue == is_queue {
+        if let Some(drop_idx) = player.drag_drop_target {
+            if drop_idx == tracks.len() {
+                items.push(drop_indicator(player.palette.accent).into());
+            }
+        }
+    }
+
+    let list_id = scrollable_id(is_queue);
 
     Container::new(
         scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
+            .id(list_id)
+            .on_scroll(move |vp| Message::ListScrolled {
+                offset_y: vp.absolute_offset().y,
+                bounds: vp.bounds(),
+                is_queue,
+            })
             .width(Length::Fill)
             .height(Length::Fill),
     )
@@ -752,7 +800,7 @@ fn view_track_row<'a>(
     is_queue: bool,
 ) -> Element<'a, Message> {
     let p = &player.palette;
-    let is_selected = player.selected_indices.contains(&index);
+    let is_selected = player.selection(is_queue).contains(&index);
     let is_hovered = player.hovered_track == Some((index, is_queue));
     let row_bg = if is_selected {
         p.bg_selected
