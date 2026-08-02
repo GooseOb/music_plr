@@ -320,7 +320,7 @@ fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .height(Length::Fill)
         .style(bg(player.palette.bg));
 
-    Column::with_children(vec![search_bar.into(), inner.into()])
+    Column::with_children(vec![search_bar, inner.into()])
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -403,7 +403,20 @@ fn view_search<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         view_track_list(&player.search_results, player)
     };
 
-    Column::with_children(vec![history_dropdown, track_list])
+    let load_more = if !player.search_loading
+        && player.search_results.len() >= player.search_offset
+        && !player.search_results.is_empty()
+    {
+        let btn = Button::new(text("Load More").size(12).color(Color::WHITE))
+            .padding(8)
+            .style(button_style_accent())
+            .on_press(Message::SearchLoadMore);
+        Container::new(btn).padding(8).into()
+    } else {
+        Container::new(Row::new()).height(Length::Fixed(0.0)).into()
+    };
+
+    Column::with_children(vec![history_dropdown, track_list, load_more])
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -465,19 +478,29 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                 p.bg_secondary
             };
             Container::new(
-                MouseArea::new(
-                    Row::with_children(vec![
-                        icons::icon("search.svg", p.fg_muted, 12.0).into(),
-                        text(q)
-                            .size(12)
-                            .color(if is_focused { p.fg } else { p.fg_secondary })
-                            .into(),
-                    ])
-                    .spacing(8)
-                    .padding([6, 12])
-                    .align_y(alignment::Vertical::Center),
-                )
-                .on_press(Message::SearchHistorySelected(i)),
+                Row::with_children(vec![
+                    Container::new(
+                        MouseArea::new(
+                            Row::with_children(vec![
+                                icons::icon("search.svg", p.fg_muted, 12.0).into(),
+                                text(q)
+                                    .size(12)
+                                    .color(if is_focused { p.fg } else { p.fg_secondary })
+                                    .into(),
+                            ])
+                            .spacing(8),
+                        )
+                        .on_press(Message::SearchHistorySelected(i)),
+                    )
+                    .width(Length::Fill)
+                    .into(),
+                    MouseArea::new(icons::icon("delete.svg", p.fg_muted, 12.0))
+                        .on_press(Message::DeleteSearchHistory(i))
+                        .into(),
+                ])
+                .spacing(8)
+                .padding([6, 12])
+                .align_y(alignment::Vertical::Center),
             )
             .width(Length::Fill)
             .style(bg(bg_color))
@@ -509,6 +532,11 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                     .color(p.fg_secondary)
                     .into(),
                 icons::icon("edit.svg", p.fg_muted, 14.0).into(),
+                Button::new(icons::icon("delete.svg", p.fg_muted, 14.0))
+                    .padding(4)
+                    .style(button_style_accent())
+                    .on_press(Message::ShowDeleteConfirm(idx))
+                    .into(),
             ])
             .spacing(8)
             .align_y(alignment::Vertical::Center)
@@ -527,20 +555,15 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .into()
     };
 
-    let track_list = if player.selected_playlist.is_some() {
-        player
-            .selected_playlist
-            .and_then(|sp| player.playlists.playlists.get(sp))
-            .map(|playlist| {
-                let tracks: &[crate::types::Track] = &playlist.tracks;
-                view_track_list(tracks, player)
-            })
-            .unwrap_or_else(|| {
-                Container::new(Row::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .into()
-            })
+    let track_list = if let Some(idx) = player.selected_playlist {
+        if let Some(pl) = player.playlists.playlists.get(idx) {
+            view_track_list(&pl.tracks, player)
+        } else {
+            Container::new(Row::new())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        }
     } else {
         Container::new(Row::new())
             .width(Length::Fill)
@@ -556,20 +579,6 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
-}
-
-fn view_queue_main<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
-    let p = &player.palette;
-
-    let header = Container::new(text("Queue").size(16).color(p.fg)).padding([12, 16]);
-
-    let track_list = view_track_list(&player.queue.tracks, player);
-
-    Column::with_children(vec![header.into(), track_list])
-        .spacing(0)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
 }
 
 fn view_track_list<'a>(
@@ -684,40 +693,70 @@ fn view_queue_panel<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     )
     .width(Length::Fill);
 
-    let items: Vec<Element<'a, Message>> = if player.queue.tracks.is_empty() {
-        vec![
-            Container::new(text("Queue is empty").size(12).color(p.fg_secondary))
-                .padding(16)
-                .into(),
-        ]
-    } else {
-        player
-            .queue
-            .tracks
-            .iter()
-            .enumerate()
-            .map(|(i, track)| {
-                let is_current = player.queue.current_index == i;
-                let bg_color = if is_current { p.bg_current } else { p.bg };
+    if player.queue.tracks.is_empty() {
+        let empty =
+            Container::new(text("Queue is empty").size(12).color(p.fg_secondary)).padding(16);
+        return Container::new(
+            Column::with_children(vec![header.into(), empty.into()])
+                .spacing(0)
+                .width(Length::Fill),
+        )
+        .width(Length::Fixed(theme::QUEUE_MIN_WIDTH))
+        .height(Length::Fill)
+        .style(bg(p.bg_secondary))
+        .into();
+    }
+
+    let items: Vec<Element<'a, Message>> = player
+        .queue
+        .tracks
+        .iter()
+        .enumerate()
+        .map(|(i, track)| {
+            let is_current = player.queue.current_index == i;
+            let row_bg = if is_current { p.bg_current } else { p.bg };
+
+            let duration_text = crate::util::format_duration(track.duration);
+            let title_color = if is_current { p.accent } else { p.fg };
+
+            let content = Row::with_children(vec![
                 Container::new(
-                    Row::with_children(vec![
-                        text(track.title.clone())
-                            .size(12)
-                            .color(if is_current { p.accent } else { p.fg })
-                            .into(),
-                        icons::icon("delete.svg", p.fg_muted, 12.0).into(),
-                    ])
-                    .spacing(8)
-                    .align_y(alignment::Vertical::Center)
-                    .padding([6, 10]),
+                    MouseArea::new(icons::icon("delete.svg", p.fg_muted, 12.0))
+                        .on_press(Message::ContextMenuRemoveFromQueue(i)),
                 )
+                .width(Length::Fixed(24.0))
+                .into(),
+                Container::new(thumbnail(track, p))
+                    .width(Length::Fixed(theme::THUMBNAIL_SIZE))
+                    .height(Length::Fixed(theme::THUMBNAIL_SIZE))
+                    .into(),
+                text(track.title.clone())
+                    .size(12)
+                    .color(title_color)
+                    .width(Length::Fill)
+                    .into(),
+                text(track.artist.clone())
+                    .size(11)
+                    .color(p.fg_secondary)
+                    .width(Length::Fill)
+                    .into(),
+                text(duration_text)
+                    .size(11)
+                    .color(p.fg_secondary)
+                    .width(Length::Fixed(48.0))
+                    .into(),
+            ])
+            .spacing(8)
+            .align_y(alignment::Vertical::Center)
+            .padding([6, 8]);
+
+            Container::new(content)
                 .width(Length::Fill)
                 .height(Length::Fixed(theme::ROW_HEIGHT))
-                .style(bg(bg_color))
+                .style(bg(row_bg))
                 .into()
-            })
-            .collect()
-    };
+        })
+        .collect();
 
     let list = scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
         .width(Length::Fill)
@@ -762,6 +801,11 @@ fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             .padding(6)
             .style(button_style_accent())
             .on_press(Message::NextTrack)
+            .into(),
+        Button::new(icons::icon("queue.svg", p.fg_muted, 16.0))
+            .padding(6)
+            .style(button_style_accent())
+            .on_press(Message::ToggleQueue)
             .into(),
     ])
     .spacing(8)
@@ -840,6 +884,17 @@ fn view_context_menu<'a>(
 
     let items: Vec<Element<'_, Message>> = {
         let mut v: Vec<Element<'_, Message>> = vec![];
+
+        v.push(
+            menu_item(
+                "Play",
+                "play.svg",
+                p,
+                Message::ContextMenuPlayTrack(menu.track_index),
+            )
+            .width(Length::Fill)
+            .into(),
+        );
 
         if menu.is_youtube {
             v.push(

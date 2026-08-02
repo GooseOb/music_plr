@@ -23,7 +23,6 @@ pub struct PlayerState {
 }
 
 enum PlayerCommand {
-    Play(Vec<u8>, f32),
     StreamAndCache {
         url: String,
         duration: f32,
@@ -64,49 +63,6 @@ impl AudioPlayer {
             loop {
                 match cmd_rx.recv_timeout(Duration::from_millis(250)) {
                     Ok(cmd) => match cmd {
-                        PlayerCommand::Play(bytes, expected_duration) => {
-                            debug!("Play command received, {} bytes", bytes.len());
-                            Self::kill_processes(
-                                &mut ffmpeg,
-                                &mut ytdlp,
-                                &mut temp_wav,
-                                &mut stream_url,
-                            );
-                            stream_active = false;
-                            if let Some((_, s)) = &output {
-                                s.stop();
-                            }
-                            output = None;
-
-                            if let Ok((stream, handle)) = rodio::OutputStream::try_default() {
-                                if let Ok(sink) = rodio::Sink::try_new(&handle) {
-                                    let cursor = std::io::Cursor::new(bytes);
-                                    if let Ok(source) = rodio::Decoder::new(cursor) {
-                                        let vol =
-                                            state_clone.lock().map(|st| st.volume).unwrap_or(1.0);
-                                        let actual_duration = if expected_duration > 0.0 {
-                                            expected_duration
-                                        } else {
-                                            source
-                                                .total_duration()
-                                                .map(|d| d.as_secs_f32())
-                                                .unwrap_or(0.0)
-                                        };
-                                        sink.set_volume(vol);
-                                        sink.append(source);
-                                        sink.play();
-                                        if let Ok(mut st) = state_clone.lock() {
-                                            st.is_playing = true;
-                                            st.duration = actual_duration;
-                                            st.progress = 0.0;
-                                            st.stream_finished = false;
-                                        }
-                                        output = Some((stream, sink));
-                                    }
-                                }
-                            }
-                        }
-
                         PlayerCommand::StreamAndCache {
                             url,
                             duration,
@@ -500,10 +456,6 @@ impl AudioPlayer {
         }
         *temp_wav = None;
         *stream_url = None;
-    }
-
-    pub fn play(&mut self, audio_data: Vec<u8>, duration: f32) {
-        let _ = self.cmd_tx.send(PlayerCommand::Play(audio_data, duration));
     }
 
     pub fn play_stream_cache(&mut self, url: &str, duration: f32, cache_path: PathBuf) {

@@ -53,15 +53,6 @@ impl PlaylistStore {
         }
     }
 
-    pub fn add_track(&mut self, playlist_idx: usize, track: &Track) {
-        if let Some(pl) = self.playlists.get_mut(playlist_idx) {
-            if !pl.tracks.iter().any(|t| t.url == track.url) {
-                pl.tracks.push(track.clone());
-                self.save();
-            }
-        }
-    }
-
     pub fn insert_track_at(&mut self, playlist_idx: usize, track: &Track, pos: usize) {
         if let Some(pl) = self.playlists.get_mut(playlist_idx) {
             if !pl.tracks.iter().any(|t| t.url == track.url) {
@@ -69,44 +60,6 @@ impl PlaylistStore {
                 pl.tracks.insert(pos, track.clone());
                 self.save();
             }
-        }
-    }
-
-    pub fn remove_track(&mut self, playlist_idx: usize, track_idx: usize) {
-        if let Some(pl) = self.playlists.get_mut(playlist_idx) {
-            if track_idx < pl.tracks.len() {
-                pl.tracks.remove(track_idx);
-                self.save();
-            }
-        }
-    }
-
-    pub fn move_tracks(&mut self, playlist_idx: usize, from_indices: &[usize], to_idx: usize) {
-        if let Some(pl) = self.playlists.get_mut(playlist_idx) {
-            let mut indices: Vec<usize> = from_indices.to_vec();
-            indices.sort_unstable();
-            indices.dedup();
-
-            if indices.is_empty() {
-                return;
-            }
-
-            let mut moved: Vec<Track> = Vec::new();
-            for &i in indices.iter().rev() {
-                if i < pl.tracks.len() {
-                    moved.push(pl.tracks.remove(i));
-                }
-            }
-            moved.reverse();
-
-            let removed_before = indices.iter().filter(|&&i| i < to_idx).count();
-            let target = (to_idx.saturating_sub(removed_before)).min(pl.tracks.len());
-
-            for (offset, track) in moved.into_iter().enumerate() {
-                pl.tracks.insert(target + offset, track);
-            }
-
-            self.save();
         }
     }
 }
@@ -142,104 +95,6 @@ mod tests {
         PlaylistStore {
             playlists: vec![playlist],
         }
-    }
-
-    #[test]
-    fn move_tracks_same_position() {
-        let mut store = make_store(&["a", "b", "c"]);
-        store.move_tracks(0, &[0], 0);
-        assert_eq!(
-            store.playlists[0]
-                .tracks
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["a", "b", "c"]
-        );
-    }
-
-    #[test]
-    fn move_tracks_to_end() {
-        let mut store = make_store(&["a", "b", "c", "d"]);
-        store.move_tracks(0, &[0], 4);
-        assert_eq!(
-            store.playlists[0]
-                .tracks
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["b", "c", "d", "a"]
-        );
-    }
-
-    #[test]
-    fn move_tracks_insert_before() {
-        let mut store = make_store(&["a", "b", "c", "d"]);
-        store.move_tracks(0, &[0], 3);
-        assert_eq!(
-            store.playlists[0]
-                .tracks
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["b", "c", "a", "d"]
-        );
-    }
-
-    #[test]
-    fn move_tracks_backward() {
-        let mut store = make_store(&["a", "b", "c", "d"]);
-        store.move_tracks(0, &[3], 0);
-        assert_eq!(
-            store.playlists[0]
-                .tracks
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["d", "a", "b", "c"]
-        );
-    }
-
-    #[test]
-    fn move_tracks_multiple() {
-        let mut store = make_store(&["a", "b", "c", "d", "e"]);
-        store.move_tracks(0, &[0, 2], 4);
-        assert_eq!(
-            store.playlists[0]
-                .tracks
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["b", "d", "a", "c", "e"]
-        );
-    }
-
-    #[test]
-    fn move_tracks_out_of_bounds_clamped() {
-        let mut store = make_store(&["a", "b", "c"]);
-        store.move_tracks(0, &[0], 100);
-        assert_eq!(
-            store.playlists[0]
-                .tracks
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["b", "c", "a"]
-        );
-    }
-
-    #[test]
-    fn remove_track_from_middle() {
-        let mut store = make_store(&["a", "b", "c"]);
-        store.remove_track(0, 1);
-        assert_eq!(
-            store.playlists[0]
-                .tracks
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["a", "c"]
-        );
     }
 
     #[test]

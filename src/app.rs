@@ -65,39 +65,26 @@ pub enum Message {
     SearchInputChanged(String),
     SearchExecute,
     SearchLoadMore,
-    ShowSearchHistory(bool),
     SearchHistorySelected(usize),
     DeleteSearchHistory(usize),
 
     TrackPressed(usize),
     TrackHoverStart(usize),
-    TrackHoverEnd,
     TrackRightClicked(usize),
     GlobalSearchSubmit,
     PlayTrackAtIndex(usize),
-    PlayTrack(usize),
-    PlayQueueTrack(usize),
     TogglePlayPause,
     NextTrack,
     PreviousTrack,
     SetVolume(f32),
     Seek(f32),
 
-    StartSongRadio(String),
-    StartArtistRadio(String),
-
     CreatePlaylist,
     NewPlaylistNameChanged(String),
-    DeletePlaylist(usize),
     SelectPlaylist(usize),
     RenamePlaylist(String),
     AddLocalMusic,
     AddToPlaylist(usize),
-    RemoveFromPlaylist(usize),
-    ReorderTracks {
-        from: usize,
-        to: usize,
-    },
     TogglePicker(usize),
     ClosePicker,
     ShowDeleteConfirm(usize),
@@ -105,23 +92,10 @@ pub enum Message {
     HideDeleteConfirm,
 
     ToggleQueue,
-    ReorderQueue {
-        from: usize,
-        to: usize,
-    },
-    RemoveFromQueue(usize),
 
-    ToggleSelect(usize),
-    CopySelected,
-    DeleteSelected,
-    PasteClipboard,
-    ClearSelection,
-
-    NavigateSearch,
     NavigateTo(View),
     NavigateBack,
     NavigateForward,
-    ResumePlayback,
 
     ContextMenuPlayTrack(usize),
     ContextMenuStartSongRadio(usize),
@@ -130,20 +104,6 @@ pub enum Message {
     ContextMenuRemoveFromPlaylist(usize),
     ContextMenuRemoveFromQueue(usize),
     CloseContextMenu,
-
-    SearchResults(Vec<Track>),
-    SearchResultsAppend(Vec<Track>),
-    SearchError(String),
-    DownloadComplete(String, String),
-    DownloadError(String),
-    ThumbnailsReady,
-
-    Notify(String),
-    ClearNotification,
-
-    SearchScroll(f32),
-    PlaylistScroll(f32),
-    SidebarScroll(f32),
 }
 
 pub struct MusicPlayer {
@@ -176,7 +136,6 @@ pub struct MusicPlayer {
     pub downloading_index: Option<usize>,
 
     pub notification: Option<String>,
-    pub loading: bool,
 
     pub playlists: PlaylistStore,
     pub selected_playlist: Option<usize>,
@@ -224,9 +183,6 @@ pub struct MusicPlayer {
     pub playlist_list_scroll: f32,
     pub sidebar_bounds: Option<iced::Rectangle>,
     pub sidebar_list_scroll: f32,
-    pub picker_scroll: f32,
-
-    pub window_size: (u32, u32),
 }
 
 impl Default for MusicPlayer {
@@ -269,7 +225,6 @@ impl MusicPlayer {
             download_registry: DownloadRegistry::load(),
             downloading_index: None,
             notification: None,
-            loading: false,
             track_loading: false,
             playlists: PlaylistStore::load(),
             selected_playlist: None,
@@ -310,8 +265,6 @@ impl MusicPlayer {
             playlist_list_scroll: 0.0,
             sidebar_bounds: None,
             sidebar_list_scroll: 0.0,
-            picker_scroll: 0.0,
-            window_size: (1200, 700),
             elapsed_text: String::new(),
             total_text: String::new(),
             selected_indices: Vec::new(),
@@ -322,6 +275,7 @@ impl MusicPlayer {
 
         player.init_mpris();
         player.restore_session();
+        player.resume_playback();
         player.update_progress_text();
         player
     }
@@ -358,35 +312,10 @@ impl MusicPlayer {
         }
     }
 
-    pub fn boot() -> (MusicPlayer, Task<Message>) {
-        (MusicPlayer::default(), Task::none())
-    }
-
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Tick => {
                 self.handle_tick();
-                Task::none()
-            }
-            Message::SearchScroll(delta) => {
-                self.search_list_scroll += delta;
-                if self.search_list_scroll < 0.0 {
-                    self.search_list_scroll = 0.0;
-                }
-                Task::none()
-            }
-            Message::PlaylistScroll(delta) => {
-                self.playlist_list_scroll += delta;
-                if self.playlist_list_scroll < 0.0 {
-                    self.playlist_list_scroll = 0.0;
-                }
-                Task::none()
-            }
-            Message::SidebarScroll(delta) => {
-                self.sidebar_list_scroll += delta;
-                if self.sidebar_list_scroll < 0.0 {
-                    self.sidebar_list_scroll = 0.0;
-                }
                 Task::none()
             }
             Message::WindowClose => {
@@ -396,11 +325,12 @@ impl MusicPlayer {
             Message::CursorMoved(pos) => {
                 self.cursor_pos = pos;
                 if self.pressed_track.is_some() && self.drag_origin.is_some() && !self.drag_active {
-                    let origin = self.drag_origin.unwrap();
-                    let dx = (pos.x - origin.x).abs();
-                    let dy = (pos.y - origin.y).abs();
-                    if dx > crate::theme::DRAG_THRESHOLD || dy > crate::theme::DRAG_THRESHOLD {
-                        self.drag_active = true;
+                    if let Some(origin) = self.drag_origin {
+                        let dx = (pos.x - origin.x).abs();
+                        let dy = (pos.y - origin.y).abs();
+                        if dx > crate::theme::DRAG_THRESHOLD || dy > crate::theme::DRAG_THRESHOLD {
+                            self.drag_active = true;
+                        }
                     }
                 }
                 Task::none()
@@ -428,10 +358,6 @@ impl MusicPlayer {
                 self.handle_search_load_more();
                 Task::none()
             }
-            Message::ShowSearchHistory(show) => {
-                self.show_search_history = show;
-                Task::none()
-            }
             Message::SearchHistorySelected(index) => {
                 self.handle_search_history_select(index);
                 Task::none()
@@ -448,10 +374,6 @@ impl MusicPlayer {
                 self.hovered_track = Some(index);
                 Task::none()
             }
-            Message::TrackHoverEnd => {
-                self.hovered_track = None;
-                Task::none()
-            }
             Message::TrackRightClicked(index) => {
                 self.hovered_track = None;
                 self.show_context_menu(index);
@@ -464,16 +386,6 @@ impl MusicPlayer {
             Message::PlayTrackAtIndex(index) => {
                 self.hovered_track = None;
                 self.handle_play_track(index);
-                Task::none()
-            }
-            Message::PlayTrack(index) => {
-                self.pressed_track = None;
-                self.handle_play_track(index);
-                Task::none()
-            }
-            Message::PlayQueueTrack(index) => {
-                self.pressed_track = None;
-                self.handle_play_from_queue(index);
                 Task::none()
             }
             Message::TogglePlayPause => {
@@ -496,43 +408,12 @@ impl MusicPlayer {
                 self.seek(frac);
                 Task::none()
             }
-            Message::StartSongRadio(name) => {
-                self.start_song_radio(name);
-                Task::none()
-            }
-            Message::StartArtistRadio(name) => {
-                self.start_artist_radio(name);
-                Task::none()
-            }
-            Message::SearchResults(_tracks) => Task::none(),
-            Message::SearchResultsAppend(_tracks) => Task::none(),
-            Message::SearchError(_msg) => Task::none(),
-            Message::DownloadComplete(url, path) => {
-                self.downloading_index = None;
-                self.download_registry.register(&url, &path);
-                self.notify("Download complete!".into());
-                Task::none()
-            }
-            Message::DownloadError(msg) => {
-                self.downloading_index = None;
-                error!("Download error: {}", msg);
-                self.notify_error(msg);
-                Task::none()
-            }
-            Message::ThumbnailsReady => {
-                self.thumbnails_pending = true;
-                Task::none()
-            }
             Message::CreatePlaylist => {
                 self.handle_create_playlist();
                 Task::none()
             }
             Message::NewPlaylistNameChanged(name) => {
                 self.playlist_create_name = name;
-                Task::none()
-            }
-            Message::DeletePlaylist(index) => {
-                self.handle_delete_playlist(index);
                 Task::none()
             }
             Message::SelectPlaylist(index) => {
@@ -561,14 +442,6 @@ impl MusicPlayer {
             }
             Message::AddToPlaylist(playlist_idx) => {
                 self.handle_add_to_playlist(playlist_idx);
-                Task::none()
-            }
-            Message::RemoveFromPlaylist(index) => {
-                self.handle_remove_from_playlist(index);
-                Task::none()
-            }
-            Message::ReorderTracks { from, to } => {
-                self.handle_reorder_tracks(from, to);
                 Task::none()
             }
             Message::TogglePicker(index) => {
@@ -602,38 +475,6 @@ impl MusicPlayer {
                 self.save_session();
                 Task::none()
             }
-            Message::ReorderQueue { from, to } => {
-                self.handle_reorder_queue(from, to);
-                Task::none()
-            }
-            Message::RemoveFromQueue(index) => {
-                self.handle_remove_from_queue(index);
-                Task::none()
-            }
-            Message::ToggleSelect(index) => {
-                self.handle_toggle_select(index);
-                Task::none()
-            }
-            Message::CopySelected => {
-                self.handle_copy_selected();
-                Task::none()
-            }
-            Message::DeleteSelected => {
-                self.handle_delete_selected();
-                Task::none()
-            }
-            Message::PasteClipboard => {
-                self.handle_paste_clipboard();
-                Task::none()
-            }
-            Message::ClearSelection => {
-                self.handle_clear_selection();
-                Task::none()
-            }
-            Message::NavigateSearch => {
-                self.handle_navigate_to(View::Search(self.search_query.clone()));
-                Task::none()
-            }
             Message::NavigateTo(view) => {
                 self.handle_navigate_to(view);
                 Task::none()
@@ -644,10 +485,6 @@ impl MusicPlayer {
             }
             Message::NavigateForward => {
                 self.handle_navigate_forward();
-                Task::none()
-            }
-            Message::ResumePlayback => {
-                self.resume_playback();
                 Task::none()
             }
             Message::ContextMenuPlayTrack(index) => {
@@ -697,14 +534,6 @@ impl MusicPlayer {
             }
             Message::CloseContextMenu => {
                 self.context_menu = None;
-                Task::none()
-            }
-            Message::Notify(msg) => {
-                self.notify(msg);
-                Task::none()
-            }
-            Message::ClearNotification => {
-                self.clear_notification();
                 Task::none()
             }
         }

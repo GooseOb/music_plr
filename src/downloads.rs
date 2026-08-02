@@ -41,10 +41,6 @@ impl DownloadRegistry {
         result
     }
 
-    pub fn get_path(&self, url: &str) -> Option<&str> {
-        self.tracks.get(url).map(|s| s.as_str())
-    }
-
     pub fn contains(&self, url: &str) -> bool {
         self.tracks.contains_key(url)
     }

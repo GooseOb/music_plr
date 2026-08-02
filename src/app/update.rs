@@ -7,7 +7,6 @@ use std::thread;
 use tracing::debug;
 
 const DOUBLE_CLICK_MS: u128 = 300;
-const DRAG_THRESHOLD: f32 = 5.0;
 
 pub fn spawn_thumbnail_download_thread(tracks: &[Track], result_tx: &mpsc::Sender<BackendResult>) {
     let entries: Vec<(String, String)> = tracks
@@ -527,13 +526,6 @@ impl MusicPlayer {
         }
     }
 
-    pub fn handle_play_from_queue(&mut self, index: usize) {
-        if let Some(track) = self.queue.tracks.get(index) {
-            let track = track.clone();
-            self.play_track_internal(&track);
-        }
-    }
-
     pub fn play_track_internal(&mut self, track: &Track) {
         self.track_loading = true;
         let id = track.id.clone();
@@ -595,11 +587,9 @@ impl MusicPlayer {
 
         let query = self.search_query.clone();
         let tx = self.result_tx.clone();
-        let search_history = self.config.search_history.clone();
 
         std::thread::spawn(move || {
             let result = crate::youtube::search(&query, 0);
-            let _ = search_history;
             match result {
                 Ok(videos) => {
                     let tracks: Vec<Track> = videos.into_iter().map(|v| v.into()).collect();
@@ -890,14 +880,6 @@ impl MusicPlayer {
         }
     }
 
-    pub fn handle_reorder_queue(&mut self, from: usize, to: usize) {
-        if from < self.queue.tracks.len() && to < self.queue.tracks.len() {
-            let track = self.queue.tracks.remove(from);
-            self.queue.tracks.insert(to, track);
-            self.save_session();
-        }
-    }
-
     pub fn handle_download_track(&mut self, index: usize) {
         if let Some(track) = self.get_track_at(index) {
             let track = track.clone();
@@ -986,21 +968,9 @@ impl MusicPlayer {
         self.clear_selection();
     }
 
-    pub fn handle_clear_selection(&mut self) {
-        self.selected_indices.clear();
-    }
-
     pub fn clear_selection(&mut self) {
         self.selected_indices.clear();
         self.show_playlist_picker = None;
-    }
-
-    pub fn handle_toggle_select(&mut self, index: usize) {
-        if let Some(pos) = self.selected_indices.iter().position(|&i| i == index) {
-            self.selected_indices.remove(pos);
-        } else {
-            self.selected_indices.push(index);
-        }
     }
 
     pub fn toggle_play_pause(&mut self) {

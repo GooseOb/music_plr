@@ -19,6 +19,7 @@ pub fn handle(name: &str) -> svg::Handle {
         "music.svg" => include_str!("../icons/music.svg"),
         "back.svg" => include_str!("../icons/back.svg"),
         "forward.svg" => include_str!("../icons/forward.svg"),
+        "queue.svg" => include_str!("../icons/queue.svg"),
         _ => panic!("Unknown icon: {}", name),
     };
     svg::Handle::from_memory(data.as_bytes().to_vec())

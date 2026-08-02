@@ -74,14 +74,6 @@ impl StreamCache {
         self.index.entries.contains_key(id) && self.path_for(id).exists()
     }
 
-    pub fn record_access(&mut self, id: &str) {
-        let now = now_secs();
-        if let Some(entry) = self.index.entries.get_mut(id) {
-            entry.last_accessed = now;
-            self.save();
-        }
-    }
-
     pub fn insert(&mut self, id: &str) -> bool {
         let path = self.path_for(id);
         if !path.exists() {
@@ -109,15 +101,6 @@ impl StreamCache {
         self.evict();
         self.save();
         true
-    }
-
-    pub fn remove(&mut self, id: &str) {
-        if let Some(entry) = self.index.entries.remove(id) {
-            let path = self.path_for(id);
-            let _ = std::fs::remove_file(&path);
-            self.current_total = self.current_total.saturating_sub(entry.size_bytes);
-            self.save();
-        }
     }
 
     fn evict(&mut self) {

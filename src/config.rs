@@ -59,12 +59,6 @@ pub fn save_config(cfg: &Config) {
     let _ = confy::store("music_plr", "config", cfg);
 }
 
-impl Config {
-    pub fn save(&self) {
-        save_config(self);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
