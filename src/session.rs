@@ -1,4 +1,4 @@
-use crate::backend::{PlayQueue, View};
+use crate::types::{PlayQueue, View};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -15,7 +15,7 @@ pub struct SessionState {
 impl Default for SessionState {
     fn default() -> Self {
         SessionState {
-            current_view: View::Search,
+            current_view: View::Search(String::new()),
             queue: PlayQueue::new(),
             is_playing: false,
             selected_playlist: None,
@@ -64,7 +64,7 @@ mod tests {
     #[test]
     fn session_state_default() {
         let state = SessionState::default();
-        assert_eq!(state.current_view, View::Search);
+        assert_eq!(state.current_view, View::Search(String::new()));
         assert!(state.queue.tracks.is_empty());
         assert!(!state.is_playing);
         assert_eq!(state.selected_playlist, None);
@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn session_state_round_trip() {
         let state = SessionState {
-            current_view: View::Radio,
+            current_view: View::SongRadio("test song".into()),
             queue: PlayQueue::default(),
             is_playing: true,
             selected_playlist: Some(2),
@@ -84,7 +84,7 @@ mod tests {
         };
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.current_view, View::Radio);
+        assert_eq!(restored.current_view, View::SongRadio("test song".into()));
         assert!(restored.is_playing);
         assert_eq!(restored.selected_playlist, Some(2));
         assert_eq!(restored.selected_playlist_name, "Test");

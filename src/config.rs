@@ -59,19 +59,10 @@ pub fn save_config(cfg: &Config) {
     let _ = confy::store("music_plr", "config", cfg);
 }
 
-pub fn fuzzy_match(query: &str, text: &str) -> bool {
-    if query.is_empty() {
-        return true;
+impl Config {
+    pub fn save(&self) {
+        save_config(self);
     }
-    let query = query.to_lowercase();
-    let text = text.to_lowercase();
-    let mut qi = query.chars().peekable();
-    for c in text.chars() {
-        if qi.peek() == Some(&c) {
-            qi.next();
-        }
-    }
-    qi.peek().is_none()
 }
 
 #[cfg(test)]
@@ -79,35 +70,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fuzzy_match_exact() {
-        assert!(fuzzy_match("hello", "hello"));
+    fn config_default_values() {
+        let cfg = Config::default();
+        assert_eq!(cfg.volume, 0.8);
+        assert_eq!(cfg.max_search_history_visible, 10);
+        assert_eq!(cfg.max_search_history_stored, 100);
+        assert_eq!(cfg.cache_max_size_mb, 1024);
+        assert!(cfg.search_history.is_empty());
+        assert_eq!(cfg.last_search_query, "");
     }
 
     #[test]
-    fn fuzzy_match_subsequence() {
-        assert!(fuzzy_match("hlo", "hello"));
-        assert!(fuzzy_match("hlo", "Hello World"));
-    }
-
-    #[test]
-    fn fuzzy_match_empty_query() {
-        assert!(fuzzy_match("", "anything"));
-    }
-
-    #[test]
-    fn fuzzy_match_no_match() {
-        assert!(!fuzzy_match("xyz", "hello"));
-    }
-
-    #[test]
-    fn fuzzy_match_case_insensitive() {
-        assert!(fuzzy_match("HELLO", "hello"));
-        assert!(fuzzy_match("HeLlO", "HELLO"));
-    }
-
-    #[test]
-    fn fuzzy_match_partial() {
-        assert!(fuzzy_match("ell", "hello"));
-        assert!(!fuzzy_match("leh", "hello"));
+    fn config_round_trip() {
+        let mut cfg = Config::default();
+        cfg.search_history = vec!["test".to_string(), "query".to_string()];
+        cfg.last_search_query = "test".to_string();
+        cfg.volume = 0.5;
+        let json = serde_json::to_string(&cfg).unwrap();
+        let restored: Config = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.search_history, cfg.search_history);
+        assert_eq!(restored.last_search_query, cfg.last_search_query);
+        assert_eq!(restored.volume, cfg.volume);
     }
 }
