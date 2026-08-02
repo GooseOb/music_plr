@@ -820,85 +820,97 @@ fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         "play.svg"
     };
 
-    let controls = Row::with_children(vec![
-        Button::new(icons::icon("skip-back.svg", p.fg, 16.0))
-            .padding(6)
-            .style(button_style_accent())
-            .on_press(Message::PreviousTrack)
-            .into(),
-        Button::new(icons::icon(play_pause_icon, p.fg, 18.0))
-            .padding(8)
-            .style(button_style_accent())
-            .on_press(Message::TogglePlayPause)
-            .into(),
-        Button::new(icons::icon("skip-forward.svg", p.fg, 16.0))
-            .padding(6)
-            .style(button_style_accent())
-            .on_press(Message::NextTrack)
-            .into(),
-        Button::new(icons::icon("queue.svg", p.fg_muted, 16.0))
-            .padding(6)
-            .style(button_style_accent())
-            .on_press(Message::ToggleQueue)
-            .into(),
-    ])
-    .spacing(8)
-    .align_y(alignment::Vertical::Center);
+    let track_thumb: Element<'a, Message> = if let Some(t) = track {
+        thumbnail(t, p)
+    } else {
+        icons::icon("music.svg", p.fg_muted, theme::THUMBNAIL_SIZE).into()
+    };
 
     let track_info = Column::with_children(vec![
-        text(title)
-            .size(13)
-            .color(p.fg)
-            .width(Length::Fixed(180.0))
-            .into(),
+        text(title).size(13).color(p.fg).into(),
         text(artist).size(11).color(p.fg_secondary).into(),
     ])
     .spacing(2);
+
+    let elapsed_text = text(player.elapsed_text.clone())
+        .size(11)
+        .color(p.fg_secondary)
+        .width(Length::Fixed(48.0))
+        .center();
+
+    let total_text = text(player.total_text.clone())
+        .size(11)
+        .color(p.fg_secondary)
+        .width(Length::Fixed(48.0))
+        .center();
+
+    let controls = Container::new(
+        Row::with_children(vec![
+            Button::new(icons::icon("skip-back.svg", p.fg, 16.0))
+                .padding(6)
+                .style(button_style_accent())
+                .on_press(Message::PreviousTrack)
+                .into(),
+            Button::new(icons::icon(play_pause_icon, p.fg, 18.0))
+                .padding(8)
+                .style(button_style_accent())
+                .on_press(Message::TogglePlayPause)
+                .into(),
+            Button::new(icons::icon("skip-forward.svg", p.fg, 16.0))
+                .padding(6)
+                .style(button_style_accent())
+                .on_press(Message::NextTrack)
+                .into(),
+        ])
+        .spacing(8)
+        .align_y(alignment::Vertical::Center),
+    )
+    .center_x(Length::Fill);
 
     let progress = slider(0.0..=1.0, player.progress, Message::Seek)
         .width(Length::Fill)
         .step(0.01f32)
         .style(slider_style(p.accent, p.bg_secondary));
 
-    let time_and_volume = Row::with_children(vec![
-        text(player.elapsed_text.clone())
-            .size(11)
-            .color(p.fg_secondary)
-            .into(),
-        Container::new(widget::rule::horizontal(1))
-            .width(Length::Fixed(1.0))
-            .height(Length::Fixed(12.0))
-            .into(),
-        text(player.total_text.clone())
-            .size(11)
-            .color(p.fg_secondary)
-            .into(),
-        Container::new(Row::new()).width(Length::Fill).into(),
-        icons::icon("volume.svg", p.fg_secondary, 14.0).into(),
-        slider(0.0..=1.0, player.volume, Message::SetVolume)
-            .width(Length::Fixed(80.0))
-            .step(0.01f32)
-            .style(slider_style(p.accent, p.bg_secondary))
-            .into(),
-    ])
-    .align_y(alignment::Vertical::Center)
-    .spacing(10);
+    let controls_and_progress =
+        Column::with_children(vec![controls.into(), progress.into()]).spacing(4);
 
-    Column::with_children(vec![
-        Container::new(
-            Row::with_children(vec![controls.into(), track_info.into(), progress.into()])
-                .spacing(12)
-                .align_y(alignment::Vertical::Center)
-                .padding([8, 12]),
-        )
-        .width(Length::Fill)
-        .into(),
-        Container::new(time_and_volume)
-            .padding([4, 12])
-            .width(Length::Fill)
-            .into(),
-    ])
-    .spacing(0)
+    let volume_slider = slider(0.0..=1.0, player.volume, Message::SetVolume)
+        .width(Length::Fixed(80.0))
+        .step(0.01f32)
+        .style(slider_style(p.accent, p.bg_secondary));
+
+    let queue_btn = Button::new(icons::icon("queue.svg", p.fg_muted, 16.0))
+        .padding(6)
+        .style(button_style_accent())
+        .on_press(Message::ToggleQueue)
+        .width(Length::Fixed(36.0))
+        .height(Length::Fixed(28.0));
+
+    Container::new(
+        Row::with_children(vec![
+            Container::new(track_thumb)
+                .width(Length::Fixed(theme::THUMBNAIL_SIZE))
+                .height(Length::Fixed(theme::THUMBNAIL_SIZE))
+                .into(),
+            Container::new(track_info)
+                .width(Length::Fixed(164.0))
+                .into(),
+            Container::new(elapsed_text).into(),
+            Container::new(controls_and_progress)
+                .width(Length::Fill)
+                .into(),
+            Container::new(total_text).into(),
+            icons::icon("volume.svg", p.fg_secondary, 14.0).into(),
+            volume_slider.into(),
+            queue_btn.into(),
+        ])
+        .spacing(12)
+        .align_y(alignment::Vertical::Center)
+        .padding([8, 12]),
+    )
+    .width(Length::Fill)
+    .style(bg(p.bg_secondary))
     .into()
 }
 
