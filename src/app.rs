@@ -186,7 +186,6 @@ pub struct MusicPlayer {
 
     pub context_menu: Option<ContextMenuState>,
 
-    pub input_focused: bool,
     pub focused_list_index: usize,
 
     pub palette: Palette,
@@ -272,7 +271,6 @@ impl MusicPlayer {
             drag_origin: None,
             drag_active: false,
             context_menu: None,
-            input_focused: false,
             focused_list_index: 0,
             palette: Palette::dark(),
             search_list_bounds: None,
@@ -311,7 +309,7 @@ impl MusicPlayer {
 
     fn event_to_message(
         event: iced::Event,
-        _status: iced::event::Status,
+        status: iced::event::Status,
         _window: iced::window::Id,
     ) -> Option<Message> {
         match event {
@@ -322,6 +320,9 @@ impl MusicPlayer {
                 Some(Message::LeftButtonReleased)
             }
             iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+                if status == iced::event::Status::Captured {
+                    return None;
+                }
                 Some(Message::KeyPressed { key, modifiers })
             }
             iced::Event::Window(iced::window::Event::CloseRequested) => Some(Message::WindowClose),
@@ -369,7 +370,6 @@ impl MusicPlayer {
             }
             Message::SearchInputChanged(query) => {
                 self.search_query = query;
-                self.input_focused = true;
                 self.update_search_history();
                 self.show_search_history = true;
                 Task::none()

@@ -337,7 +337,6 @@ impl MusicPlayer {
         self.pressed_track_is_queue = is_queue;
         self.drag_origin = Some(self.cursor_pos);
         self.drag_active = false;
-        self.input_focused = false;
 
         if is_double {
             self.pressed_track = None;
@@ -460,9 +459,6 @@ impl MusicPlayer {
         key: &iced::keyboard::key::Key,
         modifiers: iced::keyboard::Modifiers,
     ) {
-        if self.input_focused {
-            return;
-        }
         use iced::keyboard::key::Named;
         match key {
             iced::keyboard::Key::Named(Named::Space) => {
@@ -508,9 +504,6 @@ impl MusicPlayer {
                 }
                 iced::keyboard::Key::Character(c) if c.eq_ignore_ascii_case("v") => {
                     self.handle_paste_clipboard();
-                }
-                iced::keyboard::Key::Character(c) if c.eq_ignore_ascii_case("f") => {
-                    self.input_focused = true;
                 }
                 _ => {}
             }
@@ -642,7 +635,6 @@ impl MusicPlayer {
         if self.search_query.trim().is_empty() {
             return;
         }
-        self.input_focused = false;
         self.show_search_history = false;
         self.handle_search_execute();
     }
@@ -678,7 +670,6 @@ impl MusicPlayer {
         if index < self.last_filtered_history.len() {
             self.search_query = self.last_filtered_history[index].clone();
             self.show_search_history = false;
-            self.input_focused = false;
             self.handle_search_execute();
         }
     }
