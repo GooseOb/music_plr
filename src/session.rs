@@ -88,7 +88,13 @@ mod tests {
         assert_eq!(restored.view, View::SongRadio);
         assert!(restored.is_playing);
         assert!(restored.show_queue);
-        if let ViewSnapshot::Radio { label, selection, scroll, .. } = restored.snapshot {
+        if let ViewSnapshot::Radio {
+            label,
+            selection,
+            scroll,
+            ..
+        } = restored.snapshot
+        {
             assert_eq!(label, "Test Radio");
             assert_eq!(selection, vec![2]);
             assert_eq!(scroll, 42.0);

@@ -109,20 +109,25 @@ impl MusicPlayer {
         }
 
         let is_queue_drag = self.pressed_track_is_queue;
-        let (list_bounds, list_scroll, track_count) = if is_queue_drag && self.show_queue {
-            match (self.queue_list_bounds, self.queue_list_scroll) {
-                (Some(b), s) => (b, s, self.queue.tracks.len()),
-                _ => return Task::none(),
-            }
-        } else {
-            match (
-                self.get_current_list_bounds(),
-                self.get_current_list_scroll(),
-            ) {
-                (Some(b), s) => (b, s, self.current_track_count(false)),
-                (None, _) => return Task::none(),
-            }
-        };
+        let (list_bounds, list_scroll, track_count, drag_offset) =
+            if is_queue_drag && self.show_queue {
+                match (self.queue_list_bounds, self.queue_list_scroll) {
+                    (Some(b), s) => {
+                        let offset = self.queue.current_index + 1;
+                        let upcoming = self.queue.tracks.len().saturating_sub(offset);
+                        (b, s, upcoming, offset)
+                    }
+                    _ => return Task::none(),
+                }
+            } else {
+                match (
+                    self.get_current_list_bounds(),
+                    self.get_current_list_scroll(),
+                ) {
+                    (Some(b), s) => (b, s, self.current_track_count(false), 0),
+                    (None, _) => return Task::none(),
+                }
+            };
 
         let y_offset = self.cursor_pos.y - list_bounds.y;
         let row_pos = ((y_offset + list_scroll) / crate::theme::ROW_HEIGHT).max(0.0);
@@ -133,6 +138,7 @@ impl MusicPlayer {
             row_idx
         };
         let drop_idx = drop_idx.min(track_count);
+        let drop_idx = drop_idx + drag_offset;
 
         let sel = self.selection(is_queue_drag).to_vec();
 

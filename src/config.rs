@@ -8,6 +8,7 @@ pub struct Config {
     pub max_search_history_stored: usize,
     pub search_history: Vec<String>,
     pub cache_max_size_mb: u64,
+    pub max_recently_played: usize,
 }
 
 impl Default for Config {
@@ -19,6 +20,7 @@ impl Default for Config {
             max_search_history_stored: 100,
             search_history: Vec::new(),
             cache_max_size_mb: 1024,
+            max_recently_played: 50,
         }
     }
 }
@@ -58,6 +60,7 @@ mod tests {
         assert_eq!(cfg.max_search_history_visible, 10);
         assert_eq!(cfg.max_search_history_stored, 100);
         assert_eq!(cfg.cache_max_size_mb, 1024);
+        assert_eq!(cfg.max_recently_played, 50);
         assert!(cfg.search_history.is_empty());
     }
 

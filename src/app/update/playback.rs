@@ -17,6 +17,14 @@ impl MusicPlayer {
         }
         if let Some(track) = self.get_track_at(index, false) {
             let track = track.clone();
+            // Record the current track as recently played before replacing
+            // the queue with a new one.
+            if let Some(old) = self.queue.current().cloned() {
+                if old.url != track.url {
+                    self.queue
+                        .record_played(&old, self.config.max_recently_played);
+                }
+            }
             self.play_track_internal(&track);
             self.queue.clear();
             self.queue.enqueue(track);
@@ -27,6 +35,22 @@ impl MusicPlayer {
                 }
             }
         }
+    }
+
+    /// Play a track picked from the Recently Played list.  The old current
+    /// track (if any) is recorded as recently played, then the queue is
+    /// rebuilt with *only* the selected track so the old queue is discarded.
+    pub fn play_recent_track(&mut self, track: Track) {
+        if let Some(old) = self.queue.current().cloned() {
+            if old.url != track.url {
+                self.queue
+                    .record_played(&old, self.config.max_recently_played);
+            }
+        }
+        self.play_track_internal(&track);
+        self.queue.clear();
+        self.queue.enqueue(track);
+        self.send_mpris_update();
     }
 
     pub fn play_track_internal(&mut self, track: &Track) {
@@ -57,6 +81,11 @@ impl MusicPlayer {
     pub fn handle_remove_from_queue(&mut self, index: usize) {
         if index < self.queue.tracks.len() {
             self.queue.tracks.remove(index);
+            if self.queue.current_index >= self.queue.tracks.len() {
+                self.queue.current_index = self.queue.tracks.len().saturating_sub(1);
+            } else if index < self.queue.current_index {
+                self.queue.current_index -= 1;
+            }
             self.save_session();
         }
     }
@@ -73,18 +102,43 @@ impl MusicPlayer {
     }
 
     pub fn next_track(&mut self) {
-        if self.queue.next().is_some() {
-            self.track_loading = true;
-            if let Some(t) = self.queue.current() {
-                let t = t.clone();
-                self.play_track_internal(&t);
+        // Record the current track as recently played, then remove it from
+        // the queue so that Previous can restore it via recently_played.
+        if let Some(old) = self.queue.current().cloned() {
+            self.queue
+                .record_played(&old, self.config.max_recently_played);
+            if self.queue.current_index < self.queue.tracks.len() {
+                self.queue.tracks.remove(self.queue.current_index);
+                // current_index now points to what was the next track
             }
+        }
+
+        if let Some(t) = self.queue.current() {
+            self.track_loading = true;
+            let t = t.clone();
+            self.play_track_internal(&t);
             self.send_mpris_update();
         }
     }
 
+    /// “Previous” navigates the recently-played history.  If a track was
+    /// recently played it is popped from the history and inserted *before*
+    /// the current track in the queue (so the current track becomes “up next”
+    /// again).  When history is empty we fall back to stepping back in the
+    /// queue itself.
     pub fn previous_track(&mut self) {
-        if self.queue.previous().is_some() {
+        if let Some(prev) = self.queue.recently_played.first() {
+            let prev = prev.clone();
+            self.queue.recently_played.remove(0);
+            // Insert before the current track so it becomes the new current.
+            self.queue
+                .tracks
+                .insert(self.queue.current_index, prev.clone());
+            // current_index is unchanged — it now points at the inserted track.
+            self.track_loading = true;
+            self.play_track_internal(&prev);
+            self.send_mpris_update();
+        } else if self.queue.previous().is_some() {
             self.track_loading = true;
             if let Some(t) = self.queue.current() {
                 let t = t.clone();

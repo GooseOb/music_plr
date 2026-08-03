@@ -127,7 +127,7 @@ fn view_search<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .padding(theme::SPACING_XL)
         .into()
     } else {
-        view_track_list(&player.search_results, player, false)
+        view_track_list(&player.search_results, player, false, 0)
     };
 
     let load_more = if !player.search_loading
@@ -178,7 +178,7 @@ fn view_search_radio<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .padding(theme::SPACING_XL)
         .into()
     } else {
-        view_track_list(&player.radio_tracks, player, false)
+        view_track_list(&player.radio_tracks, player, false, 0)
     };
 
     Column::with_children(vec![header.into(), track_list])
@@ -346,7 +346,7 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
 
     let track_list = if let Some(idx) = player.selected_playlist {
         if let Some(pl) = player.playlists.playlists.get(idx) {
-            view_track_list(&pl.tracks, player, false)
+            view_track_list(&pl.tracks, player, false, 0)
         } else {
             Container::new(Row::new())
                 .width(Length::Fill)

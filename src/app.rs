@@ -11,9 +11,9 @@ use crate::downloads::DownloadRegistry;
 use crate::mpris::{self, MprisCommand, MprisUpdate};
 use crate::playlists::PlaylistStore;
 use crate::theme::Palette;
-use crate::types::{PlayQueue, Track, View};
-use serde::{Deserialize, Serialize};
+use crate::types::{PlayQueue, QueueTab, Track, View};
 use crate::util::format_duration;
+use serde::{Deserialize, Serialize};
 
 mod ui;
 mod update;
@@ -141,6 +141,8 @@ pub enum Message {
     HideDeleteConfirm,
 
     ToggleQueue,
+    SwitchQueueTab(QueueTab),
+    PlayRecentTrack(usize),
 
     NavigateTo(View),
     NavigateBack,
@@ -570,6 +572,21 @@ impl MusicPlayer {
             Message::ToggleQueue => {
                 self.show_queue = !self.show_queue;
                 self.save_session();
+                Task::none()
+            }
+            Message::SwitchQueueTab(tab) => {
+                self.queue.queue_tab = tab;
+                self.hovered_track = None;
+                self.save_session();
+                Task::none()
+            }
+            Message::PlayRecentTrack(index) => {
+                if index < self.queue.recently_played.len() {
+                    if let Some(track) = self.queue.recently_played.get(index) {
+                        let track = track.clone();
+                        self.play_recent_track(track);
+                    }
+                }
                 Task::none()
             }
             Message::NavigateTo(view) => {
