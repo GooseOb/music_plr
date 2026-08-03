@@ -307,13 +307,33 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                     .on_input(Message::RenamePlaylist)
                     .size(theme::TEXT_SIZE_LG)
                     .padding([theme::SPACING_XS, theme::SPACING_SM])
+                    .width(Length::Fill)
                     .into(),
                 text(format!("({track_count} tracks)"))
                     .size(theme::TEXT_SIZE_MD)
                     .color(p.fg_secondary)
                     .into(),
+                Button::new(
+                    Row::with_children(vec![
+                        icons::icon("folder.svg", Color::WHITE, theme::ICON_SIZE_SM).into(),
+                        text("Add local")
+                            .size(theme::TEXT_SIZE_DEFAULT)
+                            .align_y(alignment::Vertical::Center)
+                            .color(Color::WHITE)
+                            .into(),
+                    ])
+                    .spacing(theme::SPACING_SM)
+                    .align_y(alignment::Vertical::Center),
+                )
+                .padding(theme::SPACING_SM)
+                .height(Length::Fixed(theme::BUTTON_HEIGHT))
+                .style(button_style_accent())
+                .on_press(Message::AddLocalMusic)
+                .into(),
                 Button::new(icons::icon("delete.svg", p.fg_muted, theme::ICON_SIZE_SM))
-                    .padding(4)
+                    .padding(theme::SPACING_SM)
+                    .height(Length::Fixed(theme::BUTTON_HEIGHT))
+                    .width(Length::Fixed(theme::BUTTON_HEIGHT))
                     .style(button_style_accent())
                     .on_press(Message::ShowDeleteConfirm(idx))
                     .into(),

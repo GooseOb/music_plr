@@ -128,8 +128,8 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
         )
         .width(Length::Fill)
         .into(),
-        Button::new(icons::icon("folder.svg", Color::WHITE, theme::ICON_SIZE_SM))
-            .padding(6)
+        Button::new(icons::icon("add.svg", Color::WHITE, theme::ICON_SIZE_SM))
+            .padding(theme::SPACING_SM)
             .style(button_style_accent())
             .on_press(Message::CreatePlaylist)
             .into(),
@@ -137,22 +137,6 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
     .align_y(alignment::Vertical::Center)
     .spacing(6)
     .padding([theme::SPACING_SM, theme::SPACING_MD]);
-
-    let import_btn = Button::new(
-        Row::with_children(vec![
-            icons::icon("folder.svg", Color::WHITE, theme::ICON_SIZE_SM).into(),
-            text("Local Music")
-                .size(theme::TEXT_SIZE_DEFAULT)
-                .color(Color::WHITE)
-                .into(),
-        ])
-        .spacing(6)
-        .align_y(alignment::Vertical::Center),
-    )
-    .padding(theme::SPACING_SM)
-    .width(Length::Fill)
-    .style(button_style_accent())
-    .on_press(Message::AddLocalMusic);
 
     let sidebar_content = Column::with_children(vec![
         nav_buttons.into(),
@@ -183,7 +167,6 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
             .padding([theme::SPACING_SM, 0.0])
             .into(),
         create_row.into(),
-        import_btn.into(),
     ]);
 
     Container::new(sidebar_content)

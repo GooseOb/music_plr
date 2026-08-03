@@ -8,7 +8,6 @@ use std::sync::OnceLock;
 fn icon_data(name: &str) -> &'static str {
     match name {
         "search.svg" => include_str!("../icons/search.svg"),
-        "edit.svg" => include_str!("../icons/edit.svg"),
         "skip-forward.svg" => include_str!("../icons/skip-forward.svg"),
         "delete.svg" => include_str!("../icons/delete.svg"),
         "pause.svg" => include_str!("../icons/pause.svg"),
@@ -23,6 +22,7 @@ fn icon_data(name: &str) -> &'static str {
         "back.svg" => include_str!("../icons/back.svg"),
         "forward.svg" => include_str!("../icons/forward.svg"),
         "queue.svg" => include_str!("../icons/queue.svg"),
+        "add.svg" => include_str!("../icons/add.svg"),
         _ => include_str!("../icons/music.svg"),
     }
 }
@@ -34,7 +34,6 @@ fn cached_handle(name: &str) -> &'static svg::Handle {
     let cache = ICON_CACHE.get_or_init(|| {
         let names = [
             "search.svg",
-            "edit.svg",
             "skip-forward.svg",
             "delete.svg",
             "pause.svg",
@@ -49,6 +48,7 @@ fn cached_handle(name: &str) -> &'static svg::Handle {
             "back.svg",
             "forward.svg",
             "queue.svg",
+            "add.svg",
         ];
         names
             .iter()
