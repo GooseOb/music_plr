@@ -425,11 +425,44 @@ fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .height(Length::Fill)
         .style(bg(player.palette.bg));
 
-    Column::with_children(vec![search_bar, inner.into()])
+    let base = Column::with_children(vec![search_bar, inner.into()])
         .spacing(0)
         .width(Length::Fill)
+        .height(Length::Fill);
+
+    let mut stack = Stack::new()
+        .width(Length::Fill)
         .height(Length::Fill)
-        .into()
+        .push(base);
+
+    if player.show_search_history {
+        let (input_x, input_width) = player.search_input_geometry();
+        let dropdown =
+            Container::new(view_search_history(player)).width(Length::Fixed(input_width));
+
+        let positioned = Column::with_children(vec![
+            Container::new(Row::new())
+                .height(Length::Fixed(theme::SEARCH_BAR_HEIGHT))
+                .into(),
+            Row::with_children(vec![
+                Container::new(Row::new())
+                    .width(Length::Fixed(input_x))
+                    .into(),
+                dropdown.into(),
+            ])
+            .spacing(0)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into(),
+        ])
+        .spacing(0)
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+        stack = stack.push(positioned);
+    }
+
+    stack.into()
 }
 
 fn view_search_bar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
@@ -486,15 +519,6 @@ fn view_search_bar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
 }
 
 fn view_search<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
-    let history_dropdown = if player.show_search_history {
-        view_search_history(player)
-    } else {
-        Container::new(Row::new())
-            .width(Length::Fill)
-            .height(Length::Fixed(0.0))
-            .into()
-    };
-
     let track_list = if player.search_loading && player.search_results.is_empty() {
         Container::new(
             text("Searching...")
@@ -527,7 +551,7 @@ fn view_search<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         Container::new(Row::new()).height(Length::Fixed(0.0)).into()
     };
 
-    Column::with_children(vec![history_dropdown, track_list, load_more])
+    Column::with_children(vec![track_list, load_more])
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -577,7 +601,10 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                 .size(theme::TEXT_SIZE_DEFAULT)
                 .color(p.fg_secondary),
         )
+        .width(Length::Fill)
+        .height(Length::Fixed(theme::SEARCH_HISTORY_ITEM_HEIGHT))
         .padding([theme::SPACING_SM, theme::SPACING_XL])
+        .style(bg(p.bg_secondary))
         .into();
     }
 
@@ -665,9 +692,18 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         })
         .collect();
 
-    Container::new(Column::with_children(items).spacing(0).width(Length::Fill))
+    let dropdown_height = (player.last_filtered_history.len() as f32
+        * theme::SEARCH_HISTORY_ITEM_HEIGHT)
+        .min(theme::SEARCH_DROPDOWN_MAX_HEIGHT);
+
+    let content = scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
+        .id(iced::widget::Id::new("search_history_list"))
         .width(Length::Fill)
-        .max_width(theme::MIN_TRACK_WIDTH)
+        .height(Length::Fixed(dropdown_height));
+
+    Container::new(content)
+        .width(Length::Fill)
+        .height(Length::Fixed(dropdown_height))
         .style(bg(p.bg_secondary))
         .into()
 }

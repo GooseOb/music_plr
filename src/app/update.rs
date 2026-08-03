@@ -297,6 +297,7 @@ impl MusicPlayer {
 
     pub fn handle_navigate_to(&mut self, view: View) {
         self.nav_history.truncate(self.nav_history_pos + 1);
+        self.show_search_history = false;
         self.cleanup_drag_state();
 
         let back_entry = NavEntry {
@@ -349,6 +350,17 @@ impl MusicPlayer {
             let is_queue = self.pressed_track_is_queue;
             self.toggle_selection(track_idx, is_queue);
         }
+
+        if self.show_search_history && !self.is_cursor_in_search_area() {
+            self.show_search_history = false;
+        } else if !self.show_search_history
+            && self.search_input_bounds().contains(self.cursor_pos)
+            && !self.config.search_history.is_empty()
+        {
+            self.update_search_history();
+            self.show_search_history = true;
+        }
+
         self.cleanup_drag_state();
     }
 
@@ -639,6 +651,55 @@ impl MusicPlayer {
         }
     }
 
+    pub fn search_input_geometry(&self) -> (f32, f32) {
+        let queue_width = if self.show_queue {
+            (self.window_width * crate::theme::QUEUE_WIDTH_RATIO).max(crate::theme::QUEUE_MIN_WIDTH)
+        } else {
+            0.0
+        };
+        let main_width = (self.window_width - crate::theme::SIDEBAR_WIDTH - queue_width).max(0.0);
+        let input_x = crate::theme::SPACING_XL;
+        let input_width = (main_width
+            - 2.0 * crate::theme::SPACING_XL
+            - crate::theme::SEARCH_BTN_SIZE
+            - crate::theme::SPACING_SM)
+            .max(100.0);
+        (input_x, input_width)
+    }
+
+    pub fn search_input_bounds(&self) -> iced::Rectangle {
+        let (input_x, input_width) = self.search_input_geometry();
+        let notification_y = if self.notification.is_some() {
+            crate::theme::NOTIFICATION_HEIGHT
+        } else {
+            0.0
+        };
+        iced::Rectangle {
+            x: crate::theme::SIDEBAR_WIDTH + input_x,
+            y: notification_y,
+            width: input_width,
+            height: crate::theme::SEARCH_BAR_HEIGHT,
+        }
+    }
+
+    pub fn search_dropdown_bounds(&self) -> iced::Rectangle {
+        let input_bounds = self.search_input_bounds();
+        iced::Rectangle {
+            x: input_bounds.x,
+            y: input_bounds.y + input_bounds.height,
+            width: input_bounds.width,
+            height: crate::theme::SEARCH_DROPDOWN_MAX_HEIGHT,
+        }
+    }
+
+    pub fn is_cursor_in_search_area(&self) -> bool {
+        let cursor = self.cursor_pos;
+        if self.search_input_bounds().contains(cursor) {
+            return true;
+        }
+        self.search_dropdown_bounds().contains(cursor)
+    }
+
     pub fn handle_key_press(
         &mut self,
         key: &iced::keyboard::key::Key,
@@ -753,6 +814,7 @@ impl MusicPlayer {
             self.push_nav_entry();
         }
         self.current_view = View::Search;
+        self.show_search_history = false;
 
         self.search_loading = true;
         self.search_exhausted = false;
