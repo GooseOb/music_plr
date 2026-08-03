@@ -62,6 +62,27 @@ fn button_style_accent() -> impl Fn(&iced::Theme, button::Status) -> button::Sty
     )
 }
 
+fn button_style_nav(
+    enabled: bool,
+    p: &theme::Palette,
+) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
+    let bg = if enabled { p.bg_hover } else { p.bg_secondary };
+    let bg_hover = if enabled { p.accent } else { p.bg_secondary };
+    let text_color = if enabled { p.fg } else { p.fg_muted };
+    move |_, status| {
+        let bg_color = match status {
+            button::Status::Hovered | button::Status::Pressed if enabled => bg_hover,
+            _ => bg,
+        };
+        button::Style {
+            background: Some(bg_color.into()),
+            text_color,
+            border: iced::border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
+}
+
 fn button_style_green() -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
     button_style(
         Color::from_rgb8(0x14, 0xc8, 0x84),

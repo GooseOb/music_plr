@@ -9,29 +9,41 @@ use super::*;
 pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let p = &player.palette;
 
+    let can_back = player.can_navigate_back();
+    let can_forward = player.can_navigate_forward();
+
     let nav_buttons = Row::with_children(vec![
         Button::new(
-            Container::new(icons::icon("back.svg", p.fg, theme::ICON_SIZE_MD)).center(Length::Fill),
+            Container::new(icons::icon(
+                "back.svg",
+                if can_back { p.fg } else { p.fg_muted },
+                theme::ICON_SIZE_MD,
+            ))
+            .center(Length::Fill),
         )
         .padding(6)
-        .style(button_style_accent())
+        .style(button_style_nav(can_back, p))
         .width(Length::Fill)
         .height(Length::Fixed(theme::BUTTON_HEIGHT))
-        .on_press_maybe(if player.can_navigate_back() {
+        .on_press_maybe(if can_back {
             Some(Message::NavigateBack)
         } else {
             None
         })
         .into(),
         Button::new(
-            Container::new(icons::icon("forward.svg", p.fg, theme::ICON_SIZE_MD))
-                .center(Length::Fill),
+            Container::new(icons::icon(
+                "forward.svg",
+                if can_forward { p.fg } else { p.fg_muted },
+                theme::ICON_SIZE_MD,
+            ))
+            .center(Length::Fill),
         )
         .padding(6)
-        .style(button_style_accent())
+        .style(button_style_nav(can_forward, p))
         .width(Length::Fill)
         .height(Length::Fixed(theme::BUTTON_HEIGHT))
-        .on_press_maybe(if player.can_navigate_forward() {
+        .on_press_maybe(if can_forward {
             Some(Message::NavigateForward)
         } else {
             None
