@@ -1,25 +1,24 @@
+use crate::app::ViewSnapshot;
 use crate::types::{PlayQueue, View};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
-    pub current_view: View,
+    pub view: View,
+    pub snapshot: ViewSnapshot,
     pub queue: PlayQueue,
     pub is_playing: bool,
-    pub selected_playlist: Option<usize>,
-    pub selected_playlist_name: String,
     pub show_queue: bool,
 }
 
 impl Default for SessionState {
     fn default() -> Self {
         SessionState {
-            current_view: View::Search,
+            view: View::Search,
+            snapshot: ViewSnapshot::default(),
             queue: PlayQueue::new(),
             is_playing: false,
-            selected_playlist: None,
-            selected_playlist_name: String::new(),
             show_queue: false,
         }
     }
@@ -64,30 +63,37 @@ mod tests {
     #[test]
     fn session_state_default() {
         let state = SessionState::default();
-        assert_eq!(state.current_view, View::Search);
+        assert_eq!(state.view, View::Search);
         assert!(state.queue.tracks.is_empty());
         assert!(!state.is_playing);
-        assert_eq!(state.selected_playlist, None);
-        assert_eq!(state.selected_playlist_name, "");
         assert!(!state.show_queue);
     }
 
     #[test]
     fn session_state_round_trip() {
         let state = SessionState {
-            current_view: View::SongRadio,
+            view: View::SongRadio,
+            snapshot: ViewSnapshot::Radio {
+                label: "Test Radio".into(),
+                tracks: Vec::new(),
+                selection: vec![2],
+                scroll: 42.0,
+            },
             queue: PlayQueue::default(),
             is_playing: true,
-            selected_playlist: Some(2),
-            selected_playlist_name: "Test".into(),
             show_queue: true,
         };
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.current_view, View::SongRadio);
+        assert_eq!(restored.view, View::SongRadio);
         assert!(restored.is_playing);
-        assert_eq!(restored.selected_playlist, Some(2));
-        assert_eq!(restored.selected_playlist_name, "Test");
         assert!(restored.show_queue);
+        if let ViewSnapshot::Radio { label, selection, scroll, .. } = restored.snapshot {
+            assert_eq!(label, "Test Radio");
+            assert_eq!(selection, vec![2]);
+            assert_eq!(scroll, 42.0);
+        } else {
+            panic!("expected Radio snapshot");
+        }
     }
 }

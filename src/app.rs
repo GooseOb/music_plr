@@ -10,21 +10,21 @@ use crate::config;
 use crate::downloads::DownloadRegistry;
 use crate::mpris::{self, MprisCommand, MprisUpdate};
 use crate::playlists::PlaylistStore;
-use crate::session::SessionState;
 use crate::theme::Palette;
 use crate::types::{PlayQueue, Track, View};
+use serde::{Deserialize, Serialize};
 use crate::util::format_duration;
 
 mod ui;
 mod update;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct NavEntry {
     pub view: View,
     pub snapshot: ViewSnapshot,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ViewSnapshot {
     Search {
         query: String,

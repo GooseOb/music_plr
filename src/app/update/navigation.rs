@@ -33,7 +33,7 @@ impl MusicPlayer {
         }
     }
 
-    fn restore_nav_entry(&mut self, entry: &NavEntry) -> Task<Message> {
+    pub(super) fn restore_nav_entry(&mut self, entry: &NavEntry) -> Task<Message> {
         self.current_view = entry.view.clone();
         match &entry.snapshot {
             ViewSnapshot::Search {

@@ -1,13 +1,13 @@
 use super::*;
+use crate::session::SessionState;
 
 impl MusicPlayer {
     pub fn save_session(&self) {
         let state = SessionState {
-            current_view: self.current_view.clone(),
+            view: self.current_view.clone(),
+            snapshot: self.snapshot_current(),
             queue: self.queue.clone(),
             is_playing: self.is_playing,
-            selected_playlist: self.selected_playlist,
-            selected_playlist_name: self.selected_playlist_name.clone(),
             show_queue: self.show_queue,
         };
         state.save();
@@ -15,12 +15,17 @@ impl MusicPlayer {
 
     pub fn restore_session(&mut self) {
         let state = SessionState::load();
-        self.current_view = state.current_view;
         self.queue = state.queue;
         self.is_playing = state.is_playing;
-        self.selected_playlist = state.selected_playlist;
-        self.selected_playlist_name = state.selected_playlist_name.clone();
         self.show_queue = state.show_queue;
+
+        let entry = NavEntry {
+            view: state.view,
+            snapshot: state.snapshot,
+        };
+        // Reuse the same restore logic as nav back/forward
+        let _ = self.restore_nav_entry(&entry);
+
         self.nav_history = vec![NavEntry {
             view: self.current_view.clone(),
             snapshot: self.snapshot_current(),

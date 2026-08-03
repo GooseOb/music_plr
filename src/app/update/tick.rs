@@ -90,6 +90,7 @@ impl MusicPlayer {
                 if matches!(self.current_view, View::Search) {
                     self.push_nav_entry();
                 }
+                self.save_session();
                 spawn_thumbnail_download_thread(&self.search_results);
                 self.clear_notification();
             }
@@ -105,6 +106,7 @@ impl MusicPlayer {
                 }
                 spawn_thumbnail_download_thread(&self.search_results);
                 self.clear_notification();
+                self.save_session();
             }
             BackendResult::RadioResults(label, tracks) => {
                 self.radio_label = label;
