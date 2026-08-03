@@ -56,8 +56,9 @@ src/
 │   │   ├── content.rs  # search bar, search/radio/playlist/download views
 │   │   ├── overlays.rs # context menu, playlist picker, delete confirm
 │   │   ├── playbar.rs  # bottom playbar (track info, slider, controls, volume)
+│   │   ├── queue.rs    # queue panel (tabs, now-playing, up-next, recently played)
 │   │   ├── sidebar.rs  # left sidebar (nav, playlists, create/import)
-│   │   └── track_list.rs # reusable track rows + queue panel
+│   │   └── track_list.rs # reusable track rows + shared helpers (row_layout, etc.)
 │   └── update/     # Business logic handlers
 │       ├── mod.rs      # spawn_thumbnail_download_thread()
 │       ├── actions.rs  # download/remove, context menu, picker

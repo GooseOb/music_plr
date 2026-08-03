@@ -14,6 +14,7 @@ use super::{ContextMenuState, Message, MusicPlayer};
 mod content;
 mod overlays;
 mod playbar;
+mod queue;
 mod sidebar;
 mod track_list;
 
@@ -129,7 +130,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message> {
     let main_content = content::view_main_content(player);
     let sidebar = sidebar::view_sidebar(player);
     let queue = if player.show_queue {
-        track_list::view_queue_panel(player)
+        queue::view_queue_panel(player)
     } else {
         Container::new(Row::new()).width(Length::Fixed(0.0)).into()
     };
