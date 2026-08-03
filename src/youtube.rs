@@ -26,40 +26,6 @@ struct YTDLPSearchResult {
 
 const YTM_SEARCH_URL: &str = "https://music.youtube.com/search?q=";
 
-const PY_SEARCH_SCRIPT: &str = r#"
-import sys, json
-try:
-    from ytmusicapi import YTMusic
-except ImportError:
-    print(json.dumps({"error": "ytmusicapi not installed"}))
-    sys.exit(1)
-query = sys.argv[1] if len(sys.argv) > 1 else ""
-limit = int(sys.argv[2]) if len(sys.argv) > 2 else 10
-if not query:
-    print(json.dumps([]))
-    sys.exit(0)
-results = YTMusic().search(query, filter="songs", limit=limit)
-out = []
-for r in results:
-    vid = r.get("videoId", "")
-    if not vid:
-        continue
-    artists = r.get("artists", [])
-    artist = artists[0].get("name", "") if artists else ""
-    duration = r.get("duration_seconds", 0) or 0
-    thumbs = r.get("thumbnails") or []
-    thumb = thumbs[-1].get("url", "") if thumbs else ""
-    out.append({
-        "id": vid,
-        "title": r.get("title", ""),
-        "url": f"https://youtube.com/watch?v={vid}",
-        "duration": duration,
-        "thumbnail": thumb,
-        "channel": artist,
-    })
-print(json.dumps(out))
-"#;
-
 pub fn search(query: &str, _offset: usize) -> Result<Vec<YouTubeVideo>> {
     if let Ok(videos) = search_ytmusic(query) {
         return Ok(videos);
@@ -69,7 +35,8 @@ pub fn search(query: &str, _offset: usize) -> Result<Vec<YouTubeVideo>> {
 
 fn search_ytmusic(query: &str) -> Result<Vec<YouTubeVideo>> {
     let script_path = std::env::temp_dir().join("music_plr_search.py");
-    std::fs::write(&script_path, PY_SEARCH_SCRIPT).context("Failed to write ytmusicapi script")?;
+    std::fs::write(&script_path, include_str!("./youtube_search.py"))
+        .context("Failed to write ytmusicapi script")?;
 
     let limit = 20;
     let output = Command::new("python3")
