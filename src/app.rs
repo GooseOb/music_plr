@@ -10,6 +10,7 @@ use crate::config;
 use crate::downloads::DownloadRegistry;
 use crate::mpris::{self, MprisCommand, MprisUpdate};
 use crate::playlists::PlaylistStore;
+use crate::search_history::SearchHistory;
 use crate::theme::Palette;
 use crate::types::{PlayQueue, QueueTab, Track, View};
 use crate::util::format_duration;
@@ -48,7 +49,7 @@ pub enum ViewSnapshot {
 
 impl Default for ViewSnapshot {
     fn default() -> Self {
-        ViewSnapshot::Search {
+        Self::Search {
             query: String::new(),
             results: Vec::new(),
             selection: Vec::new(),
@@ -68,6 +69,7 @@ pub enum BackendResult {
 }
 
 #[derive(Debug, Clone, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ContextMenuState {
     pub visible: bool,
     pub track_index: usize,
@@ -157,6 +159,35 @@ pub enum Message {
     CloseContextMenu,
 }
 
+/// Mouse and drag interaction state, grouped for clarity.
+#[derive(Debug, Clone, Default)]
+pub struct DragState {
+    pub cursor_pos: Point,
+    pub pressed_track: Option<usize>,
+    pub pressed_track_is_queue: bool,
+    pub hovered_track: Option<(usize, bool)>,
+    pub drag_origin: Option<Point>,
+    pub drag_active: bool,
+    pub drag_drop_target: Option<usize>,
+    /// Which list the cursor is currently hovering over during a drag.
+    /// `None` means no list is targeted (e.g. hovering over the sidebar).
+    /// `Some(DragTargetList::Queue)` when over the queue's up-next list.
+    /// `Some(DragTargetList::TrackList)` when over the main track list.
+    pub drag_target_list: Option<DragTargetList>,
+    pub sidebar_hover_playlist: Option<usize>,
+}
+
+impl DragState {
+    const fn cleanup(&mut self) {
+        self.drag_active = false;
+        self.drag_origin = None;
+        self.pressed_track = None;
+        self.drag_drop_target = None;
+        self.drag_target_list = None;
+        self.sidebar_hover_playlist = None;
+    }
+}
+
 /// Identifies which track list a drag is currently hovering over.
 /// Used to distinguish same-list reordering from cross-list copying.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -165,6 +196,7 @@ pub enum DragTargetList {
     Queue,
 }
 
+#[allow(clippy::struct_excessive_bools)]
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
     pub config: crate::config::Config,
@@ -208,6 +240,7 @@ pub struct MusicPlayer {
     pub nav_history: Vec<NavEntry>,
     pub nav_history_pos: usize,
 
+    pub search_history: SearchHistory,
     pub stream_cache: StreamCache,
     pub pending_cache_id: Option<String>,
 
@@ -222,19 +255,7 @@ pub struct MusicPlayer {
     pub mpris_cmd_rx: mpsc::Receiver<MprisCommand>,
     pub mpris_update_tx: Option<mpsc::Sender<MprisUpdate>>,
 
-    pub cursor_pos: Point,
-    pub pressed_track: Option<usize>,
-    pub pressed_track_is_queue: bool,
-    pub hovered_track: Option<(usize, bool)>,
-    pub drag_origin: Option<Point>,
-    pub drag_active: bool,
-    pub drag_drop_target: Option<usize>,
-    /// Which list the cursor is currently hovering over during a drag.
-    /// `None` means no list is targeted (e.g. hovering over the sidebar).
-    /// `Some(DragTargetList::Queue)` when over the queue's up-next list.
-    /// `Some(DragTargetList::TrackList)` when over the main track list.
-    pub drag_target_list: Option<DragTargetList>,
-    pub sidebar_hover_playlist: Option<usize>,
+    pub drag: DragState,
 
     pub context_menu: Option<ContextMenuState>,
 
@@ -262,7 +283,7 @@ impl Default for MusicPlayer {
 }
 
 impl MusicPlayer {
-    pub fn new() -> (MusicPlayer, Task<Message>) {
+    pub fn new() -> (Self, Task<Message>) {
         (Self::default(), Task::none())
     }
 
@@ -272,6 +293,7 @@ impl MusicPlayer {
 
         let mut player = Self {
             audio: AudioPlayer::new(config.volume),
+            search_history: SearchHistory::load(),
             stream_cache: StreamCache::new(config.cache_max_size_mb),
             pending_cache_id: None,
             config,
@@ -318,15 +340,7 @@ impl MusicPlayer {
             mpris_cmd_tx,
             mpris_cmd_rx,
             mpris_update_tx: None,
-            cursor_pos: Point::new(0.0, 0.0),
-            pressed_track: None,
-            pressed_track_is_queue: false,
-            hovered_track: None,
-            drag_origin: None,
-            drag_active: false,
-            drag_drop_target: None,
-            drag_target_list: None,
-            sidebar_hover_playlist: None,
+            drag: DragState::default(),
             context_menu: None,
             focused_list_index: 0,
             queue_selected_indices: Vec::new(),
@@ -359,10 +373,11 @@ impl MusicPlayer {
         ui::view(self)
     }
 
+    #[allow(clippy::unused_self)]
     pub fn subscription(&self) -> Subscription<Message> {
         let timer = iced::time::every(Duration::from_millis(250)).map(|_| Message::Tick);
 
-        let events = iced::event::listen_with(MusicPlayer::event_to_message);
+        let events = iced::event::listen_with(Self::event_to_message);
 
         Subscription::batch([timer, events])
     }
@@ -408,17 +423,20 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::CursorMoved(pos) => {
-                self.cursor_pos = pos;
-                if self.pressed_track.is_some() && self.drag_origin.is_some() && !self.drag_active {
-                    if let Some(origin) = self.drag_origin {
+                self.drag.cursor_pos = pos;
+                if self.drag.pressed_track.is_some()
+                    && self.drag.drag_origin.is_some()
+                    && !self.drag.drag_active
+                {
+                    if let Some(origin) = self.drag.drag_origin {
                         let dx = (pos.x - origin.x).abs();
                         let dy = (pos.y - origin.y).abs();
                         if dx > crate::theme::DRAG_THRESHOLD || dy > crate::theme::DRAG_THRESHOLD {
-                            self.drag_active = true;
+                            self.drag.drag_active = true;
                         }
                     }
                 }
-                if self.drag_active {
+                if self.drag.drag_active {
                     return self.handle_drag_update();
                 }
                 Task::none()
@@ -480,12 +498,12 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::TrackHoverStart { index, is_queue } => {
-                self.hovered_track = Some((index, is_queue));
+                self.drag.hovered_track = Some((index, is_queue));
                 Task::none()
             }
             Message::TrackRightClicked { index, is_queue } => {
                 if !is_queue {
-                    self.hovered_track = None;
+                    self.drag.hovered_track = None;
                 }
                 self.show_context_menu(index, is_queue);
                 Task::none()
@@ -496,7 +514,7 @@ impl MusicPlayer {
             }
             Message::PlayTrackAtIndex { index, is_queue } => {
                 if !is_queue {
-                    self.hovered_track = None;
+                    self.drag.hovered_track = None;
                 }
                 self.handle_play_track(index, is_queue);
                 Task::none()
@@ -590,7 +608,7 @@ impl MusicPlayer {
             }
             Message::SwitchQueueTab(tab) => {
                 self.queue.queue_tab = tab;
-                self.hovered_track = None;
+                self.drag.hovered_track = None;
                 self.save_session();
                 Task::none()
             }
@@ -610,51 +628,35 @@ impl MusicPlayer {
             Message::NavigateBack => self.handle_navigate_back(),
             Message::NavigateForward => self.handle_navigate_forward(),
             Message::ContextMenuPlayTrack(index) => {
-                let is_queue = self
-                    .context_menu
-                    .as_ref()
-                    .map(|m| m.is_queue)
-                    .unwrap_or(false);
-                self.context_menu = None;
-                self.pressed_track = None;
+                let menu = self.take_context_menu();
+                let is_queue = menu.as_ref().is_some_and(|m| m.is_queue);
+                self.drag.pressed_track = None;
                 self.handle_play_track(index, is_queue);
                 Task::none()
             }
             Message::ContextMenuStartSongRadio(index) => {
-                let is_queue = self
-                    .context_menu
-                    .as_ref()
-                    .map(|m| m.is_queue)
-                    .unwrap_or(false);
+                let menu = self.take_context_menu();
+                let is_queue = menu.as_ref().is_some_and(|m| m.is_queue);
                 let track = self.get_track_at(index, is_queue);
-                self.context_menu = None;
                 if let Some(t) = track {
-                    self.start_song_radio(t.title.clone());
+                    self.start_song_radio(t.title);
                 }
                 Task::none()
             }
             Message::ContextMenuStartArtistRadio(index) => {
-                let is_queue = self
-                    .context_menu
-                    .as_ref()
-                    .map(|m| m.is_queue)
-                    .unwrap_or(false);
+                let menu = self.take_context_menu();
+                let is_queue = menu.as_ref().is_some_and(|m| m.is_queue);
                 let track = self.get_track_at(index, is_queue);
-                self.context_menu = None;
                 if let Some(t) = track {
-                    self.start_artist_radio(t.artist.clone());
+                    self.start_artist_radio(t.artist);
                 }
                 Task::none()
             }
             Message::ContextMenuDownloadOrDelete(index) => {
-                let is_queue = self
-                    .context_menu
-                    .as_ref()
-                    .map(|m| m.is_queue)
-                    .unwrap_or(false);
+                let menu = self.take_context_menu();
+                let is_queue = menu.as_ref().is_some_and(|m| m.is_queue);
                 let track = self.get_track_at(index, is_queue);
-                self.context_menu = None;
-                self.pressed_track = None;
+                self.drag.pressed_track = None;
                 if let Some(track) = track {
                     if self.download_registry.contains(&track.url) {
                         self.handle_remove_download(index, is_queue);
@@ -665,13 +667,13 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuRemoveFromPlaylist(index) => {
+                self.take_context_menu();
                 self.handle_remove_from_playlist(index);
-                self.context_menu = None;
                 Task::none()
             }
             Message::ContextMenuRemoveFromQueue(index) => {
+                self.take_context_menu();
                 self.handle_remove_from_queue(index);
-                self.context_menu = None;
                 Task::none()
             }
             Message::CloseContextMenu => {

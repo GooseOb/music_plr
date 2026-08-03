@@ -22,7 +22,7 @@ impl Default for Palette {
 }
 
 impl Palette {
-    pub fn dark() -> Self {
+    pub const fn dark() -> Self {
         Self {
             bg: Color::from_rgb8(0x14, 0x14, 0x18),
             bg_secondary: Color::from_rgb8(0x1a, 0x1a, 0x20),

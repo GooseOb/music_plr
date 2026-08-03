@@ -67,7 +67,7 @@ impl StreamCache {
     }
 
     pub fn path_for(&self, id: &str) -> PathBuf {
-        self.cache_dir.join(format!("{}.cache", id))
+        self.cache_dir.join(format!("{id}.cache"))
     }
 
     pub fn contains(&self, id: &str) -> bool {
@@ -79,7 +79,7 @@ impl StreamCache {
         if !path.exists() {
             return false;
         }
-        let size = path.metadata().map(|m| m.len()).unwrap_or(0);
+        let size = path.metadata().map_or(0, |m| m.len());
         if size < 4096 {
             let _ = std::fs::remove_file(&path);
             return false;

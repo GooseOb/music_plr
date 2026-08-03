@@ -42,24 +42,25 @@ struct MprisData {
 struct MediaPlayer2;
 
 #[interface(name = "org.mpris.MediaPlayer2")]
+#[allow(clippy::unused_async, clippy::unused_self)]
 impl MediaPlayer2 {
-    fn can_quit(&self) -> bool {
+    const fn can_quit(&self) -> bool {
         false
     }
 
-    fn can_raise(&self) -> bool {
+    const fn can_raise(&self) -> bool {
         false
     }
 
-    fn has_track_list(&self) -> bool {
+    const fn has_track_list(&self) -> bool {
         false
     }
 
-    fn identity(&self) -> &str {
+    const fn identity(&self) -> &'static str {
         "Music PLR"
     }
 
-    fn desktop_entry(&self) -> &str {
+    const fn desktop_entry(&self) -> &'static str {
         "music_plr"
     }
 
@@ -67,7 +68,7 @@ impl MediaPlayer2 {
         vec!["file", "https"]
     }
 
-    fn supported_mime_types(&self) -> Vec<&str> {
+    const fn supported_mime_types(&self) -> Vec<&str> {
         vec![]
     }
 }
@@ -78,6 +79,7 @@ struct PlayerInterface {
 }
 
 #[interface(name = "org.mpris.MediaPlayer2.Player")]
+#[allow(clippy::unused_async, clippy::unnecessary_wraps, clippy::unused_self)]
 impl PlayerInterface {
     async fn next(&self) {
         let _ = self.cmd_tx.send(MprisCommand::NextTrack);
@@ -152,42 +154,42 @@ impl PlayerInterface {
     }
 
     #[zbus(property)]
-    fn minimum_rate(&self) -> f64 {
+    const fn minimum_rate(&self) -> f64 {
         1.0
     }
 
     #[zbus(property)]
-    fn maximum_rate(&self) -> f64 {
+    const fn maximum_rate(&self) -> f64 {
         1.0
     }
 
     #[zbus(property)]
-    fn can_control(&self) -> bool {
+    const fn can_control(&self) -> bool {
         true
     }
 
     #[zbus(property)]
-    fn can_play(&self) -> bool {
+    const fn can_play(&self) -> bool {
         true
     }
 
     #[zbus(property)]
-    fn can_pause(&self) -> bool {
+    const fn can_pause(&self) -> bool {
         true
     }
 
     #[zbus(property)]
-    fn can_seek(&self) -> bool {
+    const fn can_seek(&self) -> bool {
         true
     }
 
     #[zbus(property)]
-    fn can_go_next(&self) -> bool {
+    const fn can_go_next(&self) -> bool {
         true
     }
 
     #[zbus(property)]
-    fn can_go_previous(&self) -> bool {
+    const fn can_go_previous(&self) -> bool {
         true
     }
 }
@@ -272,7 +274,7 @@ pub fn start(cmd_tx: mpsc::Sender<MprisCommand>, update_rx: mpsc::Receiver<Mpris
                         data.artist = update.artist;
                         data.duration_us = (update.duration_secs * 1_000_000.0) as i64;
                         data.position_us = update.position_us;
-                        data.volume = update.volume as f64;
+                        data.volume = f64::from(update.volume);
                         data.has_track = update.has_track;
                     }
                 }

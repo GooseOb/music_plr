@@ -20,7 +20,7 @@ mod track_list;
 
 use track_list::view_track_list;
 
-fn scrollable_id(is_queue: bool) -> iced::widget::Id {
+const fn scrollable_id(is_queue: bool) -> iced::widget::Id {
     if is_queue {
         iced::widget::Id::new("queue_list")
     } else {
@@ -97,9 +97,7 @@ fn slider_style(
 ) -> impl Fn(&iced::Theme, slider::Status) -> slider::Style + 'static {
     move |_, status| {
         let color = match status {
-            slider::Status::Active => accent,
-            slider::Status::Hovered => accent,
-            slider::Status::Dragged => accent,
+            slider::Status::Active | slider::Status::Hovered | slider::Status::Dragged => accent,
         };
         slider::Style {
             rail: slider::Rail {

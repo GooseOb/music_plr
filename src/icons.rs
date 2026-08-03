@@ -1,7 +1,12 @@
 use iced::{widget::svg, Color, Length};
+use std::sync::OnceLock;
 
-pub fn handle(name: &str) -> svg::Handle {
-    let data = match name {
+/// Compile-time icon registry. Returns the raw SVG bytes for a named icon.
+/// Falls back to the "music.svg" icon if the name is unknown, so the app
+/// never panics on a typo'd icon reference.
+#[allow(clippy::match_same_arms)]
+fn icon_data(name: &str) -> &'static str {
+    match name {
         "search.svg" => include_str!("../icons/search.svg"),
         "edit.svg" => include_str!("../icons/edit.svg"),
         "skip-forward.svg" => include_str!("../icons/skip-forward.svg"),
@@ -18,13 +23,58 @@ pub fn handle(name: &str) -> svg::Handle {
         "back.svg" => include_str!("../icons/back.svg"),
         "forward.svg" => include_str!("../icons/forward.svg"),
         "queue.svg" => include_str!("../icons/queue.svg"),
-        _ => panic!("Unknown icon: {}", name),
-    };
-    svg::Handle::from_memory(data.as_bytes().to_vec())
+        _ => include_str!("../icons/music.svg"),
+    }
+}
+
+/// Cached SVG handles so we don't re-allocate the byte Vec on every render.
+static ICON_CACHE: OnceLock<Vec<(&'static str, svg::Handle)>> = OnceLock::new();
+
+fn cached_handle(name: &str) -> &'static svg::Handle {
+    let cache = ICON_CACHE.get_or_init(|| {
+        let names = [
+            "search.svg",
+            "edit.svg",
+            "skip-forward.svg",
+            "delete.svg",
+            "pause.svg",
+            "volume.svg",
+            "radio.svg",
+            "sync.svg",
+            "folder.svg",
+            "play.svg",
+            "skip-back.svg",
+            "download.svg",
+            "music.svg",
+            "back.svg",
+            "forward.svg",
+            "queue.svg",
+        ];
+        names
+            .iter()
+            .map(|&n| {
+                (
+                    n,
+                    svg::Handle::from_memory(icon_data(n).as_bytes().to_vec()),
+                )
+            })
+            .collect()
+    });
+    cache
+        .iter()
+        .find(|(n, _)| *n == name)
+        .or_else(|| cache.iter().find(|(n, _)| *n == "music.svg"))
+        .map(|(_, h)| h)
+        .expect("music.svg missing from icon cache")
+}
+
+#[allow(dead_code)]
+pub fn handle(name: &str) -> svg::Handle {
+    cached_handle(name).clone()
 }
 
 pub fn icon(name: &str, color: Color, size: f32) -> svg::Svg<'static> {
-    svg::Svg::new(handle(name))
+    svg::Svg::new(cached_handle(name).clone())
         .width(Length::Fixed(size))
         .height(Length::Fixed(size))
         .style(move |_, _| svg::Style { color: Some(color) })

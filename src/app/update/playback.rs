@@ -1,4 +1,4 @@
-use super::*;
+use super::{MusicPlayer, Track};
 use tracing::debug;
 
 impl MusicPlayer {
@@ -16,7 +16,6 @@ impl MusicPlayer {
             return;
         }
         if let Some(track) = self.get_track_at(index, false) {
-            let track = track.clone();
             // Record the current track as recently played before replacing
             // the queue with a new one.
             if let Some(old) = self.queue.current().cloned() {
@@ -90,6 +89,7 @@ impl MusicPlayer {
         }
     }
 
+    #[allow(clippy::needless_pass_by_ref_mut)]
     pub fn toggle_play_pause(&mut self) {
         if self.queue.current().is_some() {
             if self.is_playing {

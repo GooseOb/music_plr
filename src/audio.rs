@@ -97,7 +97,7 @@ impl AudioPlayer {
                                 .unwrap_or("stream");
                             let temp_dir = std::env::temp_dir().join("music_plr");
                             let _ = std::fs::create_dir_all(&temp_dir);
-                            let temp_path = temp_dir.join(format!("{}.wav", id));
+                            let temp_path = temp_dir.join(format!("{id}.wav"));
                             let temp_str = temp_path.to_string_lossy().to_string();
 
                             debug!("Spawning yt-dlp, teeing raw output to cache + ffmpeg");
@@ -125,12 +125,9 @@ impl AudioPlayer {
                                 }
                             };
 
-                            let ytdlp_stdout = match ytdlp_child.stdout.take() {
-                                Some(s) => s,
-                                None => {
-                                    warn!("yt-dlp stdout not available");
-                                    continue;
-                                }
+                            let Some(ytdlp_stdout) = ytdlp_child.stdout.take() else {
+                                warn!("yt-dlp stdout not available");
+                                continue;
                             };
 
                             let mut ffmpeg_child = match Command::new("ffmpeg")
@@ -159,15 +156,12 @@ impl AudioPlayer {
                                 }
                             };
 
-                            let ffmpeg_stdin = match ffmpeg_child.stdin.take() {
-                                Some(s) => s,
-                                None => {
-                                    warn!("ffmpeg stdin not available");
-                                    let _ = ytdlp_child.kill();
-                                    let _ = ffmpeg_child.kill();
-                                    let _ = std::fs::remove_file(&temp_path);
-                                    continue;
-                                }
+                            let Some(ffmpeg_stdin) = ffmpeg_child.stdin.take() else {
+                                warn!("ffmpeg stdin not available");
+                                let _ = ytdlp_child.kill();
+                                let _ = ffmpeg_child.kill();
+                                let _ = std::fs::remove_file(&temp_path);
+                                continue;
                             };
 
                             if let Some(dir) = cache_path.parent() {
@@ -243,7 +237,7 @@ impl AudioPlayer {
                                 .unwrap_or("cache");
                             let temp_dir = std::env::temp_dir().join("music_plr");
                             let _ = std::fs::create_dir_all(&temp_dir);
-                            let temp_path = temp_dir.join(format!("{}.wav", id));
+                            let temp_path = temp_dir.join(format!("{id}.wav"));
                             let temp_str = temp_path.to_string_lossy().to_string();
 
                             debug!("Playing cached file through ffmpeg: {:?}", cache_path);
@@ -264,14 +258,11 @@ impl AudioPlayer {
                                 }
                             };
 
-                            let ffmpeg_stdin = match ffmpeg_child.stdin.take() {
-                                Some(s) => s,
-                                None => {
-                                    warn!("ffmpeg stdin not available");
-                                    let _ = ffmpeg_child.kill();
-                                    let _ = std::fs::remove_file(&temp_path);
-                                    continue;
-                                }
+                            let Some(ffmpeg_stdin) = ffmpeg_child.stdin.take() else {
+                                warn!("ffmpeg stdin not available");
+                                let _ = ffmpeg_child.kill();
+                                let _ = std::fs::remove_file(&temp_path);
+                                continue;
                             };
 
                             let cache_path_clone = cache_path.clone();
@@ -288,13 +279,12 @@ impl AudioPlayer {
                                 let mut writer = ffmpeg_stdin;
                                 loop {
                                     match reader.read(&mut buf) {
-                                        Ok(0) => break,
+                                        Ok(0) | Err(_) => break,
                                         Ok(n) => {
                                             if writer.write_all(&buf[..n]).is_err() {
                                                 break;
                                             }
                                         }
-                                        Err(_) => break,
                                     }
                                 }
                             });
@@ -372,15 +362,16 @@ impl AudioPlayer {
                         ffmpeg.take();
                         ytdlp.take();
                         stream_active = false;
+                        // Temp file cleanup deferred to kill_processes() when
+                        // the next track starts, so rodio can finish reading
+                        // from it without a use-after-unlink race.
                     }
                 }
 
                 // Start playback once WAV has enough data
                 if output.is_none() && stream_active {
                     if let Some(ref path) = temp_wav {
-                        let ready = std::fs::metadata(path)
-                            .map(|m| m.len() > 2048)
-                            .unwrap_or(false);
+                        let ready = std::fs::metadata(path).is_ok_and(|m| m.len() > 2048);
                         let exited = ffmpeg
                             .as_mut()
                             .and_then(|p| p.try_wait().ok().flatten())
@@ -394,17 +385,14 @@ impl AudioPlayer {
                                         if let Ok(source) =
                                             rodio::Decoder::new(BufReader::new(file))
                                         {
-                                            let vol = state_clone
-                                                .lock()
-                                                .map(|st| st.volume)
-                                                .unwrap_or(1.0);
+                                            let vol =
+                                                state_clone.lock().map_or(1.0, |st| st.volume);
                                             let actual_duration = if expected_duration > 0.0 {
                                                 expected_duration
                                             } else {
                                                 source
                                                     .total_duration()
-                                                    .map(|d| d.as_secs_f32())
-                                                    .unwrap_or(0.0)
+                                                    .map_or(0.0, |d| d.as_secs_f32())
                                             };
                                             sink.set_volume(vol);
                                             sink.append(source);
@@ -454,7 +442,7 @@ impl AudioPlayer {
         *stream_url = None;
     }
 
-    pub fn play_stream_cache(&mut self, url: &str, duration: f32, cache_path: PathBuf) {
+    pub fn play_stream_cache(&self, url: &str, duration: f32, cache_path: PathBuf) {
         let _ = self.cmd_tx.send(PlayerCommand::StreamAndCache {
             url: url.to_string(),
             duration,
@@ -462,33 +450,32 @@ impl AudioPlayer {
         });
     }
 
-    pub fn play_cached(&mut self, cache_path: PathBuf, duration: f32) {
+    pub fn play_cached(&self, cache_path: PathBuf, duration: f32) {
         let _ = self.cmd_tx.send(PlayerCommand::PlayCached {
             cache_path,
             duration,
         });
     }
 
-    pub fn pause(&mut self) {
+    pub fn pause(&self) {
         let _ = self.cmd_tx.send(PlayerCommand::Pause);
     }
 
-    pub fn resume(&mut self) {
+    pub fn resume(&self) {
         let _ = self.cmd_tx.send(PlayerCommand::Resume);
     }
 
-    pub fn set_volume(&mut self, vol: f32) {
+    pub fn set_volume(&self, vol: f32) {
         let _ = self.cmd_tx.send(PlayerCommand::SetVolume(vol));
     }
 
-    pub fn seek(&mut self, pos: Duration) {
+    pub fn seek(&self, pos: Duration) {
         let _ = self.cmd_tx.send(PlayerCommand::Seek(pos));
     }
 
     pub fn get_state(&self) -> PlayerState {
         self.state
             .lock()
-            .map(|st| st.clone())
-            .unwrap_or_else(|e| e.into_inner().clone())
+            .map_or_else(|e| e.into_inner().clone(), |st| st.clone())
     }
 }

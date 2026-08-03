@@ -14,7 +14,7 @@ pub struct SessionState {
 
 impl Default for SessionState {
     fn default() -> Self {
-        SessionState {
+        Self {
             view: View::Search,
             snapshot: ViewSnapshot::default(),
             queue: PlayQueue::new(),

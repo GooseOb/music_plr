@@ -1,4 +1,4 @@
-use super::*;
+use super::{BackendResult, MusicPlayer, Track, View};
 
 impl MusicPlayer {
     pub fn handle_search_execute(&mut self) {
@@ -22,12 +22,11 @@ impl MusicPlayer {
         self.selected_indices.clear();
         self.focused_list_index = 0;
 
-        if !self.config.search_history.contains(&self.search_query) {
-            self.config.search_history.push(self.search_query.clone());
-            if self.config.search_history.len() > self.config.max_search_history_stored {
-                self.config.search_history.remove(0);
-            }
-            crate::config::save_config(&self.config);
+        if !self.search_history.contains(&self.search_query) {
+            self.search_history.push(
+                self.search_query.clone(),
+                self.config.max_search_history_stored,
+            );
         }
 
         let query = self.search_query.clone();
@@ -37,7 +36,8 @@ impl MusicPlayer {
             let result = crate::youtube::search(&query, 0);
             match result {
                 Ok(videos) => {
-                    let tracks: Vec<Track> = videos.into_iter().map(|v| v.into()).collect();
+                    let tracks: Vec<Track> =
+                        videos.into_iter().map(std::convert::Into::into).collect();
                     let _ = tx.send(BackendResult::SearchResults(tracks));
                 }
                 Err(e) => {
@@ -72,7 +72,8 @@ impl MusicPlayer {
             let result = crate::youtube::search_more(&query, offset);
             match result {
                 Ok(videos) => {
-                    let tracks: Vec<Track> = videos.into_iter().map(|v| v.into()).collect();
+                    let tracks: Vec<Track> =
+                        videos.into_iter().map(std::convert::Into::into).collect();
                     let _ = tx.send(BackendResult::SearchResultsAppend(tracks));
                 }
                 Err(e) => {
@@ -93,24 +94,14 @@ impl MusicPlayer {
     pub fn handle_delete_search_history(&mut self, index: usize) {
         if index < self.last_filtered_history.len() {
             let query = self.last_filtered_history[index].clone();
-            self.config.search_history.retain(|q| q != &query);
-            crate::config::save_config(&self.config);
+            self.search_history.remove(&query);
             self.update_search_history();
         }
     }
 
     pub fn update_search_history(&mut self) {
         let query_lower = self.search_query.to_lowercase();
-        self.last_filtered_history = if query_lower.is_empty() {
-            self.config.search_history.clone()
-        } else {
-            self.config
-                .search_history
-                .iter()
-                .filter(|q| crate::util::fuzzy_match(&query_lower, &q.to_lowercase()))
-                .cloned()
-                .collect()
-        };
+        self.last_filtered_history = self.search_history.filtered(&query_lower);
         if self.last_filtered_history.len() > self.config.max_search_history_visible {
             self.last_filtered_history
                 .truncate(self.config.max_search_history_visible);
@@ -119,9 +110,9 @@ impl MusicPlayer {
     }
 
     pub fn start_song_radio(&mut self, song_name: String) {
-        self.radio_label = format!("Radio: {}", song_name);
+        self.radio_label = format!("Radio: {song_name}");
         self.search_loading = true;
-        self.notify(format!("Generating radio for song: {}...", song_name));
+        self.notify(format!("Generating radio for song: {song_name}..."));
         self.handle_navigate_to(View::SongRadio);
 
         let tx = self.result_tx.clone();
@@ -130,7 +121,8 @@ impl MusicPlayer {
             let result = crate::youtube::radio_song(&song_name);
             match result {
                 Ok(videos) => {
-                    let tracks: Vec<Track> = videos.into_iter().map(|v| v.into()).collect();
+                    let tracks: Vec<Track> =
+                        videos.into_iter().map(std::convert::Into::into).collect();
                     let _ = tx.send(BackendResult::RadioResults(label, tracks));
                 }
                 Err(e) => {
@@ -141,9 +133,9 @@ impl MusicPlayer {
     }
 
     pub fn start_artist_radio(&mut self, artist_name: String) {
-        self.radio_label = format!("Radio: {}", artist_name);
+        self.radio_label = format!("Radio: {artist_name}");
         self.search_loading = true;
-        self.notify(format!("Generating radio for artist: {}...", artist_name));
+        self.notify(format!("Generating radio for artist: {artist_name}..."));
         self.handle_navigate_to(View::ArtistRadio);
 
         let tx = self.result_tx.clone();
@@ -152,7 +144,8 @@ impl MusicPlayer {
             let result = crate::youtube::radio_artist(&artist_name);
             match result {
                 Ok(videos) => {
-                    let tracks: Vec<Track> = videos.into_iter().map(|v| v.into()).collect();
+                    let tracks: Vec<Track> =
+                        videos.into_iter().map(std::convert::Into::into).collect();
                     let _ = tx.send(BackendResult::RadioResults(label, tracks));
                 }
                 Err(e) => {

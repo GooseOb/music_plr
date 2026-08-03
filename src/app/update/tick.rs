@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    error, format_duration, mpris, mpsc, spawn_thumbnail_download_thread, BackendResult,
+    MprisCommand, MprisUpdate, MusicPlayer, View, ViewSnapshot,
+};
 use tracing::debug;
 
 impl MusicPlayer {
@@ -44,6 +47,7 @@ impl MusicPlayer {
         self.update_progress_text();
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn process_mpris_command(&mut self, cmd: MprisCommand) {
         match cmd {
             MprisCommand::TogglePlayPause => self.toggle_play_pause(),
@@ -101,7 +105,7 @@ impl MusicPlayer {
                 self.search_exhausted = exhausted;
                 if let Some(entry) = self.nav_history.get_mut(self.nav_history_pos) {
                     if let ViewSnapshot::Search { results, .. } = &mut entry.snapshot {
-                        *results = self.search_results.clone();
+                        results.clone_from(&self.search_results);
                     }
                 }
                 spawn_thumbnail_download_thread(&self.search_results);

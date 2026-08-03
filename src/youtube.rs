@@ -26,11 +26,17 @@ struct YTDLPSearchResult {
 
 const YTM_SEARCH_URL: &str = "https://music.youtube.com/search?q=";
 
-pub fn search(query: &str, _offset: usize) -> Result<Vec<YouTubeVideo>> {
-    if let Ok(videos) = search_ytmusic(query) {
-        return Ok(videos);
+pub fn search(query: &str, offset: usize) -> Result<Vec<YouTubeVideo>> {
+    // Primary: ytmusicapi for the initial page (songs, not channels).
+    // yt-dlp is the fallback for pagination (search_more) and when ytmusicapi
+    // is unavailable. yt-dlp's YTM search mixes channel/mix entries that
+    // get filtered out, so it's less useful for the initial page.
+    if offset == 0 {
+        if let Ok(videos) = search_ytmusic(query) {
+            return Ok(videos);
+        }
     }
-    search_ytdlp(query)
+    search_ytdlp(query, offset, crate::theme::SEARCH_PAGE_SIZE)
 }
 
 fn search_ytmusic(query: &str) -> Result<Vec<YouTubeVideo>> {
@@ -48,7 +54,7 @@ fn search_ytmusic(query: &str) -> Result<Vec<YouTubeVideo>> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("ytmusicapi failed: {}", stderr);
+        anyhow::bail!("ytmusicapi failed: {stderr}");
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -61,7 +67,7 @@ fn search_ytmusic(query: &str) -> Result<Vec<YouTubeVideo>> {
             id: r.id,
             title: r.title,
             url: r.url,
-            duration: r.duration as f64,
+            duration: f64::from(r.duration),
             channel: r.channel,
             thumbnail: r.thumbnail,
         })
@@ -81,39 +87,37 @@ struct YtMusicResult {
     thumbnail: String,
 }
 
-fn search_ytdlp(query: &str) -> Result<Vec<YouTubeVideo>> {
-    let (mut videos, valid_ids) = flat_search(query, 0, crate::theme::SEARCH_PAGE_SIZE)?;
+fn search_ytdlp(query: &str, offset: usize, page_size: usize) -> Result<Vec<YouTubeVideo>> {
+    // yt-dlp --playlist-start/--playlist-end are 1-based, so add 1 to the
+    // 0-based offset to get the 1-based start position.
+    let (mut videos, valid_ids) = flat_search(query, offset + 1, offset + page_size)?;
     enrich_with_metadata(&mut videos, &valid_ids);
     Ok(videos)
 }
 
 pub fn search_more(query: &str, offset: usize) -> Result<Vec<YouTubeVideo>> {
-    let (mut videos, valid_ids) =
-        flat_search(query, offset + 1, offset + crate::theme::SEARCH_PAGE_SIZE)?;
-    enrich_with_metadata(&mut videos, &valid_ids);
-    Ok(videos)
+    search_ytdlp(query, offset, crate::theme::SEARCH_PAGE_SIZE)
 }
 
 // yt-dlp --flat-playlist pass: collect lightweight video stubs plus the ids
 // that need a second, more expensive metadata pass. Playlist offsets are
-// 1-based per yt-dlp's --playlist-start/--playlist-end convention.
+// 1-based per yt-dlp's --playlist-start/--playlist-end convention; callers
+// must convert 0-based offsets to 1-based before calling.
 fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVideo>, Vec<String>)> {
     let start_str = start.to_string();
     let end_str = end.to_string();
-    let mut args: Vec<&str> = vec![
+    let args: Vec<&str> = vec![
         "--default-search",
         YTM_SEARCH_URL,
         "--flat-playlist",
         "--dump-json",
         "--no-warnings",
+        "--playlist-start",
+        &start_str,
+        "--playlist-end",
+        &end_str,
+        query,
     ];
-    if start > 0 {
-        args.push("--playlist-start");
-        args.push(&start_str);
-    }
-    args.push("--playlist-end");
-    args.push(&end_str);
-    args.push(query);
 
     let flat_output = Command::new("yt-dlp")
         .args(&args)
@@ -122,7 +126,7 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
 
     if !flat_output.status.success() {
         let stderr = String::from_utf8_lossy(&flat_output.stderr);
-        anyhow::bail!("yt-dlp search failed: {}", stderr);
+        anyhow::bail!("yt-dlp search failed: {stderr}");
     }
 
     let mut videos: Vec<YouTubeVideo> = Vec::new();
@@ -145,7 +149,7 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
                 url: String::new(),
                 duration: 0.0,
                 channel: String::new(),
-                thumbnail: format!("https://i.ytimg.com/vi/{}/mqdefault.jpg", id),
+                thumbnail: format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg"),
             });
         }
     }
@@ -182,6 +186,7 @@ fn enrich_with_metadata(videos: &mut [YouTubeVideo], valid_ids: &[String]) {
 // Single batched metadata pass over yt-dlp for a list of video ids. Returns
 // results in input order; a failed yt-dlp invocation yields an empty list so
 // callers gracefully fall back to the cheap flat-search stubs.
+#[allow(clippy::manual_let_else)]
 fn fetch_batch_metadata(valid_ids: &[String]) -> Vec<YTDLPSearchResult> {
     let mut results: Vec<YTDLPSearchResult> = Vec::new();
     let mut child = match Command::new("yt-dlp")
@@ -203,7 +208,7 @@ fn fetch_batch_metadata(valid_ids: &[String]) -> Vec<YTDLPSearchResult> {
 
     if let Some(ref mut stdin) = child.stdin {
         for id in valid_ids {
-            let _ = writeln!(stdin, "https://youtube.com/watch?v={}", id);
+            let _ = writeln!(stdin, "https://youtube.com/watch?v={id}");
         }
     }
     drop(child.stdin.take());
@@ -224,11 +229,11 @@ fn fetch_batch_metadata(valid_ids: &[String]) -> Vec<YTDLPSearchResult> {
 }
 
 pub fn radio_song(song_name: &str) -> Result<Vec<YouTubeVideo>> {
-    search(&format!("{} similar songs", song_name), 0)
+    search(&format!("{song_name} similar songs"), 0)
 }
 
 pub fn radio_artist(artist_name: &str) -> Result<Vec<YouTubeVideo>> {
-    search(&format!("{} official songs", artist_name), 0)
+    search(&format!("{artist_name} official songs"), 0)
 }
 
 pub fn download(video_url: &str, download_dir: &str) -> Result<String> {
@@ -239,7 +244,7 @@ pub fn download(video_url: &str, download_dir: &str) -> Result<String> {
         .unwrap_or("download");
     let dir = std::path::Path::new(download_dir);
     let _ = std::fs::create_dir_all(dir);
-    let output_path = dir.join(format!("{}.mp3", id));
+    let output_path = dir.join(format!("{id}.mp3"));
     download_audio(video_url, output_path.to_string_lossy().as_ref())
 }
 
@@ -262,7 +267,7 @@ pub fn download_audio(video_url: &str, output_path: &str) -> Result<String> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("yt-dlp download failed: {}", stderr);
+        anyhow::bail!("yt-dlp download failed: {stderr}");
     }
 
     Ok(output_path.replace("%(ext)s", ext))

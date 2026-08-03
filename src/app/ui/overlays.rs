@@ -4,7 +4,10 @@ use iced::{
     Color, Length,
 };
 
-use super::*;
+use super::{
+    bg, button, button_style_accent, container, icons, theme, ContextMenuState, Element, Message,
+    MusicPlayer,
+};
 
 fn transparent_bg() -> impl Fn(&iced::Theme) -> container::Style + 'static {
     |_| container::Style {
@@ -277,7 +280,7 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
         .into()
 }
 
-pub(super) fn view_delete_confirm<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message> {
     let p = &player.palette;
 
     let cancel_btn = Button::new(

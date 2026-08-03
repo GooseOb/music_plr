@@ -4,7 +4,7 @@ use iced::{
     Color, Element, Length,
 };
 
-use super::*;
+use super::{bg, button_style_green, icons, thumbnail, Message, MusicPlayer};
 use crate::theme;
 use crate::types::QueueTab;
 
@@ -12,7 +12,7 @@ use super::track_list::{
     empty_state, row_layout, scrollable_list, section_header, title_artist_column, track_row,
 };
 
-pub(super) fn view_queue_panel<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message> {
     let p = &player.palette;
     let queue_width = (player.window_width * theme::QUEUE_WIDTH_RATIO).max(theme::QUEUE_MIN_WIDTH);
 
@@ -37,7 +37,7 @@ pub(super) fn view_queue_panel<'a>(player: &'a MusicPlayer) -> Element<'a, Messa
     .into()
 }
 
-fn view_queue_tabs<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+fn view_queue_tabs(player: &MusicPlayer) -> Element<'_, Message> {
     let queue_item = queue_tab(
         player,
         "Queue",
@@ -197,7 +197,7 @@ fn view_recently_played_row<'a>(
     player: &'a MusicPlayer,
 ) -> Element<'a, Message> {
     let p = &player.palette;
-    let is_hovered = player.hovered_track == Some((index, true));
+    let is_hovered = player.drag.hovered_track == Some((index, true));
     let row_bg = if is_hovered { p.bg_hover } else { p.bg };
 
     let leading = if is_hovered {

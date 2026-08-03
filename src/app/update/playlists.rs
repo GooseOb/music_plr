@@ -1,4 +1,4 @@
-use super::*;
+use super::{MusicPlayer, Track, TrackSource, View};
 use std::path::Path;
 
 impl MusicPlayer {
@@ -9,7 +9,7 @@ impl MusicPlayer {
         let name = self.playlist_create_name.trim().to_string();
         self.playlists.create(&name);
         self.playlist_create_name.clear();
-        self.notify(format!("Playlist \"{}\" created", name));
+        self.notify(format!("Playlist \"{name}\" created"));
     }
 
     pub fn handle_select_playlist(&mut self, index: usize) {
@@ -23,6 +23,7 @@ impl MusicPlayer {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn handle_rename_playlist(&mut self, new_name: String) {
         if let Some(idx) = self.selected_playlist {
             if !new_name.trim().is_empty() {
@@ -45,6 +46,7 @@ impl MusicPlayer {
         self.delete_confirm_index = None;
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn handle_add_local_music(&mut self, paths: Vec<String>) {
         let mut new_tracks = Vec::new();
         for path_str in &paths {
@@ -90,7 +92,7 @@ impl MusicPlayer {
             return;
         }
         let indices: Vec<usize> = if self.selected_indices.is_empty() {
-            if let Some(t) = self.pressed_track {
+            if let Some(t) = self.drag.pressed_track {
                 vec![t]
             } else {
                 return;

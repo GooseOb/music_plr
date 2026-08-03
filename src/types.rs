@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum TrackSource {
     #[default]
     YouTube,
@@ -19,14 +19,14 @@ pub struct Track {
     pub thumbnail: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum QueueTab {
     #[default]
     Queue,
     RecentlyPlayed,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum View {
     #[default]
     Search,
@@ -40,8 +40,8 @@ impl View {
     // True for the text-list views (search/radio) whose scroll bounds and
     // track data are keyed off the live `search_results` / `radio_tracks`
     // fields rather than the playlist store.
-    pub fn is_search_like(&self) -> bool {
-        matches!(self, View::Search | View::SongRadio | View::ArtistRadio)
+    pub const fn is_search_like(&self) -> bool {
+        matches!(self, Self::Search | Self::SongRadio | Self::ArtistRadio)
     }
 }
 
@@ -56,7 +56,7 @@ pub struct PlayQueue {
 }
 
 impl PlayQueue {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             tracks: Vec::new(),
             current_index: 0,
@@ -70,7 +70,7 @@ impl PlayQueue {
     }
 
     #[allow(dead_code)]
-    pub fn next(&mut self) -> Option<usize> {
+    pub const fn next(&mut self) -> Option<usize> {
         if self.current_index + 1 < self.tracks.len() {
             self.current_index += 1;
             Some(self.current_index)
@@ -89,7 +89,7 @@ impl PlayQueue {
         }
     }
 
-    pub fn previous(&mut self) -> Option<usize> {
+    pub const fn previous(&mut self) -> Option<usize> {
         if self.current_index > 0 {
             self.current_index -= 1;
             Some(self.current_index)
@@ -110,7 +110,7 @@ impl PlayQueue {
 
 impl From<crate::youtube::YouTubeVideo> for Track {
     fn from(v: crate::youtube::YouTubeVideo) -> Self {
-        Track {
+        Self {
             id: v.id,
             title: v.title,
             artist: v.channel,

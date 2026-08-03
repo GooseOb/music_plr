@@ -10,11 +10,11 @@ fn thumbnails_dir() -> PathBuf {
 }
 
 pub fn thumbnail_path(video_id: &str) -> PathBuf {
-    thumbnails_dir().join(format!("{}.jpg", video_id))
+    thumbnails_dir().join(format!("{video_id}.jpg"))
 }
 
 pub fn thumbnail_url(video_id: &str) -> String {
-    format!("https://i.ytimg.com/vi/{}/mqdefault.jpg", video_id)
+    format!("https://i.ytimg.com/vi/{video_id}/mqdefault.jpg")
 }
 
 pub fn download(video_id: &str, url: &str) {

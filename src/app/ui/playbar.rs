@@ -4,14 +4,17 @@ use iced::{
     Color, Length,
 };
 
-use super::*;
+use super::{
+    bg, button_style_accent, button_style_green, icons, slider_style, theme, thumbnail, Element,
+    Message, MusicPlayer,
+};
 
 pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let p = &player.palette;
 
     let track = player.queue.current();
-    let title = track.map(|t| t.title.as_str()).unwrap_or("Not playing");
-    let artist = track.map(|t| t.artist.as_str()).unwrap_or("");
+    let title = track.map_or("Not playing", |t| t.title.as_str());
+    let artist = track.map_or("", |t| t.artist.as_str());
 
     let play_pause_icon = if player.is_playing {
         "pause.svg"

@@ -48,7 +48,7 @@ cargo test
 
 ```
 src/
-├── main.rs          # Entry point — iced::application builder
+├── main.rs          # Entry point — iced::application builder (+ crate-level lint allows)
 ├── app.rs           # MusicPlayer: all app state + Message enum + update()
 ├── app/
 │   ├── ui/          # Pure functional view — reads directly from &MusicPlayer
@@ -61,35 +61,39 @@ src/
 │   │   └── track_list.rs # reusable track rows + shared helpers (row_layout, etc.)
 │   └── update/     # Business logic handlers
 │       ├── mod.rs      # spawn_thumbnail_download_thread()
-│       ├── actions.rs  # download/remove, context menu, picker
+│       ├── actions.rs  # download/remove, context menu, picker, take_context_menu()
 │       ├── drag.rs     # drag-drop geometry, reordering, autoscroll
 │       ├── input.rs    # key press handling (arrows, enter, copy/paste)
 │       ├── navigation.rs # nav history push/pop/restore, ViewSnapshot
 │       ├── playback.rs # play track, queue reorder, next/prev, volume, seek
 │       ├── playlists.rs # create/select/rename/delete, add tracks, copy/paste
-│       ├── search.rs   # execute search, load more, radio, history
+│       ├── search.rs   # execute search, load more, radio, search_history
 │       ├── session.rs  # save/restore session state
 │       └── tick.rs     # handle_tick: drain channels, audio sync, MPRIS update
 ├── audio.rs         # AudioPlayer: rodio sink + yt-dlp/ffmpeg process management
-├── youtube.rs       # YouTube search (ytmusicapi → yt-dlp fallback) + download
+├── youtube.rs       # YouTube search (yt-dlp primary, ytmusicapi fallback) + download
 ├── mpris.rs         # MPRIS D-Bus interface (MediaPlayer2 + Player)
 ├── thumbnails.rs    # Thumbnail download cache
 ├── downloads.rs     # DownloadRegistry persistence
 ├── cache.rs         # StreamCache: LRU file cache with eviction
-├── config.rs        # confy config model
+├── config.rs        # confy config model (preferences only: no user data)
 ├── playlists.rs     # PlaylistStore persistence
+├── search_history.rs # SearchHistory: user data (persisted query list)
 ├── session.rs       # SessionState for restore
 ├── theme.rs         # Palette, layout constants
 ├── types.rs         # Track, TrackSource, PlayQueue, View (payload-free)
-├── icons.rs         # Compile-time SVG embedding (match-based include_str!)
+├── icons.rs         # Compile-time SVG embedding (cached handles, no-panic fallback)
 └── util.rs         # format_duration, fuzzy_match
 ```
 
 ## State Management
 
-- **`MusicPlayer`** (in `app.rs`): holds audio player, config, queue, playlists, search
-  results, radio tracks, UI flags, mpsc channels, drag state, context menu, nav history,
-  thumbnail tracking, clipboard (copy/paste), last-click timing (double-click), scroll bounds.
+- **`MusicPlayer`** (in `app.rs`): holds audio player, config, search_history, queue, playlists, search
+  results, radio tracks, UI flags, mpsc channels, drag state (grouped in `DragState`),
+  context menu, nav history, clipboard (copy/paste), last-click timing (double-click), scroll bounds.
+- **`DragState`** sub-struct: groups `cursor_pos`, `pressed_track`, `pressed_track_is_queue`,
+  `hovered_track`, `drag_origin`, `drag_active`, `drag_drop_target`, `drag_target_list`,
+  `sidebar_hover_playlist`. Cleaned up via `DragState::cleanup()`.
 - **`BackendResult` channel**: background threads (search, download, thumbnails) send
   variants via mpsc. The 250ms tick drains and calls `process_result`.
 - **MPRIS commands**: D-Bus thread sends `MprisCommand` via a separate channel, processed
@@ -142,7 +146,8 @@ src/
   defined in `ui/mod.rs`
 - `iced::alignment::Vertical::Top` (not `::Start`)
 - `iced::widget::rule::horizontal(height)` for dividers
-- Icons: match-based `include_str!` (no runtime `concat!`)
+- Icons: match-based `include_str!` with `OnceLock` cache for `svg::Handle`s;
+  unknown icon names fall back to "music.svg" (never panics)
 - `iced::event::listen_with()` takes a `fn` pointer
 - `Subscription::batch` (not `Subscription::chain`)
 - `iced::widget::text::Text` uses `.center()` / `.align_x()` / `.align_y()`
@@ -161,14 +166,17 @@ src/
 - **rodio** plays the WAV once >2KB is available (via `symphonia` decoder)
 - **Cached playback**: re-pipes cache file through ffmpeg stdin → rodio
 - Stream completion detected by ffmpeg/yt-dlp process exit; main loop auto-advances
+- Temp file lifecycle: cleaned by `kill_processes()` on next stream start or thread exit;
+  NOT deleted on stream completion (avoids use-after-unlink if rodio is still reading)
 - Process lifecycle managed in `kill_processes()` (kill, cleanup temp files)
 
 ## YouTube Integration
 
-- `search()`: tries `ytmusicapi` (Python `youtube_search.py`) first; falls back to
-  `yt-dlp --flat-playlist` if Python unavailable
+- `search()`: tries `ytmusicapi` (Python `youtube_search.py`) for the initial page
+  (returns songs, not channels); falls back to `yt-dlp --flat-playlist` if Python
+  unavailable or offset > 0
 - Two-pass yt-dlp: flat search for stubs → batched `--batch-file` metadata pass
-- `search_more()` paginates; `SEARCH_PAGE_SIZE = 10` per page
+- `search_more()` paginates via yt-dlp; `SEARCH_PAGE_SIZE = 10` per page
 - `radio_song()` / `radio_artist()`: search with query modifiers
 - `download()` / `download_audio()`: `yt-dlp --extract-audio` to MP3
 

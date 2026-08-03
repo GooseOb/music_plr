@@ -4,7 +4,10 @@ use iced::{
     Color, Length,
 };
 
-use super::*;
+use super::{
+    bg, button, button_style_accent, icons, theme, view_track_list, Element, Message, MusicPlayer,
+    View,
+};
 
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let search_bar = view_search_bar(player);
@@ -12,8 +15,7 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
     let content: Element<'a, Message> = match &player.current_view {
         View::Search => view_search(player),
         View::SongRadio | View::ArtistRadio => view_search_radio(player),
-        View::Playlist => view_playlist(player),
-        View::Downloads => view_playlist(player),
+        View::Playlist | View::Downloads => view_playlist(player),
     };
 
     let inner = Container::new(content)
@@ -61,34 +63,29 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
     stack.into()
 }
 
-fn view_search_bar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message> {
     let p = &player.palette;
     let is_search_view = matches!(
         player.current_view,
         View::Search | View::SongRadio | View::ArtistRadio
     );
-
-    let input = if is_search_view {
-        Container::new(
-            text_input("Search YouTube Music...", &player.search_query)
-                .on_input(Message::SearchInputChanged)
-                .on_submit(Message::SearchExecute)
-                .padding([theme::SPACING_SM, theme::SPACING_MD])
-                .size(theme::TEXT_SIZE_MD),
-        )
-        .width(Length::Fill)
-        .into()
-    } else {
-        Container::new(
-            text_input("Search YouTube Music...", &player.search_query)
-                .on_input(Message::SearchInputChanged)
-                .on_submit(Message::GlobalSearchSubmit)
-                .padding([theme::SPACING_SM, theme::SPACING_MD])
-                .size(theme::TEXT_SIZE_MD),
-        )
-        .width(Length::Fill)
-        .into()
+    let submit_msg = || {
+        if is_search_view {
+            Message::SearchExecute
+        } else {
+            Message::GlobalSearchSubmit
+        }
     };
+
+    let input = Container::new(
+        text_input("Search YouTube Music...", &player.search_query)
+            .on_input(Message::SearchInputChanged)
+            .on_submit(submit_msg())
+            .padding([theme::SPACING_SM, theme::SPACING_MD])
+            .size(theme::TEXT_SIZE_MD),
+    )
+    .width(Length::Fill)
+    .into();
 
     Container::new(
         Row::with_children(vec![
@@ -98,11 +95,7 @@ fn view_search_bar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                 .style(button_style_accent())
                 .width(Length::Fixed(theme::SEARCH_BTN_SIZE))
                 .height(Length::Fixed(theme::SEARCH_BTN_SIZE))
-                .on_press(if is_search_view {
-                    Message::SearchExecute
-                } else {
-                    Message::GlobalSearchSubmit
-                })
+                .on_press(submit_msg())
                 .into(),
         ])
         .spacing(theme::SPACING_SM)
@@ -114,7 +107,7 @@ fn view_search_bar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     .into()
 }
 
-fn view_search<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+fn view_search(player: &MusicPlayer) -> Element<'_, Message> {
     let track_list = if player.search_loading && player.search_results.is_empty() {
         Container::new(
             text("Searching...")
@@ -154,7 +147,7 @@ fn view_search<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .into()
 }
 
-fn view_search_radio<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message> {
     let p = &player.palette;
 
     let header = Container::new(
@@ -223,7 +216,6 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
             let del_fg = p.fg;
             let del_fg_muted = p.fg_muted;
             let del_bg_hover = bg_hover;
-            let del_bg = bg_color;
 
             Container::new(
                 Row::with_children(vec![
@@ -265,7 +257,7 @@ fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                         .style(move |_, status| {
                             let bg = match status {
                                 button::Status::Hovered | button::Status::Pressed => del_bg_hover,
-                                _ => del_bg,
+                                _ => bg_color,
                             };
                             button::Style {
                                 background: Some(bg.into()),
@@ -316,7 +308,7 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                     .size(theme::TEXT_SIZE_LG)
                     .padding([theme::SPACING_XS, theme::SPACING_SM])
                     .into(),
-                text(format!("({} tracks)", track_count))
+                text(format!("({track_count} tracks)"))
                     .size(theme::TEXT_SIZE_MD)
                     .color(p.fg_secondary)
                     .into(),

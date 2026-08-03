@@ -1,9 +1,8 @@
-use super::*;
+use super::{BackendResult, ContextMenuState, MusicPlayer, TrackSource, View};
 
 impl MusicPlayer {
     pub fn handle_download_track(&mut self, index: usize, is_queue: bool) {
         if let Some(track) = self.get_track_at(index, is_queue) {
-            let track = track.clone();
             self.downloading_index = Some(index);
             self.notify(format!("Downloading \"{}\"...", track.title));
             let download_dir = self.config.download_dir.clone();
@@ -24,7 +23,7 @@ impl MusicPlayer {
 
     pub fn handle_remove_download(&mut self, index: usize, is_queue: bool) {
         if let Some(track) = self.get_track_at(index, is_queue) {
-            let url = track.url.clone();
+            let url = track.url;
             self.download_registry.remove(&url);
         }
     }
@@ -46,11 +45,18 @@ impl MusicPlayer {
         self.context_menu = Some(ContextMenuState {
             visible: true,
             track_index: index,
-            position: (self.cursor_pos.x, self.cursor_pos.y),
+            position: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
             is_youtube: track.source == TrackSource::YouTube,
             is_downloaded: self.download_registry.contains(&track.url),
             in_playlist: matches!(self.current_view, View::Playlist),
             is_queue,
         });
+    }
+
+    /// Extracts the context menu state (clearing it), returning `None` if
+    /// no menu was open.  This avoids the repeated
+    /// `context_menu.as_ref().map(|m| m.is_queue).unwrap_or(false)` pattern.
+    pub fn take_context_menu(&mut self) -> Option<ContextMenuState> {
+        self.context_menu.take().filter(|m| m.visible)
     }
 }

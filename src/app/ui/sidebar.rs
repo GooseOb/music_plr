@@ -4,7 +4,10 @@ use iced::{
     Color, Length,
 };
 
-use super::*;
+use super::{
+    bg, button, button_style_accent, button_style_nav, icons, scrollable, theme, widget, Element,
+    Message, MusicPlayer, View,
+};
 
 pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let p = &player.palette;
@@ -76,7 +79,7 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
             let icon_color = if is_selected { p.accent } else { p.fg_muted };
             let text_color = if is_selected { p.fg } else { p.fg_secondary };
             let bg_hover = p.bg_hover;
-            let is_hover = player.sidebar_hover_playlist == Some(i);
+            let is_hover = player.drag.sidebar_hover_playlist == Some(i);
 
             Button::new(
                 Row::with_children(vec![
@@ -207,8 +210,7 @@ fn sidebar_nav_item<'a>(
     let bg_hover = p.bg_hover;
     let icon_name: &'a str = match &view {
         View::Search => "search.svg",
-        View::SongRadio => "radio.svg",
-        View::ArtistRadio => "radio.svg",
+        View::SongRadio | View::ArtistRadio => "radio.svg",
         View::Playlist => "music.svg",
         View::Downloads => "download.svg",
     };

@@ -1,11 +1,11 @@
-use super::*;
+use super::{Message, MusicPlayer, NavEntry, Task, View, ViewSnapshot};
 
 impl MusicPlayer {
-    pub fn can_navigate_back(&self) -> bool {
+    pub const fn can_navigate_back(&self) -> bool {
         self.nav_history_pos > 0
     }
 
-    pub fn can_navigate_forward(&self) -> bool {
+    pub const fn can_navigate_forward(&self) -> bool {
         self.nav_history_pos + 1 < self.nav_history.len()
     }
 
@@ -42,9 +42,9 @@ impl MusicPlayer {
                 selection,
                 scroll,
             } => {
-                self.search_query = query.clone();
-                self.search_results = results.clone();
-                self.selected_indices = selection.clone();
+                self.search_query.clone_from(query);
+                self.search_results.clone_from(results);
+                self.selected_indices.clone_from(selection);
                 self.search_list_scroll = *scroll;
             }
             ViewSnapshot::Radio {
@@ -53,9 +53,9 @@ impl MusicPlayer {
                 selection,
                 scroll,
             } => {
-                self.radio_label = label.clone();
-                self.radio_tracks = tracks.clone();
-                self.selected_indices = selection.clone();
+                self.radio_label.clone_from(label);
+                self.radio_tracks.clone_from(tracks);
+                self.selected_indices.clone_from(selection);
                 self.search_list_scroll = *scroll;
             }
             ViewSnapshot::TrackList {
@@ -65,12 +65,14 @@ impl MusicPlayer {
                 scroll,
             } => {
                 self.selected_playlist = *playlist;
-                self.selected_playlist_name = playlist_name.clone();
-                self.selected_indices = selection.clone();
+                self.selected_playlist_name.clone_from(playlist_name);
+                self.selected_indices.clone_from(selection);
                 self.playlist_list_scroll = *scroll;
             }
         }
 
+        // Scroll position is stored relative to the main track_list scrollable.
+        // (Queue view uses a different Id and is not navigated via history.)
         iced::widget::operation::scroll_to::<Message>(
             iced::widget::Id::new("track_list"),
             iced::widget::operation::AbsoluteOffset {
@@ -150,11 +152,11 @@ impl MusicPlayer {
 }
 
 impl ViewSnapshot {
-    pub(super) fn scroll(&self) -> f32 {
+    pub(super) const fn scroll(&self) -> f32 {
         match self {
-            ViewSnapshot::Search { scroll, .. }
-            | ViewSnapshot::Radio { scroll, .. }
-            | ViewSnapshot::TrackList { scroll, .. } => *scroll,
+            Self::Search { scroll, .. }
+            | Self::Radio { scroll, .. }
+            | Self::TrackList { scroll, .. } => *scroll,
         }
     }
 }

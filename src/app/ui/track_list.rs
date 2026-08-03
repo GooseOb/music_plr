@@ -4,7 +4,10 @@ use iced::{
     Color, Element, Length,
 };
 
-use super::*;
+use super::{
+    button_style_green, container, drop_indicator, icons, scrollable_id, theme, thumbnail,
+    DragTargetList, Message, MusicPlayer,
+};
 
 pub(super) fn view_track_list<'a>(
     tracks: &'a [crate::types::Track],
@@ -17,18 +20,18 @@ pub(super) fn view_track_list<'a>(
     }
 
     let target_matches = matches!(
-        player.drag_target_list,
+        player.drag.drag_target_list,
         Some(DragTargetList::Queue) if is_queue,
     ) || matches!(
-        player.drag_target_list,
+        player.drag.drag_target_list,
         Some(DragTargetList::TrackList) if !is_queue,
     );
 
     let mut items: Vec<Element<'a, Message>> = Vec::with_capacity(tracks.len());
     for (i, track) in tracks.iter().enumerate() {
         let adjusted = i + index_offset;
-        if player.drag_active && target_matches {
-            if let Some(drop_idx) = player.drag_drop_target {
+        if player.drag.drag_active && target_matches {
+            if let Some(drop_idx) = player.drag.drag_drop_target {
                 if adjusted == drop_idx {
                     items.push(drop_indicator(player.palette.accent).into());
                 }
@@ -37,8 +40,8 @@ pub(super) fn view_track_list<'a>(
         items.push(view_track_row(track, adjusted, player, is_queue));
     }
 
-    if player.drag_active && target_matches {
-        if let Some(drop_idx) = player.drag_drop_target {
+    if player.drag.drag_active && target_matches {
+        if let Some(drop_idx) = player.drag.drag_drop_target {
             if drop_idx == tracks.len() + index_offset {
                 items.push(drop_indicator(player.palette.accent).into());
             }
@@ -71,7 +74,7 @@ fn view_track_row<'a>(
 ) -> Element<'a, Message> {
     let p = &player.palette;
     let is_selected = player.selection(is_queue).contains(&index);
-    let is_hovered = player.hovered_track == Some((index, is_queue));
+    let is_hovered = player.drag.hovered_track == Some((index, is_queue));
     let is_focused = !is_queue && player.focused_list_index == index;
     let row_bg = if is_selected {
         p.bg_selected
@@ -141,7 +144,7 @@ pub(super) fn title_artist_column<'a>(
     .spacing(2)
 }
 
-/// The inner row layout: leading | thumbnail | title_artist | duration.
+/// The inner row layout: leading | thumbnail | `title_artist` | duration.
 pub(super) fn row_layout<'a>(
     leading: Element<'a, Message>,
     thumb: Element<'a, Message>,
@@ -193,7 +196,7 @@ pub(super) fn track_row<'a>(
 }
 
 /// An empty-state message centered in the available space.
-pub(super) fn empty_state<'a>(msg: &'a str, color: Color) -> Element<'a, Message> {
+pub(super) fn empty_state(msg: &str, color: Color) -> Element<'_, Message> {
     Container::new(text(msg).size(theme::TEXT_SIZE_MD).color(color).center())
         .width(Length::Fill)
         .height(Length::Fill)
