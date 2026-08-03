@@ -312,7 +312,6 @@ fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
                     .size(theme::TEXT_SIZE_MD)
                     .color(p.fg_secondary)
                     .into(),
-                icons::icon("edit.svg", p.fg_muted, theme::ICON_SIZE_SM).into(),
                 Button::new(icons::icon("delete.svg", p.fg_muted, theme::ICON_SIZE_SM))
                     .padding(4)
                     .style(button_style_accent())
