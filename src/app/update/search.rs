@@ -20,6 +20,7 @@ impl MusicPlayer {
         self.notify(format!("Searching for \"{}\"...", self.search_query));
         self.search_results.clear();
         self.selected_indices.clear();
+        self.focused_list_index = 0;
 
         if !self.config.search_history.contains(&self.search_query) {
             self.config.search_history.push(self.search_query.clone());
@@ -57,6 +58,7 @@ impl MusicPlayer {
     pub fn handle_search_load_more(&mut self) {
         // search_exhausted is set true when a page returned fewer than a full
         // SEARCH_PAGE_SIZE, so there is nothing left to fetch.
+        // (defined in theme.rs, shared with youtube.rs)
         if self.search_loading || self.search_exhausted || self.search_results.is_empty() {
             return;
         }

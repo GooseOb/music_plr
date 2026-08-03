@@ -132,35 +132,20 @@ impl MusicPlayer {
         drop_idx: usize,
         indices: &[usize],
     ) -> Vec<usize> {
-        let mut new_positions = Vec::new();
-        if let Some(sp) = self.selected_playlist {
+        let new_positions = if let Some(sp) = self.selected_playlist {
             if sp < self.playlists.playlists.len() {
-                let tracks = &mut self.playlists.playlists[sp].tracks;
-                let sorted_indices: Vec<usize> = {
-                    let mut s = indices.to_vec();
-                    s.sort_unstable();
-                    s
-                };
-                let extracted: Vec<Track> = sorted_indices
-                    .iter()
-                    .filter_map(|&i| tracks.get(i).cloned())
-                    .collect();
-                for &i in sorted_indices.iter().rev() {
-                    if i < tracks.len() {
-                        tracks.remove(i);
-                    }
-                }
-                let removed_before = sorted_indices.iter().filter(|&&i| i < drop_idx).count();
-                let adjusted_drop = (drop_idx - removed_before).min(tracks.len());
-                let new_count = extracted.len();
-                for (j, track) in extracted.into_iter().enumerate() {
-                    tracks.insert(adjusted_drop + j, track);
-                }
-                self.playlists.save();
-
-                new_positions = (adjusted_drop..adjusted_drop + new_count).collect();
+                super::drag::reorder_tracks(
+                    &mut self.playlists.playlists[sp].tracks,
+                    drop_idx,
+                    indices,
+                )
+            } else {
+                Vec::new()
             }
-        }
+        } else {
+            Vec::new()
+        };
+        self.playlists.save();
         new_positions
     }
 

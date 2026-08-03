@@ -17,10 +17,6 @@ impl MusicPlayer {
             self.process_mpris_command(cmd);
         }
 
-        if self.thumbnails_pending {
-            self.thumbnails_pending = false;
-        }
-
         let s = self.audio.get_state();
         self.is_playing = s.is_playing;
         self.progress = s.progress;
@@ -63,6 +59,12 @@ impl MusicPlayer {
                     self.toggle_play_pause();
                 }
             }
+            MprisCommand::Pause => {
+                if self.is_playing {
+                    self.audio.pause();
+                    self.send_mpris_update();
+                }
+            }
             MprisCommand::SetVolume(vol) => self.set_volume(vol),
             MprisCommand::Seek(delta_us) => {
                 let delta_frac = delta_us as f32 / 1_000_000.0 / self.duration.max(0.001);
@@ -83,16 +85,16 @@ impl MusicPlayer {
         match result {
             BackendResult::SearchResults(tracks) => {
                 self.search_results = tracks;
-                self.search_exhausted = self.search_results.len() < SEARCH_PAGE_SIZE;
+                self.search_exhausted = self.search_results.len() < crate::theme::SEARCH_PAGE_SIZE;
                 self.search_loading = false;
                 if matches!(self.current_view, View::Search) {
                     self.push_nav_entry();
                 }
-                spawn_thumbnail_download_thread(&self.search_results, &self.result_tx);
+                spawn_thumbnail_download_thread(&self.search_results);
                 self.clear_notification();
             }
             BackendResult::SearchResultsAppend(tracks) => {
-                let exhausted = tracks.len() < SEARCH_PAGE_SIZE;
+                let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
                 self.search_results.extend(tracks);
                 self.search_loading = false;
                 self.search_exhausted = exhausted;
@@ -101,7 +103,7 @@ impl MusicPlayer {
                         *results = self.search_results.clone();
                     }
                 }
-                spawn_thumbnail_download_thread(&self.search_results, &self.result_tx);
+                spawn_thumbnail_download_thread(&self.search_results);
                 self.clear_notification();
             }
             BackendResult::RadioResults(label, tracks) => {
@@ -112,7 +114,7 @@ impl MusicPlayer {
                     self.push_nav_entry();
                 }
                 self.save_session();
-                spawn_thumbnail_download_thread(&self.radio_tracks, &self.result_tx);
+                spawn_thumbnail_download_thread(&self.radio_tracks);
             }
             BackendResult::DownloadComplete(url, path) => {
                 self.downloading_index = None;
@@ -128,9 +130,6 @@ impl MusicPlayer {
                 self.search_loading = false;
                 self.clear_notification();
                 self.notify_error(msg);
-            }
-            BackendResult::ThumbnailsReady => {
-                self.thumbnails_pending = true;
             }
         }
     }

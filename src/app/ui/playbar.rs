@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{slider, Button, Column, Container, Row, text},
+    widget::{slider, text, Button, Column, Container, Row},
     Color, Length,
 };
 

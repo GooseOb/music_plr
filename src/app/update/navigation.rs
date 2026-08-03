@@ -10,56 +10,74 @@ impl MusicPlayer {
     }
 
     pub(super) fn snapshot_current(&self) -> ViewSnapshot {
+        let scroll = self.get_current_list_scroll();
         match self.current_view {
             View::Search => ViewSnapshot::Search {
                 query: self.search_query.clone(),
                 results: self.search_results.clone(),
                 selection: self.selected_indices.clone(),
+                scroll,
             },
             View::SongRadio | View::ArtistRadio => ViewSnapshot::Radio {
                 label: self.radio_label.clone(),
                 tracks: self.radio_tracks.clone(),
                 selection: self.selected_indices.clone(),
+                scroll,
             },
-            View::Playlist | View::Downloads => ViewSnapshot::Playlist {
+            View::Playlist | View::Downloads => ViewSnapshot::TrackList {
                 playlist: self.selected_playlist,
                 playlist_name: self.selected_playlist_name.clone(),
                 selection: self.selected_indices.clone(),
+                scroll,
             },
         }
     }
 
-    fn restore_nav_entry(&mut self, entry: &NavEntry) {
+    fn restore_nav_entry(&mut self, entry: &NavEntry) -> Task<Message> {
         self.current_view = entry.view.clone();
         match &entry.snapshot {
             ViewSnapshot::Search {
                 query,
                 results,
                 selection,
+                scroll,
             } => {
                 self.search_query = query.clone();
                 self.search_results = results.clone();
                 self.selected_indices = selection.clone();
+                self.search_list_scroll = *scroll;
             }
             ViewSnapshot::Radio {
                 label,
                 tracks,
                 selection,
+                scroll,
             } => {
                 self.radio_label = label.clone();
                 self.radio_tracks = tracks.clone();
                 self.selected_indices = selection.clone();
+                self.search_list_scroll = *scroll;
             }
-            ViewSnapshot::Playlist {
+            ViewSnapshot::TrackList {
                 playlist,
                 playlist_name,
                 selection,
+                scroll,
             } => {
                 self.selected_playlist = *playlist;
                 self.selected_playlist_name = playlist_name.clone();
                 self.selected_indices = selection.clone();
+                self.playlist_list_scroll = *scroll;
             }
         }
+
+        iced::widget::operation::scroll_to::<Message>(
+            iced::widget::Id::new("track_list"),
+            iced::widget::operation::AbsoluteOffset {
+                x: 0.0,
+                y: entry.snapshot.scroll(),
+            },
+        )
     }
 
     pub fn handle_navigate_to(&mut self, view: View) {
@@ -75,6 +93,7 @@ impl MusicPlayer {
 
         self.current_view = view;
         self.selected_indices.clear();
+        self.focused_list_index = 0;
 
         let new_entry = NavEntry {
             view: self.current_view.clone(),
@@ -91,21 +110,27 @@ impl MusicPlayer {
         self.save_session();
     }
 
-    pub fn handle_navigate_back(&mut self) {
+    pub fn handle_navigate_back(&mut self) -> Task<Message> {
         if self.nav_history_pos > 0 {
             self.nav_history_pos -= 1;
             let entry = self.nav_history[self.nav_history_pos].clone();
-            self.restore_nav_entry(&entry);
+            let task = self.restore_nav_entry(&entry);
             self.save_session();
+            task
+        } else {
+            Task::none()
         }
     }
 
-    pub fn handle_navigate_forward(&mut self) {
+    pub fn handle_navigate_forward(&mut self) -> Task<Message> {
         if self.nav_history_pos + 1 < self.nav_history.len() {
             self.nav_history_pos += 1;
             let entry = self.nav_history[self.nav_history_pos].clone();
-            self.restore_nav_entry(&entry);
+            let task = self.restore_nav_entry(&entry);
             self.save_session();
+            task
+        } else {
+            Task::none()
         }
     }
 
@@ -121,5 +146,15 @@ impl MusicPlayer {
             self.nav_history_pos = self.nav_history_pos.saturating_sub(1);
         }
         self.nav_history_pos = self.nav_history.len() - 1;
+    }
+}
+
+impl ViewSnapshot {
+    pub(super) fn scroll(&self) -> f32 {
+        match self {
+            ViewSnapshot::Search { scroll, .. }
+            | ViewSnapshot::Radio { scroll, .. }
+            | ViewSnapshot::TrackList { scroll, .. } => *scroll,
+        }
     }
 }

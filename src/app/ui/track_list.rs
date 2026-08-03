@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{Button, Column, Container, MouseArea, Row, text},
+    widget::{text, Button, Column, Container, MouseArea, Row},
     Color, Length,
 };
 
@@ -71,6 +71,7 @@ fn view_track_row<'a>(
     let p = &player.palette;
     let is_selected = player.selection(is_queue).contains(&index);
     let is_hovered = player.hovered_track == Some((index, is_queue));
+    let is_focused = !is_queue && player.focused_list_index == index;
     let row_bg = if is_selected {
         p.bg_selected
     } else if is_hovered {
@@ -134,10 +135,20 @@ fn view_track_row<'a>(
         .on_right_press(Message::TrackRightClicked { index, is_queue })
         .on_move(move |_| Message::TrackHoverStart { index, is_queue });
 
+    let accent = p.accent;
     Container::new(track_area)
         .width(Length::Fill)
         .height(Length::Fixed(theme::ROW_HEIGHT))
-        .style(bg(row_bg))
+        .style(move |_: &iced::Theme| {
+            let mut s = container::Style {
+                background: Some(row_bg.into()),
+                ..Default::default()
+            };
+            if is_focused && !is_selected {
+                s.border = iced::border::rounded(0).color(accent).width(2.0);
+            }
+            s
+        })
         .into()
 }
 

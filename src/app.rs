@@ -30,16 +30,19 @@ pub enum ViewSnapshot {
         query: String,
         results: Vec<Track>,
         selection: Vec<usize>,
+        scroll: f32,
     },
     Radio {
         label: String,
         tracks: Vec<Track>,
         selection: Vec<usize>,
+        scroll: f32,
     },
-    Playlist {
+    TrackList {
         playlist: Option<usize>,
         playlist_name: String,
         selection: Vec<usize>,
+        scroll: f32,
     },
 }
 
@@ -49,6 +52,7 @@ impl Default for ViewSnapshot {
             query: String::new(),
             results: Vec::new(),
             selection: Vec::new(),
+            scroll: 0.0,
         }
     }
 }
@@ -61,7 +65,6 @@ pub enum BackendResult {
     DownloadComplete(String, String),
     DownloadError(String),
     SearchError(String),
-    ThumbnailsReady,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -197,7 +200,6 @@ pub struct MusicPlayer {
 
     pub stream_cache: StreamCache,
     pub pending_cache_id: Option<String>,
-    pub thumbnails_pending: bool,
 
     pub selected_indices: Vec<usize>,
     pub clipboard: Vec<Track>,
@@ -257,7 +259,6 @@ impl MusicPlayer {
             audio: AudioPlayer::new(config.volume),
             stream_cache: StreamCache::new(config.cache_max_size_mb),
             pending_cache_id: None,
-            thumbnails_pending: false,
             config,
             current_view: View::Search,
             search_query: String::new(),
@@ -293,6 +294,7 @@ impl MusicPlayer {
                     query: String::new(),
                     results: Vec::new(),
                     selection: Vec::new(),
+                    scroll: 0.0,
                 },
             }],
             nav_history_pos: 0,
@@ -574,14 +576,8 @@ impl MusicPlayer {
                 self.handle_navigate_to(view);
                 Task::none()
             }
-            Message::NavigateBack => {
-                self.handle_navigate_back();
-                Task::none()
-            }
-            Message::NavigateForward => {
-                self.handle_navigate_forward();
-                Task::none()
-            }
+            Message::NavigateBack => self.handle_navigate_back(),
+            Message::NavigateForward => self.handle_navigate_forward(),
             Message::ContextMenuPlayTrack(index) => {
                 let is_queue = self
                     .context_menu

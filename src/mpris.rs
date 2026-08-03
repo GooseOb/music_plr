@@ -13,6 +13,7 @@ pub enum MprisCommand {
     PreviousTrack,
     Stop,
     Play,
+    Pause,
     SetVolume(f32),
     Seek(i64),
 }
@@ -87,7 +88,7 @@ impl PlayerInterface {
     }
 
     async fn pause(&self) {
-        let _ = self.cmd_tx.send(MprisCommand::TogglePlayPause);
+        let _ = self.cmd_tx.send(MprisCommand::Pause);
     }
 
     async fn play_pause(&self) {

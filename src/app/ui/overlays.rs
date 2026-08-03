@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{Button, Column, Container, MouseArea, Row, text},
+    widget::{text, Button, Column, Container, MouseArea, Row},
     Color, Length,
 };
 

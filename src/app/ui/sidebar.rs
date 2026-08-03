@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{text_input, Button, Column, Container, Row, text},
+    widget::{text, text_input, Button, Column, Container, Row},
     Color, Length,
 };
 

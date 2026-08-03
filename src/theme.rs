@@ -40,6 +40,7 @@ impl Palette {
 }
 
 pub const SIDEBAR_WIDTH: f32 = 300.0;
+pub const SEARCH_PAGE_SIZE: usize = 10;
 pub const SIDEBAR_ITEM_HEIGHT: f32 = 44.0;
 pub const ROW_HEIGHT: f32 = 48.0;
 pub const THUMBNAIL_SIZE: f32 = 36.0;

@@ -82,13 +82,14 @@ struct YtMusicResult {
 }
 
 fn search_ytdlp(query: &str) -> Result<Vec<YouTubeVideo>> {
-    let (mut videos, valid_ids) = flat_search(query, 0, 10)?;
+    let (mut videos, valid_ids) = flat_search(query, 0, crate::theme::SEARCH_PAGE_SIZE)?;
     enrich_with_metadata(&mut videos, &valid_ids);
     Ok(videos)
 }
 
 pub fn search_more(query: &str, offset: usize) -> Result<Vec<YouTubeVideo>> {
-    let (mut videos, valid_ids) = flat_search(query, offset + 1, offset + 10)?;
+    let (mut videos, valid_ids) =
+        flat_search(query, offset + 1, offset + crate::theme::SEARCH_PAGE_SIZE)?;
     enrich_with_metadata(&mut videos, &valid_ids);
     Ok(videos)
 }

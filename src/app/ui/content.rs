@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{scrollable, text_input, Button, Column, Container, Row, Stack, text},
+    widget::{scrollable, text, text_input, Button, Column, Container, Row, Stack},
     Color, Length,
 };
 

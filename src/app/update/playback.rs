@@ -49,29 +49,9 @@ impl MusicPlayer {
     }
 
     pub fn handle_reorder_queue(&mut self, drop_idx: usize, indices: &[usize]) -> Vec<usize> {
-        let sorted_indices: Vec<usize> = {
-            let mut s = indices.to_vec();
-            s.sort_unstable();
-            s
-        };
-        let extracted: Vec<Track> = sorted_indices
-            .iter()
-            .filter_map(|&i| self.queue.tracks.get(i).cloned())
-            .collect();
-        for &i in sorted_indices.iter().rev() {
-            if i < self.queue.tracks.len() {
-                self.queue.tracks.remove(i);
-            }
-        }
-        let removed_before = sorted_indices.iter().filter(|&&i| i < drop_idx).count();
-        let adjusted_drop = (drop_idx - removed_before).min(self.queue.tracks.len());
-        let new_count = extracted.len();
-        for (j, track) in extracted.into_iter().enumerate() {
-            self.queue.tracks.insert(adjusted_drop + j, track);
-        }
+        let new_positions = super::drag::reorder_tracks(&mut self.queue.tracks, drop_idx, indices);
         self.save_session();
-
-        (adjusted_drop..adjusted_drop + new_count).collect()
+        new_positions
     }
 
     pub fn handle_remove_from_queue(&mut self, index: usize) {
@@ -88,8 +68,6 @@ impl MusicPlayer {
             } else {
                 self.audio.resume();
             }
-        } else {
-            self.is_playing = !self.is_playing;
         }
         self.send_mpris_update();
     }

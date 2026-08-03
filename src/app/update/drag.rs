@@ -1,6 +1,58 @@
 use super::*;
 
+pub(super) fn reorder_tracks(
+    tracks: &mut Vec<Track>,
+    drop_idx: usize,
+    indices: &[usize],
+) -> Vec<usize> {
+    let sorted_indices: Vec<usize> = {
+        let mut s = indices.to_vec();
+        s.sort_unstable();
+        s
+    };
+    let extracted: Vec<Track> = sorted_indices
+        .iter()
+        .filter_map(|&i| tracks.get(i).cloned())
+        .collect();
+    for &i in sorted_indices.iter().rev() {
+        if i < tracks.len() {
+            tracks.remove(i);
+        }
+    }
+    let removed_before = sorted_indices.iter().filter(|&&i| i < drop_idx).count();
+    let adjusted_drop = (drop_idx - removed_before).min(tracks.len());
+    let new_count = extracted.len();
+    for (j, track) in extracted.into_iter().enumerate() {
+        tracks.insert(adjusted_drop + j, track);
+    }
+    (adjusted_drop..adjusted_drop + new_count).collect()
+}
+
 impl MusicPlayer {
+    fn cursor_in_sidebar(&self) -> bool {
+        self.sidebar_bounds
+            .map(|b| self.cursor_pos.x < b.x + crate::theme::SIDEBAR_WIDTH)
+            .unwrap_or(false)
+    }
+
+    fn sidebar_playlist_at_cursor(&self) -> Option<usize> {
+        let sidebar_bounds = self.sidebar_bounds?;
+        if self.cursor_pos.x >= sidebar_bounds.x + crate::theme::SIDEBAR_WIDTH {
+            return None;
+        }
+        let y_offset = self.cursor_pos.y - sidebar_bounds.y;
+        if y_offset < 0.0 {
+            return None;
+        }
+        let playlist_idx =
+            ((y_offset + self.sidebar_list_scroll) / crate::theme::SIDEBAR_ITEM_HEIGHT) as usize;
+        if playlist_idx < self.playlists.playlists.len() {
+            Some(playlist_idx)
+        } else {
+            None
+        }
+    }
+
     pub fn handle_left_release(&mut self) {
         if self.drag_active {
             let is_queue = self.pressed_track_is_queue;
@@ -48,24 +100,12 @@ impl MusicPlayer {
     }
 
     pub fn handle_drag_update(&mut self) -> Task<Message> {
-        let cursor = self.cursor_pos;
-
         self.sidebar_hover_playlist = None;
         self.drag_drop_target = None;
 
-        if let Some(sidebar_bounds) = self.sidebar_bounds {
-            if cursor.x < sidebar_bounds.x + crate::theme::SIDEBAR_WIDTH {
-                let y_offset = cursor.y - sidebar_bounds.y;
-                if y_offset >= 0.0 {
-                    let playlist_idx = ((y_offset + self.sidebar_list_scroll)
-                        / crate::theme::SIDEBAR_ITEM_HEIGHT)
-                        as usize;
-                    if playlist_idx < self.playlists.playlists.len() {
-                        self.sidebar_hover_playlist = Some(playlist_idx);
-                    }
-                }
-                return Task::none();
-            }
+        if self.cursor_in_sidebar() {
+            self.sidebar_hover_playlist = self.sidebar_playlist_at_cursor();
+            return Task::none();
         }
 
         let is_queue_drag = self.pressed_track_is_queue;
@@ -84,7 +124,7 @@ impl MusicPlayer {
             }
         };
 
-        let y_offset = cursor.y - list_bounds.y;
+        let y_offset = self.cursor_pos.y - list_bounds.y;
         let row_pos = ((y_offset + list_scroll) / crate::theme::ROW_HEIGHT).max(0.0);
         let row_idx = row_pos as usize;
         let drop_idx = if row_idx < track_count && row_pos.fract() >= 0.5 {
@@ -165,8 +205,6 @@ impl MusicPlayer {
             return;
         };
 
-        let cursor = self.cursor_pos;
-
         let was_in_selection = {
             let sel = self.selection(is_queue);
             !sel.is_empty() && sel.contains(&track_idx)
@@ -178,33 +216,25 @@ impl MusicPlayer {
             vec![track_idx]
         };
 
-        if let Some(sidebar_bounds) = self.sidebar_bounds {
-            if cursor.x < sidebar_bounds.x + crate::theme::SIDEBAR_WIDTH {
-                let y_offset = cursor.y - sidebar_bounds.y;
-                if y_offset >= 0.0 {
-                    let playlist_idx = ((y_offset + self.sidebar_list_scroll)
-                        / crate::theme::SIDEBAR_ITEM_HEIGHT)
-                        as usize;
-                    if playlist_idx < self.playlists.playlists.len() {
-                        let mut count = 0;
-                        for &i in indices.iter().rev() {
-                            if let Some(track) = self.get_track_at(i, is_queue) {
-                                let track = track.clone();
-                                self.playlists.insert_track_at(playlist_idx, &track, 0);
-                                count += 1;
-                            }
-                        }
-                        self.playlists.save();
-                        let name = self.playlists.playlists[playlist_idx].name.clone();
-                        self.notify(format!(
-                            "Added {} track{} to {}",
-                            count,
-                            if count == 1 { "" } else { "s" },
-                            name
-                        ));
-                        return;
+        if self.cursor_in_sidebar() {
+            if let Some(playlist_idx) = self.sidebar_playlist_at_cursor() {
+                let mut count = 0;
+                for &i in indices.iter().rev() {
+                    if let Some(track) = self.get_track_at(i, is_queue) {
+                        let track = track.clone();
+                        self.playlists.insert_track_at(playlist_idx, &track, 0);
+                        count += 1;
                     }
                 }
+                self.playlists.save();
+                let name = self.playlists.playlists[playlist_idx].name.clone();
+                self.notify(format!(
+                    "Added {} track{} to {}",
+                    count,
+                    if count == 1 { "" } else { "s" },
+                    name
+                ));
+                return;
             }
         }
 
