@@ -157,6 +157,14 @@ pub enum Message {
     CloseContextMenu,
 }
 
+/// Identifies which track list a drag is currently hovering over.
+/// Used to distinguish same-list reordering from cross-list copying.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DragTargetList {
+    TrackList,
+    Queue,
+}
+
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
     pub config: crate::config::Config,
@@ -221,6 +229,11 @@ pub struct MusicPlayer {
     pub drag_origin: Option<Point>,
     pub drag_active: bool,
     pub drag_drop_target: Option<usize>,
+    /// Which list the cursor is currently hovering over during a drag.
+    /// `None` means no list is targeted (e.g. hovering over the sidebar).
+    /// `Some(DragTargetList::Queue)` when over the queue's up-next list.
+    /// `Some(DragTargetList::TrackList)` when over the main track list.
+    pub drag_target_list: Option<DragTargetList>,
     pub sidebar_hover_playlist: Option<usize>,
 
     pub context_menu: Option<ContextMenuState>,
@@ -312,6 +325,7 @@ impl MusicPlayer {
             drag_origin: None,
             drag_active: false,
             drag_drop_target: None,
+            drag_target_list: None,
             sidebar_hover_playlist: None,
             context_menu: None,
             focused_list_index: 0,

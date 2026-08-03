@@ -16,10 +16,18 @@ pub(super) fn view_track_list<'a>(
         return empty_state("No tracks found", player.palette.fg_secondary);
     }
 
+    let target_matches = matches!(
+        player.drag_target_list,
+        Some(DragTargetList::Queue) if is_queue,
+    ) || matches!(
+        player.drag_target_list,
+        Some(DragTargetList::TrackList) if !is_queue,
+    );
+
     let mut items: Vec<Element<'a, Message>> = Vec::with_capacity(tracks.len());
     for (i, track) in tracks.iter().enumerate() {
         let adjusted = i + index_offset;
-        if player.drag_active && player.pressed_track_is_queue == is_queue {
+        if player.drag_active && target_matches {
             if let Some(drop_idx) = player.drag_drop_target {
                 if adjusted == drop_idx {
                     items.push(drop_indicator(player.palette.accent).into());
@@ -29,7 +37,7 @@ pub(super) fn view_track_list<'a>(
         items.push(view_track_row(track, adjusted, player, is_queue));
     }
 
-    if player.drag_active && player.pressed_track_is_queue == is_queue {
+    if player.drag_active && target_matches {
         if let Some(drop_idx) = player.drag_drop_target {
             if drop_idx == tracks.len() + index_offset {
                 items.push(drop_indicator(player.palette.accent).into());
