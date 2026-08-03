@@ -14,7 +14,9 @@ use super::{ContextMenuState, DragTargetList, Message, MusicPlayer};
 mod content;
 mod overlays;
 mod playbar;
+mod playlist;
 mod queue;
+mod search;
 mod sidebar;
 mod track_list;
 

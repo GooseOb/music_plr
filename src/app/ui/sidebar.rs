@@ -123,13 +123,13 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
         Container::new(
             text_input("New playlist name", &player.playlist_create_name)
                 .on_input(Message::NewPlaylistNameChanged)
-                .padding([theme::SPACING_XS, theme::SPACING_SM])
+                .padding([theme::SPACING_SM, theme::SPACING_SM])
                 .size(theme::TEXT_SIZE_DEFAULT),
         )
         .width(Length::Fill)
         .into(),
         Button::new(icons::icon("add.svg", Color::WHITE, theme::ICON_SIZE_SM))
-            .padding(theme::SPACING_SM)
+            .padding(theme::SPACING_MD - 2f32)
             .style(button_style_accent())
             .on_press(Message::CreatePlaylist)
             .into(),
@@ -207,7 +207,7 @@ fn sidebar_nav_item<'a>(
                 .into(),
         ])
         .spacing(10)
-        .padding([theme::SPACING_LG, theme::SPACING_XL])
+        .padding([theme::SPACING_SM, theme::SPACING_MD])
         .align_y(alignment::Vertical::Center)
         .width(Length::Fill),
     )
