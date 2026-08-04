@@ -4,7 +4,7 @@ use iced::{
     Color, Length,
 };
 
-use crate::app::ui::button_style_primary;
+use crate::app::ui::{button_style_primary, view_notification};
 
 use super::{
     bg, button, button_style_nav, icons, scrollable, text_input_style, theme, widget, Element,
@@ -168,6 +168,7 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
         .width(Length::Fill)
         .height(Length::Fill)
         .into(),
+        view_notification(player),
         sidebar_separator(p).into(),
         create_row.into(),
     ])

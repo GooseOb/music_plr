@@ -16,7 +16,6 @@ pub struct Palette {
     pub fg_secondary: Color,
     pub fg_muted: Color,
     pub overlay: Color,
-    pub warning: Color,
     pub danger: Color,
     pub danger_hover: Color,
 }
@@ -30,38 +29,21 @@ impl Default for Palette {
 impl Palette {
     pub const fn dark() -> Self {
         Self {
-            // #141418
             bg: Color::from_rgb8(0x14, 0x14, 0x18),
-            // #1a1a20
             bg_secondary: Color::from_rgb8(0x1a, 0x1a, 0x20),
-            // #08080e
             bg_tertiary: Color::from_rgb8(0x08, 0x08, 0x0e),
-            // #2a2a34
             bg_hover: Color::from_rgb8(0x2a, 0x2a, 0x34),
-            // #0a3a20
             bg_current: Color::from_rgb8(0x0a, 0x3a, 0x20),
             bg_selected: Color::from_rgb8(0x0a, 0x3a, 0x20),
-            // #14c884
             accent: Color::from_rgb8(0x14, 0xc8, 0x84),
-            // #10ba70
             accent_hover: Color::from_rgb8(0x10, 0xba, 0x70),
-            // #2a2a34
             button: Color::from_rgb8(0x2a, 0x2a, 0x34),
-            // #3a3a44
             button_hover: Color::from_rgb8(0x3a, 0x3a, 0x44),
-            // #e0e0e0
             fg: Color::from_rgb8(0xe0, 0xe0, 0xe0),
-            // #8888a0
             fg_secondary: Color::from_rgb8(0x88, 0x88, 0xa0),
-            // #555560
             fg_muted: Color::from_rgb8(0x55, 0x55, 0x60),
-            // #000000b3
             overlay: Color::from_rgba8(0, 0, 0, 0.7),
-            // #f0a030
-            warning: Color::from_rgb8(0xf0, 0xa0, 0x30),
-            // #c04040
             danger: Color::from_rgb8(0xc0, 0x40, 0x40),
-            // #c03030
             danger_hover: Color::from_rgb8(0xc0, 0x30, 0x30),
         }
     }

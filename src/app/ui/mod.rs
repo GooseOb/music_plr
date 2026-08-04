@@ -190,12 +190,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message> {
         .height(Length::Fill)
         .align_y(alignment::Vertical::Top);
 
-    let layout = Column::with_children(vec![
-        view_notification(player),
-        body.into(),
-        playbar::view_playbar(player),
-    ])
-    .spacing(0);
+    let layout = Column::with_children(vec![body.into(), playbar::view_playbar(player)]).spacing(0);
 
     let main = Container::new(layout)
         .width(Length::Fill)
@@ -225,12 +220,11 @@ fn view_notification(player: &MusicPlayer) -> Element<'_, Message> {
         return Container::new(
             text(msg)
                 .size(theme::TEXT_SIZE_DEFAULT)
-                .color(Color::WHITE)
+                .color(player.palette.fg)
                 .center(),
         )
         .width(Length::Fill)
         .padding([theme::SPACING_XS, theme::SPACING_XL])
-        .style(bg(player.palette.warning))
         .into();
     }
     Container::new(Row::new())
