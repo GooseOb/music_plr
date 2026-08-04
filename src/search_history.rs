@@ -41,19 +41,20 @@ impl SearchHistory {
         &self.queries
     }
 
-    pub fn contains(&self, query: &str) -> bool {
-        self.queries.iter().any(|q| q == query)
-    }
-
     pub fn push(&mut self, query: String, max_stored: usize) {
-        if self.queries.iter().any(|q| q == &query) {
-            return;
+        if let Some(index) = self.queries.iter().position(|q| q == &query) {
+            if index != 0 {
+                self.queries.remove(index);
+                self.queries.insert(0, query);
+                self.save();
+            }
+        } else {
+            self.queries.insert(0, query);
+            if self.queries.len() > max_stored {
+                self.queries.truncate(max_stored);
+            }
+            self.save();
         }
-        self.queries.push(query);
-        if self.queries.len() > max_stored {
-            self.queries.remove(0);
-        }
-        self.save();
     }
 
     pub fn remove(&mut self, query: &str) {

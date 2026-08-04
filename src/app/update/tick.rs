@@ -1,6 +1,6 @@
 use super::{
     error, format_duration, mpris, mpsc, spawn_thumbnail_download_thread, BackendResult,
-    MprisCommand, MprisUpdate, MusicPlayer, View, ViewSnapshot,
+    MprisCommand, MprisUpdate, MusicPlayer, View,
 };
 use tracing::debug;
 
@@ -103,11 +103,7 @@ impl MusicPlayer {
                 self.search_results.extend(tracks);
                 self.search_loading = false;
                 self.search_exhausted = exhausted;
-                if let Some(entry) = self.nav_history.get_mut(self.nav_history_pos) {
-                    if let ViewSnapshot::Search { results, .. } = &mut entry.snapshot {
-                        results.clone_from(&self.search_results);
-                    }
-                }
+                let _ = self.update_current_snapshot();
                 spawn_thumbnail_download_thread(&self.search_results);
                 self.clear_notification();
                 self.save_session();
@@ -116,7 +112,9 @@ impl MusicPlayer {
                 self.radio_label = label;
                 self.radio_tracks = tracks;
                 self.search_loading = false;
-                if matches!(self.current_view, View::SongRadio | View::ArtistRadio) {
+                if matches!(self.current_view, View::SongRadio | View::ArtistRadio)
+                    && !self.update_current_snapshot()
+                {
                     self.push_nav_entry();
                 }
                 self.save_session();

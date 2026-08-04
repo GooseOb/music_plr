@@ -6,12 +6,8 @@ impl MusicPlayer {
             return;
         }
 
-        // Switch views: push the current view (if not already Search) as a
-        // back-target so Back can return to it. Re-searching on the Search
-        // view is handled by push_nav_entry() once results arrive.
-        if !matches!(self.current_view, View::Search) {
-            self.push_nav_entry();
-        }
+        // If switching from another view, the current entry already serves as
+        // the back-target — no need to push it again. Just switch to Search.
         self.current_view = View::Search;
         self.show_search_history = false;
 
@@ -22,12 +18,10 @@ impl MusicPlayer {
         self.selected_indices.clear();
         self.focused_list_index = 0;
 
-        if !self.search_history.contains(&self.search_query) {
-            self.search_history.push(
-                self.search_query.clone(),
-                self.config.max_search_history_stored,
-            );
-        }
+        self.search_history.push(
+            self.search_query.clone(),
+            self.config.max_search_history_stored,
+        );
 
         let query = self.search_query.clone();
         let tx = self.result_tx.clone();
@@ -113,7 +107,11 @@ impl MusicPlayer {
         self.radio_label = format!("Radio: {song_name}");
         self.search_loading = true;
         self.notify(format!("Generating radio for song: {song_name}..."));
-        self.handle_navigate_to(View::SongRadio);
+
+        self.current_view = View::SongRadio;
+        self.show_search_history = false;
+        self.clear_selection();
+        self.focused_list_index = 0;
 
         let tx = self.result_tx.clone();
         let label = self.radio_label.clone();
@@ -136,7 +134,11 @@ impl MusicPlayer {
         self.radio_label = format!("Radio: {artist_name}");
         self.search_loading = true;
         self.notify(format!("Generating radio for artist: {artist_name}..."));
-        self.handle_navigate_to(View::ArtistRadio);
+
+        self.current_view = View::ArtistRadio;
+        self.show_search_history = false;
+        self.clear_selection();
+        self.focused_list_index = 0;
 
         let tx = self.result_tx.clone();
         let label = self.radio_label.clone();

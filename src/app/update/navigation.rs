@@ -83,25 +83,23 @@ impl MusicPlayer {
     }
 
     pub fn handle_navigate_to(&mut self, view: View) {
+        if self.current_view == view {
+            return;
+        }
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.show_search_history = false;
         self.cleanup_drag_state();
-
-        let back_entry = NavEntry {
-            view: self.current_view.clone(),
-            snapshot: self.snapshot_current(),
-        };
-        self.nav_history.push(back_entry);
 
         self.current_view = view;
         self.selected_indices.clear();
         self.focused_list_index = 0;
 
-        let new_entry = NavEntry {
+        // Push the new state as a single entry. The previous entry (preserved
+        // by truncate) already serves as the back-target for Back navigation.
+        self.nav_history.push(NavEntry {
             view: self.current_view.clone(),
             snapshot: self.snapshot_current(),
-        };
-        self.nav_history.push(new_entry);
+        });
 
         if self.nav_history.len() > 20 {
             self.nav_history.remove(0);
@@ -148,6 +146,54 @@ impl MusicPlayer {
             self.nav_history_pos = self.nav_history_pos.saturating_sub(1);
         }
         self.nav_history_pos = self.nav_history.len() - 1;
+    }
+
+    /// Updates the current nav entry in-place with the current state if it
+    /// matches the current view. Returns true if updated, false if the current
+    /// entry doesn't match the current view.
+    pub(super) fn update_current_snapshot(&mut self) -> bool {
+        let scroll = self.get_current_list_scroll();
+        if let Some(entry) = self.nav_history.get_mut(self.nav_history_pos) {
+            if entry.view == self.current_view {
+                match &mut entry.snapshot {
+                    ViewSnapshot::Search {
+                        query,
+                        results,
+                        selection,
+                        scroll: s,
+                    } => {
+                        query.clone_from(&self.search_query);
+                        results.clone_from(&self.search_results);
+                        selection.clone_from(&self.selected_indices);
+                        *s = scroll;
+                    }
+                    ViewSnapshot::Radio {
+                        label,
+                        tracks,
+                        selection,
+                        scroll: s,
+                    } => {
+                        label.clone_from(&self.radio_label);
+                        tracks.clone_from(&self.radio_tracks);
+                        selection.clone_from(&self.selected_indices);
+                        *s = scroll;
+                    }
+                    ViewSnapshot::TrackList {
+                        playlist,
+                        playlist_name,
+                        selection,
+                        scroll: s,
+                    } => {
+                        *playlist = self.selected_playlist;
+                        playlist_name.clone_from(&self.selected_playlist_name);
+                        selection.clone_from(&self.selected_indices);
+                        *s = scroll;
+                    }
+                }
+                return true;
+            }
+        }
+        false
     }
 }
 

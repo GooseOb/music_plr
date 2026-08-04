@@ -13,13 +13,19 @@ impl MusicPlayer {
     }
 
     pub fn handle_select_playlist(&mut self, index: usize) {
-        if index < self.playlists.playlists.len() {
-            self.selected_playlist = Some(index);
-            self.selected_playlist_name = self.playlists.playlists[index].name.clone();
+        if index < self.playlists.playlists.len() && self.selected_playlist != Some(index) {
             self.show_playlist_picker = None;
             self.clear_selection();
             self.cleanup_drag_state();
-            self.handle_navigate_to(View::Playlist);
+
+            self.current_view = View::Playlist;
+            self.selected_playlist = Some(index);
+            self.selected_playlist_name = self.playlists.playlists[index].name.clone();
+            self.selected_indices.clear();
+            self.focused_list_index = 0;
+
+            self.push_nav_entry();
+            self.save_session();
         }
     }
 
