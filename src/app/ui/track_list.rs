@@ -76,17 +76,40 @@ fn view_track_row<'a>(
     let is_selected = player.selection(is_queue).contains(&index);
     let is_hovered = player.drag.hovered_track == Some((index, is_queue));
     let is_focused = !is_queue && player.focused_list_index == index;
-    let row_bg = if is_selected {
-        p.bg_selected
-    } else if is_hovered {
-        p.bg_hover
+    let is_current = player.queue.current().is_some_and(|t| t.url == track.url);
+
+    let row_bg = if is_current {
+        if is_selected {
+            p.bg_current
+        } else if is_hovered {
+            p.bg_current.scale_alpha(0.8)
+        } else {
+            p.bg_current.scale_alpha(0.6)
+        }
     } else {
-        p.bg
+        if is_selected {
+            p.bg_selected
+        } else if is_hovered {
+            p.bg_hover
+        } else {
+            p.bg
+        }
     };
 
-    let leading = if is_hovered {
+    let leading = if is_current {
+        let icon_name = if player.is_playing {
+            "pause.svg"
+        } else {
+            "play.svg"
+        };
+        Button::new(icons::icon(icon_name, Color::BLACK, theme::ICON_SIZE_LG))
+            .padding(theme::SPACING_XS2)
+            .style(button_style_primary(p))
+            .on_press(Message::TogglePlayPause)
+            .into()
+    } else if is_hovered {
         Button::new(icons::icon("play.svg", Color::BLACK, theme::ICON_SIZE_LG))
-            .padding(6)
+            .padding(theme::SPACING_XS2)
             .style(button_style_primary(p))
             .on_press(Message::PlayTrackAtIndex { index, is_queue })
             .into()

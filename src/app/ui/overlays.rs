@@ -247,83 +247,104 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
         .collect();
 
     let cancel_btn = Button::new(
-        Container::new(text("Cancel").size(theme::TEXT_SIZE_SM).color(Color::WHITE)).padding(4),
+        Container::new(text("Cancel").size(theme::TEXT_SIZE_SM)).center_x(Length::Fill),
     )
     .padding(theme::SPACING_SM)
-    .width(Length::Fixed(theme::BUTTON_WIDTH))
     .style(button_style_secondary(p))
     .on_press(Message::ClosePicker);
 
-    let dialog = Container::new(
-        Column::with_children(vec![
-            text("Add to Playlist")
-                .size(theme::TEXT_SIZE_LG)
-                .color(p.fg)
-                .into(),
-            Column::with_children(items)
-                .spacing(0)
-                .width(Length::Fill)
-                .into(),
-            cancel_btn.into(),
-        ])
-        .spacing(theme::SPACING_SM)
-        .padding(0),
+    view_dialog(
+        Container::new(
+            Column::with_children(vec![
+                text("Add to Playlist")
+                    .size(theme::TEXT_SIZE_LG)
+                    .color(p.fg)
+                    .into(),
+                Column::with_children(items)
+                    .spacing(theme::SPACING_XS)
+                    .width(Length::Fill)
+                    .into(),
+                cancel_btn.into(),
+            ])
+            .align_x(alignment::Horizontal::Center)
+            .spacing(theme::SPACING_SM)
+            .width(theme::DIALOG_WIDTH)
+            .padding(theme::SPACING_MD),
+        ),
+        p,
+        Message::ClosePicker,
     )
-    .width(Length::Fixed(theme::DIALOG_WIDTH))
-    .height(Length::Fill)
-    .style(bg(p.bg_secondary));
+}
 
-    Container::new(MouseArea::new(dialog).on_press(Message::ClosePicker))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(bg(p.overlay))
-        .into()
+fn popup_bg(bg_color: Color) -> impl Fn(&iced::Theme) -> container::Style + 'static {
+    move |_| container::Style {
+        background: Some(bg_color.into()),
+        border: iced::border::rounded(theme::RADIUS_MD),
+        ..Default::default()
+    }
+}
+
+fn view_dialog<'a>(
+    dialog: Container<'a, Message>,
+    p: &theme::Palette,
+    close_msg: Message,
+) -> Element<'a, Message> {
+    let dialog = Container::new(dialog).style(popup_bg(p.bg_secondary));
+
+    Container::new(
+        MouseArea::new(
+            Container::new(MouseArea::new(dialog).on_press(Message::Noop))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center(Length::Fill),
+        )
+        .on_press(close_msg),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .style(bg(p.overlay))
+    .into()
 }
 
 pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message> {
     let p = &player.palette;
 
     let cancel_btn = Button::new(
-        Container::new(text("Cancel").size(theme::TEXT_SIZE_SM).color(Color::WHITE)).padding(4),
+        Container::new(text("Cancel").size(theme::TEXT_SIZE_DEFAULT)).center_x(Length::Fill),
     )
     .padding(theme::SPACING_SM)
-    .width(Length::Fixed(theme::BUTTON_WIDTH))
     .style(button_style_secondary(p))
     .on_press(Message::HideDeleteConfirm);
 
     let delete_btn = Button::new(
-        Container::new(text("Delete").size(theme::TEXT_SIZE_SM).color(Color::WHITE)).padding(4),
+        Container::new(text("Delete").size(theme::TEXT_SIZE_DEFAULT)).center_x(Length::Fill),
     )
     .padding(theme::SPACING_SM)
-    .width(Length::Fixed(theme::BUTTON_WIDTH))
     .style(button_style_danger(p))
     .on_press(Message::ConfirmDeletePlaylist);
 
-    let dialog = Container::new(
-        Column::with_children(vec![
-            text("Delete playlist?")
-                .size(theme::TEXT_SIZE_LG)
-                .color(p.fg)
-                .into(),
-            text("Tracks will not be deleted.")
-                .size(theme::TEXT_SIZE_DEFAULT)
-                .color(p.fg_secondary)
-                .into(),
-            Row::with_children(vec![cancel_btn.into(), delete_btn.into()])
-                .spacing(theme::SPACING_SM)
-                .align_y(alignment::Vertical::Center)
-                .into(),
-        ])
-        .spacing(theme::SPACING_MD)
-        .padding(theme::SPACING_XL),
+    view_dialog(
+        Container::new(
+            Column::with_children(vec![
+                text("Delete playlist?")
+                    .size(theme::TEXT_SIZE_LG)
+                    .color(p.fg)
+                    .into(),
+                text("Tracks will not be deleted.")
+                    .size(theme::TEXT_SIZE_DEFAULT)
+                    .color(p.fg_secondary)
+                    .into(),
+                Row::with_children(vec![cancel_btn.into(), delete_btn.into()])
+                    .spacing(theme::SPACING_XL)
+                    .align_y(alignment::Vertical::Center)
+                    .into(),
+            ])
+            .width(theme::DIALOG_WIDTH)
+            .align_x(alignment::Horizontal::Center)
+            .spacing(theme::SPACING_LG)
+            .padding(theme::SPACING_XL),
+        ),
+        p,
+        Message::HideDeleteConfirm,
     )
-    .width(Length::Fixed(theme::DIALOG_WIDTH))
-    .height(Length::Fixed(theme::DIALOG_HEIGHT))
-    .style(bg(p.bg_secondary));
-
-    Container::new(MouseArea::new(dialog))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(bg(p.overlay))
-        .into()
 }

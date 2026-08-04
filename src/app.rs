@@ -82,6 +82,7 @@ pub struct ContextMenuState {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Noop,
     Tick,
     WindowClose,
     WindowResized(iced::Size),
@@ -410,6 +411,7 @@ impl MusicPlayer {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::Noop => Task::none(),
             Message::Tick => {
                 self.handle_tick();
                 Task::none()

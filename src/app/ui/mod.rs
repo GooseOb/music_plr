@@ -24,11 +24,11 @@ mod track_list;
 
 use track_list::view_track_list;
 
-const fn scrollable_id(is_queue: bool) -> iced::widget::Id {
+const fn scrollable_id(is_queue: bool) -> widget::Id {
     if is_queue {
-        iced::widget::Id::new("queue_list")
+        widget::Id::new("queue_list")
     } else {
-        iced::widget::Id::new("track_list")
+        widget::Id::new("track_list")
     }
 }
 
@@ -130,14 +130,15 @@ fn text_input_style(
     let p = *p;
     move |_, status| {
         let border_color = match status {
-            text_input::Status::Active => p.fg_muted,
             text_input::Status::Hovered => p.fg_muted,
             text_input::Status::Focused { is_hovered: _ } => p.accent,
-            text_input::Status::Disabled => p.fg_muted,
+            _ => Color::TRANSPARENT,
         };
         text_input::Style {
             background: p.bg_tertiary.into(),
-            border: iced::border::rounded(theme::RADIUS_SM).color(border_color),
+            border: iced::border::rounded(theme::RADIUS_MD)
+                .color(border_color)
+                .width(1),
             icon: p.fg_muted,
             placeholder: p.fg_muted,
             value: p.fg,
@@ -154,7 +155,7 @@ fn thumbnail<'a>(
     let thumb_path = crate::thumbnails::thumbnail_path(&track.id);
     let fallback_color = p.fg_muted;
     if thumb_path.exists() {
-        image(iced::widget::image::Handle::from_path(thumb_path))
+        image(widget::image::Handle::from_path(thumb_path))
             .width(Length::Fixed(size))
             .height(Length::Fixed(size))
             .border_radius(size / 4.0)
@@ -165,14 +166,13 @@ fn thumbnail<'a>(
     }
 }
 
-fn drop_indicator(color: Color) -> Container<'static, Message> {
-    Container::new(Row::new())
-        .width(Length::Fill)
-        .height(Length::Fixed(crate::theme::DROP_LINE_HEIGHT))
-        .style(move |_| container::Style {
-            background: Some(color.into()),
-            ..Default::default()
-        })
+fn drop_indicator(color: Color) -> widget::Rule<'static> {
+    widget::rule::horizontal(theme::DROP_LINE_HEIGHT).style(move |_| widget::rule::Style {
+        color,
+        radius: iced::border::Radius::new(0),
+        fill_mode: widget::rule::FillMode::Full,
+        snap: true,
+    })
 }
 
 pub fn view(player: &MusicPlayer) -> Element<'_, Message> {

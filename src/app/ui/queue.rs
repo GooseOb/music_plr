@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{button, text, Button, Column, Container, MouseArea, Row},
+    widget::{self, button, text, Button, Column, Container, MouseArea, Row},
     Color, Element, Length,
 };
 
@@ -33,7 +33,7 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message> {
     )
     .width(Length::Fixed(queue_width))
     .height(Length::Fill)
-    .style(bg(p.bg))
+    .style(bg(p.bg_secondary))
     .into()
 }
 
@@ -114,8 +114,6 @@ fn view_queue_tab<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         .into()
     };
 
-    let separator = iced::widget::rule::horizontal(1);
-
     let up_next_header = section_header("UP NEXT", p);
 
     let offset = player.queue.current_index + 1;
@@ -140,7 +138,14 @@ fn view_queue_tab<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     Column::with_children(vec![
         now_playing_header.into(),
         now_playing_row,
-        Container::new(separator).width(Length::Fill).into(),
+        widget::rule::horizontal(1)
+            .style(move |_| widget::rule::Style {
+                color: p.fg_muted,
+                radius: iced::border::Radius::new(0),
+                fill_mode: widget::rule::FillMode::Padded(theme::SPACING_MD as u16),
+                snap: true,
+            })
+            .into(),
         up_next_header.into(),
         up_next,
     ])
@@ -169,7 +174,6 @@ fn view_now_playing_row<'a>(
     Container::new(inner)
         .width(Length::Fill)
         .height(Length::Fixed(theme::ROW_HEIGHT))
-        .style(bg(p.bg))
         .into()
 }
 
@@ -202,7 +206,7 @@ fn view_recently_played_row<'a>(
 
     let leading = if is_hovered {
         Button::new(icons::icon("play.svg", Color::BLACK, theme::ICON_SIZE_LG))
-            .padding(6)
+            .padding(theme::SPACING_XS2)
             .style(button_style_primary(p))
             .on_press(Message::PlayRecentTrack(index))
             .into()

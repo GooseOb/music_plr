@@ -3,9 +3,7 @@ use iced::{
     Length,
 };
 
-use super::{
-    bg, playlist, search, theme, Element, Message, MusicPlayer, View,
-};
+use super::{bg, playlist, search, theme, Element, Message, MusicPlayer, View};
 
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
     let search_bar = search::view_search_bar(player);

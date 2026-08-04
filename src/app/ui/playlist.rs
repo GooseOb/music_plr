@@ -18,8 +18,9 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message>
             Row::with_children(vec![
                 text_input(&pl.name, &player.selected_playlist_name)
                     .on_input(Message::RenamePlaylist)
-                    .size(theme::TEXT_SIZE_LG)
-                    .padding([theme::SPACING_XS, theme::SPACING_SM])
+                    .size(theme::TEXT_SIZE_MD)
+                    .padding([theme::SPACING_SM, theme::SPACING_MD])
+                    // .padding([theme::SPACING_XS, theme::SPACING_SM])
                     .width(Length::Fill)
                     .style(text_input_style(p))
                     .into(),
@@ -46,8 +47,8 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message>
                 .into(),
                 Button::new(icons::icon("delete.svg", p.fg, theme::ICON_SIZE_SM))
                     .padding(theme::SPACING_SM)
-                    .height(Length::Fixed(theme::BUTTON_HEIGHT))
-                    .width(Length::Fixed(theme::BUTTON_HEIGHT))
+                    .height(theme::BUTTON_HEIGHT)
+                    .width(theme::BUTTON_HEIGHT)
                     .style(button_style_danger(p))
                     .on_press(Message::ShowDeleteConfirm(idx))
                     .into(),

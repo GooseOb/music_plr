@@ -57,7 +57,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
     let controls = Container::new(
         Row::with_children(vec![
             Button::new(icons::icon("skip-back.svg", p.fg, theme::ICON_SIZE_MD))
-                .padding(6)
+                .padding(theme::SPACING_XS2)
                 .style(button_style_secondary(p))
                 .on_press(Message::PreviousTrack)
                 .into(),
@@ -71,7 +71,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
             .on_press(Message::TogglePlayPause)
             .into(),
             Button::new(icons::icon("skip-forward.svg", p.fg, theme::ICON_SIZE_MD))
-                .padding(6)
+                .padding(theme::SPACING_XS2)
                 .style(button_style_secondary(p))
                 .on_press(Message::NextTrack)
                 .into(),
