@@ -5,7 +5,8 @@ use iced::{
 };
 
 use super::{
-    button_style_accent, icons, theme, view_track_list, Message, MusicPlayer,
+    button_style_danger, button_style_secondary, icons, text_input_style, theme, view_track_list,
+    Message, MusicPlayer,
 };
 
 pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
@@ -20,6 +21,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message>
                     .size(theme::TEXT_SIZE_LG)
                     .padding([theme::SPACING_XS, theme::SPACING_SM])
                     .width(Length::Fill)
+                    .style(text_input_style(p))
                     .into(),
                 text(format!("({track_count} tracks)"))
                     .size(theme::TEXT_SIZE_MD)
@@ -39,14 +41,14 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message>
                 )
                 .padding(theme::SPACING_SM)
                 .height(Length::Fixed(theme::BUTTON_HEIGHT))
-                .style(button_style_accent())
+                .style(button_style_secondary(p))
                 .on_press(Message::AddLocalMusic)
                 .into(),
-                Button::new(icons::icon("delete.svg", p.fg_muted, theme::ICON_SIZE_SM))
+                Button::new(icons::icon("delete.svg", p.fg, theme::ICON_SIZE_SM))
                     .padding(theme::SPACING_SM)
                     .height(Length::Fixed(theme::BUTTON_HEIGHT))
                     .width(Length::Fixed(theme::BUTTON_HEIGHT))
-                    .style(button_style_accent())
+                    .style(button_style_danger(p))
                     .on_press(Message::ShowDeleteConfirm(idx))
                     .into(),
             ])

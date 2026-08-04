@@ -4,7 +4,7 @@ use iced::{
     Color, Element, Length,
 };
 
-use super::{bg, button_style_green, icons, thumbnail, Message, MusicPlayer};
+use super::{bg, button_style_primary, icons, thumbnail, Message, MusicPlayer};
 use crate::theme;
 use crate::types::QueueTab;
 
@@ -33,7 +33,7 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message> {
     )
     .width(Length::Fixed(queue_width))
     .height(Length::Fill)
-    .style(bg(p.bg_secondary))
+    .style(bg(p.bg))
     .into()
 }
 
@@ -169,7 +169,7 @@ fn view_now_playing_row<'a>(
     Container::new(inner)
         .width(Length::Fill)
         .height(Length::Fixed(theme::ROW_HEIGHT))
-        .style(bg(p.bg_hover))
+        .style(bg(p.bg))
         .into()
 }
 
@@ -203,7 +203,7 @@ fn view_recently_played_row<'a>(
     let leading = if is_hovered {
         Button::new(icons::icon("play.svg", Color::BLACK, theme::ICON_SIZE_LG))
             .padding(6)
-            .style(button_style_green())
+            .style(button_style_primary(p))
             .on_press(Message::PlayRecentTrack(index))
             .into()
     } else {

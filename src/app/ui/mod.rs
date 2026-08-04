@@ -4,12 +4,14 @@ use crate::types::View;
 use iced::{
     alignment,
     widget::{
-        self, button, container, image, scrollable, slider, text, Column, Container, Row, Stack,
+        self, button, container, image, scrollable, slider, text, text_input, Column, Container,
+        Row, Stack,
     },
     Color, Element, Length,
 };
 
 use super::{ContextMenuState, DragTargetList, Message, MusicPlayer};
+use crate::theme::Palette;
 
 mod content;
 mod overlays;
@@ -56,40 +58,45 @@ fn button_style(
     }
 }
 
-fn button_style_accent() -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    button_style(
-        Color::from_rgb8(0x2a, 0x2a, 0x34),
-        Color::from_rgb8(0x3a, 0x3a, 0x44),
-        Color::WHITE,
-    )
+fn button_style_primary(
+    p: &Palette,
+) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
+    button_style(p.accent, p.accent_hover, Color::BLACK)
+}
+
+fn button_style_secondary(
+    p: &Palette,
+) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
+    button_style(p.button, p.button_hover, p.fg)
+}
+
+fn button_style_queue(
+    enabled: bool,
+    p: &Palette,
+) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
+    if enabled {
+        // primary
+        button_style(p.accent, p.accent_hover, Color::BLACK)
+    } else {
+        // secondary
+        button_style(p.button, p.button_hover, p.fg)
+    }
+}
+
+fn button_style_danger(
+    p: &Palette,
+) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
+    button_style(p.danger, p.danger_hover, Color::WHITE)
 }
 
 fn button_style_nav(
     enabled: bool,
-    p: &theme::Palette,
+    p: &Palette,
 ) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    let bg = if enabled { p.bg_hover } else { p.bg_secondary };
-    let bg_hover = if enabled { p.accent } else { p.bg_secondary };
-    let text_color = if enabled { p.fg } else { p.fg_muted };
-    move |_, status| {
-        let bg_color = match status {
-            button::Status::Hovered | button::Status::Pressed if enabled => bg_hover,
-            _ => bg,
-        };
-        button::Style {
-            background: Some(bg_color.into()),
-            text_color,
-            border: iced::border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    }
-}
-
-fn button_style_green() -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
     button_style(
-        Color::from_rgb8(0x14, 0xc8, 0x84),
-        Color::from_rgba8(0x14, 0xc8, 0x84, 0.8),
-        Color::BLACK,
+        if enabled { p.button } else { p.bg },
+        if enabled { p.button_hover } else { p.bg },
+        if enabled { p.fg } else { p.fg_muted },
     )
 }
 
@@ -117,6 +124,28 @@ fn slider_style(
     }
 }
 
+fn text_input_style(
+    p: &Palette,
+) -> impl Fn(&iced::Theme, text_input::Status) -> text_input::Style + 'static {
+    let p = *p;
+    move |_, status| {
+        let border_color = match status {
+            text_input::Status::Active => p.fg_muted,
+            text_input::Status::Hovered => p.fg_muted,
+            text_input::Status::Focused { is_hovered: _ } => p.accent,
+            text_input::Status::Disabled => p.fg_muted,
+        };
+        text_input::Style {
+            background: p.bg_tertiary.into(),
+            border: iced::border::rounded(theme::RADIUS_SM).color(border_color),
+            icon: p.fg_muted,
+            placeholder: p.fg_muted,
+            value: p.fg,
+            selection: p.bg_selected,
+        }
+    }
+}
+
 fn thumbnail<'a>(
     track: &'a crate::types::Track,
     p: &theme::Palette,
@@ -128,6 +157,7 @@ fn thumbnail<'a>(
         image(iced::widget::image::Handle::from_path(thumb_path))
             .width(Length::Fixed(size))
             .height(Length::Fixed(size))
+            .border_radius(size / 4.0)
             .content_fit(iced::ContentFit::Cover)
             .into()
     } else {

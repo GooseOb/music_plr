@@ -5,7 +5,7 @@ use iced::{
 };
 
 use super::{
-    button_style_green, container, drop_indicator, icons, scrollable_id, theme, thumbnail,
+    button_style_primary, container, drop_indicator, icons, scrollable_id, theme, thumbnail,
     DragTargetList, Message, MusicPlayer,
 };
 
@@ -87,7 +87,7 @@ fn view_track_row<'a>(
     let leading = if is_hovered {
         Button::new(icons::icon("play.svg", Color::BLACK, theme::ICON_SIZE_LG))
             .padding(6)
-            .style(button_style_green())
+            .style(button_style_primary(p))
             .on_press(Message::PlayTrackAtIndex { index, is_queue })
             .into()
     } else {

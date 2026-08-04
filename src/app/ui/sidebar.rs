@@ -4,8 +4,10 @@ use iced::{
     Color, Length,
 };
 
+use crate::app::ui::button_style_primary;
+
 use super::{
-    bg, button, button_style_accent, button_style_nav, icons, scrollable, theme, widget, Element,
+    bg, button, button_style_nav, icons, scrollable, text_input_style, theme, widget, Element,
     Message, MusicPlayer, View,
 };
 
@@ -24,7 +26,7 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
             ))
             .center(Length::Fill),
         )
-        .padding(6)
+        .padding(theme::SPACING_XS)
         .style(button_style_nav(can_back, p))
         .width(Length::Fill)
         .height(Length::Fixed(theme::BUTTON_HEIGHT))
@@ -42,7 +44,7 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
             ))
             .center(Length::Fill),
         )
-        .padding(6)
+        .padding(theme::SPACING_XS)
         .style(button_style_nav(can_forward, p))
         .width(Length::Fill)
         .height(Length::Fixed(theme::BUTTON_HEIGHT))
@@ -124,13 +126,14 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
             text_input("New playlist name", &player.playlist_create_name)
                 .on_input(Message::NewPlaylistNameChanged)
                 .padding([theme::SPACING_SM, theme::SPACING_SM])
-                .size(theme::TEXT_SIZE_DEFAULT),
+                .size(theme::TEXT_SIZE_DEFAULT)
+                .style(text_input_style(&player.palette)),
         )
         .width(Length::Fill)
         .into(),
-        Button::new(icons::icon("add.svg", Color::WHITE, theme::ICON_SIZE_SM))
+        Button::new(icons::icon("add.svg", Color::BLACK, theme::ICON_SIZE_SM))
             .padding(theme::SPACING_MD - 2f32)
-            .style(button_style_accent())
+            .style(button_style_primary(p))
             .on_press(Message::CreatePlaylist)
             .into(),
     ])
@@ -167,7 +170,8 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
             .padding([theme::SPACING_SM, 0.0])
             .into(),
         create_row.into(),
-    ]);
+    ])
+    .padding([theme::SPACING_SM, 0.0]);
 
     Container::new(sidebar_content)
         .width(Length::Fixed(theme::SIDEBAR_WIDTH))

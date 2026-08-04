@@ -5,8 +5,8 @@ use iced::{
 };
 
 use super::{
-    bg, button, button_style_accent, container, icons, theme, ContextMenuState, Element, Message,
-    MusicPlayer,
+    bg, button, button_style_danger, button_style_secondary, container, icons, theme,
+    ContextMenuState, Element, Message, MusicPlayer,
 };
 
 fn transparent_bg() -> impl Fn(&iced::Theme) -> container::Style + 'static {
@@ -251,7 +251,7 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
     )
     .padding(theme::SPACING_SM)
     .width(Length::Fixed(theme::BUTTON_WIDTH))
-    .style(button_style_accent())
+    .style(button_style_secondary(p))
     .on_press(Message::ClosePicker);
 
     let dialog = Container::new(
@@ -288,7 +288,7 @@ pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message> 
     )
     .padding(theme::SPACING_SM)
     .width(Length::Fixed(theme::BUTTON_WIDTH))
-    .style(button_style_accent())
+    .style(button_style_secondary(p))
     .on_press(Message::HideDeleteConfirm);
 
     let delete_btn = Button::new(
@@ -296,7 +296,7 @@ pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message> 
     )
     .padding(theme::SPACING_SM)
     .width(Length::Fixed(theme::BUTTON_WIDTH))
-    .style(button::danger)
+    .style(button_style_danger(p))
     .on_press(Message::ConfirmDeletePlaylist);
 
     let dialog = Container::new(

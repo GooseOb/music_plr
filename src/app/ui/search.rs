@@ -4,7 +4,12 @@ use iced::{
     Color, Element, Length,
 };
 
-use super::{bg, button_style_accent, icons, theme, view_track_list, Message, MusicPlayer, View};
+use crate::app::ui::button_style_primary;
+
+use super::{
+    bg, button_style_secondary, icons, text_input_style, theme, view_track_list, Message,
+    MusicPlayer, View,
+};
 
 pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message> {
     let is_search_view = matches!(
@@ -24,7 +29,8 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message> {
             .on_input(Message::SearchInputChanged)
             .on_submit(submit_msg())
             .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .size(theme::TEXT_SIZE_MD),
+            .size(theme::TEXT_SIZE_MD)
+            .style(text_input_style(&player.palette)),
     )
     .width(Length::Fill)
     .into();
@@ -32,9 +38,9 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message> {
     Container::new(
         Row::with_children(vec![
             input,
-            Button::new(icons::icon("search.svg", Color::WHITE, theme::ICON_SIZE_MD))
+            Button::new(icons::icon("search.svg", Color::BLACK, theme::ICON_SIZE_MD))
                 .padding(theme::SPACING_SM)
-                .style(button_style_accent())
+                .style(button_style_primary(&player.palette))
                 .width(Length::Fixed(theme::SEARCH_BTN_SIZE))
                 .height(Length::Fixed(theme::SEARCH_BTN_SIZE))
                 .on_press(submit_msg())
@@ -68,7 +74,7 @@ pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message> {
         )
         .padding(theme::SPACING_SM)
         .width(Length::Fill)
-        .style(button_style_accent())
+        .style(button_style_secondary(&player.palette))
         .on_press(Message::SearchLoadMore);
         Container::new(btn).padding(theme::SPACING_SM).into()
     } else {
