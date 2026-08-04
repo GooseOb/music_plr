@@ -208,7 +208,6 @@ pub struct MusicPlayer {
     pub search_exhausted: bool,
     pub show_search_history: bool,
     pub last_filtered_history: Vec<String>,
-    pub search_history_focused_index: usize,
 
     pub radio_tracks: Vec<Track>,
     pub radio_label: String,
@@ -305,7 +304,6 @@ impl MusicPlayer {
             search_exhausted: false,
             show_search_history: false,
             last_filtered_history: Vec::new(),
-            search_history_focused_index: 0,
             radio_tracks: Vec::new(),
             radio_label: String::new(),
             queue: PlayQueue::new(),

@@ -157,30 +157,17 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
         .iter()
         .enumerate()
         .map(|(i, q)| {
-            let is_focused = player.search_history_focused_index == i;
-            let bg_color = if is_focused {
-                p.bg_hover
-            } else {
-                p.bg_secondary
-            };
+            let bg_color = p.bg_secondary;
             let bg_hover = p.bg_hover;
-            let is_focused_copy = is_focused;
             let sel_fg = p.fg;
-            let sel_fg_secondary = if is_focused { p.fg } else { p.fg_secondary };
-            let sel_bg_hover = bg_hover;
-            let del_fg = p.fg;
-            let del_fg_muted = p.fg_muted;
-            let del_bg_hover = bg_hover;
+            let sel_fg_secondary = p.fg_secondary;
 
             Container::new(
                 Row::with_children(vec![
                     Button::new(
                         Row::with_children(vec![
-                            icons::icon("search.svg", del_fg_muted, theme::ICON_SIZE_SM).into(),
-                            text(q)
-                                .size(theme::TEXT_SIZE_SM)
-                                .color(sel_fg_secondary)
-                                .into(),
+                            icons::icon("search.svg", p.fg_muted, theme::ICON_SIZE_SM).into(),
+                            text(q).size(theme::TEXT_SIZE_SM).into(),
                         ])
                         .spacing(theme::SPACING_SM)
                         .padding([theme::SPACING_XS, theme::SPACING_MD])
@@ -190,33 +177,32 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                     .width(Length::Fill)
                     .padding(0)
                     .style(move |_, status| {
-                        let bg = if is_focused_copy {
-                            bg_color
-                        } else {
-                            match status {
-                                button::Status::Hovered | button::Status::Pressed => sel_bg_hover,
-                                _ => bg_color,
-                            }
+                        let bg = match status {
+                            button::Status::Hovered | button::Status::Pressed => bg_hover,
+                            _ => bg_color,
+                        };
+                        let text_color = match status {
+                            button::Status::Hovered | button::Status::Pressed => sel_fg,
+                            _ => sel_fg_secondary,
                         };
                         button::Style {
                             background: Some(bg.into()),
-                            text_color: sel_fg,
+                            text_color,
                             border: iced::border::rounded(theme::RADIUS_SM),
                             ..Default::default()
                         }
                     })
                     .on_press(Message::SearchHistorySelected(i))
                     .into(),
-                    Button::new(icons::icon("delete.svg", del_fg_muted, theme::ICON_SIZE_SM))
-                        .padding(2)
+                    Button::new(icons::icon("delete.svg", p.fg_muted, theme::ICON_SIZE_SM))
+                        .padding(theme::SPACING_XS)
                         .style(move |_, status| {
                             let bg = match status {
-                                button::Status::Hovered | button::Status::Pressed => del_bg_hover,
+                                button::Status::Hovered | button::Status::Pressed => bg_hover,
                                 _ => bg_color,
                             };
                             button::Style {
                                 background: Some(bg.into()),
-                                text_color: del_fg,
                                 border: iced::border::rounded(theme::RADIUS_SM),
                                 ..Default::default()
                             }
@@ -226,7 +212,6 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                         .height(Length::Fixed(theme::DELETE_BTN_SIZE))
                         .into(),
                 ])
-                .spacing(theme::SPACING_SM)
                 .align_y(alignment::Vertical::Center),
             )
             .width(Length::Fill)

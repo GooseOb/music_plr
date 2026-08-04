@@ -100,7 +100,6 @@ impl MusicPlayer {
             self.last_filtered_history
                 .truncate(self.config.max_search_history_visible);
         }
-        self.search_history_focused_index = 0;
     }
 
     pub fn start_song_radio(&mut self, song_name: String) {
