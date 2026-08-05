@@ -42,6 +42,10 @@ fn main() {
     )
     .subscription(app::MusicPlayer::subscription)
     .theme(|state: &app::MusicPlayer| state.app_theme.clone())
+    .settings(iced::Settings {
+        default_text_size: iced::Pixels(theme::TEXT_SIZE_MD as f32),
+        ..Default::default()
+    })
     .title("music_plr")
     .run()
     .unwrap();

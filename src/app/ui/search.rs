@@ -16,8 +16,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
         text_input("Search YouTube Music...", &player.search_query)
             .on_input(Message::SearchInputChanged)
             .on_submit(Message::SearchExecute)
-            .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .size(theme::TEXT_SIZE_MD),
+            .padding([theme::SPACING_SM, theme::SPACING_MD]),
     )
     .width(Length::Fill)
     .into();
@@ -58,14 +57,10 @@ pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme
         && !player.search_exhausted
         && !player.search_results.is_empty()
     {
-        let btn = Button::new(
-            text("Load More")
-                .size(theme::TEXT_SIZE_DEFAULT)
-                .color(Color::WHITE),
-        )
-        .padding(theme::SPACING_SM)
-        .width(Length::Fill)
-        .on_press(Message::SearchLoadMore);
+        let btn = Button::new(text("Load More").color(Color::WHITE))
+            .padding(theme::SPACING_SM)
+            .width(Length::Fill)
+            .on_press(Message::SearchLoadMore);
         Container::new(btn).padding(theme::SPACING_SM).into()
     } else {
         Container::new(Row::new()).height(0.0).into()
@@ -87,7 +82,6 @@ fn view_search_results<'a>(
     if loading && tracks.is_empty() {
         Container::new(
             text(loading_msg)
-                .size(theme::TEXT_SIZE_MD)
                 .color(player.app_theme.palette.fg_secondary)
                 .center(),
         )
@@ -103,7 +97,6 @@ fn view_search_results<'a>(
 pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let header = Container::new(
         text(player.radio_label.clone())
-            .size(theme::TEXT_SIZE_DEFAULT)
             .width(Length::Fill)
             .center(),
     )
@@ -127,16 +120,12 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
     let p = &player.app_theme.palette;
 
     if player.last_filtered_history.is_empty() {
-        return Container::new(
-            text("No recent searches")
-                .size(theme::TEXT_SIZE_DEFAULT)
-                .color(p.fg_secondary),
-        )
-        .width(Length::Fill)
-        .height(theme::SEARCH_HISTORY_ITEM_HEIGHT)
-        .padding([theme::SPACING_SM, theme::SPACING_XL])
-        .style(bg_secondary())
-        .into();
+        return Container::new(text("No recent searches").color(p.fg_secondary))
+            .width(Length::Fill)
+            .height(theme::SEARCH_HISTORY_ITEM_HEIGHT)
+            .padding([theme::SPACING_SM, theme::SPACING_XL])
+            .style(bg_secondary())
+            .into();
     }
 
     let items: Vec<Element<'a, Message, AppTheme>> = player

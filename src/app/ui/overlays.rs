@@ -152,7 +152,7 @@ fn menu_item<'a>(
         Button::new(
             Row::with_children(vec![
                 icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
-                text(label).size(theme::TEXT_SIZE_DEFAULT).into(),
+                text(label).into(),
             ])
             .spacing(theme::SPACING_SM)
             .padding([theme::SPACING_XS, theme::SPACING_SM])
@@ -197,7 +197,7 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
             let bg_hover = p.bg_hover;
 
             Button::new(
-                Row::with_children(vec![text(&pl.name).size(theme::TEXT_SIZE_DEFAULT).into()])
+                Row::with_children(vec![text(&pl.name).into()])
                     .spacing(theme::SPACING_SM)
                     .padding([theme::SPACING_SM, theme::SPACING_MD])
                     .align_y(alignment::Vertical::Center)
@@ -275,25 +275,20 @@ fn view_dialog(
 pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.app_theme.palette;
 
-    let cancel_btn = Button::new(
-        Container::new(text("Cancel").size(theme::TEXT_SIZE_DEFAULT)).center_x(Length::Fill),
-    )
-    .padding(theme::SPACING_SM)
-    .on_press(Message::HideDeleteConfirm);
+    let cancel_btn = Button::new(Container::new(text("Cancel")).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .on_press(Message::HideDeleteConfirm);
 
-    let delete_btn = Button::new(
-        Container::new(text("Delete").size(theme::TEXT_SIZE_DEFAULT)).center_x(Length::Fill),
-    )
-    .padding(theme::SPACING_SM)
-    .style(button_style_danger())
-    .on_press(Message::ConfirmDeletePlaylist);
+    let delete_btn = Button::new(Container::new(text("Delete")).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .style(button_style_danger())
+        .on_press(Message::ConfirmDeletePlaylist);
 
     view_dialog(
         Container::new(
             Column::with_children(vec![
                 text("Delete playlist?").size(theme::TEXT_SIZE_LG).into(),
                 text("Tracks will not be deleted.")
-                    .size(theme::TEXT_SIZE_DEFAULT)
                     .color(p.fg_secondary)
                     .into(),
                 Row::with_children(vec![cancel_btn.into(), delete_btn.into()])

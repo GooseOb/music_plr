@@ -181,10 +181,7 @@ pub(super) fn title_artist_column<'a>(
     p: &'a Palette,
 ) -> Column<'a, Message, AppTheme> {
     Column::with_children(vec![
-        text(track.title.clone())
-            .size(theme::TEXT_SIZE_DEFAULT)
-            .width(Length::Fill)
-            .into(),
+        text(track.title.clone()).width(Length::Fill).into(),
         text(track.artist.clone())
             .size(theme::TEXT_SIZE_SM)
             .color(p.fg_secondary)
@@ -247,7 +244,7 @@ pub(super) fn track_row<'a>(
 
 /// An empty-state message centered in the available space.
 pub(super) fn empty_state(msg: &str, color: Color) -> Element<'_, Message, AppTheme> {
-    Container::new(text(msg).size(theme::TEXT_SIZE_MD).color(color).center())
+    Container::new(text(msg).color(color).center())
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(theme::SPACING_XL)

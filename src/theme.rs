@@ -97,7 +97,6 @@ pub const ICON_SIZE_LG: f32 = 18.0;
 
 pub const TEXT_SIZE_XS: u32 = 12;
 pub const TEXT_SIZE_SM: u32 = 13;
-pub const TEXT_SIZE_DEFAULT: u32 = 15;
 pub const TEXT_SIZE_MD: u32 = 15;
 pub const TEXT_SIZE_LG: u32 = 18;
 

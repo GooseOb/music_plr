@@ -17,19 +17,16 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
             Row::with_children(vec![
                 text_input(&pl.name, &player.selected_playlist_name)
                     .on_input(Message::RenamePlaylist)
-                    .size(theme::TEXT_SIZE_MD)
                     .padding([theme::SPACING_SM, theme::SPACING_MD])
                     .width(Length::Fill)
                     .into(),
                 text(format!("({track_count} tracks)"))
-                    .size(theme::TEXT_SIZE_MD)
                     .color(p.fg_secondary)
                     .into(),
                 Button::new(
                     Row::with_children(vec![
                         icons::icon(icons::FOLDER_ICON, Color::WHITE, theme::ICON_SIZE_SM).into(),
                         text("Add local")
-                            .size(theme::TEXT_SIZE_DEFAULT)
                             .align_y(alignment::Vertical::Center)
                             .color(Color::WHITE)
                             .into(),
@@ -57,13 +54,9 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
             Row::new().into()
         }
     } else {
-        Container::new(
-            text("Select a playlist from the sidebar")
-                .size(theme::TEXT_SIZE_MD)
-                .color(p.fg_secondary),
-        )
-        .padding(theme::SPACING_XL)
-        .into()
+        Container::new(text("Select a playlist from the sidebar").color(p.fg_secondary))
+            .padding(theme::SPACING_XL)
+            .into()
     };
 
     let track_list = if let Some(idx) = player.selected_playlist {

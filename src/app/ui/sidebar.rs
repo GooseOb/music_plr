@@ -13,7 +13,7 @@ use super::{
 
 fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     if let Some(msg) = &player.notification {
-        return Container::new(text(msg).size(theme::TEXT_SIZE_DEFAULT).center())
+        return Container::new(text(msg).center())
             .width(Length::Fill)
             .padding([theme::SPACING_XS, theme::SPACING_XL])
             .into();
@@ -111,10 +111,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             Button::new(
                 Row::with_children(vec![
                     icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_MD).into(),
-                    text(&pl.name)
-                        .size(theme::TEXT_SIZE_DEFAULT)
-                        .color(text_color)
-                        .into(),
+                    text(&pl.name).color(text_color).into(),
                 ])
                 .spacing(10)
                 .padding([theme::SPACING_SM, theme::SPACING_MD])
@@ -144,8 +141,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         Container::new(
             text_input("New playlist name", &player.playlist_create_name)
                 .on_input(Message::NewPlaylistNameChanged)
-                .padding([theme::SPACING_SM, theme::SPACING_SM])
-                .size(theme::TEXT_SIZE_DEFAULT),
+                .padding([theme::SPACING_SM, theme::SPACING_SM]),
         )
         .width(Length::Fill)
         .into(),
@@ -221,10 +217,7 @@ fn sidebar_nav_item<'a>(
     Button::new(
         Row::with_children(vec![
             icons::icon(icon_name, icon_color, theme::ICON_SIZE_MD).into(),
-            text(name)
-                .size(theme::TEXT_SIZE_DEFAULT)
-                .color(text_color)
-                .into(),
+            text(name).color(text_color).into(),
         ])
         .spacing(theme::SPACING_MD)
         .padding([theme::SPACING_SM, theme::SPACING_MD])

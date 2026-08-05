@@ -27,7 +27,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     };
 
     let track_info = Column::with_children(vec![
-        text(title).size(theme::TEXT_SIZE_DEFAULT).into(),
+        text(title).into(),
         text(artist)
             .size(theme::TEXT_SIZE_SM)
             .color(p.fg_secondary)

@@ -79,10 +79,7 @@ fn queue_tab<'a>(
     Button::new(
         Row::with_children(vec![
             icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_SM).into(),
-            text(label)
-                .size(theme::TEXT_SIZE_MD)
-                .color(text_color)
-                .into(),
+            text(label).color(text_color).into(),
         ])
         .spacing(theme::SPACING_SM)
         .padding([theme::SPACING_SM, theme::SPACING_MD])
