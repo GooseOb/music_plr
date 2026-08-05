@@ -25,7 +25,7 @@ fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 }
 
 pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let p = &player.palette;
+    let p = &player.app_theme.palette;
 
     let can_back = player.can_navigate_back();
     let can_forward = player.can_navigate_forward();

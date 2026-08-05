@@ -14,7 +14,7 @@ use super::{
 };
 
 pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let p = &player.palette;
+    let p = &player.app_theme.palette;
 
     let track = player.queue.current();
     let title = track.map_or("Not playing", |t| t.title.as_str());

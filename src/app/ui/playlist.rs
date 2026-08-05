@@ -9,7 +9,7 @@ use crate::{icons, theme::AppTheme};
 use super::{styles::button_style_danger, theme, view_track_list, Message, MusicPlayer};
 
 pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let p = &player.palette;
+    let p = &player.app_theme.palette;
 
     let header: Element<'a, Message, AppTheme> = if let Some(idx) = player.selected_playlist {
         if let Some(pl) = player.playlists.playlists.get(idx) {

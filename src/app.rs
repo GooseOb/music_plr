@@ -262,7 +262,6 @@ pub struct MusicPlayer {
     pub focused_list_index: usize,
     pub queue_selected_indices: Vec<usize>,
 
-    pub palette: Palette,
     pub app_theme: AppTheme,
 
     pub search_list_bounds: Option<iced::Rectangle>,
@@ -344,7 +343,6 @@ impl MusicPlayer {
             context_menu: None,
             focused_list_index: 0,
             queue_selected_indices: Vec::new(),
-            palette: Palette::dark(),
             app_theme: AppTheme::new(Palette::dark()),
             search_list_bounds: None,
             search_list_scroll: 0.0,

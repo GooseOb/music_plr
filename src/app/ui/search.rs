@@ -96,7 +96,7 @@ fn view_search_results<'a>(
         Container::new(
             text(loading_msg)
                 .size(theme::TEXT_SIZE_MD)
-                .color(player.palette.fg_secondary)
+                .color(player.app_theme.palette.fg_secondary)
                 .center(),
         )
         .width(Length::Fill)
@@ -132,7 +132,7 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
 }
 
 pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let p = &player.palette;
+    let p = &player.app_theme.palette;
 
     if player.last_filtered_history.is_empty() {
         return Container::new(

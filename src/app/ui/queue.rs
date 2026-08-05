@@ -70,7 +70,7 @@ fn queue_tab<'a>(
     active: bool,
     on: Message,
 ) -> Element<'a, Message, AppTheme> {
-    let p = &player.palette;
+    let p = &player.app_theme.palette;
 
     let icon_color = if active { p.accent } else { p.fg_muted };
     let text_color = if active { p.fg } else { p.fg_secondary };
@@ -105,7 +105,7 @@ fn queue_tab<'a>(
 /// current track (non-interactive), a separator, then a draggable "Up Next"
 /// list.
 fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let p = &player.palette;
+    let p = &player.app_theme.palette;
 
     let now_playing_header = section_header("NOW PLAYING", p);
 
@@ -191,7 +191,7 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
     let tracks = &player.queue.recently_played;
 
     if tracks.is_empty() {
-        return empty_state("No recently played tracks", player.palette.fg_secondary);
+        return empty_state("No recently played tracks", player.app_theme.palette.fg_secondary);
     }
 
     let items: Vec<Element<'_, Message, AppTheme>> = tracks
@@ -208,7 +208,7 @@ fn view_recently_played_row<'a>(
     index: usize,
     player: &'a MusicPlayer,
 ) -> Element<'a, Message, AppTheme> {
-    let p = &player.palette;
+    let p = &player.app_theme.palette;
     let is_hovered = player.drag.hovered_track == Some((index, true));
     let row_bg = if is_hovered { p.bg_hover } else { p.bg };
 

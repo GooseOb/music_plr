@@ -53,7 +53,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         stack = stack.push(overlays::view_delete_confirm(player));
     } else if let Some(menu) = &player.context_menu {
         if menu.visible {
-            stack = stack.push(overlays::view_context_menu(menu, &player.palette));
+            stack = stack.push(overlays::view_context_menu(menu, &player.app_theme.palette));
         }
     }
 

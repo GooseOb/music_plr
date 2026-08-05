@@ -184,7 +184,7 @@ fn menu_item<'a>(
 }
 
 pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let p = &player.palette;
+    let p = &player.app_theme.palette;
 
     let playlists: Vec<&crate::playlists::Playlist> = player.playlists.playlists.iter().collect();
 
@@ -277,7 +277,7 @@ fn view_dialog(
 }
 
 pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let p = &player.palette;
+    let p = &player.app_theme.palette;
 
     let cancel_btn = Button::new(
         Container::new(text("Cancel").size(theme::TEXT_SIZE_DEFAULT)).center_x(Length::Fill),

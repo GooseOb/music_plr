@@ -48,7 +48,7 @@ pub(super) fn view_track_list<'a>(
     index_offset: usize,
 ) -> Element<'a, Message, AppTheme> {
     if tracks.is_empty() {
-        return empty_state("No tracks found", player.palette.fg_secondary);
+        return empty_state("No tracks found", player.app_theme.palette.fg_secondary);
     }
 
     let target_matches = matches!(
@@ -101,7 +101,7 @@ fn view_track_row<'a>(
     player: &'a MusicPlayer,
     is_queue: bool,
 ) -> Element<'a, Message, AppTheme> {
-    let p = &player.palette;
+    let p = &player.app_theme.palette;
     let is_selected = player.selection(is_queue).contains(&index);
     let is_hovered = player.drag.hovered_track == Some((index, is_queue));
     let is_focused = !is_queue && player.focused_list_index == index;
