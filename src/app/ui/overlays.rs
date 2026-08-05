@@ -255,10 +255,10 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
     )
 }
 
-fn view_dialog<'a>(
-    dialog: Container<'a, Message, AppTheme>,
+fn view_dialog(
+    dialog: Container<'_, Message, AppTheme>,
     close_msg: Message,
-) -> Element<'a, Message, AppTheme> {
+) -> Element<'_, Message, AppTheme> {
     let dialog = Container::new(dialog).style(bg_popup());
 
     Container::new(

@@ -84,11 +84,11 @@ mod tests {
                 .map(|s| Track {
                     id: s.to_string(),
                     title: s.to_string(),
-                    artist: "".to_string(),
+                    artist: String::new(),
                     duration: 0,
                     url: s.to_string(),
                     source: crate::types::TrackSource::YouTube,
-                    thumbnail: "".to_string(),
+                    thumbnail: String::new(),
                 })
                 .collect(),
         };
@@ -118,11 +118,11 @@ mod tests {
         let new_track = Track {
             id: "new".to_string(),
             title: "new".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             duration: 0,
             url: "new".to_string(),
             source: crate::types::TrackSource::YouTube,
-            thumbnail: "".to_string(),
+            thumbnail: String::new(),
         };
         store.insert_track_at(0, &new_track, 0);
         assert_eq!(
@@ -141,11 +141,11 @@ mod tests {
         let new_track = Track {
             id: "new".to_string(),
             title: "new".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             duration: 0,
             url: "new".to_string(),
             source: crate::types::TrackSource::YouTube,
-            thumbnail: "".to_string(),
+            thumbnail: String::new(),
         };
         store.insert_track_at(0, &new_track, 2);
         assert_eq!(
@@ -164,11 +164,11 @@ mod tests {
         let new_track = Track {
             id: "new".to_string(),
             title: "new".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             duration: 0,
             url: "new".to_string(),
             source: crate::types::TrackSource::YouTube,
-            thumbnail: "".to_string(),
+            thumbnail: String::new(),
         };
         store.insert_track_at(0, &new_track, 100);
         assert_eq!(
@@ -187,11 +187,11 @@ mod tests {
         let dup_track = Track {
             id: "a".to_string(),
             title: "a".to_string(),
-            artist: "".to_string(),
+            artist: String::new(),
             duration: 0,
             url: "a".to_string(),
             source: crate::types::TrackSource::YouTube,
-            thumbnail: "".to_string(),
+            thumbnail: String::new(),
         };
         store.insert_track_at(0, &dup_track, 0);
         assert_eq!(

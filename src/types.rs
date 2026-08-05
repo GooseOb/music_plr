@@ -135,27 +135,27 @@ mod tests {
                 title: "A".into(),
                 artist: "X".into(),
                 duration: 10,
-                url: "".into(),
+                url: String::new(),
                 source: TrackSource::YouTube,
-                thumbnail: "".into(),
+                thumbnail: String::new(),
             },
             Track {
                 id: "2".into(),
                 title: "B".into(),
                 artist: "X".into(),
                 duration: 10,
-                url: "".into(),
+                url: String::new(),
                 source: TrackSource::YouTube,
-                thumbnail: "".into(),
+                thumbnail: String::new(),
             },
             Track {
                 id: "3".into(),
                 title: "C".into(),
                 artist: "X".into(),
                 duration: 10,
-                url: "".into(),
+                url: String::new(),
                 source: TrackSource::YouTube,
-                thumbnail: "".into(),
+                thumbnail: String::new(),
             },
         ];
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
@@ -184,12 +184,12 @@ mod tests {
     fn make_track(id: &str, url: &str) -> Track {
         Track {
             id: id.into(),
-            title: format!("Track {}", id),
+            title: format!("Track {id}"),
             artist: "Artist".into(),
             duration: 10,
             url: url.into(),
             source: TrackSource::YouTube,
-            thumbnail: "".into(),
+            thumbnail: String::new(),
         }
     }
 
@@ -220,7 +220,7 @@ mod tests {
     fn record_played_truncates_to_max() {
         let mut q = PlayQueue::new();
         for i in 1..=60 {
-            q.record_played(&make_track(&i.to_string(), &format!("url{}", i)), 50);
+            q.record_played(&make_track(&i.to_string(), &format!("url{i}")), 50);
         }
         assert_eq!(q.recently_played.len(), 50);
         assert_eq!(q.recently_played[0].id, "60");

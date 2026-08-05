@@ -1,5 +1,5 @@
 use crate::theme::AppTheme;
-use iced::{widget::svg, Color, Length};
+use iced::{widget::svg, Color};
 use std::sync::OnceLock;
 
 /// Compile-time icon registry. Returns the raw SVG bytes for a named icon.

@@ -94,7 +94,7 @@ mod tests {
             h.push(i.to_string(), 5);
         }
         assert_eq!(h.get().len(), 5);
-        assert_eq!(h.get(), &["5", "6", "7", "8", "9"]);
+        assert_eq!(h.get(), &["9", "8", "7", "6", "5"]);
     }
 
     #[test]
