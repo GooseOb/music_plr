@@ -78,7 +78,7 @@ fn queue_tab<'a>(
 
     Button::new(
         Row::with_children(vec![
-            icons::icon("music.svg", icon_color, theme::ICON_SIZE_SM).into(),
+            icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_SM).into(),
             text(label)
                 .size(theme::TEXT_SIZE_MD)
                 .color(text_color)
@@ -213,7 +213,7 @@ fn view_recently_played_row<'a>(
     let row_bg = if is_hovered { p.bg_hover } else { p.bg };
 
     let leading = if is_hovered {
-        Button::new(icons::icon("play.svg", Color::BLACK, theme::ICON_SIZE_LG))
+        Button::new(icons::icon(icons::PLAY_ICON, Color::BLACK, theme::ICON_SIZE_LG))
             .padding(theme::SPACING_XS2)
             .style(button_style_primary())
             .on_press(Message::PlayRecentTrack(index))

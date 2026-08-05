@@ -27,7 +27,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
                     .into(),
                 Button::new(
                     Row::with_children(vec![
-                        icons::icon("folder.svg", Color::WHITE, theme::ICON_SIZE_SM).into(),
+                        icons::icon(icons::FOLDER_ICON, Color::WHITE, theme::ICON_SIZE_SM).into(),
                         text("Add local")
                             .size(theme::TEXT_SIZE_DEFAULT)
                             .align_y(alignment::Vertical::Center)
@@ -41,7 +41,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
                 .height(Length::Fixed(theme::BUTTON_HEIGHT))
                 .on_press(Message::AddLocalMusic)
                 .into(),
-                Button::new(icons::icon("delete.svg", p.fg, theme::ICON_SIZE_SM))
+                Button::new(icons::icon(icons::DELETE_ICON, p.fg, theme::ICON_SIZE_SM))
                     .padding(theme::SPACING_SM)
                     .height(theme::BUTTON_HEIGHT)
                     .width(theme::BUTTON_HEIGHT)

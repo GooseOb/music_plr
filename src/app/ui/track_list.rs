@@ -28,7 +28,7 @@ pub fn thumbnail<'a>(
             .content_fit(iced::ContentFit::Cover)
             .into()
     } else {
-        icons::icon("music.svg", p.fg_muted, size).into()
+        icons::icon(icons::MUSIC_ICON, p.fg_muted, size).into()
     }
 }
 
@@ -127,9 +127,9 @@ fn view_track_row<'a>(
 
     let leading = if is_current {
         let icon_name = if player.is_playing {
-            "pause.svg"
+            icons::PAUSE_ICON
         } else {
-            "play.svg"
+            icons::PLAY_ICON
         };
         Button::new(icons::icon(icon_name, Color::BLACK, theme::ICON_SIZE_LG))
             .padding(theme::SPACING_XS2)
@@ -137,7 +137,7 @@ fn view_track_row<'a>(
             .on_press(Message::TogglePlayPause)
             .into()
     } else if is_hovered {
-        Button::new(icons::icon("play.svg", Color::BLACK, theme::ICON_SIZE_LG))
+        Button::new(icons::icon(icons::PLAY_ICON, Color::BLACK, theme::ICON_SIZE_LG))
             .padding(theme::SPACING_XS2)
             .style(button_style_primary())
             .on_press(Message::PlayTrackAtIndex { index, is_queue })

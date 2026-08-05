@@ -28,7 +28,7 @@ pub(super) fn view_context_menu<'a>(
         v.push(
             menu_item(
                 "Play",
-                "play.svg",
+                icons::PLAY_ICON,
                 p,
                 Message::ContextMenuPlayTrack(menu.track_index),
             )
@@ -40,7 +40,7 @@ pub(super) fn view_context_menu<'a>(
             v.push(
                 menu_item(
                     "Song Radio",
-                    "radio.svg",
+                    icons::RADIO_ICON,
                     p,
                     Message::ContextMenuStartSongRadio(menu.track_index),
                 )
@@ -50,7 +50,7 @@ pub(super) fn view_context_menu<'a>(
             v.push(
                 menu_item(
                     "Artist Radio",
-                    "radio.svg",
+                    icons::RADIO_ICON,
                     p,
                     Message::ContextMenuStartArtistRadio(menu.track_index),
                 )
@@ -62,7 +62,7 @@ pub(super) fn view_context_menu<'a>(
         v.push(
             menu_item(
                 "Add to Playlist",
-                "folder.svg",
+                icons::FOLDER_ICON,
                 p,
                 Message::TogglePicker(menu.track_index),
             )
@@ -79,7 +79,7 @@ pub(super) fn view_context_menu<'a>(
             v.push(
                 menu_item(
                     label,
-                    "download.svg",
+                    icons::DOWNLOAD_ICON,
                     p,
                     Message::ContextMenuDownloadOrDelete(menu.track_index),
                 )
@@ -92,7 +92,7 @@ pub(super) fn view_context_menu<'a>(
             v.push(
                 menu_item(
                     "Remove from Queue",
-                    "delete.svg",
+                    icons::DELETE_ICON,
                     p,
                     Message::ContextMenuRemoveFromQueue(menu.track_index),
                 )
@@ -103,7 +103,7 @@ pub(super) fn view_context_menu<'a>(
             v.push(
                 menu_item(
                     "Remove from Playlist",
-                    "delete.svg",
+                    icons::DELETE_ICON,
                     p,
                     Message::ContextMenuRemoveFromPlaylist(menu.track_index),
                 )
@@ -148,7 +148,7 @@ pub(super) fn view_context_menu<'a>(
 
 fn menu_item<'a>(
     label: &'a str,
-    icon: &'a str,
+    icon: &'static [u8],
     p: &'a Palette,
     on_press: Message,
 ) -> Container<'a, Message, AppTheme> {

@@ -37,7 +37,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
     Container::new(
         Row::with_children(vec![
             input,
-            Button::new(icons::icon("search.svg", Color::BLACK, theme::ICON_SIZE_MD))
+            Button::new(icons::icon(icons::SEARCH_ICON, Color::BLACK, theme::ICON_SIZE_MD))
                 .padding(theme::SPACING_SM)
                 .style(button_style_primary())
                 .width(Length::Fixed(theme::SEARCH_BTN_SIZE))
@@ -156,7 +156,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                 Row::with_children(vec![
                     Button::new(
                         Row::with_children(vec![
-                            icons::icon("search.svg", p.fg_muted, theme::ICON_SIZE_SM).into(),
+                            icons::icon(icons::SEARCH_ICON, p.fg_muted, theme::ICON_SIZE_SM).into(),
                             text(q).size(theme::TEXT_SIZE_SM).into(),
                         ])
                         .spacing(theme::SPACING_SM)
@@ -185,7 +185,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                     })
                     .on_press(Message::SearchHistorySelected(i))
                     .into(),
-                    Button::new(icons::icon("delete.svg", p.fg_muted, theme::ICON_SIZE_SM))
+                    Button::new(icons::icon(icons::DELETE_ICON, p.fg_muted, theme::ICON_SIZE_SM))
                         .padding(theme::SPACING_XS)
                         .style(move |t, status| {
                             let p = &t.palette;

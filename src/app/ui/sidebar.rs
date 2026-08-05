@@ -33,7 +33,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     let nav_buttons = Row::with_children(vec![
         Button::new(
             Container::new(icons::icon(
-                "back.svg",
+                icons::BACK_ICON,
                 if can_back { p.fg } else { p.fg_muted },
                 theme::ICON_SIZE_MD,
             ))
@@ -51,7 +51,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .into(),
         Button::new(
             Container::new(icons::icon(
-                "forward.svg",
+                icons::FORWARD_ICON,
                 if can_forward { p.fg } else { p.fg_muted },
                 theme::ICON_SIZE_MD,
             ))
@@ -98,7 +98,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
 
             Button::new(
                 Row::with_children(vec![
-                    icons::icon("music.svg", icon_color, theme::ICON_SIZE_SM).into(),
+                    icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_SM).into(),
                     text(&pl.name)
                         .size(theme::TEXT_SIZE_DEFAULT)
                         .color(text_color)
@@ -143,7 +143,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         )
         .width(Length::Fill)
         .into(),
-        Button::new(icons::icon("add.svg", Color::BLACK, theme::ICON_SIZE_SM))
+        Button::new(icons::icon(icons::ADD_ICON, Color::BLACK, theme::ICON_SIZE_SM))
             .padding(theme::SPACING_MD - 2f32)
             .style(button_style_primary())
             .on_press(Message::CreatePlaylist)
@@ -200,11 +200,11 @@ fn sidebar_nav_item<'a>(
     let icon_color = if is_active { p.accent } else { p.fg_muted };
     let text_color = if is_active { p.fg } else { p.fg_secondary };
     let bg_hover = p.bg_hover;
-    let icon_name: &'a str = match &view {
-        View::Search => "search.svg",
-        View::SongRadio | View::ArtistRadio => "radio.svg",
-        View::Playlist => "music.svg",
-        View::Downloads => "download.svg",
+    let icon_name: &'static [u8] = match &view {
+        View::Search => icons::SEARCH_ICON,
+        View::SongRadio | View::ArtistRadio => icons::RADIO_ICON,
+        View::Playlist => icons::MUSIC_ICON,
+        View::Downloads => icons::DOWNLOAD_ICON,
     };
 
     Button::new(

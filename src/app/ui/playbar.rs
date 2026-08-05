@@ -21,15 +21,15 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     let artist = track.map_or("", |t| t.artist.as_str());
 
     let play_pause_icon = if player.is_playing {
-        "pause.svg"
+        icons::PAUSE_ICON
     } else {
-        "play.svg"
+        icons::PLAY_ICON
     };
 
     let track_thumb: Element<'a, Message, AppTheme> = if let Some(t) = track {
         thumbnail(t, p, theme::PLAYBAR_THUMBNAIL_SIZE)
     } else {
-        icons::icon("music.svg", p.fg_muted, theme::PLAYBAR_THUMBNAIL_SIZE).into()
+        icons::icon(icons::MUSIC_ICON, p.fg_muted, theme::PLAYBAR_THUMBNAIL_SIZE).into()
     };
 
     let track_info = Column::with_children(vec![
@@ -55,7 +55,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
 
     let controls = Container::new(
         Row::with_children(vec![
-            Button::new(icons::icon("skip-back.svg", p.fg, theme::ICON_SIZE_MD))
+            Button::new(icons::icon(icons::SKIP_BACK_ICON, p.fg, theme::ICON_SIZE_MD))
                 .padding(theme::SPACING_XS2)
                 .on_press(Message::PreviousTrack)
                 .into(),
@@ -68,7 +68,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
             .style(button_style_primary())
             .on_press(Message::TogglePlayPause)
             .into(),
-            Button::new(icons::icon("skip-forward.svg", p.fg, theme::ICON_SIZE_MD))
+            Button::new(icons::icon(icons::SKIP_FORWARD_ICON, p.fg, theme::ICON_SIZE_MD))
                 .padding(theme::SPACING_XS2)
                 .on_press(Message::NextTrack)
                 .into(),
@@ -90,7 +90,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         .step(0.01f32);
 
     let queue_btn = Button::new(icons::icon(
-        "queue.svg",
+        icons::QUEUE_ICON,
         if player.show_queue {
             Color::BLACK
         } else {
@@ -118,7 +118,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
                 .width(Length::Fill)
                 .into(),
             Container::new(total_text).into(),
-            icons::icon("volume.svg", p.fg_secondary, theme::ICON_SIZE_SM).into(),
+            icons::icon(icons::VOLUME_ICON, p.fg_secondary, theme::ICON_SIZE_SM).into(),
             volume_slider.into(),
             queue_btn.into(),
         ])
