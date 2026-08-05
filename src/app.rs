@@ -120,7 +120,6 @@ pub enum Message {
         index: usize,
         is_queue: bool,
     },
-    GlobalSearchSubmit,
     PlayTrackAtIndex {
         index: usize,
         is_queue: bool,
@@ -506,10 +505,6 @@ impl MusicPlayer {
                     self.drag.hovered_track = None;
                 }
                 self.show_context_menu(index, is_queue);
-                Task::none()
-            }
-            Message::GlobalSearchSubmit => {
-                self.handle_global_search();
                 Task::none()
             }
             Message::PlayTrackAtIndex { index, is_queue } => {

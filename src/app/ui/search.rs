@@ -8,26 +8,14 @@ use crate::{icons, theme::AppTheme};
 
 use super::{
     styles::{bg_secondary, button_style_primary},
-    theme, view_track_list, Message, MusicPlayer, View,
+    theme, view_track_list, Message, MusicPlayer,
 };
 
 pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let is_search_view = matches!(
-        player.current_view,
-        View::Search | View::SongRadio | View::ArtistRadio
-    );
-    let submit_msg = || {
-        if is_search_view {
-            Message::SearchExecute
-        } else {
-            Message::GlobalSearchSubmit
-        }
-    };
-
     let input = Container::new(
         text_input("Search YouTube Music...", &player.search_query)
             .on_input(Message::SearchInputChanged)
-            .on_submit(submit_msg())
+            .on_submit(Message::SearchExecute)
             .padding([theme::SPACING_SM, theme::SPACING_MD])
             .size(theme::TEXT_SIZE_MD),
     )
@@ -46,7 +34,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
             .style(button_style_primary())
             .width(Length::Fixed(theme::SEARCH_BTN_SIZE))
             .height(Length::Fixed(theme::SEARCH_BTN_SIZE))
-            .on_press(submit_msg())
+            .on_press(Message::SearchExecute)
             .into(),
         ])
         .spacing(theme::SPACING_SM)

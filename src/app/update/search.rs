@@ -41,14 +41,6 @@ impl MusicPlayer {
         });
     }
 
-    pub fn handle_global_search(&mut self) {
-        if self.search_query.trim().is_empty() {
-            return;
-        }
-        self.show_search_history = false;
-        self.handle_search_execute();
-    }
-
     pub fn handle_search_load_more(&mut self) {
         // search_exhausted is set true when a page returned fewer than a full
         // SEARCH_PAGE_SIZE, so there is nothing left to fetch.
