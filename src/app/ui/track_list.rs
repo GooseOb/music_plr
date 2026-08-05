@@ -23,8 +23,8 @@ pub fn thumbnail<'a>(
     let thumb_path = crate::thumbnails::thumbnail_path(&track.id);
     if thumb_path.exists() {
         image(image::Handle::from_path(thumb_path))
-            .width(Length::Fixed(size))
-            .height(Length::Fixed(size))
+            .width(size)
+            .height(size)
             .border_radius(size / 4.0)
             .content_fit(iced::ContentFit::Cover)
             .into()
@@ -145,7 +145,7 @@ fn view_track_row<'a>(
         text((index + 1).to_string())
             .size(theme::TEXT_SIZE_SM)
             .color(p.fg_secondary)
-            .width(Length::Fixed(theme::TRACK_LEADING_WIDTH))
+            .width(theme::TRACK_LEADING_WIDTH)
             .center()
             .into()
     };
@@ -204,17 +204,17 @@ pub(super) fn row_layout<'a>(
 ) -> Row<'a, Message, AppTheme> {
     Row::with_children(vec![
         Container::new(leading)
-            .width(Length::Fixed(theme::TRACK_LEADING_WIDTH))
+            .width(theme::TRACK_LEADING_WIDTH)
             .into(),
         Container::new(thumb)
-            .width(Length::Fixed(theme::THUMBNAIL_SIZE))
-            .height(Length::Fixed(theme::THUMBNAIL_SIZE))
+            .width(theme::THUMBNAIL_SIZE)
+            .height(theme::THUMBNAIL_SIZE)
             .into(),
         Container::new(title_artist).width(Length::Fill).into(),
         text(duration_text)
             .size(theme::TEXT_SIZE_SM)
             .color(p.fg_secondary)
-            .width(Length::Fixed(theme::DURATION_WIDTH))
+            .width(theme::DURATION_WIDTH)
             .into(),
     ])
     .spacing(theme::SPACING_SM)
@@ -232,7 +232,7 @@ pub(super) fn track_row<'a>(
     let accent = focus_border;
     Container::new(content)
         .width(Length::Fill)
-        .height(Length::Fixed(theme::ROW_HEIGHT))
+        .height(theme::ROW_HEIGHT)
         .style(move |_: &AppTheme| {
             let mut s = container::Style {
                 background: Some(bg.into()),

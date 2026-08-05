@@ -32,8 +32,8 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
             ))
             .padding(theme::SPACING_SM)
             .style(button_style_primary())
-            .width(Length::Fixed(theme::SEARCH_BTN_SIZE))
-            .height(Length::Fixed(theme::SEARCH_BTN_SIZE))
+            .width(theme::SEARCH_BTN_SIZE)
+            .height(theme::SEARCH_BTN_SIZE)
             .on_press(Message::SearchExecute)
             .into(),
         ])
@@ -68,7 +68,7 @@ pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme
         .on_press(Message::SearchLoadMore);
         Container::new(btn).padding(theme::SPACING_SM).into()
     } else {
-        Container::new(Row::new()).height(Length::Fixed(0.0)).into()
+        Container::new(Row::new()).height(0.0).into()
     };
 
     Column::with_children(vec![track_list, load_more])
@@ -133,7 +133,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                 .color(p.fg_secondary),
         )
         .width(Length::Fill)
-        .height(Length::Fixed(theme::SEARCH_HISTORY_ITEM_HEIGHT))
+        .height(theme::SEARCH_HISTORY_ITEM_HEIGHT)
         .padding([theme::SPACING_SM, theme::SPACING_XL])
         .style(bg_secondary())
         .into();
@@ -196,8 +196,8 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                         }
                     })
                     .on_press(Message::DeleteSearchHistory(i))
-                    .width(Length::Fixed(theme::DELETE_BTN_SIZE))
-                    .height(Length::Fixed(theme::DELETE_BTN_SIZE))
+                    .width(theme::DELETE_BTN_SIZE)
+                    .height(theme::DELETE_BTN_SIZE)
                     .into(),
                 ])
                 .align_y(alignment::Vertical::Center),
@@ -215,11 +215,11 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
     let content = scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
         .id(iced::widget::Id::new("search_history_list"))
         .width(Length::Fill)
-        .height(Length::Fixed(dropdown_height));
+        .height(dropdown_height);
 
     Container::new(content)
         .width(Length::Fill)
-        .height(Length::Fixed(dropdown_height))
+        .height(dropdown_height)
         .style(bg_secondary())
         .into()
 }

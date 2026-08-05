@@ -20,7 +20,7 @@ fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     }
     Container::new(Row::new())
         .width(Length::Fill)
-        .height(Length::Fixed(0.0))
+        .height(0.0)
         .into()
 }
 
@@ -191,7 +191,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .padding([theme::SPACING_SM, theme::SPACING_XS]);
 
     Container::new(sidebar_content)
-        .width(Length::Fixed(theme::SIDEBAR_WIDTH))
+        .width(theme::SIDEBAR_WIDTH)
         .height(Length::Fill)
         .style(bg_secondary())
         .into()
@@ -214,9 +214,8 @@ fn sidebar_nav_item<'a>(
     let bg_hover = p.bg_hover;
     let icon_name: &'static [u8] = match &view {
         View::Search => icons::SEARCH_ICON,
-        View::SongRadio | View::ArtistRadio => icons::RADIO_ICON,
-        View::Playlist => icons::MUSIC_ICON,
         View::Downloads => icons::DOWNLOAD_ICON,
+        _ => icons::MUSIC_ICON,
     };
 
     Button::new(

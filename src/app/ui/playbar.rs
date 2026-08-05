@@ -38,13 +38,13 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     let elapsed_text = text(player.elapsed_text.clone())
         .size(theme::TEXT_SIZE_XS)
         .color(p.fg_secondary)
-        .width(Length::Fixed(theme::TIME_TEXT_WIDTH))
+        .width(theme::TIME_TEXT_WIDTH)
         .center();
 
     let total_text = text(player.total_text.clone())
         .size(theme::TEXT_SIZE_XS)
         .color(p.fg_secondary)
-        .width(Length::Fixed(theme::TIME_TEXT_WIDTH))
+        .width(theme::TIME_TEXT_WIDTH)
         .center();
 
     let controls = Container::new(
@@ -83,7 +83,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         Column::with_children(vec![controls.into(), progress.into()]).spacing(theme::SPACING_XS);
 
     let volume_slider = slider(0.0..=1.0, player.volume, Message::SetVolume)
-        .width(Length::Fixed(theme::VOLUME_SLIDER_WIDTH))
+        .width(theme::VOLUME_SLIDER_WIDTH)
         .step(0.01f32);
 
     let queue_btn = Button::new(icons::icon(
@@ -98,17 +98,17 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     .padding(theme::SPACING_XS)
     .style(button_style_queue(player.show_queue))
     .on_press(Message::ToggleQueue)
-    .width(Length::Fixed(theme::QUEUE_BTN_WIDTH))
-    .height(Length::Fixed(theme::QUEUE_BTN_WIDTH));
+    .width(theme::QUEUE_BTN_WIDTH)
+    .height(theme::QUEUE_BTN_WIDTH);
 
     Container::new(
         Row::with_children(vec![
             Container::new(track_thumb)
-                .width(Length::Fixed(theme::PLAYBAR_THUMBNAIL_SIZE))
-                .height(Length::Fixed(theme::PLAYBAR_THUMBNAIL_SIZE))
+                .width(theme::PLAYBAR_THUMBNAIL_SIZE)
+                .height(theme::PLAYBAR_THUMBNAIL_SIZE)
                 .into(),
             Container::new(track_info)
-                .width(Length::Fixed(theme::PLAYBAR_TRACK_INFO_WIDTH))
+                .width(theme::PLAYBAR_TRACK_INFO_WIDTH)
                 .into(),
             Container::new(elapsed_text).into(),
             Container::new(controls_and_progress)

@@ -38,7 +38,7 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
             .width(Length::Fill)
             .height(Length::Fill),
     )
-    .width(Length::Fixed(queue_width))
+    .width(queue_width)
     .height(Length::Fill)
     .style(bg_secondary())
     .into()
@@ -171,7 +171,7 @@ fn view_now_playing_row<'a>(
 
     let inner = row_layout(
         Container::new(Row::new())
-            .width(Length::Fixed(theme::TRACK_LEADING_WIDTH))
+            .width(theme::TRACK_LEADING_WIDTH)
             .into(),
         thumbnail(track, p, theme::THUMBNAIL_SIZE),
         title_artist_column(track, p),
@@ -181,7 +181,7 @@ fn view_now_playing_row<'a>(
 
     Container::new(inner)
         .width(Length::Fill)
-        .height(Length::Fixed(theme::ROW_HEIGHT))
+        .height(theme::ROW_HEIGHT)
         .into()
 }
 
@@ -229,7 +229,7 @@ fn view_recently_played_row<'a>(
         text((index + 1).to_string())
             .size(theme::TEXT_SIZE_SM)
             .color(p.fg_secondary)
-            .width(Length::Fixed(theme::TRACK_LEADING_WIDTH))
+            .width(theme::TRACK_LEADING_WIDTH)
             .center()
             .into()
     };

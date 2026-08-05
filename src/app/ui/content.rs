@@ -32,17 +32,14 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
 
     if player.show_search_history {
         let (input_x, input_width) = player.search_input_geometry();
-        let dropdown =
-            Container::new(search::view_search_history(player)).width(Length::Fixed(input_width));
+        let dropdown = Container::new(search::view_search_history(player)).width(input_width);
 
         let positioned = Column::with_children(vec![
             Container::new(Row::new())
-                .height(Length::Fixed(theme::SEARCH_BAR_HEIGHT))
+                .height(theme::SEARCH_BAR_HEIGHT)
                 .into(),
             Row::with_children(vec![
-                Container::new(Row::new())
-                    .width(Length::Fixed(input_x))
-                    .into(),
+                Container::new(Row::new()).width(input_x).into(),
                 dropdown.into(),
             ])
             .spacing(0)

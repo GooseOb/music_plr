@@ -120,21 +120,17 @@ pub(super) fn view_context_menu<'a>(
             .spacing(2)
             .padding(theme::SPACING_SM),
     )
-    .width(Length::Fixed(theme::CONTEXT_MENU_WIDTH))
+    .width(theme::CONTEXT_MENU_WIDTH)
     .style(bg_popup());
 
     let row = Row::with_children(vec![
-        Container::new(Row::new())
-            .width(Length::Fixed(pos_x))
-            .into(),
+        Container::new(Row::new()).width(pos_x).into(),
         menu_content.into(),
     ])
     .spacing(0);
 
     let col = Column::with_children(vec![
-        Container::new(Column::new())
-            .height(Length::Fixed(pos_y))
-            .into(),
+        Container::new(Column::new()).height(pos_y).into(),
         row.into(),
     ])
     .spacing(0);

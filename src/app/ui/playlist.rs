@@ -38,7 +38,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
                     .align_y(alignment::Vertical::Center),
                 )
                 .padding(theme::SPACING_SM)
-                .height(Length::Fixed(theme::BUTTON_HEIGHT))
+                .height(theme::BUTTON_HEIGHT)
                 .on_press(Message::AddLocalMusic)
                 .into(),
                 Button::new(icons::icon(icons::DELETE_ICON, p.fg, theme::ICON_SIZE_SM))

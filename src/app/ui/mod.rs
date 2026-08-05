@@ -30,7 +30,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let queue = if player.show_queue {
         queue::view_queue_panel(player)
     } else {
-        Container::new(Row::new()).width(Length::Fixed(0.0)).into()
+        Container::new(Row::new()).width(0.0).into()
     };
 
     let body = Row::with_children(vec![sidebar, main_content, queue])
