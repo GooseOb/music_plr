@@ -13,15 +13,10 @@ use super::{
 
 fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     if let Some(msg) = &player.notification {
-        return Container::new(
-            text(msg)
-                .size(theme::TEXT_SIZE_DEFAULT)
-                .color(player.palette.fg)
-                .center(),
-        )
-        .width(Length::Fill)
-        .padding([theme::SPACING_XS, theme::SPACING_XL])
-        .into();
+        return Container::new(text(msg).size(theme::TEXT_SIZE_DEFAULT).center())
+            .width(Length::Fill)
+            .padding([theme::SPACING_XS, theme::SPACING_XL])
+            .into();
     }
     Container::new(Row::new())
         .width(Length::Fill)

@@ -11,12 +11,13 @@ use crate::{
 };
 
 use super::{
-    styles::{bg_secondary, button_style_primary, thumbnail},
+    styles::{bg_secondary, button_style_primary},
     Message, MusicPlayer,
 };
 
 use super::track_list::{
-    empty_state, row_layout, scrollable_list, section_header, title_artist_column, track_row,
+    empty_state, row_layout, scrollable_list, section_header, thumbnail, title_artist_column,
+    track_row,
 };
 
 pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {

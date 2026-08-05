@@ -156,10 +156,7 @@ fn menu_item<'a>(
         Button::new(
             Row::with_children(vec![
                 icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
-                text(label)
-                    .size(theme::TEXT_SIZE_DEFAULT)
-                    .color(p.fg)
-                    .into(),
+                text(label).size(theme::TEXT_SIZE_DEFAULT).into(),
             ])
             .spacing(theme::SPACING_SM)
             .padding([theme::SPACING_XS, theme::SPACING_SM])
@@ -202,22 +199,18 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
                 p.bg_secondary
             };
             let bg_hover = p.bg_hover;
-            let is_focused_copy = is_focused;
 
             Button::new(
-                Row::with_children(vec![text(&pl.name)
-                    .size(theme::TEXT_SIZE_DEFAULT)
-                    .color(p.fg)
-                    .into()])
-                .spacing(theme::SPACING_SM)
-                .padding([theme::SPACING_SM, theme::SPACING_MD])
-                .align_y(alignment::Vertical::Center)
-                .width(Length::Fill),
+                Row::with_children(vec![text(&pl.name).size(theme::TEXT_SIZE_DEFAULT).into()])
+                    .spacing(theme::SPACING_SM)
+                    .padding([theme::SPACING_SM, theme::SPACING_MD])
+                    .align_y(alignment::Vertical::Center)
+                    .width(Length::Fill),
             )
             .width(Length::Fill)
             .padding(0)
             .style(move |_, status| {
-                let bg = if is_focused_copy {
+                let bg = if is_focused {
                     bg_color
                 } else {
                     match status {
@@ -246,10 +239,7 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
     view_dialog(
         Container::new(
             Column::with_children(vec![
-                text("Add to Playlist")
-                    .size(theme::TEXT_SIZE_LG)
-                    .color(p.fg)
-                    .into(),
+                text("Add to Playlist").size(theme::TEXT_SIZE_LG).into(),
                 Column::with_children(items)
                     .spacing(theme::SPACING_XS)
                     .width(Length::Fill)
@@ -305,10 +295,7 @@ pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message, 
     view_dialog(
         Container::new(
             Column::with_children(vec![
-                text("Delete playlist?")
-                    .size(theme::TEXT_SIZE_LG)
-                    .color(p.fg)
-                    .into(),
+                text("Delete playlist?").size(theme::TEXT_SIZE_LG).into(),
                 text("Tracks will not be deleted.")
                     .size(theme::TEXT_SIZE_DEFAULT)
                     .color(p.fg_secondary)

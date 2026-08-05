@@ -184,7 +184,6 @@ pub(super) fn title_artist_column<'a>(
     Column::with_children(vec![
         text(track.title.clone())
             .size(theme::TEXT_SIZE_DEFAULT)
-            .color(p.fg)
             .width(Length::Fill)
             .into(),
         text(track.artist.clone())

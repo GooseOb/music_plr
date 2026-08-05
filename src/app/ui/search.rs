@@ -109,12 +109,9 @@ fn view_search_results<'a>(
 }
 
 pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let p = &player.palette;
-
     let header = Container::new(
         text(player.radio_label.clone())
             .size(theme::TEXT_SIZE_DEFAULT)
-            .color(p.fg)
             .width(Length::Fill)
             .center(),
     )

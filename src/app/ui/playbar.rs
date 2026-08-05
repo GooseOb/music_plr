@@ -7,8 +7,10 @@ use iced::{
 use crate::{icons, theme::AppTheme};
 
 use super::{
-    styles::{bg_tertiary, button_style_primary, button_style_queue, thumbnail},
-    theme, Message, MusicPlayer,
+    styles::{bg_tertiary, button_style_primary, button_style_queue},
+    theme,
+    track_list::thumbnail,
+    Message, MusicPlayer,
 };
 
 pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
@@ -31,10 +33,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     };
 
     let track_info = Column::with_children(vec![
-        text(title)
-            .size(theme::TEXT_SIZE_DEFAULT)
-            .color(p.fg)
-            .into(),
+        text(title).size(theme::TEXT_SIZE_DEFAULT).into(),
         text(artist)
             .size(theme::TEXT_SIZE_SM)
             .color(p.fg_secondary)

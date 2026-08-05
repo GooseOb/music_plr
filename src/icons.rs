@@ -69,14 +69,9 @@ fn cached_handle(name: &str) -> &'static svg::Handle {
         .expect("music.svg missing from icon cache")
 }
 
-#[allow(dead_code)]
-pub fn handle(name: &str) -> svg::Handle {
-    cached_handle(name).clone()
-}
-
 pub fn icon(name: &str, color: Color, size: f32) -> svg::Svg<'static, AppTheme> {
     svg::Svg::new(cached_handle(name).clone())
-        .width(Length::Fixed(size))
-        .height(Length::Fixed(size))
+        .width(size)
+        .height(size)
         .style(move |_, _| svg::Style { color: Some(color) })
 }

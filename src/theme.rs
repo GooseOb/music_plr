@@ -75,7 +75,6 @@ pub const RADIUS_MD: f32 = 12.0;
 // pub const RADIUS_LG: f32 = 16.0;
 pub const SEARCH_BTN_SIZE: f32 = 35.0;
 pub const SEARCH_BAR_HEIGHT: f32 = 66.0;
-pub const NOTIFICATION_HEIGHT: f32 = 28.0;
 pub const SEARCH_HISTORY_ITEM_HEIGHT: f32 = 32.0;
 pub const SEARCH_DROPDOWN_MAX_HEIGHT: f32 = 240.0;
 
