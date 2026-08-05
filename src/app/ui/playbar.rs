@@ -4,10 +4,12 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::app::ui::button_style_queue;
-use crate::theme::AppTheme;
+use crate::{icons, theme::AppTheme};
 
-use super::{bg, button_style_primary, icons, theme, thumbnail, Message, MusicPlayer};
+use super::{
+    styles::{bg_tertiary, button_style_primary, button_style_queue, thumbnail},
+    theme, Message, MusicPlayer,
+};
 
 pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.palette;
@@ -126,6 +128,6 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         .padding([theme::SPACING_LG, theme::SPACING_XL]),
     )
     .width(Length::Fill)
-    .style(bg(p.bg_tertiary))
+    .style(bg_tertiary())
     .into()
 }

@@ -1,14 +1,33 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, text_input, Button, Column, Container, Row},
+    widget::{button, scrollable, text, text_input, Button, Column, Container, Row},
     Color, Element, Length,
 };
 
-use crate::theme::AppTheme;
+use crate::{icons, theme::AppTheme};
 
-use crate::app::ui::{button_style_primary, view_notification};
+use super::{
+    styles::{bg_secondary, button_style_nav, button_style_primary},
+    theme, widget, Message, MusicPlayer, View,
+};
 
-use super::{bg, button, button_style_nav, icons, theme, widget, Message, MusicPlayer, View};
+fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    if let Some(msg) = &player.notification {
+        return Container::new(
+            text(msg)
+                .size(theme::TEXT_SIZE_DEFAULT)
+                .color(player.palette.fg)
+                .center(),
+        )
+        .width(Length::Fill)
+        .padding([theme::SPACING_XS, theme::SPACING_XL])
+        .into();
+    }
+    Container::new(Row::new())
+        .width(Length::Fill)
+        .height(Length::Fixed(0.0))
+        .into()
+}
 
 pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.palette;
@@ -167,7 +186,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     Container::new(sidebar_content)
         .width(Length::Fixed(theme::SIDEBAR_WIDTH))
         .height(Length::Fill)
-        .style(bg(p.bg_secondary))
+        .style(bg_secondary())
         .into()
 }
 

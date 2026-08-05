@@ -4,9 +4,9 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::theme::AppTheme;
+use crate::{icons, theme::AppTheme};
 
-use super::{button_style_danger, icons, theme, view_track_list, Message, MusicPlayer};
+use super::{styles::button_style_danger, theme, view_track_list, Message, MusicPlayer};
 
 pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.palette;

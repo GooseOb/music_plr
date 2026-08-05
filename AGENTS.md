@@ -52,8 +52,9 @@ src/
 ├── app.rs           # MusicPlayer: all app state + Message enum + update()
 ├── app/
 │   ├── ui/          # Pure functional view — reads directly from &MusicPlayer
-│   │   ├── mod.rs      # root layout: bg(), button_style(), view()
-│   │   ├── content.rs  # search bar, search/radio/playlist/download views
+│   ├── mod.rs      # root layout: view() + re-exports
+│   ├── styles.rs   # style helpers: bg_*(), button_style_*(), etc.
+│   ├── content.rs  # search bar, search/radio/playlist/download views
 │   │   ├── overlays.rs # context menu, playlist picker, delete confirm
 │   │   ├── playbar.rs  # bottom playbar (track info, slider, controls, volume)
 │   │   ├── queue.rs    # queue panel (tabs, now-playing, up-next, recently played)
@@ -141,9 +142,10 @@ src/
 
 ## iced API Notes
 
-- `bg(color)` → `impl Fn(&iced::Theme) -> container::Style` (defined in `ui/mod.rs`)
-- `button_style()` / `slider_style()` / `button_style_accent()` / `button_style_green()`
-  defined in `ui/mod.rs`
+- `bg_*()` → `impl Fn(&AppTheme) -> container::Style` (defined in `ui/styles.rs`)
+- `button_style_primary()` / `button_style_queue()` / `button_style_nav()` /
+  `button_style_danger()` defined in `ui/styles.rs`
+- `slider_style()` is provided by the `AppTheme` `slider::Catalog` impl in `theme.rs`
 - `iced::alignment::Vertical::Top` (not `::Start`)
 - `iced::widget::rule::horizontal(height)` for dividers
 - Icons: match-based `include_str!` with `OnceLock` cache for `svg::Handle`s;

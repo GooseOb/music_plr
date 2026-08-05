@@ -4,24 +4,27 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::theme::AppTheme;
-use crate::theme::Palette;
+use crate::{
+    icons,
+    theme::{self, AppTheme, Palette},
+    types::QueueTab,
+};
 
-use super::{bg, button_style_primary, icons, thumbnail, Message, MusicPlayer};
-use crate::theme;
-use crate::types::QueueTab;
+use super::{
+    styles::{bg_secondary, button_style_primary, thumbnail},
+    Message, MusicPlayer,
+};
 
 use super::track_list::{
     empty_state, row_layout, scrollable_list, section_header, title_artist_column, track_row,
 };
 
 pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let p = &player.palette;
     let queue_width = (player.window_width * theme::QUEUE_WIDTH_RATIO).max(theme::QUEUE_MIN_WIDTH);
 
     let tab_bar = Container::new(view_queue_tabs(player))
         .width(Length::Fill)
-        .style(bg(p.bg_secondary));
+        .style(bg_secondary());
 
     let body: Element<'_, Message, AppTheme> = match player.queue.queue_tab {
         QueueTab::Queue => view_queue_tab(player),
@@ -36,7 +39,7 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
     )
     .width(Length::Fixed(queue_width))
     .height(Length::Fill)
-    .style(bg(p.bg_secondary))
+    .style(bg_secondary())
     .into()
 }
 

@@ -18,14 +18,9 @@ impl MusicPlayer {
 
     pub fn search_input_bounds(&self) -> iced::Rectangle {
         let (input_x, input_width) = self.search_input_geometry();
-        let notification_y = if self.notification.is_some() {
-            crate::theme::NOTIFICATION_HEIGHT
-        } else {
-            0.0
-        };
         iced::Rectangle {
             x: crate::theme::SIDEBAR_WIDTH + input_x,
-            y: notification_y,
+            y: 0.0,
             width: input_width,
             height: crate::theme::SEARCH_BAR_HEIGHT,
         }

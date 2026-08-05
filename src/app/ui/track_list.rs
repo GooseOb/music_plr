@@ -1,16 +1,45 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, Button, Column, Container, MouseArea, Row},
+    widget::{
+        container, image, rule, scrollable, text, Button, Column, Container, MouseArea, Row, Rule,
+    },
     Color, Element, Length,
 };
 
-use crate::theme::AppTheme;
-use crate::theme::Palette;
-
-use super::{
-    button_style_primary, container, drop_indicator, icons, theme, thumbnail, DragTargetList,
-    Message, MusicPlayer,
+use crate::{
+    icons,
+    theme::{AppTheme, Palette},
+    types::Track,
 };
+
+use super::{styles::button_style_primary, theme, DragTargetList, Message, MusicPlayer};
+
+pub fn thumbnail<'a>(
+    track: &'a Track,
+    p: &'a Palette,
+    size: f32,
+) -> Element<'a, Message, AppTheme> {
+    let thumb_path = crate::thumbnails::thumbnail_path(&track.id);
+    if thumb_path.exists() {
+        image(image::Handle::from_path(thumb_path))
+            .width(Length::Fixed(size))
+            .height(Length::Fixed(size))
+            .border_radius(size / 4.0)
+            .content_fit(iced::ContentFit::Cover)
+            .into()
+    } else {
+        icons::icon("music.svg", p.fg_muted, size).into()
+    }
+}
+
+fn drop_indicator() -> Rule<'static, AppTheme> {
+    rule::horizontal(theme::DROP_LINE_HEIGHT).style(|theme: &AppTheme| rule::Style {
+        color: theme.palette.accent,
+        radius: iced::border::Radius::new(0),
+        fill_mode: rule::FillMode::Full,
+        snap: true,
+    })
+}
 
 pub(super) fn view_track_list<'a>(
     tracks: &'a [crate::types::Track],
@@ -36,7 +65,7 @@ pub(super) fn view_track_list<'a>(
         if player.drag.drag_active && target_matches {
             if let Some(drop_idx) = player.drag.drag_drop_target {
                 if adjusted == drop_idx {
-                    items.push(drop_indicator(player.palette.accent).into());
+                    items.push(drop_indicator().into());
                 }
             }
         }
@@ -46,7 +75,7 @@ pub(super) fn view_track_list<'a>(
     if player.drag.drag_active && target_matches {
         if let Some(drop_idx) = player.drag.drag_drop_target {
             if drop_idx == tracks.len() + index_offset {
-                items.push(drop_indicator(player.palette.accent).into());
+                items.push(drop_indicator().into());
             }
         }
     }

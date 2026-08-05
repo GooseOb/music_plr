@@ -4,28 +4,16 @@ use iced::{
     Element, Length,
 };
 
-use crate::theme::AppTheme;
-use crate::theme::Palette;
-
-use super::{
-    bg, button, button_style_danger, container, icons, theme, ContextMenuState, Message,
-    MusicPlayer,
+use crate::{
+    icons,
+    theme::{AppTheme, Palette},
 };
 
-fn transparent_bg() -> impl Fn(&AppTheme) -> container::Style + 'static {
-    |_| container::Style {
-        background: None,
-        ..Default::default()
-    }
-}
-
-fn popup_bg() -> impl Fn(&AppTheme) -> container::Style + 'static {
-    move |theme| container::Style {
-        background: Some(theme.palette.bg_secondary.into()),
-        border: iced::border::rounded(theme::RADIUS_MD),
-        ..Default::default()
-    }
-}
+use super::{
+    button,
+    styles::{bg_overlay, bg_popup, bg_secondary, bg_transparent, button_style_danger},
+    theme, ContextMenuState, Message, MusicPlayer,
+};
 
 pub(super) fn view_context_menu<'a>(
     menu: &'a ContextMenuState,
@@ -133,7 +121,7 @@ pub(super) fn view_context_menu<'a>(
             .padding(theme::SPACING_SM),
     )
     .width(Length::Fixed(theme::CONTEXT_MENU_WIDTH))
-    .style(popup_bg());
+    .style(bg_popup());
 
     let row = Row::with_children(vec![
         Container::new(Row::new())
@@ -154,7 +142,7 @@ pub(super) fn view_context_menu<'a>(
     Container::new(MouseArea::new(col).on_press(Message::CloseContextMenu))
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(transparent_bg())
+        .style(bg_transparent())
         .into()
 }
 
@@ -195,7 +183,7 @@ fn menu_item<'a>(
         .on_press(on_press),
     )
     .width(Length::Fill)
-    .style(bg(p.bg_secondary))
+    .style(bg_secondary())
 }
 
 pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
@@ -273,17 +261,15 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
             .width(theme::DIALOG_WIDTH)
             .padding(theme::SPACING_MD),
         ),
-        p,
         Message::ClosePicker,
     )
 }
 
 fn view_dialog<'a>(
     dialog: Container<'a, Message, AppTheme>,
-    p: &Palette,
     close_msg: Message,
 ) -> Element<'a, Message, AppTheme> {
-    let dialog = Container::new(dialog).style(popup_bg());
+    let dialog = Container::new(dialog).style(bg_popup());
 
     Container::new(
         MouseArea::new(
@@ -296,7 +282,7 @@ fn view_dialog<'a>(
     )
     .width(Length::Fill)
     .height(Length::Fill)
-    .style(bg(p.overlay))
+    .style(bg_overlay())
     .into()
 }
 
@@ -337,7 +323,6 @@ pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message, 
             .spacing(theme::SPACING_LG)
             .padding(theme::SPACING_XL),
         ),
-        p,
         Message::HideDeleteConfirm,
     )
 }

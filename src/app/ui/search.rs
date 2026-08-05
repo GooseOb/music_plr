@@ -4,9 +4,12 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::theme::AppTheme;
+use crate::{icons, theme::AppTheme};
 
-use super::{bg, button_style_primary, icons, theme, view_track_list, Message, MusicPlayer, View};
+use super::{
+    styles::{bg_secondary, button_style_primary},
+    theme, view_track_list, Message, MusicPlayer, View,
+};
 
 pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let is_search_view = matches!(
@@ -47,7 +50,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
         .padding([theme::SPACING_LG, theme::SPACING_XL]),
     )
     .width(Length::Fill)
-    .style(bg(player.palette.bg_secondary))
+    .style(bg_secondary())
     .into()
 }
 
@@ -143,7 +146,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
         .width(Length::Fill)
         .height(Length::Fixed(theme::SEARCH_HISTORY_ITEM_HEIGHT))
         .padding([theme::SPACING_SM, theme::SPACING_XL])
-        .style(bg(p.bg_secondary))
+        .style(bg_secondary())
         .into();
     }
 
@@ -207,7 +210,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                 .align_y(alignment::Vertical::Center),
             )
             .width(Length::Fill)
-            .style(bg(p.bg_secondary))
+            .style(bg_secondary())
             .into()
         })
         .collect();
@@ -224,6 +227,6 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
     Container::new(content)
         .width(Length::Fill)
         .height(Length::Fixed(dropdown_height))
-        .style(bg(p.bg_secondary))
+        .style(bg_secondary())
         .into()
 }

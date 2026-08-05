@@ -1,5 +1,4 @@
-use iced::widget::container;
-use iced::{theme, Color, Theme};
+use iced::{theme, widget, Color, Theme};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Palette {
@@ -191,83 +190,75 @@ impl From<Palette> for iced::theme::Palette {
 
 // Implement widget Catalog traits for AppTheme.
 
-impl iced::widget::container::Catalog for AppTheme {
-    type Class<'a> = iced::widget::container::StyleFn<'a, AppTheme>;
+impl widget::container::Catalog for AppTheme {
+    type Class<'a> = widget::container::StyleFn<'a, AppTheme>;
 
     fn default<'a>() -> Self::Class<'a> {
-        let inner = <iced::Theme as iced::widget::container::Catalog>::default();
-        Box::new(move |theme: &AppTheme| {
-            iced::widget::container::Catalog::style(&theme.inner, &inner)
-        })
+        let inner = <iced::Theme as widget::container::Catalog>::default();
+        Box::new(move |theme: &AppTheme| widget::container::Catalog::style(&theme.inner, &inner))
     }
 
-    fn style(&self, class: &Self::Class<'_>) -> iced::widget::container::Style {
+    fn style(&self, class: &Self::Class<'_>) -> widget::container::Style {
         class(self)
     }
 }
 
-impl iced::widget::rule::Catalog for AppTheme {
-    type Class<'a> = iced::widget::rule::StyleFn<'a, AppTheme>;
+impl widget::rule::Catalog for AppTheme {
+    type Class<'a> = widget::rule::StyleFn<'a, AppTheme>;
 
     fn default<'a>() -> Self::Class<'a> {
-        Box::new(move |theme| iced::widget::rule::Style {
+        Box::new(move |theme| widget::rule::Style {
             color: theme.palette.fg_muted,
             radius: iced::border::Radius::new(0),
-            fill_mode: iced::widget::rule::FillMode::Full,
+            fill_mode: widget::rule::FillMode::Full,
             snap: true,
         })
     }
 
-    fn style(&self, class: &Self::Class<'_>) -> iced::widget::rule::Style {
+    fn style(&self, class: &Self::Class<'_>) -> widget::rule::Style {
         class(self)
     }
 }
 
-impl iced::widget::text::Catalog for AppTheme {
-    type Class<'a> = iced::widget::text::StyleFn<'a, AppTheme>;
+impl widget::text::Catalog for AppTheme {
+    type Class<'a> = widget::text::StyleFn<'a, AppTheme>;
 
     fn default<'a>() -> Self::Class<'a> {
-        let inner = <iced::Theme as iced::widget::text::Catalog>::default();
-        Box::new(move |theme: &AppTheme| iced::widget::text::Catalog::style(&theme.inner, &inner))
+        let inner = <iced::Theme as widget::text::Catalog>::default();
+        Box::new(move |theme: &AppTheme| widget::text::Catalog::style(&theme.inner, &inner))
     }
 
-    fn style(&self, class: &Self::Class<'_>) -> iced::widget::text::Style {
+    fn style(&self, class: &Self::Class<'_>) -> widget::text::Style {
         class(self)
     }
 }
 
-impl iced::widget::svg::Catalog for AppTheme {
-    type Class<'a> = iced::widget::svg::StyleFn<'a, AppTheme>;
+impl widget::svg::Catalog for AppTheme {
+    type Class<'a> = widget::svg::StyleFn<'a, AppTheme>;
 
     fn default<'a>() -> Self::Class<'a> {
-        let inner = <iced::Theme as iced::widget::svg::Catalog>::default();
+        let inner = <iced::Theme as widget::svg::Catalog>::default();
         Box::new(move |theme: &AppTheme, status| {
-            iced::widget::svg::Catalog::style(&theme.inner, &inner, status)
+            widget::svg::Catalog::style(&theme.inner, &inner, status)
         })
     }
 
-    fn style(
-        &self,
-        class: &Self::Class<'_>,
-        status: iced::widget::svg::Status,
-    ) -> iced::widget::svg::Style {
+    fn style(&self, class: &Self::Class<'_>, status: widget::svg::Status) -> widget::svg::Style {
         class(self, status)
     }
 }
 
-impl iced::widget::button::Catalog for AppTheme {
-    type Class<'a> = iced::widget::button::StyleFn<'a, AppTheme>;
+impl widget::button::Catalog for AppTheme {
+    type Class<'a> = widget::button::StyleFn<'a, AppTheme>;
 
     fn default<'a>() -> Self::Class<'a> {
         Box::new(|theme, status| {
             let p = &theme.palette;
             let bg_color = match status {
-                iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed => {
-                    p.button_hover
-                }
+                widget::button::Status::Hovered | widget::button::Status::Pressed => p.button_hover,
                 _ => p.button,
             };
-            iced::widget::button::Style {
+            widget::button::Style {
                 background: Some(bg_color.into()),
                 text_color: p.fg,
                 border: iced::border::rounded(crate::theme::RADIUS_SM),
@@ -279,42 +270,38 @@ impl iced::widget::button::Catalog for AppTheme {
     fn style(
         &self,
         class: &Self::Class<'_>,
-        status: iced::widget::button::Status,
-    ) -> iced::widget::button::Style {
+        status: widget::button::Status,
+    ) -> widget::button::Style {
         class(self, status)
     }
 }
 
-impl iced::widget::scrollable::Catalog for AppTheme {
-    type Class<'a> = iced::widget::scrollable::StyleFn<'a, AppTheme>;
+impl widget::scrollable::Catalog for AppTheme {
+    type Class<'a> = widget::scrollable::StyleFn<'a, AppTheme>;
 
     fn default<'a>() -> Self::Class<'a> {
         Box::new(|theme, status| {
             let p = &theme.palette;
-            let rail = iced::widget::scrollable::Rail {
+            let rail = widget::scrollable::Rail {
                 background: Some(p.bg_tertiary.scale_alpha(0.6).into()),
                 border: iced::border::rounded(0),
-                scroller: iced::widget::scrollable::Scroller {
+                scroller: widget::scrollable::Scroller {
                     background: match status {
-                        iced::widget::scrollable::Status::Active { .. } => {
-                            p.fg_muted.scale_alpha(0.6)
-                        }
-                        iced::widget::scrollable::Status::Hovered { .. } => {
-                            p.fg_muted.scale_alpha(0.8)
-                        }
-                        iced::widget::scrollable::Status::Dragged { .. } => p.fg_muted,
+                        widget::scrollable::Status::Active { .. } => p.fg_muted.scale_alpha(0.6),
+                        widget::scrollable::Status::Hovered { .. } => p.fg_muted.scale_alpha(0.8),
+                        widget::scrollable::Status::Dragged { .. } => p.fg_muted,
                     }
                     .into(),
                     border: iced::border::rounded(crate::theme::SPACING_SM),
                 },
             };
 
-            iced::widget::scrollable::Style {
-                container: container::Style::default(),
+            widget::scrollable::Style {
+                container: widget::container::Style::default(),
                 vertical_rail: rail,
                 horizontal_rail: rail,
                 gap: None,
-                auto_scroll: iced::widget::scrollable::AutoScroll {
+                auto_scroll: widget::scrollable::AutoScroll {
                     background: p.overlay.into(),
                     border: iced::border::rounded(u32::MAX),
                     shadow: iced::Shadow {
@@ -331,27 +318,27 @@ impl iced::widget::scrollable::Catalog for AppTheme {
     fn style(
         &self,
         class: &Self::Class<'_>,
-        status: iced::widget::scrollable::Status,
-    ) -> iced::widget::scrollable::Style {
+        status: widget::scrollable::Status,
+    ) -> widget::scrollable::Style {
         class(self, status)
     }
 }
 
-impl iced::widget::slider::Catalog for AppTheme {
-    type Class<'a> = iced::widget::slider::StyleFn<'a, AppTheme>;
+impl widget::slider::Catalog for AppTheme {
+    type Class<'a> = widget::slider::StyleFn<'a, AppTheme>;
 
     fn default<'a>() -> Self::Class<'a> {
         Box::new(|theme, _status| {
             let p = &theme.palette;
             let color = p.accent;
-            iced::widget::slider::Style {
-                rail: iced::widget::slider::Rail {
+            widget::slider::Style {
+                rail: widget::slider::Rail {
                     backgrounds: (color.into(), p.bg_secondary.into()),
                     width: 4.0,
                     border: iced::border::rounded(2.0),
                 },
-                handle: iced::widget::slider::Handle {
-                    shape: iced::widget::slider::HandleShape::Circle { radius: 7.0 },
+                handle: widget::slider::Handle {
+                    shape: widget::slider::HandleShape::Circle { radius: 7.0 },
                     background: color.into(),
                     border_color: Color::TRANSPARENT,
                     border_width: 0.0,
@@ -363,24 +350,24 @@ impl iced::widget::slider::Catalog for AppTheme {
     fn style(
         &self,
         class: &Self::Class<'_>,
-        status: iced::widget::slider::Status,
-    ) -> iced::widget::slider::Style {
+        status: widget::slider::Status,
+    ) -> widget::slider::Style {
         class(self, status)
     }
 }
 
-impl iced::widget::text_input::Catalog for AppTheme {
-    type Class<'a> = iced::widget::text_input::StyleFn<'a, AppTheme>;
+impl widget::text_input::Catalog for AppTheme {
+    type Class<'a> = widget::text_input::StyleFn<'a, AppTheme>;
 
     fn default<'a>() -> Self::Class<'a> {
         Box::new(|theme, status| {
             let p = &theme.palette;
             let border_color = match status {
-                iced::widget::text_input::Status::Hovered => p.fg_muted,
-                iced::widget::text_input::Status::Focused { .. } => p.accent,
+                widget::text_input::Status::Hovered => p.fg_muted,
+                widget::text_input::Status::Focused { .. } => p.accent,
                 _ => Color::TRANSPARENT,
             };
-            iced::widget::text_input::Style {
+            widget::text_input::Style {
                 background: p.bg_tertiary.into(),
                 border: iced::border::rounded(crate::theme::RADIUS_MD)
                     .color(border_color)
@@ -396,8 +383,8 @@ impl iced::widget::text_input::Catalog for AppTheme {
     fn style(
         &self,
         class: &Self::Class<'_>,
-        status: iced::widget::text_input::Status,
-    ) -> iced::widget::text_input::Style {
+        status: widget::text_input::Status,
+    ) -> widget::text_input::Style {
         class(self, status)
     }
 }
