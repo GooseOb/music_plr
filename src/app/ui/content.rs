@@ -3,12 +3,14 @@ use iced::{
     Length,
 };
 
-use super::{bg, playlist, search, theme, Element, Message, MusicPlayer, View};
+use crate::theme::AppTheme;
 
-pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+use super::{playlist, search, theme, Element, Message, MusicPlayer, View};
+
+pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let search_bar = search::view_search_bar(player);
 
-    let content: Element<'a, Message> = match &player.current_view {
+    let content: Element<'a, Message, AppTheme> = match &player.current_view {
         View::Search => search::view_search(player),
         View::SongRadio | View::ArtistRadio => search::view_search_radio(player),
         View::Playlist | View::Downloads => playlist::view_playlist(player),
@@ -16,8 +18,7 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
 
     let inner = Container::new(content)
         .width(Length::Fill)
-        .height(Length::Fill)
-        .style(bg(player.palette.bg));
+        .height(Length::Fill);
 
     let base = Column::with_children(vec![search_bar, inner.into()])
         .spacing(0)

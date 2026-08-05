@@ -1,17 +1,14 @@
 use crate::icons;
 use crate::theme;
+use crate::theme::AppTheme;
 use crate::types::View;
 use iced::{
     alignment,
-    widget::{
-        self, button, container, image, scrollable, slider, text, text_input, Column, Container,
-        Row, Stack,
-    },
+    widget::{self, button, container, image, text, Column, Container, Row, Stack},
     Color, Element, Length,
 };
 
 use super::{ContextMenuState, DragTargetList, Message, MusicPlayer};
-use crate::theme::Palette;
 
 mod content;
 mod overlays;
@@ -24,31 +21,97 @@ mod track_list;
 
 use track_list::view_track_list;
 
-const fn scrollable_id(is_queue: bool) -> widget::Id {
-    if is_queue {
-        widget::Id::new("queue_list")
-    } else {
-        widget::Id::new("track_list")
-    }
-}
-
-fn bg(color: Color) -> impl Fn(&iced::Theme) -> container::Style + 'static {
+fn bg(color: Color) -> impl Fn(&AppTheme) -> container::Style + 'static {
     move |_| container::Style {
         background: Some(color.into()),
         ..Default::default()
     }
 }
 
-fn button_style(
-    bg: Color,
-    bg_hover: Color,
-    text_color: Color,
-) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    move |_, status| {
+fn button_style_primary() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
+    move |theme, status| {
+        let p = &theme.palette;
         let bg_color = match status {
-            button::Status::Hovered | button::Status::Pressed => bg_hover,
-            _ => bg,
+            button::Status::Hovered | button::Status::Pressed => p.accent_hover,
+            _ => p.accent,
         };
+        button::Style {
+            background: Some(bg_color.into()),
+            text_color: Color::BLACK,
+            border: iced::border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
+}
+
+fn button_style_queue(
+    enabled: bool,
+) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
+    move |theme, status| {
+        let p = &theme.palette;
+        let bg_color = match status {
+            button::Status::Hovered | button::Status::Pressed => {
+                if enabled {
+                    p.accent_hover
+                } else {
+                    p.button_hover
+                }
+            }
+            _ => {
+                if enabled {
+                    p.accent
+                } else {
+                    p.button
+                }
+            }
+        };
+        button::Style {
+            background: Some(bg_color.into()),
+            text_color: if enabled { Color::BLACK } else { p.fg },
+            border: iced::border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
+}
+
+fn button_style_danger() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
+    move |theme, status| {
+        let p = &theme.palette;
+        let bg_color = match status {
+            button::Status::Hovered | button::Status::Pressed => p.danger_hover,
+            _ => p.danger,
+        };
+        button::Style {
+            background: Some(bg_color.into()),
+            text_color: Color::WHITE,
+            border: iced::border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
+}
+
+fn button_style_nav(
+    enabled: bool,
+) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
+    move |theme, status| {
+        let p = &theme.palette;
+        let bg_color = match status {
+            button::Status::Hovered | button::Status::Pressed => {
+                if enabled {
+                    p.button_hover
+                } else {
+                    p.bg
+                }
+            }
+            _ => {
+                if enabled {
+                    p.button
+                } else {
+                    p.bg
+                }
+            }
+        };
+        let text_color = if enabled { p.fg } else { p.fg_muted };
         button::Style {
             background: Some(bg_color.into()),
             text_color,
@@ -58,138 +121,11 @@ fn button_style(
     }
 }
 
-fn button_style_primary(
-    p: &Palette,
-) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    button_style(p.accent, p.accent_hover, Color::BLACK)
-}
-
-fn button_style_secondary(
-    p: &Palette,
-) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    button_style(p.button, p.button_hover, p.fg)
-}
-
-fn button_style_queue(
-    enabled: bool,
-    p: &Palette,
-) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    if enabled {
-        // primary
-        button_style(p.accent, p.accent_hover, Color::BLACK)
-    } else {
-        // secondary
-        button_style(p.button, p.button_hover, p.fg)
-    }
-}
-
-fn button_style_danger(
-    p: &Palette,
-) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    button_style(p.danger, p.danger_hover, Color::WHITE)
-}
-
-fn button_style_nav(
-    enabled: bool,
-    p: &Palette,
-) -> impl Fn(&iced::Theme, button::Status) -> button::Style + 'static {
-    button_style(
-        if enabled { p.button } else { p.bg },
-        if enabled { p.button_hover } else { p.bg },
-        if enabled { p.fg } else { p.fg_muted },
-    )
-}
-
-fn slider_style(
-    accent: Color,
-    bg_secondary: Color,
-) -> impl Fn(&iced::Theme, slider::Status) -> slider::Style + 'static {
-    move |_, status| {
-        let color = match status {
-            slider::Status::Active | slider::Status::Hovered | slider::Status::Dragged => accent,
-        };
-        slider::Style {
-            rail: slider::Rail {
-                backgrounds: (color.into(), bg_secondary.into()),
-                width: 4.0,
-                border: iced::border::rounded(2.0),
-            },
-            handle: slider::Handle {
-                shape: slider::HandleShape::Circle { radius: 7.0 },
-                background: color.into(),
-                border_color: Color::TRANSPARENT,
-                border_width: 0.0,
-            },
-        }
-    }
-}
-
-fn scrollable_style(
-    p: &Palette,
-) -> impl Fn(&iced::Theme, scrollable::Status) -> scrollable::Style + 'static {
-    let p = *p;
-    move |_, status| {
-        let rail = scrollable::Rail {
-            background: Some(p.bg_tertiary.scale_alpha(0.6).into()),
-            border: iced::border::rounded(0),
-            scroller: scrollable::Scroller {
-                background: match status {
-                    scrollable::Status::Active { .. } => p.fg_muted.scale_alpha(0.6),
-                    scrollable::Status::Hovered { .. } => p.fg_muted.scale_alpha(0.8),
-                    scrollable::Status::Dragged { .. } => p.fg_muted,
-                }
-                .into(),
-                border: iced::border::rounded(theme::SPACING_SM),
-            },
-        };
-
-        scrollable::Style {
-            container: container::Style::default(),
-            vertical_rail: rail,
-            horizontal_rail: rail,
-            gap: None,
-            auto_scroll: scrollable::AutoScroll {
-                background: p.overlay.into(),
-                border: iced::border::rounded(u32::MAX),
-                shadow: iced::Shadow {
-                    color: Color::BLACK.scale_alpha(0.7),
-                    offset: iced::Vector::ZERO,
-                    blur_radius: 2.0,
-                },
-                icon: p.fg_muted,
-            },
-        }
-    }
-}
-
-fn text_input_style(
-    p: &Palette,
-) -> impl Fn(&iced::Theme, text_input::Status) -> text_input::Style + 'static {
-    let p = *p;
-    move |_, status| {
-        let border_color = match status {
-            text_input::Status::Hovered => p.fg_muted,
-            text_input::Status::Focused { is_hovered: _ } => p.accent,
-            _ => Color::TRANSPARENT,
-        };
-        text_input::Style {
-            background: p.bg_tertiary.into(),
-            border: iced::border::rounded(theme::RADIUS_MD)
-                .color(border_color)
-                .width(1),
-            icon: p.fg_muted,
-            placeholder: p.fg_muted,
-            value: p.fg,
-            selection: p.bg_selected,
-        }
-    }
-}
-
 fn thumbnail<'a>(
     track: &'a crate::types::Track,
-    p: &theme::Palette,
+    p: &'a theme::Palette,
     size: f32,
-) -> Element<'a, Message> {
+) -> Element<'a, Message, AppTheme> {
     let thumb_path = crate::thumbnails::thumbnail_path(&track.id);
     let fallback_color = p.fg_muted;
     if thumb_path.exists() {
@@ -204,7 +140,7 @@ fn thumbnail<'a>(
     }
 }
 
-fn drop_indicator(color: Color) -> widget::Rule<'static> {
+fn drop_indicator(color: Color) -> widget::Rule<'static, AppTheme> {
     widget::rule::horizontal(theme::DROP_LINE_HEIGHT).style(move |_| widget::rule::Style {
         color,
         radius: iced::border::Radius::new(0),
@@ -213,9 +149,7 @@ fn drop_indicator(color: Color) -> widget::Rule<'static> {
     })
 }
 
-pub fn view(player: &MusicPlayer) -> Element<'_, Message> {
-    let p = &player.palette;
-
+pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let main_content = content::view_main_content(player);
     let sidebar = sidebar::view_sidebar(player);
     let queue = if player.show_queue {
@@ -232,8 +166,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message> {
 
     let main = Container::new(layout)
         .width(Length::Fill)
-        .height(Length::Fill)
-        .style(bg(p.bg));
+        .height(Length::Fill);
 
     let mut stack = Stack::new()
         .width(Length::Fill)
@@ -253,7 +186,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message> {
     stack.into()
 }
 
-fn view_notification(player: &MusicPlayer) -> Element<'_, Message> {
+fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     if let Some(msg) = &player.notification {
         return Container::new(
             text(msg)

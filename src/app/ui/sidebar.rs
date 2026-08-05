@@ -1,26 +1,16 @@
 use iced::{
     alignment,
-    widget::{text, text_input, Button, Column, Container, Row},
-    Color, Length,
+    widget::{scrollable, text, text_input, Button, Column, Container, Row},
+    Color, Element, Length,
 };
+
+use crate::theme::AppTheme;
 
 use crate::app::ui::{button_style_primary, view_notification};
 
-use super::{
-    bg, button, button_style_nav, icons, scrollable, scrollable_style, text_input_style, theme,
-    widget, Element, Message, MusicPlayer, View,
-};
+use super::{bg, button, button_style_nav, icons, theme, widget, Message, MusicPlayer, View};
 
-fn sidebar_separator(p: &theme::Palette) -> widget::Rule<'_> {
-    widget::rule::horizontal(1).style(move |_| widget::rule::Style {
-        color: p.fg_muted,
-        radius: iced::border::Radius::new(0),
-        fill_mode: widget::rule::FillMode::Full,
-        snap: true,
-    })
-}
-
-pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.palette;
 
     let can_back = player.can_navigate_back();
@@ -36,7 +26,7 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
             .center(Length::Fill),
         )
         .padding(theme::SPACING_XS)
-        .style(button_style_nav(can_back, p))
+        .style(button_style_nav(can_back))
         .width(Length::Fill)
         .height(theme::BUTTON_HEIGHT)
         .on_press_maybe(if can_back {
@@ -54,7 +44,7 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
             .center(Length::Fill),
         )
         .padding(theme::SPACING_XS)
-        .style(button_style_nav(can_forward, p))
+        .style(button_style_nav(can_forward))
         .width(Length::Fill)
         .height(theme::BUTTON_HEIGHT)
         .on_press_maybe(if can_forward {
@@ -69,12 +59,12 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
     .padding([theme::SPACING_MD, theme::SPACING_XL])
     .width(Length::Fill);
 
-    let nav_items: Vec<Element<'a, Message>> = vec![
+    let nav_items: Vec<Element<'_, Message, AppTheme>> = vec![
         sidebar_nav_item("Search", View::Search, player, p),
         sidebar_nav_item("Downloads", View::Downloads, player, p),
     ];
 
-    let playlist_items: Vec<Element<'a, Message>> = player
+    let playlist_items: Vec<Element<'_, Message, AppTheme>> = player
         .playlists
         .playlists
         .iter()
@@ -135,14 +125,13 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
             text_input("New playlist name", &player.playlist_create_name)
                 .on_input(Message::NewPlaylistNameChanged)
                 .padding([theme::SPACING_SM, theme::SPACING_SM])
-                .size(theme::TEXT_SIZE_DEFAULT)
-                .style(text_input_style(&player.palette)),
+                .size(theme::TEXT_SIZE_DEFAULT),
         )
         .width(Length::Fill)
         .into(),
         Button::new(icons::icon("add.svg", Color::BLACK, theme::ICON_SIZE_SM))
             .padding(theme::SPACING_MD - 2f32)
-            .style(button_style_primary(p))
+            .style(button_style_primary())
             .on_press(Message::CreatePlaylist)
             .into(),
     ])
@@ -152,16 +141,15 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
 
     let sidebar_content = Column::with_children(vec![
         nav_buttons.into(),
-        sidebar_separator(p).into(),
+        widget::rule::horizontal(1).into(),
         Column::with_children(nav_items).spacing(2).into(),
-        sidebar_separator(p).into(),
+        widget::rule::horizontal(1).into(),
         scrollable(
             Column::with_children(playlist_items)
                 .spacing(theme::SPACING_XS)
                 .width(Length::Fill),
         )
         .id(iced::widget::Id::new("sidebar_playlist_list"))
-        .style(scrollable_style(p))
         .on_scroll(|vp| Message::SidebarListScrolled {
             offset_y: vp.absolute_offset().y,
             bounds: vp.bounds(),
@@ -170,7 +158,7 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
         .height(Length::Fill)
         .into(),
         view_notification(player),
-        sidebar_separator(p).into(),
+        widget::rule::horizontal(1).into(),
         create_row.into(),
     ])
     .spacing(theme::SPACING_XS)
@@ -188,7 +176,7 @@ fn sidebar_nav_item<'a>(
     view: View,
     player: &'a MusicPlayer,
     p: &theme::Palette,
-) -> Element<'a, Message> {
+) -> Element<'a, Message, AppTheme> {
     let is_active = player.current_view == view;
     let bg_color = if is_active {
         p.bg_current

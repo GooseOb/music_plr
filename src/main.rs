@@ -41,7 +41,7 @@ fn main() {
         app::MusicPlayer::view,
     )
     .subscription(app::MusicPlayer::subscription)
-    .theme(iced::Theme::Dark)
+    .theme(|state: &app::MusicPlayer| state.app_theme.clone())
     .title("music_plr")
     .run()
     .unwrap();

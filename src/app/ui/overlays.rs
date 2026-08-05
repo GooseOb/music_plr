@@ -1,24 +1,27 @@
 use iced::{
     alignment,
     widget::{text, Button, Column, Container, MouseArea, Row},
-    Color, Length,
+    Element, Length,
 };
+
+use crate::theme::AppTheme;
+use crate::theme::Palette;
 
 use super::{
-    bg, button, button_style_danger, button_style_secondary, container, icons, theme,
-    ContextMenuState, Element, Message, MusicPlayer,
+    bg, button, button_style_danger, container, icons, theme, ContextMenuState, Message,
+    MusicPlayer,
 };
 
-fn transparent_bg() -> impl Fn(&iced::Theme) -> container::Style + 'static {
+fn transparent_bg() -> impl Fn(&AppTheme) -> container::Style + 'static {
     |_| container::Style {
         background: None,
         ..Default::default()
     }
 }
 
-fn menu_bg(bg_color: Color) -> impl Fn(&iced::Theme) -> container::Style + 'static {
-    move |_| container::Style {
-        background: Some(bg_color.into()),
+fn popup_bg() -> impl Fn(&AppTheme) -> container::Style + 'static {
+    move |theme| container::Style {
+        background: Some(theme.palette.bg_secondary.into()),
         border: iced::border::rounded(theme::RADIUS_MD),
         ..Default::default()
     }
@@ -26,13 +29,13 @@ fn menu_bg(bg_color: Color) -> impl Fn(&iced::Theme) -> container::Style + 'stat
 
 pub(super) fn view_context_menu<'a>(
     menu: &'a ContextMenuState,
-    p: &'a theme::Palette,
-) -> Element<'a, Message> {
+    p: &'a Palette,
+) -> Element<'a, Message, AppTheme> {
     let pos_x = menu.position.0;
     let pos_y = menu.position.1;
 
-    let items: Vec<Element<'_, Message>> = {
-        let mut v: Vec<Element<'_, Message>> = vec![];
+    let items: Vec<Element<'_, Message, AppTheme>> = {
+        let mut v: Vec<Element<'_, Message, AppTheme>> = vec![];
 
         v.push(
             menu_item(
@@ -130,7 +133,7 @@ pub(super) fn view_context_menu<'a>(
             .padding(theme::SPACING_SM),
     )
     .width(Length::Fixed(theme::CONTEXT_MENU_WIDTH))
-    .style(menu_bg(p.bg_secondary));
+    .style(popup_bg());
 
     let row = Row::with_children(vec![
         Container::new(Row::new())
@@ -158,9 +161,9 @@ pub(super) fn view_context_menu<'a>(
 fn menu_item<'a>(
     label: &'a str,
     icon: &'a str,
-    p: &'a theme::Palette,
+    p: &'a Palette,
     on_press: Message,
-) -> Container<'a, Message> {
+) -> Container<'a, Message, AppTheme> {
     Container::new(
         Button::new(
             Row::with_children(vec![
@@ -195,12 +198,12 @@ fn menu_item<'a>(
     .style(bg(p.bg_secondary))
 }
 
-pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.palette;
 
     let playlists: Vec<&crate::playlists::Playlist> = player.playlists.playlists.iter().collect();
 
-    let items: Vec<Element<'a, Message>> = playlists
+    let items: Vec<Element<'a, Message, AppTheme>> = playlists
         .iter()
         .enumerate()
         .map(|(i, pl)| {
@@ -250,7 +253,6 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
         Container::new(text("Cancel").size(theme::TEXT_SIZE_SM)).center_x(Length::Fill),
     )
     .padding(theme::SPACING_SM)
-    .style(button_style_secondary(p))
     .on_press(Message::ClosePicker);
 
     view_dialog(
@@ -276,20 +278,12 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
     )
 }
 
-fn popup_bg(bg_color: Color) -> impl Fn(&iced::Theme) -> container::Style + 'static {
-    move |_| container::Style {
-        background: Some(bg_color.into()),
-        border: iced::border::rounded(theme::RADIUS_MD),
-        ..Default::default()
-    }
-}
-
 fn view_dialog<'a>(
-    dialog: Container<'a, Message>,
-    p: &theme::Palette,
+    dialog: Container<'a, Message, AppTheme>,
+    p: &Palette,
     close_msg: Message,
-) -> Element<'a, Message> {
-    let dialog = Container::new(dialog).style(popup_bg(p.bg_secondary));
+) -> Element<'a, Message, AppTheme> {
+    let dialog = Container::new(dialog).style(popup_bg());
 
     Container::new(
         MouseArea::new(
@@ -306,21 +300,20 @@ fn view_dialog<'a>(
     .into()
 }
 
-pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message> {
+pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.palette;
 
     let cancel_btn = Button::new(
         Container::new(text("Cancel").size(theme::TEXT_SIZE_DEFAULT)).center_x(Length::Fill),
     )
     .padding(theme::SPACING_SM)
-    .style(button_style_secondary(p))
     .on_press(Message::HideDeleteConfirm);
 
     let delete_btn = Button::new(
         Container::new(text("Delete").size(theme::TEXT_SIZE_DEFAULT)).center_x(Length::Fill),
     )
     .padding(theme::SPACING_SM)
-    .style(button_style_danger(p))
+    .style(button_style_danger())
     .on_press(Message::ConfirmDeletePlaylist);
 
     view_dialog(

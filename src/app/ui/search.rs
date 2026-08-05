@@ -4,14 +4,11 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::app::ui::button_style_primary;
+use crate::theme::AppTheme;
 
-use super::{
-    bg, button_style_secondary, icons, scrollable_style, text_input_style, theme,
-    view_track_list, Message, MusicPlayer, View,
-};
+use super::{bg, button_style_primary, icons, theme, view_track_list, Message, MusicPlayer, View};
 
-pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message> {
+pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let is_search_view = matches!(
         player.current_view,
         View::Search | View::SongRadio | View::ArtistRadio
@@ -29,8 +26,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message> {
             .on_input(Message::SearchInputChanged)
             .on_submit(submit_msg())
             .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .size(theme::TEXT_SIZE_MD)
-            .style(text_input_style(&player.palette)),
+            .size(theme::TEXT_SIZE_MD),
     )
     .width(Length::Fill)
     .into();
@@ -40,7 +36,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message> {
             input,
             Button::new(icons::icon("search.svg", Color::BLACK, theme::ICON_SIZE_MD))
                 .padding(theme::SPACING_SM)
-                .style(button_style_primary(&player.palette))
+                .style(button_style_primary())
                 .width(Length::Fixed(theme::SEARCH_BTN_SIZE))
                 .height(Length::Fixed(theme::SEARCH_BTN_SIZE))
                 .on_press(submit_msg())
@@ -55,7 +51,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message> {
     .into()
 }
 
-pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message> {
+pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let track_list = view_search_results(
         player,
         &player.search_results,
@@ -74,7 +70,6 @@ pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message> {
         )
         .padding(theme::SPACING_SM)
         .width(Length::Fill)
-        .style(button_style_secondary(&player.palette))
         .on_press(Message::SearchLoadMore);
         Container::new(btn).padding(theme::SPACING_SM).into()
     } else {
@@ -93,7 +88,7 @@ fn view_search_results<'a>(
     tracks: &'a [crate::types::Track],
     loading: bool,
     loading_msg: &'a str,
-) -> Element<'a, Message> {
+) -> Element<'a, Message, AppTheme> {
     if loading && tracks.is_empty() {
         Container::new(
             text(loading_msg)
@@ -110,7 +105,7 @@ fn view_search_results<'a>(
     }
 }
 
-pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message> {
+pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.palette;
 
     let header = Container::new(
@@ -136,7 +131,7 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message> {
         .into()
 }
 
-pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.palette;
 
     if player.last_filtered_history.is_empty() {
@@ -152,16 +147,11 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
         .into();
     }
 
-    let items: Vec<Element<'a, Message>> = player
+    let items: Vec<Element<'a, Message, AppTheme>> = player
         .last_filtered_history
         .iter()
         .enumerate()
         .map(|(i, q)| {
-            let bg_color = p.bg_secondary;
-            let bg_hover = p.bg_hover;
-            let sel_fg = p.fg;
-            let sel_fg_secondary = p.fg_secondary;
-
             Container::new(
                 Row::with_children(vec![
                     Button::new(
@@ -176,14 +166,15 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                     )
                     .width(Length::Fill)
                     .padding(0)
-                    .style(move |_, status| {
+                    .style(move |t, status| {
+                        let p = &t.palette;
                         let bg = match status {
-                            button::Status::Hovered | button::Status::Pressed => bg_hover,
-                            _ => bg_color,
+                            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
+                            _ => p.bg_secondary,
                         };
                         let text_color = match status {
-                            button::Status::Hovered | button::Status::Pressed => sel_fg,
-                            _ => sel_fg_secondary,
+                            button::Status::Hovered | button::Status::Pressed => p.fg,
+                            _ => p.fg_secondary,
                         };
                         button::Style {
                             background: Some(bg.into()),
@@ -196,10 +187,11 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                     .into(),
                     Button::new(icons::icon("delete.svg", p.fg_muted, theme::ICON_SIZE_SM))
                         .padding(theme::SPACING_XS)
-                        .style(move |_, status| {
+                        .style(move |t, status| {
+                            let p = &t.palette;
                             let bg = match status {
-                                button::Status::Hovered | button::Status::Pressed => bg_hover,
-                                _ => bg_color,
+                                button::Status::Hovered | button::Status::Pressed => p.bg_hover,
+                                _ => p.bg_secondary,
                             };
                             button::Style {
                                 background: Some(bg.into()),
@@ -215,7 +207,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                 .align_y(alignment::Vertical::Center),
             )
             .width(Length::Fill)
-            .style(bg(bg_color))
+            .style(bg(p.bg_secondary))
             .into()
         })
         .collect();
@@ -226,7 +218,6 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
 
     let content = scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
         .id(iced::widget::Id::new("search_history_list"))
-        .style(scrollable_style(p))
         .width(Length::Fill)
         .height(Length::Fixed(dropdown_height));
 

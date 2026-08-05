@@ -1,17 +1,15 @@
 use iced::{
     alignment,
     widget::{slider, text, Button, Column, Container, Row},
-    Color, Length,
+    Color, Element, Length,
 };
 
 use crate::app::ui::button_style_queue;
+use crate::theme::AppTheme;
 
-use super::{
-    bg, button_style_primary, button_style_secondary, icons, slider_style, theme, thumbnail,
-    Element, Message, MusicPlayer,
-};
+use super::{bg, button_style_primary, icons, theme, thumbnail, Message, MusicPlayer};
 
-pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.palette;
 
     let track = player.queue.current();
@@ -24,7 +22,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
         "play.svg"
     };
 
-    let track_thumb: Element<'a, Message> = if let Some(t) = track {
+    let track_thumb: Element<'a, Message, AppTheme> = if let Some(t) = track {
         thumbnail(t, p, theme::PLAYBAR_THUMBNAIL_SIZE)
     } else {
         icons::icon("music.svg", p.fg_muted, theme::PLAYBAR_THUMBNAIL_SIZE).into()
@@ -58,7 +56,6 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
         Row::with_children(vec![
             Button::new(icons::icon("skip-back.svg", p.fg, theme::ICON_SIZE_MD))
                 .padding(theme::SPACING_XS2)
-                .style(button_style_secondary(p))
                 .on_press(Message::PreviousTrack)
                 .into(),
             Button::new(icons::icon(
@@ -67,12 +64,11 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
                 theme::ICON_SIZE_LG,
             ))
             .padding(theme::SPACING_SM)
-            .style(button_style_primary(p))
+            .style(button_style_primary())
             .on_press(Message::TogglePlayPause)
             .into(),
             Button::new(icons::icon("skip-forward.svg", p.fg, theme::ICON_SIZE_MD))
                 .padding(theme::SPACING_XS2)
-                .style(button_style_secondary(p))
                 .on_press(Message::NextTrack)
                 .into(),
         ])
@@ -83,16 +79,14 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
 
     let progress = slider(0.0..=1.0, player.progress, Message::Seek)
         .width(Length::Fill)
-        .step(0.01f32)
-        .style(slider_style(p.accent, p.bg_secondary));
+        .step(0.01f32);
 
     let controls_and_progress =
         Column::with_children(vec![controls.into(), progress.into()]).spacing(theme::SPACING_XS);
 
     let volume_slider = slider(0.0..=1.0, player.volume, Message::SetVolume)
         .width(Length::Fixed(theme::VOLUME_SLIDER_WIDTH))
-        .step(0.01f32)
-        .style(slider_style(p.accent, p.bg_secondary));
+        .step(0.01f32);
 
     let queue_btn = Button::new(icons::icon(
         "queue.svg",
@@ -104,7 +98,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
         theme::ICON_SIZE_MD,
     ))
     .padding(theme::SPACING_XS)
-    .style(button_style_queue(player.show_queue, p))
+    .style(button_style_queue(player.show_queue))
     .on_press(Message::ToggleQueue)
     .width(Length::Fixed(theme::QUEUE_BTN_WIDTH))
     .height(Length::Fixed(theme::QUEUE_BTN_WIDTH));

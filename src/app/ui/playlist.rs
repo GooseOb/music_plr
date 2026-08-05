@@ -4,15 +4,14 @@ use iced::{
     Color, Element, Length,
 };
 
-use super::{
-    button_style_danger, button_style_secondary, icons, text_input_style, theme, view_track_list,
-    Message, MusicPlayer,
-};
+use crate::theme::AppTheme;
 
-pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+use super::{button_style_danger, icons, theme, view_track_list, Message, MusicPlayer};
+
+pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.palette;
 
-    let header: Element<'a, Message> = if let Some(idx) = player.selected_playlist {
+    let header: Element<'a, Message, AppTheme> = if let Some(idx) = player.selected_playlist {
         if let Some(pl) = player.playlists.playlists.get(idx) {
             let track_count = pl.tracks.len();
             Row::with_children(vec![
@@ -20,9 +19,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message>
                     .on_input(Message::RenamePlaylist)
                     .size(theme::TEXT_SIZE_MD)
                     .padding([theme::SPACING_SM, theme::SPACING_MD])
-                    // .padding([theme::SPACING_XS, theme::SPACING_SM])
                     .width(Length::Fill)
-                    .style(text_input_style(p))
                     .into(),
                 text(format!("({track_count} tracks)"))
                     .size(theme::TEXT_SIZE_MD)
@@ -42,14 +39,13 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message>
                 )
                 .padding(theme::SPACING_SM)
                 .height(Length::Fixed(theme::BUTTON_HEIGHT))
-                .style(button_style_secondary(p))
                 .on_press(Message::AddLocalMusic)
                 .into(),
                 Button::new(icons::icon("delete.svg", p.fg, theme::ICON_SIZE_SM))
                     .padding(theme::SPACING_SM)
                     .height(theme::BUTTON_HEIGHT)
                     .width(theme::BUTTON_HEIGHT)
-                    .style(button_style_danger(p))
+                    .style(button_style_danger())
                     .on_press(Message::ShowDeleteConfirm(idx))
                     .into(),
             ])

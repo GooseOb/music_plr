@@ -4,9 +4,12 @@ use iced::{
     Color, Element, Length,
 };
 
+use crate::theme::AppTheme;
+use crate::theme::Palette;
+
 use super::{
-    button_style_primary, container, drop_indicator, icons, scrollable_id, scrollable_style,
-    theme, thumbnail, DragTargetList, Message, MusicPlayer,
+    button_style_primary, container, drop_indicator, icons, theme, thumbnail, DragTargetList,
+    Message, MusicPlayer,
 };
 
 pub(super) fn view_track_list<'a>(
@@ -14,7 +17,7 @@ pub(super) fn view_track_list<'a>(
     player: &'a MusicPlayer,
     is_queue: bool,
     index_offset: usize,
-) -> Element<'a, Message> {
+) -> Element<'a, Message, AppTheme> {
     if tracks.is_empty() {
         return empty_state("No tracks found", player.palette.fg_secondary);
     }
@@ -27,7 +30,7 @@ pub(super) fn view_track_list<'a>(
         Some(DragTargetList::TrackList) if !is_queue,
     );
 
-    let mut items: Vec<Element<'a, Message>> = Vec::with_capacity(tracks.len());
+    let mut items: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(tracks.len());
     for (i, track) in tracks.iter().enumerate() {
         let adjusted = i + index_offset;
         if player.drag.drag_active && target_matches {
@@ -48,12 +51,8 @@ pub(super) fn view_track_list<'a>(
         }
     }
 
-    let list_id = scrollable_id(is_queue);
-
     Container::new(
         scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
-            .id(list_id)
-            .style(scrollable_style(&player.palette))
             .on_scroll(move |vp| Message::ListScrolled {
                 offset_y: vp.absolute_offset().y,
                 bounds: vp.bounds(),
@@ -72,7 +71,7 @@ fn view_track_row<'a>(
     index: usize,
     player: &'a MusicPlayer,
     is_queue: bool,
-) -> Element<'a, Message> {
+) -> Element<'a, Message, AppTheme> {
     let p = &player.palette;
     let is_selected = player.selection(is_queue).contains(&index);
     let is_hovered = player.drag.hovered_track == Some((index, is_queue));
@@ -105,13 +104,13 @@ fn view_track_row<'a>(
         };
         Button::new(icons::icon(icon_name, Color::BLACK, theme::ICON_SIZE_LG))
             .padding(theme::SPACING_XS2)
-            .style(button_style_primary(p))
+            .style(button_style_primary())
             .on_press(Message::TogglePlayPause)
             .into()
     } else if is_hovered {
         Button::new(icons::icon("play.svg", Color::BLACK, theme::ICON_SIZE_LG))
             .padding(theme::SPACING_XS2)
-            .style(button_style_primary(p))
+            .style(button_style_primary())
             .on_press(Message::PlayTrackAtIndex { index, is_queue })
             .into()
     } else {
@@ -151,8 +150,8 @@ fn view_track_row<'a>(
 /// A title + artist column, used by all track rows.
 pub(super) fn title_artist_column<'a>(
     track: &'a crate::types::Track,
-    p: &'a theme::Palette,
-) -> Column<'a, Message> {
+    p: &'a Palette,
+) -> Column<'a, Message, AppTheme> {
     Column::with_children(vec![
         text(track.title.clone())
             .size(theme::TEXT_SIZE_DEFAULT)
@@ -170,12 +169,12 @@ pub(super) fn title_artist_column<'a>(
 
 /// The inner row layout: leading | thumbnail | `title_artist` | duration.
 pub(super) fn row_layout<'a>(
-    leading: Element<'a, Message>,
-    thumb: Element<'a, Message>,
-    title_artist: Column<'a, Message>,
-    p: &'a theme::Palette,
+    leading: Element<'a, Message, AppTheme>,
+    thumb: Element<'a, Message, AppTheme>,
+    title_artist: Column<'a, Message, AppTheme>,
+    p: &'a Palette,
     duration_text: String,
-) -> Row<'a, Message> {
+) -> Row<'a, Message, AppTheme> {
     Row::with_children(vec![
         Container::new(leading)
             .width(Length::Fixed(theme::TRACK_LEADING_WIDTH))
@@ -199,15 +198,15 @@ pub(super) fn row_layout<'a>(
 /// Wraps row content in a fixed-height container with a background color and
 /// optional accent border (used for keyboard focus highlight).
 pub(super) fn track_row<'a>(
-    content: impl Into<Element<'a, Message>>,
+    content: impl Into<Element<'a, Message, AppTheme>>,
     bg: Color,
     focus_border: Option<Color>,
-) -> Container<'a, Message> {
+) -> Container<'a, Message, AppTheme> {
     let accent = focus_border;
     Container::new(content)
         .width(Length::Fill)
         .height(Length::Fixed(theme::ROW_HEIGHT))
-        .style(move |_: &iced::Theme| {
+        .style(move |_: &AppTheme| {
             let mut s = container::Style {
                 background: Some(bg.into()),
                 ..Default::default()
@@ -220,7 +219,7 @@ pub(super) fn track_row<'a>(
 }
 
 /// An empty-state message centered in the available space.
-pub(super) fn empty_state(msg: &str, color: Color) -> Element<'_, Message> {
+pub(super) fn empty_state(msg: &str, color: Color) -> Element<'_, Message, AppTheme> {
     Container::new(text(msg).size(theme::TEXT_SIZE_MD).color(color).center())
         .width(Length::Fill)
         .height(Length::Fill)
@@ -231,13 +230,11 @@ pub(super) fn empty_state(msg: &str, color: Color) -> Element<'_, Message> {
 /// A scrollable column of pre-built elements with a stable id.
 pub(super) fn scrollable_list<'a>(
     id: &'static str,
-    items: Vec<Element<'a, Message>>,
-    p: &'a theme::Palette,
-) -> Element<'a, Message> {
+    items: Vec<Element<'a, Message, AppTheme>>,
+) -> Element<'a, Message, AppTheme> {
     Container::new(
         scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
             .id(iced::widget::Id::new(id))
-            .style(scrollable_style(p))
             .width(Length::Fill)
             .height(Length::Fill),
     )
@@ -247,7 +244,10 @@ pub(super) fn scrollable_list<'a>(
 }
 
 /// A centered section header (e.g. "NOW PLAYING", "UP NEXT").
-pub(super) fn section_header<'a>(label: &'a str, p: &'a theme::Palette) -> Container<'a, Message> {
+pub(super) fn section_header<'a>(
+    label: &'a str,
+    p: &'a Palette,
+) -> Container<'a, Message, AppTheme> {
     Container::new(
         text(label)
             .size(theme::TEXT_SIZE_XS)

@@ -4,6 +4,9 @@ use iced::{
     Color, Element, Length,
 };
 
+use crate::theme::AppTheme;
+use crate::theme::Palette;
+
 use super::{bg, button_style_primary, icons, thumbnail, Message, MusicPlayer};
 use crate::theme;
 use crate::types::QueueTab;
@@ -12,7 +15,7 @@ use super::track_list::{
     empty_state, row_layout, scrollable_list, section_header, title_artist_column, track_row,
 };
 
-pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message> {
+pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.palette;
     let queue_width = (player.window_width * theme::QUEUE_WIDTH_RATIO).max(theme::QUEUE_MIN_WIDTH);
 
@@ -20,7 +23,7 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message> {
         .width(Length::Fill)
         .style(bg(p.bg_secondary));
 
-    let body: Element<'_, Message> = match player.queue.queue_tab {
+    let body: Element<'_, Message, AppTheme> = match player.queue.queue_tab {
         QueueTab::Queue => view_queue_tab(player),
         QueueTab::RecentlyPlayed => view_recently_played_tab(player),
     };
@@ -37,7 +40,7 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message> {
     .into()
 }
 
-fn view_queue_tabs(player: &MusicPlayer) -> Element<'_, Message> {
+fn view_queue_tabs(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let queue_item = queue_tab(
         player,
         "Queue",
@@ -62,7 +65,7 @@ fn queue_tab<'a>(
     label: &'a str,
     active: bool,
     on: Message,
-) -> Element<'a, Message> {
+) -> Element<'a, Message, AppTheme> {
     let p = &player.palette;
 
     let icon_color = if active { p.accent } else { p.fg_muted };
@@ -97,22 +100,23 @@ fn queue_tab<'a>(
 /// Renders the Queue tab: a "Now Playing" section header followed by the
 /// current track (non-interactive), a separator, then a draggable "Up Next"
 /// list.
-fn view_queue_tab<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.palette;
 
     let now_playing_header = section_header("NOW PLAYING", p);
 
-    let now_playing_row: Element<'a, Message> = if let Some(track) = player.queue.current() {
-        view_now_playing_row(track, p)
-    } else {
-        Container::new(
-            text("No track playing")
-                .size(theme::TEXT_SIZE_SM)
-                .color(p.fg_secondary),
-        )
-        .padding(theme::SPACING_MD)
-        .into()
-    };
+    let now_playing_row: Element<'_, Message, AppTheme> =
+        if let Some(track) = player.queue.current() {
+            view_now_playing_row(track, p)
+        } else {
+            Container::new(
+                text("No track playing")
+                    .size(theme::TEXT_SIZE_SM)
+                    .color(p.fg_secondary),
+            )
+            .padding(theme::SPACING_MD)
+            .into()
+        };
 
     let up_next_header = section_header("UP NEXT", p);
 
@@ -123,7 +127,7 @@ fn view_queue_tab<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
         &[]
     };
 
-    let up_next: Element<'a, Message> = if upcoming.is_empty() {
+    let up_next: Element<'_, Message, AppTheme> = if upcoming.is_empty() {
         Container::new(
             text("No more tracks in queue")
                 .size(theme::TEXT_SIZE_SM)
@@ -157,8 +161,8 @@ fn view_queue_tab<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
 
 fn view_now_playing_row<'a>(
     track: &'a crate::types::Track,
-    p: &'a theme::Palette,
-) -> Element<'a, Message> {
+    p: &'a Palette,
+) -> Element<'a, Message, AppTheme> {
     let duration_text = crate::util::format_duration(track.duration);
 
     let inner = row_layout(
@@ -179,27 +183,27 @@ fn view_now_playing_row<'a>(
 
 /// Renders the Recently Played tab: a simple scrollable list with no
 /// drag / selection / context-menu support.
-fn view_recently_played_tab<'a>(player: &'a MusicPlayer) -> Element<'a, Message> {
+fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let tracks = &player.queue.recently_played;
 
     if tracks.is_empty() {
         return empty_state("No recently played tracks", player.palette.fg_secondary);
     }
 
-    let items: Vec<Element<'a, Message>> = tracks
+    let items: Vec<Element<'_, Message, AppTheme>> = tracks
         .iter()
         .enumerate()
         .map(|(i, track)| view_recently_played_row(track, i, player))
         .collect();
 
-    scrollable_list("recently_played_list", items, &player.palette)
+    scrollable_list("recently_played_list", items)
 }
 
 fn view_recently_played_row<'a>(
     track: &'a crate::types::Track,
     index: usize,
     player: &'a MusicPlayer,
-) -> Element<'a, Message> {
+) -> Element<'a, Message, AppTheme> {
     let p = &player.palette;
     let is_hovered = player.drag.hovered_track == Some((index, true));
     let row_bg = if is_hovered { p.bg_hover } else { p.bg };
@@ -207,7 +211,7 @@ fn view_recently_played_row<'a>(
     let leading = if is_hovered {
         Button::new(icons::icon("play.svg", Color::BLACK, theme::ICON_SIZE_LG))
             .padding(theme::SPACING_XS2)
-            .style(button_style_primary(p))
+            .style(button_style_primary())
             .on_press(Message::PlayRecentTrack(index))
             .into()
     } else {

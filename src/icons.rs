@@ -1,3 +1,4 @@
+use crate::theme::AppTheme;
 use iced::{widget::svg, Color, Length};
 use std::sync::OnceLock;
 
@@ -73,7 +74,7 @@ pub fn handle(name: &str) -> svg::Handle {
     cached_handle(name).clone()
 }
 
-pub fn icon(name: &str, color: Color, size: f32) -> svg::Svg<'static> {
+pub fn icon(name: &str, color: Color, size: f32) -> svg::Svg<'static, AppTheme> {
     svg::Svg::new(cached_handle(name).clone())
         .width(Length::Fixed(size))
         .height(Length::Fixed(size))
