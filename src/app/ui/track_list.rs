@@ -7,6 +7,7 @@ use iced::{
 };
 
 use crate::{
+    app::ui::shared_components::play_pause_button,
     icons,
     theme::{AppTheme, Palette},
     types::Track,
@@ -126,14 +127,8 @@ fn view_track_row<'a>(
     };
 
     let leading = if is_current {
-        let icon_name = if player.is_playing {
-            icons::PAUSE_ICON
-        } else {
-            icons::PLAY_ICON
-        };
-        Button::new(icons::icon(icon_name, Color::BLACK, theme::ICON_SIZE_LG))
+        play_pause_button(player.is_playing)
             .padding(theme::SPACING_XS2)
-            .style(button_style_primary())
             .on_press(Message::TogglePlayPause)
             .into()
     } else if is_hovered {

@@ -4,10 +4,10 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{icons, theme::AppTheme};
+use crate::{app::ui::shared_components::play_pause_button, icons, theme::AppTheme};
 
 use super::{
-    styles::{bg_tertiary, button_style_primary, button_style_queue},
+    styles::{bg_tertiary, button_style_queue},
     theme,
     track_list::thumbnail,
     Message, MusicPlayer,
@@ -19,12 +19,6 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     let track = player.queue.current();
     let title = track.map_or("Not playing", |t| t.title.as_str());
     let artist = track.map_or("", |t| t.artist.as_str());
-
-    let play_pause_icon = if player.is_playing {
-        icons::PAUSE_ICON
-    } else {
-        icons::PLAY_ICON
-    };
 
     let track_thumb: Element<'a, Message, AppTheme> = if let Some(t) = track {
         thumbnail(t, p, theme::PLAYBAR_THUMBNAIL_SIZE)
@@ -63,15 +57,10 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
             .padding(theme::SPACING_XS2)
             .on_press(Message::PreviousTrack)
             .into(),
-            Button::new(icons::icon(
-                play_pause_icon,
-                Color::BLACK,
-                theme::ICON_SIZE_LG,
-            ))
-            .padding(theme::SPACING_SM)
-            .style(button_style_primary())
-            .on_press(Message::TogglePlayPause)
-            .into(),
+            play_pause_button(player.is_playing)
+                .padding(theme::SPACING_SM)
+                .on_press(Message::TogglePlayPause)
+                .into(),
             Button::new(icons::icon(
                 icons::SKIP_FORWARD_ICON,
                 p.fg,
