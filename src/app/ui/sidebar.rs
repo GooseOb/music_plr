@@ -86,19 +86,31 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .map(|(i, pl)| {
             let is_active = matches!(player.current_view, View::Playlist)
                 && player.selected_playlist == Some(i);
-            let bg_color = if is_active {
-                p.bg_current
+            let is_dragged_over = player.drag.sidebar_hover_playlist == Some(i);
+            let is_interacting = is_active || is_dragged_over;
+
+            let bg_color = if is_dragged_over {
+                p.bg_selected
+            } else if is_active {
+                p.bg_current.scale_alpha(0.7)
             } else {
                 p.bg_secondary
             };
-            let icon_color = if is_active { p.accent } else { p.fg_muted };
-            let text_color = if is_active { p.fg } else { p.fg_secondary };
-            let bg_hover = p.bg_hover;
-            let is_hover = player.drag.sidebar_hover_playlist == Some(i);
+
+            let bg_hover = if is_dragged_over {
+                p.bg_selected
+            } else if is_active {
+                p.bg_current
+            } else {
+                p.bg_hover
+            };
+
+            let icon_color = if is_interacting { p.accent } else { p.fg_muted };
+            let text_color = if is_interacting { p.fg } else { p.fg_secondary };
 
             Button::new(
                 Row::with_children(vec![
-                    icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_SM).into(),
+                    icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_MD).into(),
                     text(&pl.name)
                         .size(theme::TEXT_SIZE_DEFAULT)
                         .color(text_color)
@@ -112,15 +124,9 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             .width(Length::Fill)
             .padding(0)
             .style(move |_, status| {
-                let bg = if is_active {
-                    bg_color
-                } else if is_hover {
-                    p.accent
-                } else {
-                    match status {
-                        button::Status::Hovered | button::Status::Pressed => bg_hover,
-                        _ => bg_color,
-                    }
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => bg_hover,
+                    _ => bg_color,
                 };
                 button::Style {
                     background: Some(bg.into()),
@@ -143,11 +149,15 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         )
         .width(Length::Fill)
         .into(),
-        Button::new(icons::icon(icons::ADD_ICON, Color::BLACK, theme::ICON_SIZE_SM))
-            .padding(theme::SPACING_MD - 2f32)
-            .style(button_style_primary())
-            .on_press(Message::CreatePlaylist)
-            .into(),
+        Button::new(icons::icon(
+            icons::ADD_ICON,
+            Color::BLACK,
+            theme::ICON_SIZE_SM,
+        ))
+        .padding(theme::SPACING_MD - 2f32)
+        .style(button_style_primary())
+        .on_press(Message::CreatePlaylist)
+        .into(),
     ])
     .align_y(alignment::Vertical::Center)
     .spacing(theme::SPACING_SM)
@@ -156,7 +166,9 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     let sidebar_content = Column::with_children(vec![
         nav_buttons.into(),
         widget::rule::horizontal(1).into(),
-        Column::with_children(nav_items).spacing(2).into(),
+        Column::with_children(nav_items)
+            .spacing(theme::SPACING_XS)
+            .into(),
         widget::rule::horizontal(1).into(),
         scrollable(
             Column::with_children(playlist_items)

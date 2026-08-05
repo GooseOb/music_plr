@@ -30,21 +30,30 @@ pub(super) fn reorder_tracks(
 
 impl MusicPlayer {
     fn cursor_in_sidebar(&self) -> bool {
-        self.sidebar_bounds
-            .is_some_and(|b| self.drag.cursor_pos.x < b.x + crate::theme::SIDEBAR_WIDTH)
+        match self.sidebar_bounds {
+            Some(b) => self.drag.cursor_pos.x < b.x + crate::theme::SIDEBAR_WIDTH,
+            None => self.drag.cursor_pos.x < crate::theme::SIDEBAR_WIDTH,
+        }
     }
 
     fn sidebar_playlist_at_cursor(&self) -> Option<usize> {
-        let sidebar_bounds = self.sidebar_bounds?;
-        if self.drag.cursor_pos.x >= sidebar_bounds.x + crate::theme::SIDEBAR_WIDTH {
+        if self.drag.cursor_pos.x >= crate::theme::SIDEBAR_WIDTH {
             return None;
         }
-        let y_offset = self.drag.cursor_pos.y - sidebar_bounds.y;
+        // Use the actual scrollable viewport bounds when available (set via
+        // `on_scroll`). Fall back to a constant offset from the top of the
+        // sidebar when no scroll has occurred yet — iced's `on_scroll` callback
+        // does not fire when the scrollable content fits entirely within the
+        // viewport, leaving `sidebar_bounds` as `None`.
+        let y_start = self
+            .sidebar_bounds
+            .map_or(crate::theme::SIDEBAR_PLAYLIST_LIST_OFFSET_Y, |b| b.y);
+        let y_offset = self.drag.cursor_pos.y - y_start;
         if y_offset < 0.0 {
             return None;
         }
-        let playlist_idx =
-            ((y_offset + self.sidebar_list_scroll) / crate::theme::SIDEBAR_ITEM_HEIGHT) as usize;
+        let playlist_idx = ((y_offset + self.sidebar_list_scroll)
+            / (crate::theme::SIDEBAR_ITEM_HEIGHT + 2.0)) as usize;
         if playlist_idx < self.playlists.playlists.len() {
             Some(playlist_idx)
         } else {

@@ -55,10 +55,14 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
 
     let controls = Container::new(
         Row::with_children(vec![
-            Button::new(icons::icon(icons::SKIP_BACK_ICON, p.fg, theme::ICON_SIZE_MD))
-                .padding(theme::SPACING_XS2)
-                .on_press(Message::PreviousTrack)
-                .into(),
+            Button::new(icons::icon(
+                icons::SKIP_BACK_ICON,
+                p.fg,
+                theme::ICON_SIZE_MD,
+            ))
+            .padding(theme::SPACING_XS2)
+            .on_press(Message::PreviousTrack)
+            .into(),
             Button::new(icons::icon(
                 play_pause_icon,
                 Color::BLACK,
@@ -68,10 +72,14 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
             .style(button_style_primary())
             .on_press(Message::TogglePlayPause)
             .into(),
-            Button::new(icons::icon(icons::SKIP_FORWARD_ICON, p.fg, theme::ICON_SIZE_MD))
-                .padding(theme::SPACING_XS2)
-                .on_press(Message::NextTrack)
-                .into(),
+            Button::new(icons::icon(
+                icons::SKIP_FORWARD_ICON,
+                p.fg,
+                theme::ICON_SIZE_MD,
+            ))
+            .padding(theme::SPACING_XS2)
+            .on_press(Message::NextTrack)
+            .into(),
         ])
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center),

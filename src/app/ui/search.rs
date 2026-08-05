@@ -37,13 +37,17 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
     Container::new(
         Row::with_children(vec![
             input,
-            Button::new(icons::icon(icons::SEARCH_ICON, Color::BLACK, theme::ICON_SIZE_MD))
-                .padding(theme::SPACING_SM)
-                .style(button_style_primary())
-                .width(Length::Fixed(theme::SEARCH_BTN_SIZE))
-                .height(Length::Fixed(theme::SEARCH_BTN_SIZE))
-                .on_press(submit_msg())
-                .into(),
+            Button::new(icons::icon(
+                icons::SEARCH_ICON,
+                Color::BLACK,
+                theme::ICON_SIZE_MD,
+            ))
+            .padding(theme::SPACING_SM)
+            .style(button_style_primary())
+            .width(Length::Fixed(theme::SEARCH_BTN_SIZE))
+            .height(Length::Fixed(theme::SEARCH_BTN_SIZE))
+            .on_press(submit_msg())
+            .into(),
         ])
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)
@@ -185,24 +189,28 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                     })
                     .on_press(Message::SearchHistorySelected(i))
                     .into(),
-                    Button::new(icons::icon(icons::DELETE_ICON, p.fg_muted, theme::ICON_SIZE_SM))
-                        .padding(theme::SPACING_XS)
-                        .style(move |t, status| {
-                            let p = &t.palette;
-                            let bg = match status {
-                                button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-                                _ => p.bg_secondary,
-                            };
-                            button::Style {
-                                background: Some(bg.into()),
-                                border: iced::border::rounded(theme::RADIUS_SM),
-                                ..Default::default()
-                            }
-                        })
-                        .on_press(Message::DeleteSearchHistory(i))
-                        .width(Length::Fixed(theme::DELETE_BTN_SIZE))
-                        .height(Length::Fixed(theme::DELETE_BTN_SIZE))
-                        .into(),
+                    Button::new(icons::icon(
+                        icons::DELETE_ICON,
+                        p.fg_muted,
+                        theme::ICON_SIZE_SM,
+                    ))
+                    .padding(theme::SPACING_XS)
+                    .style(move |t, status| {
+                        let p = &t.palette;
+                        let bg = match status {
+                            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
+                            _ => p.bg_secondary,
+                        };
+                        button::Style {
+                            background: Some(bg.into()),
+                            border: iced::border::rounded(theme::RADIUS_SM),
+                            ..Default::default()
+                        }
+                    })
+                    .on_press(Message::DeleteSearchHistory(i))
+                    .width(Length::Fixed(theme::DELETE_BTN_SIZE))
+                    .height(Length::Fixed(theme::DELETE_BTN_SIZE))
+                    .into(),
                 ])
                 .align_y(alignment::Vertical::Center),
             )

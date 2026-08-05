@@ -191,7 +191,10 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
     let tracks = &player.queue.recently_played;
 
     if tracks.is_empty() {
-        return empty_state("No recently played tracks", player.app_theme.palette.fg_secondary);
+        return empty_state(
+            "No recently played tracks",
+            player.app_theme.palette.fg_secondary,
+        );
     }
 
     let items: Vec<Element<'_, Message, AppTheme>> = tracks
@@ -213,11 +216,15 @@ fn view_recently_played_row<'a>(
     let row_bg = if is_hovered { p.bg_hover } else { p.bg };
 
     let leading = if is_hovered {
-        Button::new(icons::icon(icons::PLAY_ICON, Color::BLACK, theme::ICON_SIZE_LG))
-            .padding(theme::SPACING_XS2)
-            .style(button_style_primary())
-            .on_press(Message::PlayRecentTrack(index))
-            .into()
+        Button::new(icons::icon(
+            icons::PLAY_ICON,
+            Color::BLACK,
+            theme::ICON_SIZE_LG,
+        ))
+        .padding(theme::SPACING_XS2)
+        .style(button_style_primary())
+        .on_press(Message::PlayRecentTrack(index))
+        .into()
     } else {
         text((index + 1).to_string())
             .size(theme::TEXT_SIZE_SM)

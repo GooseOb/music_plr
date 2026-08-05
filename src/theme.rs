@@ -51,7 +51,20 @@ impl Palette {
 
 pub const SIDEBAR_WIDTH: f32 = 300.0;
 pub const SEARCH_PAGE_SIZE: usize = 10;
-pub const SIDEBAR_ITEM_HEIGHT: f32 = 44.0;
+pub const SIDEBAR_ITEM_HEIGHT: f32 = SPACING_XS + ICON_SIZE_MD + 2.0 * SPACING_SM;
+/// Y-offset from the top of the sidebar container to the playlist list
+/// scrollable area. Used as a fallback when `sidebar_bounds` hasn't been
+/// populated yet (iced's `on_scroll` doesn't fire when content fits).
+pub const SIDEBAR_PLAYLIST_LIST_OFFSET_Y: f32 = SPACING_SM // sidebar padding
+    + SPACING_XS
+    + BUTTON_HEIGHT + 2.0 * SPACING_MD // nav_buttons
+    + SPACING_XS
+    + 1.0 // rule
+    + SPACING_XS
+    + SIDEBAR_ITEM_HEIGHT // Search
+    + SIDEBAR_ITEM_HEIGHT // Downaloads
+    + 1.0 // rule
+    + SPACING_XS;
 pub const ROW_HEIGHT: f32 = 48.0;
 pub const THUMBNAIL_SIZE: f32 = 36.0;
 pub const QUEUE_MIN_WIDTH: f32 = 240.0;

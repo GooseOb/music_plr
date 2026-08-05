@@ -137,11 +137,15 @@ fn view_track_row<'a>(
             .on_press(Message::TogglePlayPause)
             .into()
     } else if is_hovered {
-        Button::new(icons::icon(icons::PLAY_ICON, Color::BLACK, theme::ICON_SIZE_LG))
-            .padding(theme::SPACING_XS2)
-            .style(button_style_primary())
-            .on_press(Message::PlayTrackAtIndex { index, is_queue })
-            .into()
+        Button::new(icons::icon(
+            icons::PLAY_ICON,
+            Color::BLACK,
+            theme::ICON_SIZE_LG,
+        ))
+        .padding(theme::SPACING_XS2)
+        .style(button_style_primary())
+        .on_press(Message::PlayTrackAtIndex { index, is_queue })
+        .into()
     } else {
         text((index + 1).to_string())
             .size(theme::TEXT_SIZE_SM)
