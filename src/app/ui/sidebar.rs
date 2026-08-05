@@ -7,8 +7,8 @@ use iced::{
 use crate::app::ui::{button_style_primary, view_notification};
 
 use super::{
-    bg, button, button_style_nav, icons, scrollable, text_input_style, theme, widget, Element,
-    Message, MusicPlayer, View,
+    bg, button, button_style_nav, icons, scrollable, scrollable_style, text_input_style, theme,
+    widget, Element, Message, MusicPlayer, View,
 };
 
 fn sidebar_separator(p: &theme::Palette) -> widget::Rule<'_> {
@@ -161,6 +161,7 @@ pub(super) fn view_sidebar<'a>(player: &'a MusicPlayer) -> Element<'a, Message> 
                 .width(Length::Fill),
         )
         .id(iced::widget::Id::new("sidebar_playlist_list"))
+        .style(scrollable_style(p))
         .on_scroll(|vp| Message::SidebarListScrolled {
             offset_y: vp.absolute_offset().y,
             bounds: vp.bounds(),

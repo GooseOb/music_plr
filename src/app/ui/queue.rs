@@ -192,7 +192,7 @@ fn view_recently_played_tab<'a>(player: &'a MusicPlayer) -> Element<'a, Message>
         .map(|(i, track)| view_recently_played_row(track, i, player))
         .collect();
 
-    scrollable_list("recently_played_list", items)
+    scrollable_list("recently_played_list", items, &player.palette)
 }
 
 fn view_recently_played_row<'a>(

@@ -5,8 +5,8 @@ use iced::{
 };
 
 use super::{
-    button_style_primary, container, drop_indicator, icons, scrollable_id, theme, thumbnail,
-    DragTargetList, Message, MusicPlayer,
+    button_style_primary, container, drop_indicator, icons, scrollable_id, scrollable_style,
+    theme, thumbnail, DragTargetList, Message, MusicPlayer,
 };
 
 pub(super) fn view_track_list<'a>(
@@ -53,6 +53,7 @@ pub(super) fn view_track_list<'a>(
     Container::new(
         scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
             .id(list_id)
+            .style(scrollable_style(&player.palette))
             .on_scroll(move |vp| Message::ListScrolled {
                 offset_y: vp.absolute_offset().y,
                 bounds: vp.bounds(),
@@ -231,10 +232,12 @@ pub(super) fn empty_state(msg: &str, color: Color) -> Element<'_, Message> {
 pub(super) fn scrollable_list<'a>(
     id: &'static str,
     items: Vec<Element<'a, Message>>,
+    p: &'a theme::Palette,
 ) -> Element<'a, Message> {
     Container::new(
         scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
             .id(iced::widget::Id::new(id))
+            .style(scrollable_style(p))
             .width(Length::Fill)
             .height(Length::Fill),
     )

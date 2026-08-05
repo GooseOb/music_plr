@@ -7,8 +7,8 @@ use iced::{
 use crate::app::ui::button_style_primary;
 
 use super::{
-    bg, button_style_secondary, icons, text_input_style, theme, view_track_list, Message,
-    MusicPlayer, View,
+    bg, button_style_secondary, icons, scrollable_style, text_input_style, theme,
+    view_track_list, Message, MusicPlayer, View,
 };
 
 pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message> {
@@ -226,6 +226,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
 
     let content = scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
         .id(iced::widget::Id::new("search_history_list"))
+        .style(scrollable_style(p))
         .width(Length::Fill)
         .height(Length::Fixed(dropdown_height));
 

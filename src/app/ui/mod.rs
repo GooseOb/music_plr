@@ -124,6 +124,44 @@ fn slider_style(
     }
 }
 
+fn scrollable_style(
+    p: &Palette,
+) -> impl Fn(&iced::Theme, scrollable::Status) -> scrollable::Style + 'static {
+    let p = *p;
+    move |_, status| {
+        let rail = scrollable::Rail {
+            background: Some(p.bg_tertiary.scale_alpha(0.6).into()),
+            border: iced::border::rounded(0),
+            scroller: scrollable::Scroller {
+                background: match status {
+                    scrollable::Status::Active { .. } => p.fg_muted.scale_alpha(0.6),
+                    scrollable::Status::Hovered { .. } => p.fg_muted.scale_alpha(0.8),
+                    scrollable::Status::Dragged { .. } => p.fg_muted,
+                }
+                .into(),
+                border: iced::border::rounded(theme::SPACING_SM),
+            },
+        };
+
+        scrollable::Style {
+            container: container::Style::default(),
+            vertical_rail: rail,
+            horizontal_rail: rail,
+            gap: None,
+            auto_scroll: scrollable::AutoScroll {
+                background: p.overlay.into(),
+                border: iced::border::rounded(u32::MAX),
+                shadow: iced::Shadow {
+                    color: Color::BLACK.scale_alpha(0.7),
+                    offset: iced::Vector::ZERO,
+                    blur_radius: 2.0,
+                },
+                icon: p.fg_muted,
+            },
+        }
+    }
+}
+
 fn text_input_style(
     p: &Palette,
 ) -> impl Fn(&iced::Theme, text_input::Status) -> text_input::Style + 'static {
