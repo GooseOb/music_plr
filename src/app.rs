@@ -473,10 +473,7 @@ impl MusicPlayer {
                 self.sidebar_list_scroll = offset_y;
                 Task::none()
             }
-            Message::KeyPressed { key, modifiers } => {
-                self.handle_key_press(&key, modifiers);
-                Task::none()
-            }
+            Message::KeyPressed { key, modifiers } => self.handle_key_press(&key, modifiers),
             Message::SearchInputChanged(query) => {
                 self.search_query = query;
                 self.update_search_history();
