@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{self, button, text, Button, Column, Container, MouseArea, Row},
+    widget::{button, rule, text, Button, Column, Container, Id, MouseArea, Row},
     Color, Element, Length,
 };
 
@@ -12,10 +12,13 @@ use crate::{
 
 use super::{
     styles::{bg_secondary, button_style_primary, fg_secondary},
+    track_list::{
+        empty_state, row_layout, scrollable_list, section_header, track_row, view_track_list,
+    },
     Message, MusicPlayer,
 };
 
-use super::track_list::{empty_state, row_layout, scrollable_list, section_header, track_row};
+pub const QUEUE_LIST_ID: Id = Id::new("queue_list");
 
 pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let queue_width = (player.window_width * theme::QUEUE_WIDTH_RATIO).max(theme::QUEUE_MIN_WIDTH);
@@ -135,17 +138,17 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .padding(theme::SPACING_MD)
         .into()
     } else {
-        super::track_list::view_track_list(upcoming, player, true, offset)
+        view_track_list(upcoming, player, true, offset)
     };
 
     Column::with_children(vec![
         now_playing_header.into(),
         now_playing_row,
-        widget::rule::horizontal(1)
-            .style(move |_| widget::rule::Style {
+        rule::horizontal(1)
+            .style(move |_| rule::Style {
                 color: p.fg_muted,
                 radius: iced::border::Radius::new(0),
-                fill_mode: widget::rule::FillMode::Padded(theme::SPACING_MD as u16),
+                fill_mode: rule::FillMode::Padded(theme::SPACING_MD as u16),
                 snap: true,
             })
             .into(),
@@ -188,7 +191,7 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
         .map(|(i, track)| view_recently_played_row(track, i, player))
         .collect();
 
-    scrollable_list("recently_played_list", items)
+    scrollable_list(QUEUE_LIST_ID, items)
 }
 
 fn view_recently_played_row<'a>(

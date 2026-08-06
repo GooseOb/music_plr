@@ -1,3 +1,5 @@
+use crate::app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID};
+
 use super::{DragTargetList, Message, MusicPlayer, Task, Track, View, DOUBLE_CLICK_MS};
 
 pub(super) fn reorder_tracks(
@@ -232,9 +234,9 @@ impl MusicPlayer {
         }
 
         let list_id = if is_queue {
-            iced::widget::Id::new("queue_list")
+            QUEUE_LIST_ID
         } else {
-            iced::widget::Id::new("track_list")
+            TRACK_LIST_ID
         };
 
         iced::widget::operation::scroll_by::<Message>(

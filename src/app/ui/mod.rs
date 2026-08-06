@@ -22,6 +22,9 @@ mod sidebar;
 mod styles;
 mod track_list;
 
+pub use queue::QUEUE_LIST_ID;
+pub use track_list::TRACK_LIST_ID;
+
 use track_list::view_track_list;
 
 pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {

@@ -1,19 +1,23 @@
 use iced::{
     alignment,
     widget::{
-        container, image, rule, scrollable, text, Button, Column, Container, MouseArea, Row, Rule,
+        container, image, rule, scrollable, text, Button, Column, Container, Id, MouseArea, Row,
+        Rule,
     },
     Color, Element, Length,
 };
 
+pub const TRACK_LIST_ID: Id = Id::new("track_list");
+
 use crate::{
-    app::ui::shared_components::play_pause_button,
     icons,
     theme::{AppTheme, Palette},
     types::Track,
 };
 
 use super::{
+    queue::QUEUE_LIST_ID,
+    shared_components::play_pause_button,
     styles::{button_style_primary, fg_secondary},
     theme, DragTargetList, Message, MusicPlayer,
 };
@@ -87,6 +91,11 @@ pub(super) fn view_track_list<'a>(
 
     Container::new(
         scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
+            .id(if is_queue {
+                QUEUE_LIST_ID
+            } else {
+                TRACK_LIST_ID
+            })
             .on_scroll(move |vp| Message::ListScrolled {
                 offset_y: vp.absolute_offset().y,
                 bounds: vp.bounds(),
@@ -232,12 +241,12 @@ pub(super) fn empty_state(msg: &str, color: Color) -> Element<'_, Message, AppTh
 
 /// A scrollable column of pre-built elements with a stable id.
 pub(super) fn scrollable_list<'a>(
-    id: &'static str,
+    id: Id,
     items: Vec<Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
     Container::new(
         scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
-            .id(iced::widget::Id::new(id))
+            .id(id)
             .width(Length::Fill)
             .height(Length::Fill),
     )
