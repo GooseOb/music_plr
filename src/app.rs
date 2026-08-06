@@ -256,6 +256,8 @@ pub struct MusicPlayer {
     pub mpris_cmd_tx: mpsc::Sender<MprisCommand>,
     pub mpris_cmd_rx: mpsc::Receiver<MprisCommand>,
     pub mpris_update_tx: Option<mpsc::Sender<MprisUpdate>>,
+    pub mpris_dirty: bool,
+    pub session_dirty: bool,
 
     pub drag: DragState,
 
@@ -342,6 +344,8 @@ impl MusicPlayer {
             mpris_cmd_tx,
             mpris_cmd_rx,
             mpris_update_tx: None,
+            mpris_dirty: true,
+            session_dirty: true,
             drag: DragState::default(),
             context_menu: None,
             queue_selected_indices: Vec::new(),
@@ -421,7 +425,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::WindowClose => {
-                self.save_session();
+                self.flush_session();
                 Task::none()
             }
             Message::CursorMoved(pos) => {

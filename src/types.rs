@@ -45,11 +45,13 @@ impl View {
     }
 }
 
+use std::collections::VecDeque;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlayQueue {
     pub tracks: Vec<Track>,
     /// Tracks that have been played, most recent first. Deduped by url.
-    pub recently_played: Vec<Track>,
+    pub recently_played: VecDeque<Track>,
     /// Which tab is currently shown in the queue panel.
     pub queue_tab: QueueTab,
 }
@@ -58,7 +60,7 @@ impl PlayQueue {
     pub const fn new() -> Self {
         Self {
             tracks: Vec::new(),
-            recently_played: Vec::new(),
+            recently_played: VecDeque::new(),
             queue_tab: QueueTab::Queue,
         }
     }
@@ -69,12 +71,12 @@ impl PlayQueue {
 
     /// Pop the current (first) track off the front of the queue after it has
     /// finished playing, making the next track the new current.
-    pub fn advance(&mut self) -> Option<()> {
+    pub fn advance(&mut self) -> bool {
         if !self.tracks.is_empty() {
             self.tracks.remove(0);
-            Some(())
+            true
         } else {
-            None
+            false
         }
     }
 
@@ -82,22 +84,20 @@ impl PlayQueue {
     /// Deduplicates by url, keeping most-recent-first. Trims to `max_len`.
     pub fn record_played(&mut self, track: &Track, max_len: usize) {
         self.recently_played.retain(|t| t.url != track.url);
-        self.recently_played.insert(0, track.clone());
-        if self.recently_played.len() > max_len {
-            self.recently_played.truncate(max_len);
+        self.recently_played.push_front(track.clone());
+        while self.recently_played.len() > max_len {
+            self.recently_played.pop_back();
         }
     }
 
     /// Restore the most recently played track to the front of the queue
     /// (becomes the new current track).
-    pub fn restore_previous(&mut self) -> Option<()> {
-        if let Some(track) = self.recently_played.first() {
-            let track = track.clone();
-            self.recently_played.remove(0);
+    pub fn restore_previous(&mut self) -> bool {
+        if let Some(track) = self.recently_played.pop_front() {
             self.tracks.insert(0, track);
-            Some(())
+            true
         } else {
-            None
+            false
         }
     }
 
@@ -175,31 +175,31 @@ mod tests {
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
 
         // advance removes the current track, making the next one current
-        assert!(q.advance().is_some());
+        assert!(q.advance());
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("2"));
 
         // record played and restore_previous puts it back at the front
         let t1 = make_track("1", "url1");
         q.record_played(&t1, 50);
-        assert!(q.restore_previous().is_some());
+        assert!(q.restore_previous());
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
 
         // advance through all tracks
-        assert!(q.advance().is_some());
+        assert!(q.advance());
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("2"));
-        assert!(q.advance().is_some());
+        assert!(q.advance());
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("3"));
-        assert!(q.advance().is_some());
+        assert!(q.advance());
         assert!(q.current().is_none());
-        assert!(q.advance().is_none());
+        assert!(!q.advance());
     }
 
     #[test]
     fn play_queue_empty() {
         let mut q = PlayQueue::new();
         assert!(q.current().is_none());
-        assert!(q.advance().is_none());
-        assert!(q.restore_previous().is_none());
+        assert!(!q.advance());
+        assert!(!q.restore_previous());
     }
 
     #[test]

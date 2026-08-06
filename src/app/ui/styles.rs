@@ -45,7 +45,6 @@ pub fn bg_popup() -> impl Fn(&AppTheme) -> container::Style + 'static {
 pub fn fg_secondary() -> impl Fn(&AppTheme) -> text::Style + 'static {
     |theme| text::Style {
         color: theme.palette.fg_secondary.into(),
-        ..Default::default()
     }
 }
 
@@ -136,6 +135,50 @@ pub fn button_style_nav(
         button::Style {
             background: Some(bg_color.into()),
             text_color,
+            border: border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
+}
+
+/// A list-item button that highlights on hover and uses `accent` for active
+/// items. Used by sidebar playlists, search history, and playlist picker.
+pub fn button_style_list_item(
+    active: bool,
+) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
+    move |theme, status| {
+        let p = &theme.palette;
+        let bg_color = match status {
+            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
+            _ => {
+                if active {
+                    p.bg_current
+                } else {
+                    p.bg_secondary
+                }
+            }
+        };
+        let text_color = if active { p.fg } else { p.fg_secondary };
+        button::Style {
+            background: Some(bg_color.into()),
+            text_color,
+            border: border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
+}
+
+/// A button with no text color / border emphasis — used for icon-only
+/// action buttons (e.g. delete in search history).
+pub fn button_style_delete() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
+    |theme, status| {
+        let p = &theme.palette;
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
+            _ => p.bg_secondary,
+        };
+        button::Style {
+            background: Some(bg.into()),
             border: border::rounded(theme::RADIUS_SM),
             ..Default::default()
         }

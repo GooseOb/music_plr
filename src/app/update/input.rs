@@ -9,7 +9,8 @@ impl MusicPlayer {
         };
         let main_width = (self.window_width - crate::theme::SIDEBAR_WIDTH - queue_width).max(0.0);
         let input_x = crate::theme::SPACING_XL;
-        let input_width = (2.0f32.mul_add(-crate::theme::SPACING_XL, main_width)
+        let input_width = (main_width
+            - 2.0 * crate::theme::SPACING_XL
             - crate::theme::SEARCH_BTN_SIZE
             - crate::theme::SPACING_SM)
             .max(100.0);
@@ -87,7 +88,7 @@ impl MusicPlayer {
                     }
                 } else {
                     self.drag.hovered_track = Some((first_idx, is_queue));
-                };
+                }
             }
             iced::keyboard::Key::Named(Named::ArrowDown) => {
                 let is_queue = self.is_queue_hovered();
@@ -103,7 +104,7 @@ impl MusicPlayer {
                     }
                 } else {
                     self.drag.hovered_track = Some((self.list_first_index(is_queue), is_queue));
-                };
+                }
             }
             iced::keyboard::Key::Named(Named::Enter) => {
                 if let Some((index, is_queue)) = self.drag.hovered_track {
@@ -164,10 +165,6 @@ impl MusicPlayer {
     }
 
     fn list_first_index(&self, is_queue: bool) -> usize {
-        if is_queue && matches!(self.queue.queue_tab, crate::types::QueueTab::Queue) {
-            1
-        } else {
-            0
-        }
+        usize::from(is_queue && matches!(self.queue.queue_tab, crate::types::QueueTab::Queue))
     }
 }

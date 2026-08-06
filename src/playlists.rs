@@ -62,6 +62,23 @@ impl PlaylistStore {
             }
         }
     }
+
+    /// Insert multiple tracks at once, writing to disk only once.
+    /// `pos` is clamped per-track to the growing list length.
+    pub fn insert_tracks_at(&mut self, playlist_idx: usize, tracks: &[Track], pos: usize) {
+        let Some(pl) = self.playlists.get_mut(playlist_idx) else {
+            return;
+        };
+        let mut insert_pos = pos;
+        for track in tracks {
+            if !pl.tracks.iter().any(|t| t.url == track.url) {
+                insert_pos = insert_pos.min(pl.tracks.len());
+                pl.tracks.insert(insert_pos, track.clone());
+                insert_pos += 1;
+            }
+        }
+        self.save();
+    }
 }
 
 fn store_path() -> PathBuf {

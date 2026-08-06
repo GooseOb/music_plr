@@ -264,15 +264,15 @@ impl MusicPlayer {
 
         if self.cursor_in_sidebar() {
             if let Some(playlist_idx) = self.sidebar_playlist_at_cursor() {
-                let mut count = 0;
-                for &i in indices.iter().rev() {
-                    if let Some(track) = self.get_track_at(i, is_queue) {
-                        let track = track.clone();
-                        self.playlists.insert_track_at(playlist_idx, &track, 0);
-                        count += 1;
-                    }
+                let tracks: Vec<Track> = indices
+                    .iter()
+                    .rev()
+                    .filter_map(|&i| self.get_track_at(i, is_queue))
+                    .collect();
+                let count = tracks.len();
+                if count > 0 {
+                    self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
                 }
-                self.playlists.save();
                 let name = self.playlists.playlists[playlist_idx].name.clone();
                 self.notify(format!(
                     "Added {} track{} to {}",
@@ -294,11 +294,9 @@ impl MusicPlayer {
 
         match target {
             Some(DragTargetList::Queue) if !source_is_queue => {
-                // Copy tracks from the current track list into the queue.
                 self.copy_to_queue(&indices, drop_idx);
             }
             Some(DragTargetList::TrackList) if source_is_queue => {
-                // Copy tracks from the queue into the current playlist.
                 self.copy_from_queue(&indices, drop_idx);
             }
             Some(_) if Self::target_is_same_as_source(target, source_is_queue) => {
@@ -309,6 +307,10 @@ impl MusicPlayer {
                     source_is_queue,
                 );
             }
+            // None target: cursor is over no valid drop zone.
+            // Some(target) where target_is_same_as_source is false is
+            // unreachable: the two cross-list arms above cover all mismatched
+            // targets, and same-list targets are caught by the guard above.
             _ => {}
         }
     }
@@ -328,15 +330,14 @@ impl MusicPlayer {
     /// Insert tracks from the current (non-queue) track list into the queue
     /// at the given drop index. `indices` are positions in the source list.
     fn copy_to_queue(&mut self, indices: &[usize], drop_idx: usize) {
-        let count = self.queue.tracks.len();
-        let clamped = drop_idx.min(count);
-        let mut inserted = 0;
-        for &i in indices {
-            if let Some(track) = self.get_track_at(i, false) {
-                let track = track.clone();
-                self.queue.tracks.insert(clamped + inserted, track);
-                inserted += 1;
-            }
+        let clamped = drop_idx.min(self.queue.tracks.len());
+        let tracks: Vec<Track> = indices
+            .iter()
+            .filter_map(|&i| self.get_track_at(i, false))
+            .collect();
+        let inserted = tracks.len();
+        for (j, track) in tracks.into_iter().enumerate() {
+            self.queue.tracks.insert(clamped + j, track);
         }
         self.save_session();
         self.notify(format!(
@@ -361,16 +362,14 @@ impl MusicPlayer {
         }
 
         let clamped = drop_idx.min(self.playlists.playlists[sp].tracks.len());
-        let mut inserted = 0;
-        for &queue_idx in indices {
-            if let Some(track) = self.queue.tracks.get(queue_idx) {
-                let track = track.clone();
-                self.playlists
-                    .insert_track_at(sp, &track, clamped + inserted);
-                inserted += 1;
-            }
+        let tracks: Vec<Track> = indices
+            .iter()
+            .filter_map(|&queue_idx| self.queue.tracks.get(queue_idx).cloned())
+            .collect();
+        let inserted = tracks.len();
+        if inserted > 0 {
+            self.playlists.insert_tracks_at(sp, &tracks, clamped);
         }
-        self.playlists.save();
         let name = self.playlists.playlists[sp].name.clone();
         self.notify(format!(
             "Added {} track{} to {}",

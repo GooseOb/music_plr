@@ -2,15 +2,22 @@ use super::{warn, MusicPlayer, NavEntry};
 use crate::session::SessionState;
 
 impl MusicPlayer {
-    pub fn save_session(&self) {
-        let state = SessionState {
-            view: self.current_view.clone(),
-            snapshot: self.snapshot_current(),
-            queue: self.queue.clone(),
-            show_queue: self.show_queue,
-            volume: self.volume,
-        };
-        state.save();
+    pub fn save_session(&mut self) {
+        self.session_dirty = true;
+    }
+
+    pub fn flush_session(&mut self) {
+        if self.session_dirty {
+            let state = SessionState {
+                view: self.current_view.clone(),
+                snapshot: self.snapshot_current(),
+                queue: self.queue.clone(),
+                show_queue: self.show_queue,
+                volume: self.volume,
+            };
+            state.save();
+            self.session_dirty = false;
+        }
     }
 
     pub fn restore_session(&mut self) {

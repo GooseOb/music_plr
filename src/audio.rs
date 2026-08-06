@@ -38,6 +38,14 @@ enum PlayerCommand {
     Seek(Duration),
 }
 
+/// Extract the video id from a `YouTube` URL for naming temp files.
+fn youtube_id_from_url(url: &str) -> &str {
+    url.split("v=")
+        .nth(1)
+        .and_then(|s| s.split('&').next())
+        .unwrap_or("stream")
+}
+
 impl AudioPlayer {
     pub fn new(initial_volume: f32) -> Self {
         let state = Arc::new(Mutex::new(PlayerState {
@@ -60,6 +68,71 @@ impl AudioPlayer {
             let mut expected_duration: f32 = 0.0;
             let mut stream_active: bool = false;
 
+            /// Kill ffmpeg/yt-dlp, stop playback, and reset pipeline state.
+            /// Shared by both stream-start commands.
+            macro_rules! reset_pipeline {
+                () => {
+                    Self::kill_processes(&mut ffmpeg, &mut ytdlp, &mut temp_wav, &mut stream_url);
+                    stream_active = false;
+                    if let Some((_, s)) = &output {
+                        s.stop();
+                    }
+                    output = None;
+                    if let Ok(mut st) = state_clone.lock() {
+                        st.stream_finished = false;
+                    }
+                };
+            }
+
+            /// Try to start rodio playback from the temp WAV file once enough
+            /// data has been written. Shared by both stream-start commands.
+            macro_rules! try_start_playback {
+                () => {
+                    if output.is_none() && stream_active {
+                        if let Some(ref path) = temp_wav {
+                            let ready = std::fs::metadata(path).is_ok_and(|m| m.len() > 2048);
+                            let exited = ffmpeg
+                                .as_mut()
+                                .and_then(|p| p.try_wait().ok().flatten())
+                                .is_some();
+
+                            if ready || exited {
+                                debug!("WAV ready, starting playback");
+                                if let Ok((stream, handle)) = rodio::OutputStream::try_default() {
+                                    if let Ok(sink) = rodio::Sink::try_new(&handle) {
+                                        if let Ok(file) = std::fs::File::open(path) {
+                                            if let Ok(source) =
+                                                rodio::Decoder::new(BufReader::new(file))
+                                            {
+                                                let vol =
+                                                    state_clone.lock().map_or(1.0, |st| st.volume);
+                                                let actual_duration = if expected_duration > 0.0 {
+                                                    expected_duration
+                                                } else {
+                                                    source
+                                                        .total_duration()
+                                                        .map_or(0.0, |d| d.as_secs_f32())
+                                                };
+                                                sink.set_volume(vol);
+                                                sink.append(source);
+                                                sink.play();
+                                                if let Ok(mut st) = state_clone.lock() {
+                                                    st.is_playing = true;
+                                                    st.duration = actual_duration;
+                                                    st.progress = 0.0;
+                                                    st.stream_finished = false;
+                                                }
+                                                output = Some((stream, sink));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
+            }
+
             loop {
                 match cmd_rx.recv_timeout(Duration::from_millis(250)) {
                     Ok(cmd) => match cmd {
@@ -75,29 +148,12 @@ impl AudioPlayer {
                                 }
                             }
 
-                            Self::kill_processes(
-                                &mut ffmpeg,
-                                &mut ytdlp,
-                                &mut temp_wav,
-                                &mut stream_url,
-                            );
-                            stream_active = false;
-                            if let Some((_, s)) = &output {
-                                s.stop();
-                            }
-                            output = None;
-                            if let Ok(mut st) = state_clone.lock() {
-                                st.stream_finished = false;
-                            }
+                            reset_pipeline!();
 
-                            let id = url
-                                .split("v=")
-                                .nth(1)
-                                .and_then(|s| s.split('&').next())
-                                .unwrap_or("stream");
                             let temp_dir = std::env::temp_dir().join("music_plr");
                             let _ = std::fs::create_dir_all(&temp_dir);
-                            let temp_path = temp_dir.join(format!("{id}.wav"));
+                            let temp_path =
+                                temp_dir.join(format!("{}.wav", youtube_id_from_url(&url)));
                             let temp_str = temp_path.to_string_lossy().to_string();
 
                             debug!("Spawning yt-dlp, teeing raw output to cache + ffmpeg");
@@ -168,8 +224,6 @@ impl AudioPlayer {
                                 let _ = std::fs::create_dir_all(dir);
                             }
 
-                            // Spawn tee thread: reads yt-dlp stdout, writes to both
-                            // cache file and ffmpeg stdin
                             let cache_path_clone = cache_path.clone();
                             thread::spawn(move || {
                                 let mut cache_file = match std::fs::File::create(&cache_path_clone)
@@ -216,28 +270,17 @@ impl AudioPlayer {
                             cache_path,
                             duration,
                         } => {
-                            Self::kill_processes(
-                                &mut ffmpeg,
-                                &mut ytdlp,
-                                &mut temp_wav,
-                                &mut stream_url,
-                            );
-                            stream_active = false;
-                            if let Some((_, s)) = &output {
-                                s.stop();
-                            }
-                            output = None;
-                            if let Ok(mut st) = state_clone.lock() {
-                                st.stream_finished = false;
-                            }
+                            reset_pipeline!();
 
-                            let id = cache_path
-                                .file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("cache");
                             let temp_dir = std::env::temp_dir().join("music_plr");
                             let _ = std::fs::create_dir_all(&temp_dir);
-                            let temp_path = temp_dir.join(format!("{id}.wav"));
+                            let temp_path = temp_dir.join(format!(
+                                "{}.wav",
+                                cache_path
+                                    .file_stem()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or("cache")
+                            ));
                             let temp_str = temp_path.to_string_lossy().to_string();
 
                             debug!("Playing cached file through ffmpeg: {:?}", cache_path);
@@ -368,49 +411,7 @@ impl AudioPlayer {
                     }
                 }
 
-                // Start playback once WAV has enough data
-                if output.is_none() && stream_active {
-                    if let Some(ref path) = temp_wav {
-                        let ready = std::fs::metadata(path).is_ok_and(|m| m.len() > 2048);
-                        let exited = ffmpeg
-                            .as_mut()
-                            .and_then(|p| p.try_wait().ok().flatten())
-                            .is_some();
-
-                        if ready || exited {
-                            debug!("WAV ready, starting playback");
-                            if let Ok((stream, handle)) = rodio::OutputStream::try_default() {
-                                if let Ok(sink) = rodio::Sink::try_new(&handle) {
-                                    if let Ok(file) = std::fs::File::open(path) {
-                                        if let Ok(source) =
-                                            rodio::Decoder::new(BufReader::new(file))
-                                        {
-                                            let vol =
-                                                state_clone.lock().map_or(1.0, |st| st.volume);
-                                            let actual_duration = if expected_duration > 0.0 {
-                                                expected_duration
-                                            } else {
-                                                source
-                                                    .total_duration()
-                                                    .map_or(0.0, |d| d.as_secs_f32())
-                                            };
-                                            sink.set_volume(vol);
-                                            sink.append(source);
-                                            sink.play();
-                                            if let Ok(mut st) = state_clone.lock() {
-                                                st.is_playing = true;
-                                                st.duration = actual_duration;
-                                                st.progress = 0.0;
-                                                st.stream_finished = false;
-                                            }
-                                            output = Some((stream, sink));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                try_start_playback!();
             }
 
             if let Some(ref path) = temp_wav {

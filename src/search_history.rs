@@ -68,7 +68,7 @@ impl SearchHistory {
         }
         self.queries
             .iter()
-            .filter(|q| crate::util::fuzzy_match(query_lower, &q.to_lowercase()))
+            .filter(|q| crate::util::fuzzy_match(query_lower, q))
             .cloned()
             .collect()
     }

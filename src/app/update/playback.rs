@@ -1,4 +1,4 @@
-use super::{MusicPlayer, Track};
+use super::{MusicPlayer, Track, View};
 use tracing::debug;
 
 impl MusicPlayer {
@@ -28,17 +28,41 @@ impl MusicPlayer {
             self.play_track_internal(&track);
             self.queue.clear();
             self.queue.enqueue(track);
-            let count = self.current_track_count(false);
-            for i in (index + 1)..count {
-                if let Some(t) = self.get_track_at(i, false) {
-                    self.queue.enqueue(t);
-                }
+
+            // Enqueue remaining tracks after the played one. Get the slice
+            // once instead of calling get_track_at (which re-dispatches on
+            // current_view) per iteration.
+            let remaining: Vec<Track> = self.tracks_after(index).to_vec();
+            for t in remaining {
+                self.queue.enqueue(t);
             }
             self.save_session();
         }
     }
 
-    /// Play a track picked from the Recently Played list.  The old current
+    /// Returns the tracks after `index` in the current view, without the
+    /// view dispatch overhead of `get_track_at` called in a loop.
+    fn tracks_after(&self, index: usize) -> &[Track] {
+        let start = index + 1;
+        match &self.current_view {
+            View::Search => self.search_results.get(start..).unwrap_or(&[]),
+            View::SongRadio | View::ArtistRadio => self.radio_tracks.get(start..).unwrap_or(&[]),
+            View::Playlist => {
+                if let Some(sp) = self.selected_playlist {
+                    if let Some(pl) = self.playlists.playlists.get(sp) {
+                        pl.tracks.get(start..).unwrap_or(&[])
+                    } else {
+                        &[]
+                    }
+                } else {
+                    &[]
+                }
+            }
+            View::Downloads => self.downloaded_tracks.get(start..).unwrap_or(&[]),
+        }
+    }
+
+    /// Play a track picked from the Recently Played list. The old current
     /// track (if any) is recorded as recently played, then the queue is
     /// rebuilt with *only* the selected track so the old queue is discarded.
     pub fn play_recent_track(&mut self, track: Track) {
@@ -52,7 +76,7 @@ impl MusicPlayer {
         self.queue.clear();
         self.queue.enqueue(track);
         self.save_session();
-        self.send_mpris_update();
+        self.mpris_dirty = true;
     }
 
     pub fn play_track_internal(&mut self, track: &Track) {
@@ -87,7 +111,7 @@ impl MusicPlayer {
         }
     }
 
-    pub fn toggle_play_pause(&self) {
+    pub fn toggle_play_pause(&mut self) {
         if self.queue.current().is_some() {
             if self.is_playing {
                 self.audio.pause();
@@ -95,7 +119,7 @@ impl MusicPlayer {
                 self.audio.resume();
             }
         }
-        self.send_mpris_update();
+        self.mpris_dirty = true;
     }
 
     pub fn next_track(&mut self) {
@@ -112,25 +136,25 @@ impl MusicPlayer {
             let t = t.clone();
             self.play_track_internal(&t);
             self.save_session();
-            self.send_mpris_update();
+            self.mpris_dirty = true;
         }
     }
 
-    /// “Previous” navigates the recently-played history.  If a track was
+    /// "Previous" navigates the recently-played history.  If a track was
     /// recently played it is popped from the history and restored to the
     /// front of the queue (becomes the new current track).  When history is
     /// empty there is nothing to go back to.
     pub fn previous_track(&mut self) {
         // Restore the most recently played track to the front of the queue
         // (becomes the new current track).
-        if self.queue.restore_previous().is_some() {
+        if self.queue.restore_previous() {
             self.track_loading = true;
             if let Some(t) = self.queue.current() {
                 let t = t.clone();
                 self.play_track_internal(&t);
             }
             self.save_session();
-            self.send_mpris_update();
+            self.mpris_dirty = true;
         }
     }
 
@@ -138,6 +162,7 @@ impl MusicPlayer {
         self.volume = vol.clamp(0.0, 1.0);
         self.audio.set_volume(self.volume);
         self.save_session();
+        self.mpris_dirty = true;
     }
 
     pub fn seek(&mut self, frac: f32) {
@@ -145,5 +170,6 @@ impl MusicPlayer {
         self.progress = frac;
         self.audio
             .seek(std::time::Duration::from_secs_f32(frac * self.duration));
+        self.mpris_dirty = true;
     }
 }

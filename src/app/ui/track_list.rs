@@ -47,7 +47,7 @@ fn drop_indicator() -> Rule<'static, AppTheme> {
 }
 
 pub(super) fn view_track_list<'a>(
-    tracks: &'a [crate::types::Track],
+    tracks: &'a [Track],
     player: &'a MusicPlayer,
     is_queue: bool,
     index_offset: usize,
@@ -101,7 +101,7 @@ pub(super) fn view_track_list<'a>(
 }
 
 fn view_track_row<'a>(
-    track: &'a crate::types::Track,
+    track: &'a Track,
     index: usize,
     player: &'a MusicPlayer,
     is_queue: bool,
@@ -166,9 +166,7 @@ fn view_track_row<'a>(
 // ── shared helpers ─────────────────────────────────────────────
 
 /// A title + artist column, used by all track rows.
-pub(super) fn title_artist_column<'a>(
-    track: &'a crate::types::Track,
-) -> Column<'a, Message, AppTheme> {
+pub(super) fn title_artist_column(track: &Track) -> Column<'_, Message, AppTheme> {
     Column::with_children(vec![
         text(track.title.clone()).width(Length::Fill).into(),
         text(track.artist.clone())
@@ -191,7 +189,7 @@ pub(super) fn row_layout<'a>(
         .thumbnail_cache
         .get(&track.id)
         .copied()
-        .unwrap_or_else(|| crate::thumbnails::thumbnail_path(&track.id).exists());
+        .unwrap_or(false);
     Row::with_children(vec![
         leading,
         thumbnail(track, p, theme::THUMBNAIL_SIZE, thumb_exists),

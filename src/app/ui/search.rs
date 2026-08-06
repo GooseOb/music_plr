@@ -1,13 +1,16 @@
 use iced::{
     alignment,
-    widget::{button, scrollable, text, text_input, Button, Column, Container, Row},
+    widget::{scrollable, text, text_input, Button, Column, Container, Row},
     Color, Element, Length,
 };
 
 use crate::{icons, theme::AppTheme};
 
 use super::{
-    styles::{bg_secondary, button_style_primary, fg_secondary},
+    styles::{
+        bg_secondary, button_style_delete, button_style_list_item, button_style_primary,
+        fg_secondary,
+    },
     theme, view_track_list, Message, MusicPlayer,
 };
 
@@ -147,23 +150,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                     )
                     .width(Length::Fill)
                     .padding(0)
-                    .style(move |t, status| {
-                        let p = &t.palette;
-                        let bg = match status {
-                            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-                            _ => p.bg_secondary,
-                        };
-                        let text_color = match status {
-                            button::Status::Hovered | button::Status::Pressed => p.fg,
-                            _ => p.fg_secondary,
-                        };
-                        button::Style {
-                            background: Some(bg.into()),
-                            text_color,
-                            border: iced::border::rounded(theme::RADIUS_SM),
-                            ..Default::default()
-                        }
-                    })
+                    .style(button_style_list_item(false))
                     .on_press(Message::SearchHistorySelected(i))
                     .into(),
                     Button::new(icons::icon(
@@ -172,18 +159,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                         theme::ICON_SIZE_SM,
                     ))
                     .padding(theme::SPACING_XS)
-                    .style(move |t, status| {
-                        let p = &t.palette;
-                        let bg = match status {
-                            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-                            _ => p.bg_secondary,
-                        };
-                        button::Style {
-                            background: Some(bg.into()),
-                            border: iced::border::rounded(theme::RADIUS_SM),
-                            ..Default::default()
-                        }
-                    })
+                    .style(button_style_delete())
                     .on_press(Message::DeleteSearchHistory(i))
                     .width(theme::DELETE_BTN_SIZE)
                     .height(theme::DELETE_BTN_SIZE)

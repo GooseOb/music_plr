@@ -24,6 +24,10 @@ impl MusicPlayer {
         self.update_thumbnail_cache();
 
         let s = self.audio.get_state();
+        // Detect audio state changes for MPRIS update throttling.
+        if self.is_playing != s.is_playing || (self.duration - s.duration).abs() > 0.001 {
+            self.mpris_dirty = true;
+        }
         self.is_playing = s.is_playing;
         self.progress = s.progress;
         self.duration = s.duration;
@@ -46,17 +50,31 @@ impl MusicPlayer {
             self.next_track();
         }
 
-        self.send_mpris_update();
+        self.update_mpris_if_dirty();
         self.update_progress_text();
+        self.flush_session();
+    }
+
+    fn update_mpris_if_dirty(&mut self) {
+        if self.mpris_dirty {
+            self.send_mpris_update();
+            self.mpris_dirty = false;
+        }
+        if self.mpris_dirty {
+            self.send_mpris_update();
+            self.mpris_dirty = false;
+        }
     }
 
     fn update_thumbnail_cache(&mut self) {
-        self.downloaded_tracks = self
-            .download_registry
-            .all_tracks()
-            .into_iter()
-            .cloned()
-            .collect();
+        if matches!(self.current_view, View::Downloads) {
+            self.downloaded_tracks = self
+                .download_registry
+                .all_tracks()
+                .into_iter()
+                .cloned()
+                .collect();
+        }
 
         let tracks: Vec<&Track> = match self.current_view {
             View::Search => self.search_results.iter().collect(),
@@ -111,7 +129,7 @@ impl MusicPlayer {
             MprisCommand::Pause => {
                 if self.is_playing {
                     self.audio.pause();
-                    self.send_mpris_update();
+                    self.mpris_dirty = true;
                 }
             }
             MprisCommand::SetVolume(vol) => self.set_volume(vol),

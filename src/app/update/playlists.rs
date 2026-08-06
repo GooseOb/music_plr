@@ -107,15 +107,15 @@ impl MusicPlayer {
             self.selected_indices.clone()
         };
 
-        let mut count = 0;
-        for &i in indices.iter().rev() {
-            if let Some(track) = self.get_track_at(i, false) {
-                let track = track.clone();
-                self.playlists.insert_track_at(playlist_idx, &track, 0);
-                count += 1;
-            }
+        let tracks: Vec<Track> = indices
+            .iter()
+            .rev()
+            .filter_map(|&i| self.get_track_at(i, false))
+            .collect();
+        let count = tracks.len();
+        if count > 0 {
+            self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
         }
-        self.playlists.save();
         self.show_playlist_picker = None;
         let name = self.playlists.playlists[playlist_idx].name.clone();
         self.notify(format!(

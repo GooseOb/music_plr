@@ -4,7 +4,10 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{icons, theme::AppTheme};
+use crate::{
+    icons,
+    theme::{AppTheme, Palette},
+};
 
 use super::{
     styles::{bg_secondary, button_style_nav, button_style_primary},
@@ -197,18 +200,12 @@ fn sidebar_nav_item<'a>(
     name: &'a str,
     view: View,
     player: &'a MusicPlayer,
-    p: &theme::Palette,
+    p: &'a Palette,
 ) -> Element<'a, Message, AppTheme> {
     let is_active = player.current_view == view;
-    let bg_color = if is_active {
-        p.bg_current
-    } else {
-        p.bg_secondary
-    };
     let icon_color = if is_active { p.accent } else { p.fg_muted };
     let text_color = if is_active { p.fg } else { p.fg_secondary };
-    let bg_hover = p.bg_hover;
-    let icon_name: &'static [u8] = match &view {
+    let icon_name: &[u8] = match view {
         View::Search => icons::SEARCH_ICON,
         View::Downloads => icons::DOWNLOAD_ICON,
         _ => icons::MUSIC_ICON,
@@ -227,12 +224,14 @@ fn sidebar_nav_item<'a>(
     .width(Length::Fill)
     .padding(0)
     .style(move |_, status| {
-        let bg = if is_active {
-            bg_color
-        } else {
-            match status {
-                button::Status::Hovered | button::Status::Pressed => bg_hover,
-                _ => bg_color,
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
+            _ => {
+                if is_active {
+                    p.bg_current
+                } else {
+                    p.bg_secondary
+                }
             }
         };
         button::Style {
