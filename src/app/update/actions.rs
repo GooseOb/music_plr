@@ -7,11 +7,12 @@ impl MusicPlayer {
             self.notify(format!("Downloading \"{}\"...", track.title));
             let download_dir = self.config.download_dir.clone();
             let tx = self.result_tx.clone();
+            let track_clone = track.clone();
             std::thread::spawn(move || {
                 let result = crate::youtube::download(&track.url, &download_dir);
                 match result {
                     Ok(path) => {
-                        let _ = tx.send(BackendResult::DownloadComplete(track.url, path));
+                        let _ = tx.send(BackendResult::DownloadComplete(track_clone, path));
                     }
                     Err(e) => {
                         let _ = tx.send(BackendResult::DownloadError(e.to_string()));
@@ -23,8 +24,8 @@ impl MusicPlayer {
 
     pub fn handle_remove_download(&mut self, index: usize, is_queue: bool) {
         if let Some(track) = self.get_track_at(index, is_queue) {
-            let url = track.url;
-            self.download_registry.remove(&url);
+            let url = &track.url;
+            self.download_registry.remove(url);
         }
     }
 

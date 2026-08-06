@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use tracing::warn;
+use tracing::{debug, warn};
 
 fn project_dirs() -> directories::ProjectDirs {
     directories::ProjectDirs::from("", "", "music_plr").expect("project dirs")
@@ -39,7 +39,7 @@ pub fn download(video_id: &str, url: &str) {
             }
         }
         Err(e) => {
-            warn!("Failed to download {}: {}", video_id, e);
+            warn!("Failed to download {video_id}: {e}");
         }
     }
 }

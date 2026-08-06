@@ -63,9 +63,10 @@ pub enum BackendResult {
     SearchResults(Vec<Track>),
     SearchResultsAppend(Vec<Track>),
     RadioResults(String, Vec<Track>),
-    DownloadComplete(String, String),
+    DownloadComplete(Track, String),
     DownloadError(String),
     SearchError(String),
+    ThumbnailsDownloaded,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -227,6 +228,8 @@ pub struct MusicPlayer {
 
     pub notification: Option<String>,
 
+    pub thumbnail_cache: std::collections::HashMap<String, bool>,
+    pub downloaded_tracks: Vec<Track>,
     pub playlists: PlaylistStore,
     pub selected_playlist: Option<usize>,
     pub selected_playlist_name: String,
@@ -320,6 +323,8 @@ impl MusicPlayer {
             playlist_create_name: String::new(),
             show_playlist_picker: None,
             show_queue: false,
+            thumbnail_cache: std::collections::HashMap::new(),
+            downloaded_tracks: Vec::new(),
             picker_focused_index: 0,
             show_delete_confirm: false,
             delete_confirm_index: None,

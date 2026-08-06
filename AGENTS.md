@@ -75,7 +75,7 @@ src/
 ├── youtube.rs       # YouTube search (yt-dlp primary, ytmusicapi fallback) + download
 ├── mpris.rs         # MPRIS D-Bus interface (MediaPlayer2 + Player)
 ├── thumbnails.rs    # Thumbnail download cache
-├── downloads.rs     # DownloadRegistry persistence
+├── downloads.rs     # DownloadRegistry persistence (stores full Track objects keyed by URL)
 ├── cache.rs         # StreamCache: LRU file cache with eviction
 ├── config.rs        # confy config model (preferences only: no user data)
 ├── playlists.rs     # PlaylistStore persistence
@@ -83,7 +83,7 @@ src/
 ├── session.rs       # SessionState for restore
 ├── theme.rs         # Palette, layout constants
 ├── types.rs         # Track, TrackSource, PlayQueue, View (payload-free)
-├── icons.rs         # Compile-time SVG embedding (cached handles, no-panic fallback)
+├── icons.rs         # Compile-time SVG embedding via `include_bytes!` + `icon()` factory
 └── util.rs         # format_duration, fuzzy_match
 ```
 
@@ -91,12 +91,20 @@ src/
 
 - **`MusicPlayer`** (in `app.rs`): holds audio player, config, search_history, queue, playlists, search
   results, radio tracks, UI flags, mpsc channels, drag state (grouped in `DragState`),
-  context menu, nav history, clipboard (copy/paste), last-click timing (double-click), scroll bounds.
+  context menu, nav history, clipboard (copy/paste), last-click timing (double-click), scroll bounds,
+  `download_registry`, `stream_cache`, `thumbnail_cache` (HashMap of track ID → exists bool,
+  populated in tick to avoid per-frame `Path::exists()` calls), and `downloaded_tracks` (Vec<Track>,
+  synced from `DownloadRegistry` in tick, used by the Downloads view).
 - **`DragState`** sub-struct: groups `cursor_pos`, `pressed_track`, `pressed_track_is_queue`,
   `hovered_track`, `drag_origin`, `drag_active`, `drag_drop_target`, `drag_target_list`,
   `sidebar_hover_playlist`. Cleaned up via `DragState::cleanup()`.
 - **`BackendResult` channel**: background threads (search, download, thumbnails) send
   variants via mpsc. The 250ms tick drains and calls `process_result`.
+  Variants: `SearchResults(Vec<Track>)`, `SearchResultsAppend(Vec<Track>)`,
+  `RadioResults(String, Vec<Track>)`, `DownloadComplete(Track, String)`,
+  `DownloadError(String)`, `SearchError(String)`, `ThumbnailsDownloaded`.
+  The `ThumbnailsDownloaded` variant is sent after `spawn_thumbnail_download_thread`
+  finishes; it clears `thumbnail_cache` so existence checks re-run on the next tick.
 - **MPRIS commands**: D-Bus thread sends `MprisCommand` via a separate channel, processed
   by `process_mpris_command` during the tick. A `MprisUpdate` channel flows in the opposite
   direction (main → MPRIS thread).
@@ -126,6 +134,8 @@ src/
 - Search/radio results cached per `NavEntry` `ViewSnapshot` for back/forward restore
 - `SearchResultsAppend` (Load More) syncs current `ViewSnapshot` results in-place
 - "Load More" hidden once a page returns < `SEARCH_PAGE_SIZE` (`search_exhausted`)
+- `View::Downloads` clears `selected_playlist` on navigation (via `handle_navigate_to`);
+  renders from `downloaded_tracks` (synced from `DownloadRegistry` in tick), not from playlists
 
 ## UI Layout
 
@@ -148,8 +158,9 @@ src/
 - `slider_style()` is provided by the `AppTheme` `slider::Catalog` impl in `theme.rs`
 - `iced::alignment::Vertical::Top` (not `::Start`)
 - `iced::widget::rule::horizontal(height)` for dividers
-- Icons: match-based `include_str!` with `OnceLock` cache for `svg::Handle`s;
-  unknown icon names fall back to "music.svg" (never panics)
+- Icons: `include_bytes!` for raw SVG data + an `icon(icon_data, color, size)` factory
+  that builds `svg::Svg::new(svg::Handle::from_memory(icon_data))` (see `src/icons.rs`);
+  `svg::Handle::from_memory` embeds bytes at compile time — no disk I/O or caching needed
 - `iced::event::listen_with()` takes a `fn` pointer
 - `Subscription::batch` (not `Subscription::chain`)
 - `iced::widget::text::Text` uses `.center()` / `.align_x()` / `.align_y()`

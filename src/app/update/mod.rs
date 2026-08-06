@@ -17,12 +17,16 @@ mod tick;
 
 const DOUBLE_CLICK_MS: u128 = 300;
 
-pub fn spawn_thumbnail_download_thread(tracks: &[Track]) {
+pub fn spawn_thumbnail_download_thread(tracks: &[Track], tx: mpsc::Sender<BackendResult>) {
     let entries: Vec<(String, String)> = tracks
         .iter()
         .filter(|t| t.source == TrackSource::YouTube)
         .map(|t| (t.id.clone(), t.thumbnail.clone()))
         .collect();
+    tracing::debug!(
+        "Spawning thumbnail download thread for {} entries",
+        entries.len()
+    );
     if entries.is_empty() {
         return;
     }
@@ -30,5 +34,6 @@ pub fn spawn_thumbnail_download_thread(tracks: &[Track]) {
         for (id, thumb) in &entries {
             crate::thumbnails::download(id, thumb);
         }
+        let _ = tx.send(BackendResult::ThumbnailsDownloaded);
     });
 }

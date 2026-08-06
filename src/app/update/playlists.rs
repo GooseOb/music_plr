@@ -193,7 +193,7 @@ impl MusicPlayer {
             return;
         }
         match &self.current_view {
-            View::Playlist | View::Downloads => {
+            View::Playlist => {
                 if let Some(sp) = self.selected_playlist {
                     if sp < self.playlists.playlists.len() {
                         let indices: Vec<usize> = self.selected_indices.clone();
@@ -212,6 +212,22 @@ impl MusicPlayer {
                         ));
                     }
                 }
+            }
+            View::Downloads => {
+                let indices: Vec<usize> = self.selected_indices.clone();
+                let mut removed = 0;
+                for &i in indices.iter().rev() {
+                    if i < self.downloaded_tracks.len() {
+                        let track = self.downloaded_tracks.remove(i);
+                        self.download_registry.remove(&track.url);
+                        removed += 1;
+                    }
+                }
+                self.notify(format!(
+                    "Removed {} download{}",
+                    removed,
+                    if removed == 1 { "" } else { "s" }
+                ));
             }
             _ => {}
         }

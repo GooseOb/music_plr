@@ -94,6 +94,10 @@ impl MusicPlayer {
         self.selected_indices.clear();
         self.focused_list_index = 0;
 
+        if self.current_view == View::Downloads {
+            self.selected_playlist = None;
+        }
+
         // Push the new state as a single entry. The previous entry (preserved
         // by truncate) already serves as the back-target for Back navigation.
         self.nav_history.push(NavEntry {

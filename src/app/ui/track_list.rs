@@ -22,9 +22,10 @@ pub fn thumbnail<'a>(
     track: &'a Track,
     p: &'a Palette,
     size: f32,
+    exists: bool,
 ) -> Element<'a, Message, AppTheme> {
-    let thumb_path = crate::thumbnails::thumbnail_path(&track.id);
-    if thumb_path.exists() {
+    if exists {
+        let thumb_path = crate::thumbnails::thumbnail_path(&track.id);
         image(image::Handle::from_path(thumb_path))
             .width(size)
             .height(size)
@@ -153,7 +154,7 @@ fn view_track_row<'a>(
             .into()
     };
 
-    let inner = row_layout(leading, track, p);
+    let inner = row_layout(leading, track, player);
 
     let track_area = MouseArea::new(inner)
         .on_press(Message::TrackPressed { index, is_queue })
@@ -189,11 +190,17 @@ pub(super) fn title_artist_column<'a>(
 pub(super) fn row_layout<'a>(
     leading: Element<'a, Message, AppTheme>,
     track: &'a Track,
-    p: &'a Palette,
+    player: &'a MusicPlayer,
 ) -> Row<'a, Message, AppTheme> {
+    let p = &player.app_theme.palette;
+    let thumb_exists = player
+        .thumbnail_cache
+        .get(&track.id)
+        .copied()
+        .unwrap_or_else(|| crate::thumbnails::thumbnail_path(&track.id).exists());
     Row::with_children(vec![
         leading,
-        thumbnail(track, p, theme::THUMBNAIL_SIZE),
+        thumbnail(track, p, theme::THUMBNAIL_SIZE, thumb_exists),
         title_artist_column(track).into(),
         Container::new(
             text(crate::util::format_duration(track.duration))

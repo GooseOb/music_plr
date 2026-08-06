@@ -2,6 +2,7 @@ use super::{
     error, format_duration, mpris, mpsc, spawn_thumbnail_download_thread, BackendResult,
     MprisCommand, MprisUpdate, MusicPlayer, View,
 };
+use crate::types::Track;
 use tracing::debug;
 
 impl MusicPlayer {
@@ -19,6 +20,8 @@ impl MusicPlayer {
         while let Ok(cmd) = self.mpris_cmd_rx.try_recv() {
             self.process_mpris_command(cmd);
         }
+
+        self.update_thumbnail_cache();
 
         let s = self.audio.get_state();
         self.is_playing = s.is_playing;
@@ -45,6 +48,48 @@ impl MusicPlayer {
 
         self.send_mpris_update();
         self.update_progress_text();
+    }
+
+    fn update_thumbnail_cache(&mut self) {
+        self.downloaded_tracks = self
+            .download_registry
+            .all_tracks()
+            .into_iter()
+            .cloned()
+            .collect();
+
+        let tracks: Vec<&Track> = match self.current_view {
+            View::Search => self.search_results.iter().collect(),
+            View::SongRadio | View::ArtistRadio => self.radio_tracks.iter().collect(),
+            View::Playlist => {
+                if let Some(idx) = self.selected_playlist {
+                    self.playlists
+                        .playlists
+                        .get(idx)
+                        .map(|pl| pl.tracks.iter().collect())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                }
+            }
+            View::Downloads => self.downloaded_tracks.iter().collect(),
+        };
+
+        for track in &tracks {
+            let id = &track.id;
+            if !self.thumbnail_cache.contains_key(id) {
+                let exists = crate::thumbnails::thumbnail_path(id).exists();
+                self.thumbnail_cache.insert(id.clone(), exists);
+            }
+        }
+
+        if let Some(current) = self.queue.current() {
+            let id = &current.id;
+            if !self.thumbnail_cache.contains_key(id) {
+                let exists = crate::thumbnails::thumbnail_path(id).exists();
+                self.thumbnail_cache.insert(id.clone(), exists);
+            }
+        }
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -95,7 +140,7 @@ impl MusicPlayer {
                     self.push_nav_entry();
                 }
                 self.save_session();
-                spawn_thumbnail_download_thread(&self.search_results);
+                spawn_thumbnail_download_thread(&self.search_results, self.result_tx.clone());
                 self.clear_notification();
             }
             BackendResult::SearchResultsAppend(tracks) => {
@@ -104,7 +149,7 @@ impl MusicPlayer {
                 self.search_loading = false;
                 self.search_exhausted = exhausted;
                 let _ = self.update_current_snapshot();
-                spawn_thumbnail_download_thread(&self.search_results);
+                spawn_thumbnail_download_thread(&self.search_results, self.result_tx.clone());
                 self.clear_notification();
                 self.save_session();
             }
@@ -118,12 +163,13 @@ impl MusicPlayer {
                     self.push_nav_entry();
                 }
                 self.save_session();
-                spawn_thumbnail_download_thread(&self.radio_tracks);
+                spawn_thumbnail_download_thread(&self.radio_tracks, self.result_tx.clone());
             }
-            BackendResult::DownloadComplete(url, path) => {
+            BackendResult::DownloadComplete(track, path) => {
                 self.downloading_index = None;
-                self.download_registry.register(&url, &path);
-                self.notify("Download complete!".into());
+                self.download_registry.register(track);
+                self.notify(format!("Download complete! Saved to {path}"));
+                self.thumbnail_cache.clear();
             }
             BackendResult::DownloadError(msg) => {
                 self.downloading_index = None;
@@ -134,6 +180,9 @@ impl MusicPlayer {
                 self.search_loading = false;
                 self.clear_notification();
                 self.notify_error(msg);
+            }
+            BackendResult::ThumbnailsDownloaded => {
+                self.thumbnail_cache.clear();
             }
         }
     }

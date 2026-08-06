@@ -463,11 +463,12 @@ impl MusicPlayer {
         match &self.current_view {
             View::Search => self.search_results.get(index).cloned(),
             View::SongRadio | View::ArtistRadio => self.radio_tracks.get(index).cloned(),
-            View::Playlist | View::Downloads => self
+            View::Playlist => self
                 .selected_playlist
                 .and_then(|sp| self.playlists.playlists.get(sp))
                 .and_then(|p| p.tracks.get(index))
                 .cloned(),
+            View::Downloads => self.downloaded_tracks.get(index).cloned(),
         }
     }
 
@@ -478,10 +479,11 @@ impl MusicPlayer {
         match &self.current_view {
             View::Search => self.search_results.len(),
             View::SongRadio | View::ArtistRadio => self.radio_tracks.len(),
-            View::Playlist | View::Downloads => self
+            View::Playlist => self
                 .selected_playlist
                 .and_then(|sp| self.playlists.playlists.get(sp))
                 .map_or(0, |p| p.tracks.len()),
+            View::Downloads => self.downloaded_tracks.len(),
         }
     }
 

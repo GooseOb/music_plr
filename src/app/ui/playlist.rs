@@ -14,7 +14,18 @@ use super::{
 pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
 
-    let header: Element<'a, Message, AppTheme> = if let Some(idx) = player.selected_playlist {
+    let is_downloads = matches!(player.current_view, crate::types::View::Downloads);
+
+    let header: Element<'a, Message, AppTheme> = if is_downloads {
+        Row::with_children(vec![
+            icons::icon(icons::DOWNLOAD_ICON, p.fg_muted, theme::ICON_SIZE_MD).into(),
+            text("Downloaded tracks").style(fg_secondary()).into(),
+        ])
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center)
+        .padding([theme::SPACING_SM, theme::SPACING_XL])
+        .into()
+    } else if let Some(idx) = player.selected_playlist {
         if let Some(pl) = player.playlists.playlists.get(idx) {
             let track_count = pl.tracks.len();
             Row::with_children(vec![
@@ -62,7 +73,17 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
             .into()
     };
 
-    let track_list = if let Some(idx) = player.selected_playlist {
+    let track_list = if is_downloads {
+        if player.downloaded_tracks.is_empty() {
+            Container::new(text("No downloaded tracks").style(fg_secondary()))
+                .padding(theme::SPACING_XL)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        } else {
+            view_track_list(&player.downloaded_tracks, player, false, 0)
+        }
+    } else if let Some(idx) = player.selected_playlist {
         if let Some(pl) = player.playlists.playlists.get(idx) {
             view_track_list(&pl.tracks, player, false, 0)
         } else {

@@ -6,7 +6,7 @@ use iced::{
 
 use crate::{
     icons,
-    theme::{self, AppTheme, Palette},
+    theme::{self, AppTheme},
     types::QueueTab,
 };
 
@@ -105,7 +105,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let now_playing_row: Element<'_, Message, AppTheme> =
         if let Some(track) = player.queue.current() {
-            view_now_playing_row(track, p)
+            view_now_playing_row(track, player)
         } else {
             Container::new(
                 text("No track playing")
@@ -159,9 +159,9 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
 fn view_now_playing_row<'a>(
     track: &'a crate::types::Track,
-    p: &'a Palette,
+    player: &'a MusicPlayer,
 ) -> Element<'a, Message, AppTheme> {
-    let inner = row_layout(Row::new().into(), track, p);
+    let inner = row_layout(Row::new().into(), track, player);
 
     Container::new(inner)
         .width(Length::Fill)
@@ -218,7 +218,7 @@ fn view_recently_played_row<'a>(
             .into()
     };
 
-    let inner = row_layout(leading, track, p);
+    let inner = row_layout(leading, track, player);
 
     let track_area = MouseArea::new(inner)
         .on_press(Message::PlayRecentTrack(index))

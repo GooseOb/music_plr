@@ -2,9 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::types::Track;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DownloadRegistry {
-    tracks: HashMap<String, String>,
+    tracks: HashMap<String, Track>,
 }
 
 impl DownloadRegistry {
@@ -30,12 +32,12 @@ impl DownloadRegistry {
     #[cfg(test)]
     pub fn save(&self) {}
 
-    pub fn register(&mut self, url: &str, path: &str) {
-        self.tracks.insert(url.to_string(), path.to_string());
+    pub fn register(&mut self, track: Track) {
+        self.tracks.insert(track.url.clone(), track);
         self.save();
     }
 
-    pub fn remove(&mut self, url: &str) -> Option<String> {
+    pub fn remove(&mut self, url: &str) -> Option<Track> {
         let result = self.tracks.remove(url);
         self.save();
         result
@@ -43,6 +45,10 @@ impl DownloadRegistry {
 
     pub fn contains(&self, url: &str) -> bool {
         self.tracks.contains_key(url)
+    }
+
+    pub fn all_tracks(&self) -> Vec<&Track> {
+        self.tracks.values().collect()
     }
 }
 
