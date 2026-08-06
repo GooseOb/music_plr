@@ -7,7 +7,7 @@ use iced::{
 use crate::{app::ui::shared_components::play_pause_button, icons, theme::AppTheme};
 
 use super::{
-    styles::{bg_tertiary, button_style_queue},
+    styles::{bg_tertiary, button_style_queue, fg_secondary},
     theme,
     track_list::thumbnail,
     Message, MusicPlayer,
@@ -30,20 +30,20 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         text(title).into(),
         text(artist)
             .size(theme::TEXT_SIZE_SM)
-            .color(p.fg_secondary)
+            .style(fg_secondary())
             .into(),
     ])
     .spacing(2);
 
     let elapsed_text = text(player.elapsed_text.clone())
         .size(theme::TEXT_SIZE_XS)
-        .color(p.fg_secondary)
+        .style(fg_secondary())
         .width(theme::TIME_TEXT_WIDTH)
         .center();
 
     let total_text = text(player.total_text.clone())
         .size(theme::TEXT_SIZE_XS)
-        .color(p.fg_secondary)
+        .style(fg_secondary())
         .width(theme::TIME_TEXT_WIDTH)
         .center();
 
@@ -54,7 +54,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
                 p.fg,
                 theme::ICON_SIZE_MD,
             ))
-            .padding(theme::SPACING_XS2)
+            .padding(theme::SPACING_2XS)
             .on_press(Message::PreviousTrack)
             .into(),
             play_pause_button(player.is_playing)
@@ -66,7 +66,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
                 p.fg,
                 theme::ICON_SIZE_MD,
             ))
-            .padding(theme::SPACING_XS2)
+            .padding(theme::SPACING_2XS)
             .on_press(Message::NextTrack)
             .into(),
         ])

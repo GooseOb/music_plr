@@ -7,7 +7,7 @@ use iced::{
 use crate::{icons, theme::AppTheme};
 
 use super::{
-    styles::{bg_secondary, button_style_primary},
+    styles::{bg_secondary, button_style_primary, fg_secondary},
     theme, view_track_list, Message, MusicPlayer,
 };
 
@@ -120,7 +120,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
     let p = &player.app_theme.palette;
 
     if player.last_filtered_history.is_empty() {
-        return Container::new(text("No recent searches").color(p.fg_secondary))
+        return Container::new(text("No recent searches").style(fg_secondary()))
             .width(Length::Fill)
             .height(theme::SEARCH_HISTORY_ITEM_HEIGHT)
             .padding([theme::SPACING_SM, theme::SPACING_XL])

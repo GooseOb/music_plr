@@ -6,7 +6,10 @@ use iced::{
 
 use crate::{icons, theme::AppTheme};
 
-use super::{styles::button_style_danger, theme, view_track_list, Message, MusicPlayer};
+use super::{
+    styles::{button_style_danger, fg_secondary},
+    theme, view_track_list, Message, MusicPlayer,
+};
 
 pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
@@ -21,7 +24,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
                     .width(Length::Fill)
                     .into(),
                 text(format!("({track_count} tracks)"))
-                    .color(p.fg_secondary)
+                    .style(fg_secondary())
                     .into(),
                 Button::new(
                     Row::with_children(vec![
@@ -54,7 +57,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
             Row::new().into()
         }
     } else {
-        Container::new(text("Select a playlist from the sidebar").color(p.fg_secondary))
+        Container::new(text("Select a playlist from the sidebar").style(fg_secondary()))
             .padding(theme::SPACING_XL)
             .into()
     };

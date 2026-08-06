@@ -11,7 +11,9 @@ use crate::{
 
 use super::{
     button,
-    styles::{bg_overlay, bg_popup, bg_secondary, bg_transparent, button_style_danger},
+    styles::{
+        bg_overlay, bg_popup, bg_secondary, bg_transparent, button_style_danger, fg_secondary,
+    },
     theme, ContextMenuState, Message, MusicPlayer,
 };
 
@@ -272,9 +274,7 @@ fn view_dialog(
     .into()
 }
 
-pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let p = &player.app_theme.palette;
-
+pub(super) fn view_delete_confirm() -> Element<'static, Message, AppTheme> {
     let cancel_btn = Button::new(Container::new(text("Cancel")).center_x(Length::Fill))
         .padding(theme::SPACING_SM)
         .on_press(Message::HideDeleteConfirm);
@@ -289,7 +289,7 @@ pub(super) fn view_delete_confirm(player: &MusicPlayer) -> Element<'_, Message, 
             Column::with_children(vec![
                 text("Delete playlist?").size(theme::TEXT_SIZE_LG).into(),
                 text("Tracks will not be deleted.")
-                    .color(p.fg_secondary)
+                    .style(fg_secondary())
                     .into(),
                 Row::with_children(vec![cancel_btn.into(), delete_btn.into()])
                     .spacing(theme::SPACING_XL)

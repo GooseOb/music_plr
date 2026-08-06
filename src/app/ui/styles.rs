@@ -2,7 +2,7 @@ use crate::theme::{self, AppTheme};
 
 use iced::{
     border,
-    widget::{button, container},
+    widget::{button, container, text},
     Color,
 };
 
@@ -38,6 +38,13 @@ pub fn bg_popup() -> impl Fn(&AppTheme) -> container::Style + 'static {
     move |theme| container::Style {
         background: Some(theme.palette.bg_secondary.into()),
         border: border::rounded(theme::RADIUS_MD),
+        ..Default::default()
+    }
+}
+
+pub fn fg_secondary() -> impl Fn(&AppTheme) -> text::Style + 'static {
+    |theme| text::Style {
+        color: theme.palette.fg_secondary.into(),
         ..Default::default()
     }
 }

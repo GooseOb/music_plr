@@ -13,7 +13,10 @@ use crate::{
     types::Track,
 };
 
-use super::{styles::button_style_primary, theme, DragTargetList, Message, MusicPlayer};
+use super::{
+    styles::{button_style_primary, fg_secondary},
+    theme, DragTargetList, Message, MusicPlayer,
+};
 
 pub fn thumbnail<'a>(
     track: &'a Track,
@@ -128,7 +131,7 @@ fn view_track_row<'a>(
 
     let leading = if is_current {
         play_pause_button(player.is_playing)
-            .padding(theme::SPACING_XS2)
+            .padding(theme::SPACING_2XS)
             .on_press(Message::TogglePlayPause)
             .into()
     } else if is_hovered {
@@ -137,28 +140,20 @@ fn view_track_row<'a>(
             Color::BLACK,
             theme::ICON_SIZE_LG,
         ))
-        .padding(theme::SPACING_XS2)
+        .padding(theme::SPACING_2XS)
         .style(button_style_primary())
         .on_press(Message::PlayTrackAtIndex { index, is_queue })
         .into()
     } else {
         text((index + 1).to_string())
             .size(theme::TEXT_SIZE_SM)
-            .color(p.fg_secondary)
+            .style(fg_secondary())
             .width(theme::TRACK_LEADING_WIDTH)
             .center()
             .into()
     };
 
-    let duration_text = crate::util::format_duration(track.duration);
-
-    let inner = row_layout(
-        leading,
-        thumbnail(track, p, theme::THUMBNAIL_SIZE),
-        title_artist_column(track, p),
-        p,
-        duration_text,
-    );
+    let inner = row_layout(leading, track, p);
 
     let track_area = MouseArea::new(inner)
         .on_press(Message::TrackPressed { index, is_queue })
@@ -178,13 +173,12 @@ fn view_track_row<'a>(
 /// A title + artist column, used by all track rows.
 pub(super) fn title_artist_column<'a>(
     track: &'a crate::types::Track,
-    p: &'a Palette,
 ) -> Column<'a, Message, AppTheme> {
     Column::with_children(vec![
         text(track.title.clone()).width(Length::Fill).into(),
         text(track.artist.clone())
             .size(theme::TEXT_SIZE_SM)
-            .color(p.fg_secondary)
+            .style(fg_secondary())
             .width(Length::Fill)
             .into(),
     ])
@@ -194,29 +188,24 @@ pub(super) fn title_artist_column<'a>(
 /// The inner row layout: leading | thumbnail | `title_artist` | duration.
 pub(super) fn row_layout<'a>(
     leading: Element<'a, Message, AppTheme>,
-    thumb: Element<'a, Message, AppTheme>,
-    title_artist: Column<'a, Message, AppTheme>,
+    track: &'a Track,
     p: &'a Palette,
-    duration_text: String,
 ) -> Row<'a, Message, AppTheme> {
     Row::with_children(vec![
-        Container::new(leading)
-            .width(theme::TRACK_LEADING_WIDTH)
-            .into(),
-        Container::new(thumb)
-            .width(theme::THUMBNAIL_SIZE)
-            .height(theme::THUMBNAIL_SIZE)
-            .into(),
-        Container::new(title_artist).width(Length::Fill).into(),
-        text(duration_text)
-            .size(theme::TEXT_SIZE_SM)
-            .color(p.fg_secondary)
-            .width(theme::DURATION_WIDTH)
-            .into(),
+        leading,
+        thumbnail(track, p, theme::THUMBNAIL_SIZE),
+        title_artist_column(track).into(),
+        Container::new(
+            text(crate::util::format_duration(track.duration))
+                .size(theme::TEXT_SIZE_SM)
+                .style(fg_secondary()),
+        )
+        .padding([0.0, theme::SPACING_2XL])
+        .into(),
     ])
     .spacing(theme::SPACING_SM)
     .align_y(alignment::Vertical::Center)
-    .padding([theme::SPACING_XS, theme::SPACING_MD])
+    .padding([theme::SPACING_XS, theme::SPACING_SM])
 }
 
 /// Wraps row content in a fixed-height container with a background color and

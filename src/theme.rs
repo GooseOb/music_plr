@@ -64,7 +64,8 @@ pub const SIDEBAR_PLAYLIST_LIST_OFFSET_Y: f32 = SPACING_SM // sidebar padding
     + SIDEBAR_ITEM_HEIGHT // Search
     + SIDEBAR_ITEM_HEIGHT // Downaloads
     + 1.0 // rule
-    + SPACING_XS;
+    + SPACING_XS
+    + SPACING_XS / 2.0;
 pub const ROW_HEIGHT: f32 = 48.0;
 pub const THUMBNAIL_SIZE: f32 = 36.0;
 pub const QUEUE_MIN_WIDTH: f32 = 240.0;
@@ -74,14 +75,14 @@ pub const DRAG_AUTO_SCROLL_SPEED: f32 = 16.0;
 pub const DROP_LINE_HEIGHT: f32 = 2.0;
 pub const PLAYBAR_THUMBNAIL_SIZE: f32 = 56.0;
 pub const TRACK_LEADING_WIDTH: f32 = 30.0;
-pub const DURATION_WIDTH: f32 = 54.0;
 
 pub const SPACING_XS: f32 = 4.0;
-pub const SPACING_XS2: f32 = 6.0;
+pub const SPACING_2XS: f32 = 6.0;
 pub const SPACING_SM: f32 = 8.0;
 pub const SPACING_MD: f32 = 12.0;
 pub const SPACING_LG: f32 = 16.0;
 pub const SPACING_XL: f32 = 20.0;
+pub const SPACING_2XL: f32 = 32.0;
 
 pub const RADIUS_SM: f32 = 8.0;
 pub const RADIUS_MD: f32 = 12.0;

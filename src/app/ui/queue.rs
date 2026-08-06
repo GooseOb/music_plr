@@ -11,14 +11,11 @@ use crate::{
 };
 
 use super::{
-    styles::{bg_secondary, button_style_primary},
+    styles::{bg_secondary, button_style_primary, fg_secondary},
     Message, MusicPlayer,
 };
 
-use super::track_list::{
-    empty_state, row_layout, scrollable_list, section_header, thumbnail, title_artist_column,
-    track_row,
-};
+use super::track_list::{empty_state, row_layout, scrollable_list, section_header, track_row};
 
 pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let queue_width = (player.window_width * theme::QUEUE_WIDTH_RATIO).max(theme::QUEUE_MIN_WIDTH);
@@ -113,7 +110,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             Container::new(
                 text("No track playing")
                     .size(theme::TEXT_SIZE_SM)
-                    .color(p.fg_secondary),
+                    .style(fg_secondary()),
             )
             .padding(theme::SPACING_MD)
             .into()
@@ -132,7 +129,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         Container::new(
             text("No more tracks in queue")
                 .size(theme::TEXT_SIZE_SM)
-                .color(p.fg_secondary),
+                .style(fg_secondary()),
         )
         .padding(theme::SPACING_MD)
         .into()
@@ -164,17 +161,7 @@ fn view_now_playing_row<'a>(
     track: &'a crate::types::Track,
     p: &'a Palette,
 ) -> Element<'a, Message, AppTheme> {
-    let duration_text = crate::util::format_duration(track.duration);
-
-    let inner = row_layout(
-        Container::new(Row::new())
-            .width(theme::TRACK_LEADING_WIDTH)
-            .into(),
-        thumbnail(track, p, theme::THUMBNAIL_SIZE),
-        title_artist_column(track, p),
-        p,
-        duration_text,
-    );
+    let inner = row_layout(Row::new().into(), track, p);
 
     Container::new(inner)
         .width(Length::Fill)
@@ -218,28 +205,20 @@ fn view_recently_played_row<'a>(
             Color::BLACK,
             theme::ICON_SIZE_LG,
         ))
-        .padding(theme::SPACING_XS2)
+        .padding(theme::SPACING_2XS)
         .style(button_style_primary())
         .on_press(Message::PlayRecentTrack(index))
         .into()
     } else {
         text((index + 1).to_string())
             .size(theme::TEXT_SIZE_SM)
-            .color(p.fg_secondary)
+            .style(fg_secondary())
             .width(theme::TRACK_LEADING_WIDTH)
             .center()
             .into()
     };
 
-    let duration_text = crate::util::format_duration(track.duration);
-
-    let inner = row_layout(
-        leading,
-        thumbnail(track, p, theme::THUMBNAIL_SIZE),
-        title_artist_column(track, p),
-        p,
-        duration_text,
-    );
+    let inner = row_layout(leading, track, p);
 
     let track_area = MouseArea::new(inner)
         .on_press(Message::PlayRecentTrack(index))
