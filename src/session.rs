@@ -8,8 +8,8 @@ pub struct SessionState {
     pub view: View,
     pub snapshot: ViewSnapshot,
     pub queue: PlayQueue,
-    pub is_playing: bool,
     pub show_queue: bool,
+    pub volume: f32,
 }
 
 impl Default for SessionState {
@@ -18,8 +18,8 @@ impl Default for SessionState {
             view: View::Search,
             snapshot: ViewSnapshot::default(),
             queue: PlayQueue::new(),
-            is_playing: false,
             show_queue: false,
+            volume: 0.8,
         }
     }
 }
@@ -65,8 +65,8 @@ mod tests {
         let state = SessionState::default();
         assert_eq!(state.view, View::Search);
         assert!(state.queue.tracks.is_empty());
-        assert!(!state.is_playing);
         assert!(!state.show_queue);
+        assert_eq!(state.volume, 0.8);
     }
 
     #[test]
@@ -80,14 +80,14 @@ mod tests {
                 scroll: 42.0,
             },
             queue: PlayQueue::default(),
-            is_playing: true,
             show_queue: true,
+            volume: 0.5,
         };
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.view, View::SongRadio);
-        assert!(restored.is_playing);
         assert!(restored.show_queue);
+        assert_eq!(restored.volume, 0.5);
         if let ViewSnapshot::Radio {
             label,
             selection,

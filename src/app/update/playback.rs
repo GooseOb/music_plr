@@ -89,8 +89,7 @@ impl MusicPlayer {
         }
     }
 
-    #[allow(clippy::needless_pass_by_ref_mut)]
-    pub fn toggle_play_pause(&mut self) {
+    pub fn toggle_play_pause(&self) {
         if self.queue.current().is_some() {
             if self.is_playing {
                 self.audio.pause();
@@ -151,6 +150,7 @@ impl MusicPlayer {
     pub fn set_volume(&mut self, vol: f32) {
         self.volume = vol.clamp(0.0, 1.0);
         self.audio.set_volume(self.volume);
+        self.save_session();
     }
 
     pub fn seek(&mut self, frac: f32) {

@@ -7,8 +7,8 @@ impl MusicPlayer {
             view: self.current_view.clone(),
             snapshot: self.snapshot_current(),
             queue: self.queue.clone(),
-            is_playing: self.is_playing,
             show_queue: self.show_queue,
+            volume: self.volume,
         };
         state.save();
     }
@@ -16,9 +16,9 @@ impl MusicPlayer {
     pub fn restore_session(&mut self) {
         let state = SessionState::load();
         self.queue = state.queue;
-        self.is_playing = state.is_playing;
         self.show_queue = state.show_queue;
-
+        self.volume = state.volume;
+        self.audio.set_volume(state.volume);
         let entry = NavEntry {
             view: state.view,
             snapshot: state.snapshot,

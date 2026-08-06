@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use tracing::{debug, warn};
+use tracing::warn;
 
 fn project_dirs() -> directories::ProjectDirs {
     directories::ProjectDirs::from("", "", "music_plr").expect("project dirs")
