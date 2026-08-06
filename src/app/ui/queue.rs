@@ -118,7 +118,8 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let up_next_header = section_header("UP NEXT", p);
 
-    let offset = player.queue.current_index + 1;
+    // Up Next: all tracks after the current (first) track.
+    let offset = 1;
     let upcoming = if offset <= player.queue.tracks.len() {
         &player.queue.tracks[offset..]
     } else {
@@ -227,5 +228,5 @@ fn view_recently_played_row<'a>(
             is_queue: true,
         });
 
-    track_row(track_area, row_bg, None).into()
+    track_row(track_area, row_bg).into()
 }

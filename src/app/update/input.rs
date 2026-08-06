@@ -68,21 +68,54 @@ impl MusicPlayer {
                     self.handle_delete_selected();
                 }
             }
+            iced::keyboard::Key::Named(Named::Tab) => {
+                self.toggle_keyboard_list();
+            }
             iced::keyboard::Key::Named(Named::ArrowUp) => {
-                if self.focused_list_index > 0 {
-                    self.focused_list_index -= 1;
+                let is_queue = self.is_queue_hovered();
+                let count = self.list_size(is_queue);
+                if count == 0 {
+                    return;
                 }
+
+                let first_idx = self.list_first_index(is_queue);
+
+                if let Some((idx, _)) = self.drag.hovered_track {
+                    let new_idx = idx.saturating_sub(1);
+                    if new_idx >= first_idx {
+                        self.drag.hovered_track = Some((new_idx, is_queue));
+                    }
+                } else {
+                    self.drag.hovered_track = Some((first_idx, is_queue));
+                };
             }
             iced::keyboard::Key::Named(Named::ArrowDown) => {
-                let count = self.current_track_count(false);
-                if self.focused_list_index < count.saturating_sub(1) {
-                    self.focused_list_index += 1;
+                let is_queue = self.is_queue_hovered();
+                let count = self.list_size(is_queue);
+                if count == 0 {
+                    return;
                 }
+
+                if let Some((idx, _)) = self.drag.hovered_track {
+                    let new_idx = idx + 1;
+                    if new_idx < count {
+                        self.drag.hovered_track = Some((new_idx, is_queue));
+                    }
+                } else {
+                    self.drag.hovered_track = Some((self.list_first_index(is_queue), is_queue));
+                };
             }
             iced::keyboard::Key::Named(Named::Enter) => {
-                let count = self.current_track_count(false);
-                if self.focused_list_index < count {
-                    self.handle_play_track(self.focused_list_index, false);
+                if let Some((index, is_queue)) = self.drag.hovered_track {
+                    if is_queue
+                        && matches!(self.queue.queue_tab, crate::types::QueueTab::RecentlyPlayed)
+                    {
+                        if let Some(track) = self.queue.recently_played.get(index).cloned() {
+                            self.play_recent_track(track);
+                        }
+                    } else {
+                        self.handle_play_track(index, is_queue);
+                    }
                 }
             }
             _ => {}
@@ -97,6 +130,44 @@ impl MusicPlayer {
                 }
                 _ => {}
             }
+        }
+    }
+
+    fn toggle_keyboard_list(&mut self) {
+        if !self.show_queue {
+            return;
+        }
+
+        let target_is_queue = !self.is_queue_hovered();
+        if self.list_size(target_is_queue) == 0 {
+            return;
+        }
+        let first_idx = self.list_first_index(target_is_queue);
+        self.drag.hovered_track = Some((first_idx, target_is_queue));
+    }
+
+    fn is_queue_hovered(&self) -> bool {
+        self.drag
+            .hovered_track
+            .is_some_and(|(_, is_queue)| is_queue)
+    }
+
+    fn list_size(&self, is_queue: bool) -> usize {
+        if is_queue {
+            match self.queue.queue_tab {
+                crate::types::QueueTab::Queue => self.queue.tracks.len(),
+                crate::types::QueueTab::RecentlyPlayed => self.queue.recently_played.len(),
+            }
+        } else {
+            self.current_track_count(false)
+        }
+    }
+
+    fn list_first_index(&self, is_queue: bool) -> usize {
+        if is_queue && matches!(self.queue.queue_tab, crate::types::QueueTab::Queue) {
+            1
+        } else {
+            0
         }
     }
 }

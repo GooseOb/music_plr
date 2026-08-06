@@ -109,7 +109,6 @@ fn view_track_row<'a>(
     let p = &player.app_theme.palette;
     let is_selected = player.selection(is_queue).contains(&index);
     let is_hovered = player.drag.hovered_track == Some((index, is_queue));
-    let is_focused = !is_queue && player.focused_list_index == index;
     let is_current = player.queue.current().is_some_and(|t| t.url == track.url);
 
     let row_bg = if is_current {
@@ -161,12 +160,7 @@ fn view_track_row<'a>(
         .on_right_press(Message::TrackRightClicked { index, is_queue })
         .on_move(move |_| Message::TrackHoverStart { index, is_queue });
 
-    let focus_border = if is_focused && !is_selected {
-        Some(p.accent)
-    } else {
-        None
-    };
-    track_row(track_area, row_bg, focus_border).into()
+    track_row(track_area, row_bg).into()
 }
 
 // ── shared helpers ─────────────────────────────────────────────
@@ -215,26 +209,17 @@ pub(super) fn row_layout<'a>(
     .padding([theme::SPACING_XS, theme::SPACING_SM])
 }
 
-/// Wraps row content in a fixed-height container with a background color and
-/// optional accent border (used for keyboard focus highlight).
+/// Wraps row content in a fixed-height container with a background color.
 pub(super) fn track_row<'a>(
     content: impl Into<Element<'a, Message, AppTheme>>,
     bg: Color,
-    focus_border: Option<Color>,
 ) -> Container<'a, Message, AppTheme> {
-    let accent = focus_border;
     Container::new(content)
         .width(Length::Fill)
         .height(theme::ROW_HEIGHT)
-        .style(move |_: &AppTheme| {
-            let mut s = container::Style {
-                background: Some(bg.into()),
-                ..Default::default()
-            };
-            if let Some(color) = accent {
-                s.border = iced::border::rounded(0).color(color).width(2.0);
-            }
-            s
+        .style(move |_: &AppTheme| container::Style {
+            background: Some(bg.into()),
+            ..Default::default()
         })
 }
 

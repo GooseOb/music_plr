@@ -16,7 +16,7 @@ impl MusicPlayer {
         self.notify(format!("Searching for \"{}\"...", self.search_query));
         self.search_results.clear();
         self.selected_indices.clear();
-        self.focused_list_index = 0;
+        self.drag.hovered_track = None;
 
         self.search_history.push(
             self.search_query.clone(),
@@ -102,7 +102,7 @@ impl MusicPlayer {
         self.current_view = View::SongRadio;
         self.show_search_history = false;
         self.clear_selection();
-        self.focused_list_index = 0;
+        self.drag.hovered_track = None;
 
         let tx = self.result_tx.clone();
         let label = self.radio_label.clone();
@@ -129,7 +129,7 @@ impl MusicPlayer {
         self.current_view = View::ArtistRadio;
         self.show_search_history = false;
         self.clear_selection();
-        self.focused_list_index = 0;
+        self.drag.hovered_track = None;
 
         let tx = self.result_tx.clone();
         let label = self.radio_label.clone();

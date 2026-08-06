@@ -261,7 +261,6 @@ pub struct MusicPlayer {
 
     pub context_menu: Option<ContextMenuState>,
 
-    pub focused_list_index: usize,
     pub queue_selected_indices: Vec<usize>,
 
     pub app_theme: AppTheme,
@@ -345,7 +344,6 @@ impl MusicPlayer {
             mpris_update_tx: None,
             drag: DragState::default(),
             context_menu: None,
-            focused_list_index: 0,
             queue_selected_indices: Vec::new(),
             app_theme: AppTheme::new(Palette::dark()),
             search_list_bounds: None,

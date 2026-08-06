@@ -89,10 +89,10 @@ impl MusicPlayer {
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.show_search_history = false;
         self.cleanup_drag_state();
+        self.drag.hovered_track = None;
 
         self.current_view = view;
         self.selected_indices.clear();
-        self.focused_list_index = 0;
 
         if self.current_view == View::Downloads {
             self.selected_playlist = None;

@@ -121,14 +121,9 @@ impl MusicPlayer {
             if let (Some(qb), qs) = (self.queue_list_bounds, self.queue_list_scroll) {
                 if qb.contains(self.drag.cursor_pos) {
                     self.drag.drag_target_list = Some(DragTargetList::Queue);
-                    let drop_idx =
-                        self.compute_drop_idx(qb, qs, true, self.queue.current_index + 1);
+                    let drop_idx = self.compute_drop_idx(qb, qs, true, 1);
                     self.drag.drag_drop_target = Some(drop_idx);
-                    let track_count = self
-                        .queue
-                        .tracks
-                        .len()
-                        .saturating_sub(self.queue.current_index + 1);
+                    let track_count = self.queue.tracks.len().saturating_sub(1);
                     return self.handle_drag_autoscroll(qb, qs, true, track_count);
                 }
             }
@@ -185,10 +180,7 @@ impl MusicPlayer {
         let row_pos = ((y_offset + list_scroll) / crate::theme::ROW_HEIGHT).max(0.0);
         let row_idx = row_pos as usize;
         let track_count = if is_queue {
-            self.queue
-                .tracks
-                .len()
-                .saturating_sub(self.queue.current_index + 1)
+            self.queue.tracks.len().saturating_sub(1)
         } else {
             self.current_track_count(false)
         };
@@ -356,7 +348,7 @@ impl MusicPlayer {
 
     /// Insert tracks from the queue into the current playlist at the given
     /// drop index. `indices` are positions in the queue's up-next list
-    /// (starting after `current_index`).
+    /// (starting after index 0, i.e. the current track).
     fn copy_from_queue(&mut self, indices: &[usize], drop_idx: usize) {
         let Some(sp) = self.selected_playlist else {
             if matches!(self.current_view, View::Playlist | View::Downloads) {

@@ -48,7 +48,6 @@ impl View {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlayQueue {
     pub tracks: Vec<Track>,
-    pub current_index: usize,
     /// Tracks that have been played, most recent first. Deduped by url.
     pub recently_played: Vec<Track>,
     /// Which tab is currently shown in the queue panel.
@@ -59,21 +58,21 @@ impl PlayQueue {
     pub const fn new() -> Self {
         Self {
             tracks: Vec::new(),
-            current_index: 0,
             recently_played: Vec::new(),
             queue_tab: QueueTab::Queue,
         }
     }
 
     pub fn current(&self) -> Option<&Track> {
-        self.tracks.get(self.current_index)
+        self.tracks.first()
     }
 
-    #[allow(dead_code)]
-    pub const fn next(&mut self) -> Option<usize> {
-        if self.current_index + 1 < self.tracks.len() {
-            self.current_index += 1;
-            Some(self.current_index)
+    /// Pop the current (first) track off the front of the queue after it has
+    /// finished playing, making the next track the new current.
+    pub fn advance(&mut self) -> Option<()> {
+        if !self.tracks.is_empty() {
+            self.tracks.remove(0);
+            Some(())
         } else {
             None
         }
@@ -89,10 +88,14 @@ impl PlayQueue {
         }
     }
 
-    pub const fn previous(&mut self) -> Option<usize> {
-        if self.current_index > 0 {
-            self.current_index -= 1;
-            Some(self.current_index)
+    /// Restore the most recently played track to the front of the queue
+    /// (becomes the new current track).
+    pub fn restore_previous(&mut self) -> Option<()> {
+        if let Some(track) = self.recently_played.first() {
+            let track = track.clone();
+            self.recently_played.remove(0);
+            self.tracks.insert(0, track);
+            Some(())
         } else {
             None
         }
@@ -104,7 +107,6 @@ impl PlayQueue {
 
     pub fn clear(&mut self) {
         self.tracks.clear();
-        self.current_index = 0;
     }
 }
 
@@ -126,8 +128,20 @@ impl From<crate::youtube::YouTubeVideo> for Track {
 mod tests {
     use super::*;
 
+    fn make_track(id: &str, url: &str) -> Track {
+        Track {
+            id: id.into(),
+            title: format!("Track {id}"),
+            artist: "Artist".into(),
+            duration: 10,
+            url: url.into(),
+            source: TrackSource::YouTube,
+            thumbnail: String::new(),
+        }
+    }
+
     #[test]
-    fn play_queue_next_and_previous() {
+    fn play_queue_advance_and_restore_previous() {
         let mut q = PlayQueue::new();
         q.tracks = vec![
             Track {
@@ -160,37 +174,32 @@ mod tests {
         ];
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
 
-        assert_eq!(q.next(), Some(1));
+        // advance removes the current track, making the next one current
+        assert!(q.advance().is_some());
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("2"));
 
-        assert_eq!(q.previous(), Some(0));
+        // record played and restore_previous puts it back at the front
+        let t1 = make_track("1", "url1");
+        q.record_played(&t1, 50);
+        assert!(q.restore_previous().is_some());
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
 
-        assert_eq!(q.previous(), None);
-        assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
-
-        assert_eq!(q.next(), Some(1));
-        assert_eq!(q.next(), Some(2));
+        // advance through all tracks
+        assert!(q.advance().is_some());
+        assert_eq!(q.current().map(|t| t.id.as_str()), Some("2"));
+        assert!(q.advance().is_some());
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("3"));
-        assert_eq!(q.next(), None);
+        assert!(q.advance().is_some());
+        assert!(q.current().is_none());
+        assert!(q.advance().is_none());
     }
 
     #[test]
     fn play_queue_empty() {
-        let q = PlayQueue::new();
+        let mut q = PlayQueue::new();
         assert!(q.current().is_none());
-    }
-
-    fn make_track(id: &str, url: &str) -> Track {
-        Track {
-            id: id.into(),
-            title: format!("Track {id}"),
-            artist: "Artist".into(),
-            duration: 10,
-            url: url.into(),
-            source: TrackSource::YouTube,
-            thumbnail: String::new(),
-        }
+        assert!(q.advance().is_none());
+        assert!(q.restore_previous().is_none());
     }
 
     #[test]
@@ -240,8 +249,7 @@ mod queue_tab_tests {
 
     #[test]
     fn queue_tab_serde() {
-        let json =
-            r#"{"tracks":[],"current_index":0,"recently_played":[],"queue_tab":"RecentlyPlayed"}"#;
+        let json = r#"{"tracks":[],"recently_played":[],"queue_tab":"RecentlyPlayed"}"#;
         let q: PlayQueue = serde_json::from_str(json).unwrap();
         assert_eq!(q.queue_tab, QueueTab::RecentlyPlayed);
 

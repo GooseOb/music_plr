@@ -4,10 +4,11 @@ use tracing::debug;
 impl MusicPlayer {
     pub fn handle_play_track(&mut self, index: usize, is_queue: bool) {
         if is_queue {
-            // Jump to the selected queue entry without discarding the
-            // tracks that precede it: the queue represents what's up next.
+            // Skip to the selected queue entry: discard all tracks before it
+            // (including the current one), keeping the clicked track and
+            // everything after it.
             if index < self.queue.tracks.len() {
-                self.queue.current_index = index;
+                self.queue.tracks.drain(0..index);
                 if let Some(t) = self.queue.current() {
                     let t = t.clone();
                     self.play_track_internal(&t);
@@ -82,11 +83,6 @@ impl MusicPlayer {
     pub fn handle_remove_from_queue(&mut self, index: usize) {
         if index < self.queue.tracks.len() {
             self.queue.tracks.remove(index);
-            if self.queue.current_index >= self.queue.tracks.len() {
-                self.queue.current_index = self.queue.tracks.len().saturating_sub(1);
-            } else if index < self.queue.current_index {
-                self.queue.current_index -= 1;
-            }
             self.save_session();
         }
     }
@@ -103,15 +99,12 @@ impl MusicPlayer {
     }
 
     pub fn next_track(&mut self) {
-        // Record the current track as recently played, then remove it from
-        // the queue so that Previous can restore it via recently_played.
+        // Record the current track as recently played, then advance the queue
+        // so that Previous can restore it via recently_played.
         if let Some(old) = self.queue.current().cloned() {
             self.queue
                 .record_played(&old, self.config.max_recently_played);
-            if self.queue.current_index < self.queue.tracks.len() {
-                self.queue.tracks.remove(self.queue.current_index);
-                // current_index now points to what was the next track
-            }
+            self.queue.advance();
         }
 
         if let Some(t) = self.queue.current() {
@@ -124,24 +117,13 @@ impl MusicPlayer {
     }
 
     /// “Previous” navigates the recently-played history.  If a track was
-    /// recently played it is popped from the history and inserted *before*
-    /// the current track in the queue (so the current track becomes “up next”
-    /// again).  When history is empty we fall back to stepping back in the
-    /// queue itself.
+    /// recently played it is popped from the history and restored to the
+    /// front of the queue (becomes the new current track).  When history is
+    /// empty there is nothing to go back to.
     pub fn previous_track(&mut self) {
-        if let Some(prev) = self.queue.recently_played.first() {
-            let prev = prev.clone();
-            self.queue.recently_played.remove(0);
-            // Insert before the current track so it becomes the new current.
-            self.queue
-                .tracks
-                .insert(self.queue.current_index, prev.clone());
-            // current_index is unchanged — it now points at the inserted track.
-            self.track_loading = true;
-            self.play_track_internal(&prev);
-            self.save_session();
-            self.send_mpris_update();
-        } else if self.queue.previous().is_some() {
+        // Restore the most recently played track to the front of the queue
+        // (becomes the new current track).
+        if self.queue.restore_previous().is_some() {
             self.track_loading = true;
             if let Some(t) = self.queue.current() {
                 let t = t.clone();

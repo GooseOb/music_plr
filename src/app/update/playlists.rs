@@ -17,12 +17,12 @@ impl MusicPlayer {
             self.show_playlist_picker = None;
             self.clear_selection();
             self.cleanup_drag_state();
+            self.drag.hovered_track = None;
 
             self.current_view = View::Playlist;
             self.selected_playlist = Some(index);
             self.selected_playlist_name = self.playlists.playlists[index].name.clone();
             self.selected_indices.clear();
-            self.focused_list_index = 0;
 
             self.push_nav_entry();
             self.save_session();
