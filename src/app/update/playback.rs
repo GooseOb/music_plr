@@ -33,6 +33,7 @@ impl MusicPlayer {
                     self.queue.enqueue(t);
                 }
             }
+            self.save_session();
         }
     }
 
@@ -49,6 +50,7 @@ impl MusicPlayer {
         self.play_track_internal(&track);
         self.queue.clear();
         self.queue.enqueue(track);
+        self.save_session();
         self.send_mpris_update();
     }
 
@@ -116,6 +118,7 @@ impl MusicPlayer {
             self.track_loading = true;
             let t = t.clone();
             self.play_track_internal(&t);
+            self.save_session();
             self.send_mpris_update();
         }
     }
@@ -136,6 +139,7 @@ impl MusicPlayer {
             // current_index is unchanged — it now points at the inserted track.
             self.track_loading = true;
             self.play_track_internal(&prev);
+            self.save_session();
             self.send_mpris_update();
         } else if self.queue.previous().is_some() {
             self.track_loading = true;
@@ -143,6 +147,7 @@ impl MusicPlayer {
                 let t = t.clone();
                 self.play_track_internal(&t);
             }
+            self.save_session();
             self.send_mpris_update();
         }
     }
