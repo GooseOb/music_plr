@@ -1,4 +1,5 @@
 use super::{MusicPlayer, Track};
+use std::path::PathBuf;
 use tracing::debug;
 
 impl MusicPlayer {
@@ -72,11 +73,19 @@ impl MusicPlayer {
         self.track_loading = true;
         let id = track.id.clone();
 
-        // Only YouTube tracks go through the stream/cache pipeline; local
-        // files are played directly via their filesystem URL.
+        // YouTube tracks go through the stream/cache pipeline (yt-dlp →
+        // ffmpeg → cached WAV). Local files are played directly by decoding
+        // the on-disk file through ffmpeg (the `PlayCached` path handles any
+        // ffmpeg-readable format uniformly), so they never hit yt-dlp.
         if track.source == crate::types::TrackSource::YouTube && self.stream_cache.contains(&id) {
             let path = self.stream_cache.path_for(&id);
             debug!("Playing from cache: {}", path.display());
+            let duration = track.duration as f32;
+            self.audio.play_cached(path, duration);
+            self.pending_cache_id = None;
+        } else if track.source == crate::types::TrackSource::Local {
+            let path = PathBuf::from(&track.url);
+            debug!("Playing local file: {}", path.display());
             let duration = track.duration as f32;
             self.audio.play_cached(path, duration);
             self.pending_cache_id = None;

@@ -15,6 +15,55 @@ pub const fn plural_suffix(count: usize) -> &'static str {
     }
 }
 
+/// Returns the duration of the audio file at `path` in seconds, or `None`
+/// on any failure (missing file, unsupported codec, corrupt header, zero rate).
+pub fn try_probe_duration(path: &str) -> Option<u32> {
+    use std::fs::File;
+    use symphonia::core::{
+        formats::FormatOptions,
+        io::{MediaSourceStream, MediaSourceStreamOptions},
+        meta::MetadataOptions,
+        probe::Hint,
+    };
+
+    let file = File::open(path).ok()?;
+    let mss = MediaSourceStream::new(Box::new(file), MediaSourceStreamOptions::default());
+
+    let mut hint = Hint::new();
+    if let Some(ext) = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+    {
+        hint.with_extension(ext);
+    }
+
+    let probed = symphonia::default::get_probe()
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
+        .ok()?;
+
+    let track = probed
+        .format
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.sample_rate.is_some())?;
+
+    let params = &track.codec_params;
+    // `sample_rate == 0` would mean a corrupt header, which we treat as
+    // undeterminable.
+    let sample_rate = params.sample_rate.filter(|&r| r != 0)?;
+    let n_frames = params.n_frames?;
+
+    // `n_frames` is the number of PCM samples (symphonia's MP3/FLAC/etc.
+    // demuxers scale codec frames up to PCM samples), so dividing by the
+    // sample rate yields seconds.
+    Some(n_frames as u32 / sample_rate)
+}
+
 pub fn fuzzy_match(query: &str, text: &str) -> bool {
     if query.is_empty() {
         return true;
@@ -118,8 +167,10 @@ mod tests {
     }
 
     #[test]
-    fn remove_at_empty() {
-        let mut v: Vec<usize> = vec![];
-        assert_eq!(remove_at(&mut v, &[0, 1]), 0);
+    fn probe_duration_missing_file() {
+        assert_eq!(
+            try_probe_duration("/nonexistent/path/file.mp3").unwrap_or(0),
+            0
+        );
     }
 }

@@ -11,7 +11,7 @@ YouTube-search music player with local playback and MPRIS, built with iced.
 
 ## Prerequisites
 
-- **yt-dlp** (stream/download) + **ffmpeg** (decode webm/aac → WAV)
+- **yt-dlp** (stream/download) + **ffmpeg** (decode audio → WAV)
 - **Python 3** + `ytmusicapi` for search (falls back to yt-dlp); **D-Bus** session bus (Linux) for MPRIS
 
 ## Build & Run

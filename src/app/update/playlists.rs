@@ -68,11 +68,12 @@ impl MusicPlayer {
         for path_str in &paths {
             let path = Path::new(path_str);
             if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
+                let duration = crate::util::try_probe_duration(path_str).unwrap_or(0);
                 new_tracks.push(Track {
                     id: filename.to_string(),
                     title: filename.to_string(),
                     artist: "Unknown Artist".to_string(),
-                    duration: 0,
+                    duration,
                     url: path_str.clone(),
                     source: TrackSource::Local,
                     thumbnail: String::new(),

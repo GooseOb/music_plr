@@ -284,11 +284,10 @@ impl AudioPlayer {
 
                             debug!("Playing cached file (re-decoded via ffmpeg): {:?}", cache_path);
 
-                            // Cached files may be WAV (written by the streaming
-                            // pipeline) or legacy WebM (raw yt-dlp output from
-                            // older builds). Decoding through ffmpeg handles
-                            // both formats uniformly, writing a temp WAV that
-                            // rodio reads.
+                            // The cache file is a WAV written by the
+                            // streaming pipeline. Decoding it through ffmpeg
+                            // (which also normalizes the sample format) writes
+                            // a temp WAV that rodio reads.
                             let temp_dir = std::env::temp_dir().join("music_plr");
                             let _ = std::fs::create_dir_all(&temp_dir);
                             let temp_path = temp_dir.join(format!(
