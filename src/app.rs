@@ -7,7 +7,7 @@ use crate::{
     playlists::PlaylistStore,
     search_history::SearchHistory,
     theme::{AppTheme, Palette},
-    types::{PlayQueue, QueueTab, Track, View},
+    types::{PlayQueue, QueueTab, RadioKind, Track, View},
     util::format_duration,
 };
 use iced::{Point, Subscription, Task};
@@ -24,38 +24,237 @@ mod update;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct NavEntry {
     pub view: View,
-    pub snapshot: ViewSnapshot,
+    pub data: ViewData,
 }
 
+/// Consolidates all per-view state into a single enum. Only one variant is
+/// live at a time, eliminating the need for mutually-exclusive fields on
+/// [`MusicPlayer`]. Serialized into [`NavEntry`] for back/forward history
+/// and [`crate::session::SessionState`] for restore.
+///
+/// `query` (the search-bar text) is intentionally kept as a field on
+/// [`MusicPlayer`] rather than here: the search bar is always visible
+/// regardless of which view is active, so the query is global UI state
+/// rather than view-specific data.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ViewSnapshot {
+pub enum ViewData {
     Search {
-        query: String,
         results: Vec<Track>,
+        loading: bool,
+        exhausted: bool,
         selection: Vec<usize>,
         scroll: f32,
+        #[serde(skip)]
+        bounds: Option<iced::Rectangle>,
     },
     Radio {
+        kind: RadioKind,
         label: String,
         tracks: Vec<Track>,
+        loading: bool,
         selection: Vec<usize>,
         scroll: f32,
+        #[serde(skip)]
+        bounds: Option<iced::Rectangle>,
     },
-    TrackList {
-        playlist: Option<usize>,
+    Playlist {
+        selected_playlist: Option<usize>,
         playlist_name: String,
         selection: Vec<usize>,
         scroll: f32,
+        #[serde(skip)]
+        bounds: Option<iced::Rectangle>,
+    },
+    Downloads {
+        tracks: Vec<Track>,
+        selection: Vec<usize>,
+        scroll: f32,
+        #[serde(skip)]
+        bounds: Option<iced::Rectangle>,
     },
 }
 
-impl Default for ViewSnapshot {
+impl Default for ViewData {
     fn default() -> Self {
         Self::Search {
-            query: String::new(),
             results: Vec::new(),
+            loading: false,
+            exhausted: false,
             selection: Vec::new(),
             scroll: 0.0,
+            bounds: None,
+        }
+    }
+}
+
+impl ViewData {
+    /// Derive the [`View`] enum from the active variant.
+    pub fn view(&self) -> View {
+        match self {
+            Self::Search { .. } => View::Search,
+            Self::Radio { kind, .. } => match kind {
+                RadioKind::Song => View::SongRadio,
+                RadioKind::Artist => View::ArtistRadio,
+            },
+            Self::Playlist { .. } => View::Playlist,
+            Self::Downloads { .. } => View::Downloads,
+        }
+    }
+
+    /// True for Search and Radio views (the scrollable text lists).
+    pub fn is_search_like(&self) -> bool {
+        matches!(self, Self::Search { .. } | Self::Radio { .. })
+    }
+
+    pub fn scroll(&self) -> f32 {
+        match self {
+            Self::Search { scroll, .. }
+            | Self::Radio { scroll, .. }
+            | Self::Playlist { scroll, .. }
+            | Self::Downloads { scroll, .. } => *scroll,
+        }
+    }
+
+    pub fn selection(&self) -> &[usize] {
+        match self {
+            Self::Search { selection, .. }
+            | Self::Radio { selection, .. }
+            | Self::Playlist { selection, .. }
+            | Self::Downloads { selection, .. } => selection,
+        }
+    }
+
+    pub fn selection_mut(&mut self) -> &mut Vec<usize> {
+        match self {
+            Self::Search { selection, .. }
+            | Self::Radio { selection, .. }
+            | Self::Playlist { selection, .. }
+            | Self::Downloads { selection, .. } => selection,
+        }
+    }
+
+    pub fn bounds(&self) -> Option<iced::Rectangle> {
+        match self {
+            Self::Search { bounds, .. }
+            | Self::Radio { bounds, .. }
+            | Self::Playlist { bounds, .. }
+            | Self::Downloads { bounds, .. } => *bounds,
+        }
+    }
+
+    /// Update the scroll offset and bounds for the current view's scrollable list.
+    pub fn set_scroll_and_bounds(&mut self, scroll: f32, bounds: Option<iced::Rectangle>) {
+        match self {
+            Self::Search {
+                scroll: s,
+                bounds: b,
+                ..
+            }
+            | Self::Radio {
+                scroll: s,
+                bounds: b,
+                ..
+            }
+            | Self::Playlist {
+                scroll: s,
+                bounds: b,
+                ..
+            }
+            | Self::Downloads {
+                scroll: s,
+                bounds: b,
+                ..
+            } => {
+                *s = scroll;
+                *b = bounds;
+            }
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        match self {
+            Self::Search { selection, .. }
+            | Self::Radio { selection, .. }
+            | Self::Playlist { selection, .. }
+            | Self::Downloads { selection, .. } => selection.clear(),
+        }
+    }
+
+    /// Returns the selected playlist index for the Playlist view, or `None`.
+    pub fn selected_playlist_id(&self) -> Option<usize> {
+        match self {
+            Self::Playlist {
+                selected_playlist, ..
+            } => *selected_playlist,
+            _ => None,
+        }
+    }
+
+    pub fn playlist_name(&self) -> &str {
+        match self {
+            Self::Playlist { playlist_name, .. } => playlist_name,
+            _ => "",
+        }
+    }
+
+    // ── constructors ─────────────────────────────────────────────
+
+    /// Create a fresh `Search` view with empty results.
+    pub fn new_search() -> Self {
+        Self::Search {
+            results: Vec::new(),
+            loading: false,
+            exhausted: false,
+            selection: Vec::new(),
+            scroll: 0.0,
+            bounds: None,
+        }
+    }
+
+    /// Create a `Radio` view with the given kind and label, initially loading.
+    pub fn new_radio(kind: RadioKind, label: String) -> Self {
+        Self::Radio {
+            kind,
+            label,
+            tracks: Vec::new(),
+            loading: true,
+            selection: Vec::new(),
+            scroll: 0.0,
+            bounds: None,
+        }
+    }
+
+    /// Create a `Playlist` view, preserving the selected playlist from the
+    /// previous view data if it was already a Playlist view.
+    pub fn new_playlist(
+        selected_playlist: Option<usize>,
+        playlist_name: String,
+        old: Option<&Self>,
+    ) -> Self {
+        let (sp, name) = match old {
+            Some(Self::Playlist {
+                selected_playlist: sp,
+                playlist_name: n,
+                ..
+            }) => (*sp, n.clone()),
+            _ => (selected_playlist, playlist_name),
+        };
+        Self::Playlist {
+            selected_playlist: sp,
+            playlist_name: name,
+            selection: Vec::new(),
+            scroll: 0.0,
+            bounds: None,
+        }
+    }
+
+    /// Create a `Downloads` view with the given tracks.
+    pub fn new_downloads(tracks: Vec<Track>) -> Self {
+        Self::Downloads {
+            tracks,
+            selection: Vec::new(),
+            scroll: 0.0,
+            bounds: None,
         }
     }
 }
@@ -207,16 +406,20 @@ pub enum DragTargetList {
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
     pub config: crate::config::Config,
-    pub current_view: View,
+    /// All per-view state lives here. The active variant is always consistent
+    /// with [`MusicPlayer::current_view`]. Replaces the previously separate
+    /// fields: `search_query`, `search_results`, `radio_tracks`,
+    /// `selected_playlist`, `selected_playlist_name`, `downloaded_tracks`,
+    /// `selected_indices`, scroll/bounds, and `search_loading`.
+    pub view_data: ViewData,
+    /// The search-bar text. Kept on `MusicPlayer` because the search bar is
+    /// always visible regardless of which view is active.
     pub search_query: String,
-    pub search_results: Vec<Track>,
-    pub search_loading: bool,
-    pub search_exhausted: bool,
+    /// Whether the search-history dropdown is open (global UI state).
     pub show_search_history: bool,
+    /// Filtered history list for the dropdown (derived from
+    /// `search_history` + `search_query`).
     pub last_filtered_history: Vec<String>,
-
-    pub radio_tracks: Vec<Track>,
-    pub radio_label: String,
 
     pub queue: PlayQueue,
     pub show_queue: bool,
@@ -234,10 +437,7 @@ pub struct MusicPlayer {
     pub notification: Option<String>,
 
     pub thumbnail_cache: std::collections::HashMap<String, bool>,
-    pub downloaded_tracks: Vec<Track>,
     pub playlists: PlaylistStore,
-    pub selected_playlist: Option<usize>,
-    pub selected_playlist_name: String,
     pub playlist_create_name: String,
     pub show_playlist_picker: bool,
     /// Whether the playlist picker was triggered from a queue track (so
@@ -259,7 +459,6 @@ pub struct MusicPlayer {
     pub stream_cache: StreamCache,
     pub pending_cache_id: Option<String>,
 
-    pub selected_indices: Vec<usize>,
     pub clipboard: Vec<Track>,
     pub last_click_index: Option<usize>,
     pub last_click_time: Instant,
@@ -280,15 +479,81 @@ pub struct MusicPlayer {
 
     pub app_theme: AppTheme,
 
-    pub search_list_bounds: Option<iced::Rectangle>,
-    pub search_list_scroll: f32,
-    pub playlist_list_bounds: Option<iced::Rectangle>,
-    pub playlist_list_scroll: f32,
     pub queue_list_bounds: Option<iced::Rectangle>,
     pub queue_list_scroll: f32,
     pub sidebar_bounds: Option<iced::Rectangle>,
     pub sidebar_list_scroll: f32,
     pub window_width: f32,
+}
+
+impl MusicPlayer {
+    /// Derive the current [`View`] from `view_data`. Cheaper than a field
+    /// access (one match) but avoids the sync risk of a separate field.
+    pub fn current_view(&self) -> View {
+        self.view_data.view()
+    }
+
+    /// True for Search and Radio views (the scrollable text lists).
+    pub fn is_search_like(&self) -> bool {
+        self.view_data.is_search_like()
+    }
+
+    /// Returns the non-queue selection for the current view.
+    pub fn view_selection(&self) -> &[usize] {
+        self.view_data.selection()
+    }
+
+    pub fn search_results(&self) -> &[Track] {
+        match &self.view_data {
+            ViewData::Search {
+                results: tracks, ..
+            } => tracks,
+            _ => &[],
+        }
+    }
+
+    pub fn radio_tracks(&self) -> &[Track] {
+        match &self.view_data {
+            ViewData::Radio { tracks, .. } => tracks,
+            _ => &[],
+        }
+    }
+
+    pub fn downloaded_tracks(&self) -> &[Track] {
+        match &self.view_data {
+            ViewData::Downloads { tracks, .. } => tracks,
+            _ => &[],
+        }
+    }
+
+    pub fn is_loading(&self) -> bool {
+        match &self.view_data {
+            ViewData::Search { loading, .. } | ViewData::Radio { loading, .. } => *loading,
+            _ => false,
+        }
+    }
+
+    pub fn search_exhausted(&self) -> bool {
+        match &self.view_data {
+            ViewData::Search { exhausted, .. } => *exhausted,
+            _ => false,
+        }
+    }
+
+    pub fn radio_label(&self) -> &str {
+        match &self.view_data {
+            ViewData::Radio { label, .. } => label,
+            _ => "",
+        }
+    }
+
+    pub fn selected_playlist(&self) -> Option<usize> {
+        self.view_data.selected_playlist_id()
+    }
+
+    pub fn selected_playlist_name(&self) -> &str {
+        self.view_data.playlist_name()
+    }
 }
 
 impl Default for MusicPlayer {
@@ -313,15 +578,10 @@ impl MusicPlayer {
             stream_cache: StreamCache::new(config.cache_max_size_mb),
             pending_cache_id: None,
             config,
-            current_view: View::Search,
+            view_data: ViewData::default(),
             search_query: String::new(),
-            search_results: Vec::new(),
-            search_loading: false,
-            search_exhausted: false,
             show_search_history: false,
             last_filtered_history: Vec::new(),
-            radio_tracks: Vec::new(),
-            radio_label: String::new(),
             queue: PlayQueue::new(),
             is_playing: false,
             volume: 0.8,
@@ -331,25 +591,17 @@ impl MusicPlayer {
             notification: None,
             track_loading: false,
             playlists: PlaylistStore::load(),
-            selected_playlist: None,
-            selected_playlist_name: String::new(),
             playlist_create_name: String::new(),
             show_playlist_picker: false,
             show_queue: false,
             thumbnail_cache: std::collections::HashMap::new(),
-            downloaded_tracks: Vec::new(),
             picker_is_queue: false,
             picker_target_indices: Vec::new(),
             show_delete_confirm: false,
             delete_confirm_index: None,
             nav_history: vec![NavEntry {
                 view: View::Search,
-                snapshot: ViewSnapshot::Search {
-                    query: String::new(),
-                    results: Vec::new(),
-                    selection: Vec::new(),
-                    scroll: 0.0,
-                },
+                data: ViewData::default(),
             }],
             nav_history_pos: 0,
             result_tx,
@@ -363,10 +615,6 @@ impl MusicPlayer {
             context_menu: None,
             queue_selected_indices: Vec::new(),
             app_theme: AppTheme::new(Palette::dark()),
-            search_list_bounds: None,
-            search_list_scroll: 0.0,
-            playlist_list_bounds: None,
-            playlist_list_scroll: 0.0,
             queue_list_bounds: None,
             queue_list_scroll: 0.0,
             sidebar_bounds: None,
@@ -374,7 +622,6 @@ impl MusicPlayer {
             window_width: 1280.0,
             elapsed_text: String::new(),
             total_text: String::new(),
-            selected_indices: Vec::new(),
             clipboard: Vec::new(),
             last_click_index: None,
             last_click_time: std::time::Instant::now(),
@@ -472,12 +719,8 @@ impl MusicPlayer {
                 if is_queue {
                     self.queue_list_bounds = Some(bounds);
                     self.queue_list_scroll = offset_y;
-                } else if self.current_view.is_search_like() {
-                    self.search_list_bounds = Some(bounds);
-                    self.search_list_scroll = offset_y;
                 } else {
-                    self.playlist_list_bounds = Some(bounds);
-                    self.playlist_list_scroll = offset_y;
+                    self.view_data.set_scroll_and_bounds(offset_y, Some(bounds));
                 }
                 Task::none()
             }

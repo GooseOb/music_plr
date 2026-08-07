@@ -1,4 +1,4 @@
-use super::{Message, MusicPlayer, NavEntry, Task, View, ViewSnapshot};
+use super::{Message, MusicPlayer, NavEntry, Task, View, ViewData};
 use crate::app::ui::TRACK_LIST_ID;
 
 impl MusicPlayer {
@@ -10,46 +10,64 @@ impl MusicPlayer {
         self.nav_history_pos + 1 < self.nav_history.len()
     }
 
-    pub(super) fn snapshot_current(&self) -> ViewSnapshot {
-        ViewSnapshot::from_player(self)
+    /// Snapshot the current view data by cloning it into the nav entry.
+    pub(super) fn snapshot_current(&self) -> ViewData {
+        self.view_data.clone()
     }
 
     pub(super) fn restore_nav_entry(&mut self, entry: &NavEntry) -> Task<Message> {
-        self.current_view = entry.view.clone();
-        entry.snapshot.apply_to(self);
-
         // Scroll position is stored relative to the main track_list scrollable.
         // (Queue view uses a different Id and is not navigated via history.)
+        let y = entry.data.scroll();
+        self.view_data = entry.data.clone();
+
         iced::widget::operation::scroll_to::<Message>(
             TRACK_LIST_ID,
-            iced::widget::operation::AbsoluteOffset {
-                x: 0.0,
-                y: entry.snapshot.scroll(),
-            },
+            iced::widget::operation::AbsoluteOffset { x: 0.0, y },
         )
     }
 
     pub fn handle_navigate_to(&mut self, view: View) {
-        if self.current_view == view {
+        if self.view_data.view() == view {
             return;
         }
         self.nav_history.truncate(self.nav_history_pos + 1);
-        self.show_search_history = false;
         self.cleanup_drag_state();
         self.drag.hovered_track = None;
 
-        self.current_view = view;
-        self.selected_indices.clear();
-
-        if self.current_view == View::Downloads {
-            self.selected_playlist = None;
-        }
+        let prev = &self.view_data;
+        self.view_data = match view {
+            View::Search => ViewData::new_search(),
+            View::SongRadio | View::ArtistRadio => {
+                let kind = if view == View::SongRadio {
+                    crate::types::RadioKind::Song
+                } else {
+                    crate::types::RadioKind::Artist
+                };
+                // Preserve query from the search bar (stays on MusicPlayer).
+                ViewData::new_radio(kind, String::new())
+            }
+            View::Playlist => {
+                let old_sp = prev.selected_playlist_id();
+                let old_name = prev.playlist_name().to_string();
+                ViewData::new_playlist(old_sp, old_name, Some(prev))
+            }
+            View::Downloads => {
+                let tracks: Vec<crate::types::Track> = self
+                    .download_registry
+                    .all_tracks()
+                    .into_iter()
+                    .cloned()
+                    .collect();
+                ViewData::new_downloads(tracks)
+            }
+        };
 
         // Push the new state as a single entry. The previous entry (preserved
         // by truncate) already serves as the back-target for Back navigation.
         self.nav_history.push(NavEntry {
-            view: self.current_view.clone(),
-            snapshot: self.snapshot_current(),
+            view,
+            data: self.view_data.clone(),
         });
 
         if self.nav_history.len() > 20 {
@@ -87,8 +105,8 @@ impl MusicPlayer {
     pub(super) fn push_nav_entry(&mut self) {
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.nav_history.push(NavEntry {
-            view: self.current_view.clone(),
-            snapshot: self.snapshot_current(),
+            view: self.view_data.view(),
+            data: self.snapshot_current(),
         });
         if self.nav_history.len() > 20 {
             self.nav_history.remove(0);
@@ -104,90 +122,18 @@ impl MusicPlayer {
         if !self
             .nav_history
             .get(pos)
-            .is_some_and(|e| e.view == self.current_view)
+            .is_some_and(|e| e.view == self.view_data.view())
         {
             return false;
         }
-        // Build a fresh snapshot (immutable borrow released before the
-        // mutable borrow below), then replace the entry's snapshot.
+        // Build a fresh snapshot (clone of the live data), then replace the
+        // entry's data.
         let snapshot = self.snapshot_current();
         if let Some(entry) = self.nav_history.get_mut(pos) {
-            entry.snapshot = snapshot;
+            entry.data = snapshot;
             true
         } else {
             false
-        }
-    }
-}
-
-impl ViewSnapshot {
-    pub(super) const fn scroll(&self) -> f32 {
-        match self {
-            Self::Search { scroll, .. }
-            | Self::Radio { scroll, .. }
-            | Self::TrackList { scroll, .. } => *scroll,
-        }
-    }
-
-    pub(super) fn from_player(player: &MusicPlayer) -> Self {
-        let scroll = player.get_current_list_scroll();
-        match player.current_view {
-            View::Search => ViewSnapshot::Search {
-                query: player.search_query.clone(),
-                results: player.search_results.clone(),
-                selection: player.selected_indices.clone(),
-                scroll,
-            },
-            View::SongRadio | View::ArtistRadio => ViewSnapshot::Radio {
-                label: player.radio_label.clone(),
-                tracks: player.radio_tracks.clone(),
-                selection: player.selected_indices.clone(),
-                scroll,
-            },
-            View::Playlist | View::Downloads => ViewSnapshot::TrackList {
-                playlist: player.selected_playlist,
-                playlist_name: player.selected_playlist_name.clone(),
-                selection: player.selected_indices.clone(),
-                scroll,
-            },
-        }
-    }
-
-    pub(super) fn apply_to(&self, player: &mut MusicPlayer) {
-        match self {
-            Self::Search {
-                query,
-                results,
-                selection,
-                scroll,
-            } => {
-                player.search_query.clone_from(query);
-                player.search_results.clone_from(results);
-                player.selected_indices.clone_from(selection);
-                player.search_list_scroll = *scroll;
-            }
-            Self::Radio {
-                label,
-                tracks,
-                selection,
-                scroll,
-            } => {
-                player.radio_label.clone_from(label);
-                player.radio_tracks.clone_from(tracks);
-                player.selected_indices.clone_from(selection);
-                player.search_list_scroll = *scroll;
-            }
-            Self::TrackList {
-                playlist,
-                playlist_name,
-                selection,
-                scroll,
-            } => {
-                player.selected_playlist = *playlist;
-                player.selected_playlist_name.clone_from(playlist_name);
-                player.selected_indices.clone_from(selection);
-                player.playlist_list_scroll = *scroll;
-            }
         }
     }
 }

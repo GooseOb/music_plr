@@ -1,4 +1,5 @@
-use super::{mpsc, thread, BackendResult, MusicPlayer, Track, View};
+use super::{mpsc, thread, BackendResult, MusicPlayer, Track, ViewData};
+use crate::types::RadioKind;
 
 impl MusicPlayer {
     pub fn handle_search_execute(&mut self) {
@@ -6,16 +7,24 @@ impl MusicPlayer {
             return;
         }
 
-        // If switching from another view, the current entry already serves as
-        // the back-target — no need to push it again. Just switch to Search.
-        self.current_view = View::Search;
+        // Switch to Search view, clearing the results but preserving the
+        // query (which lives on MusicPlayer as global search-bar state).
+        self.view_data = ViewData::new_search();
         self.show_search_history = false;
 
-        self.search_loading = true;
-        self.search_exhausted = false;
-        self.notify(format!("Searching for \"{}\"...", self.search_query));
-        self.search_results.clear();
-        self.selected_indices.clear();
+        if let ViewData::Search {
+            loading,
+            exhausted,
+            results,
+            selection,
+            ..
+        } = &mut self.view_data
+        {
+            *loading = true;
+            *exhausted = false;
+            results.clear();
+            selection.clear();
+        }
         self.drag.hovered_track = None;
 
         self.search_history.push(
@@ -34,16 +43,25 @@ impl MusicPlayer {
     }
 
     pub fn handle_search_load_more(&mut self) {
-        // search_exhausted is set true when a page returned fewer than a full
-        // SEARCH_PAGE_SIZE, so there is nothing left to fetch.
-        // (defined in theme.rs, shared with youtube.rs)
-        if self.search_loading || self.search_exhausted || self.search_results.is_empty() {
+        let (loading, exhausted, count) = match &self.view_data {
+            ViewData::Search {
+                loading,
+                exhausted,
+                results,
+                ..
+            } => (*loading, *exhausted, results.len()),
+            _ => return,
+        };
+        if loading || exhausted || count == 0 {
             return;
         }
-        self.search_loading = true;
+
+        if let ViewData::Search { loading, .. } = &mut self.view_data {
+            *loading = true;
+        }
 
         let query = self.search_query.clone();
-        let offset = self.search_results.len();
+        let offset = count;
         let tx = self.result_tx.clone();
 
         Self::spawn_youtube_thread(
@@ -80,16 +98,14 @@ impl MusicPlayer {
     }
 
     pub fn start_song_radio(&mut self, song_name: String) {
-        self.radio_label = format!("Radio: {song_name}");
-        self.search_loading = true;
+        self.view_data = ViewData::new_radio(RadioKind::Song, format!("Radio: {song_name}"));
+
         self.notify(format!("Generating radio for song: {song_name}..."));
 
-        self.current_view = View::SongRadio;
-        self.show_search_history = false;
-        self.clear_selection();
-        self.drag.hovered_track = None;
-
-        let label = self.radio_label.clone();
+        let label = match &self.view_data {
+            ViewData::Radio { label, .. } => label.clone(),
+            _ => unreachable!(),
+        };
         let tx = self.result_tx.clone();
         Self::spawn_youtube_thread(song_name, tx, crate::youtube::radio_song, move |tracks| {
             BackendResult::RadioResults(label.clone(), tracks)
@@ -97,16 +113,14 @@ impl MusicPlayer {
     }
 
     pub fn start_artist_radio(&mut self, artist_name: String) {
-        self.radio_label = format!("Radio: {artist_name}");
-        self.search_loading = true;
+        self.view_data = ViewData::new_radio(RadioKind::Artist, format!("Radio: {artist_name}"));
+
         self.notify(format!("Generating radio for artist: {artist_name}..."));
 
-        self.current_view = View::ArtistRadio;
-        self.show_search_history = false;
-        self.clear_selection();
-        self.drag.hovered_track = None;
-
-        let label = self.radio_label.clone();
+        let label = match &self.view_data {
+            ViewData::Radio { label, .. } => label.clone(),
+            _ => unreachable!(),
+        };
         let tx = self.result_tx.clone();
         Self::spawn_youtube_thread(
             artist_name,

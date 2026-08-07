@@ -1,6 +1,6 @@
 use super::{
     error, format_duration, mpris, mpsc, spawn_thumbnail_download_thread, BackendResult,
-    MprisCommand, MprisUpdate, MusicPlayer, View,
+    MprisCommand, MprisUpdate, MusicPlayer, ViewData,
 };
 use crate::types::Track;
 use tracing::debug;
@@ -63,8 +63,10 @@ impl MusicPlayer {
     }
 
     fn update_thumbnail_cache(&mut self) {
-        if matches!(self.current_view, View::Downloads) {
-            self.downloaded_tracks = self
+        // Sync downloaded tracks from the registry into ViewData::Downloads
+        // so the list stays fresh when new downloads complete.
+        if let ViewData::Downloads { tracks, .. } = &mut self.view_data {
+            *tracks = self
                 .download_registry
                 .all_tracks()
                 .into_iter()
@@ -72,21 +74,24 @@ impl MusicPlayer {
                 .collect();
         }
 
-        let tracks: Vec<&Track> = match self.current_view {
-            View::Search => self.search_results.iter().collect(),
-            View::SongRadio | View::ArtistRadio => self.radio_tracks.iter().collect(),
-            View::Playlist => {
-                if let Some(idx) = self.selected_playlist {
+        let tracks: Vec<&Track> = match &self.view_data {
+            ViewData::Search { results, .. } => results.iter().collect(),
+            ViewData::Radio { tracks, .. } | ViewData::Downloads { tracks, .. } => {
+                tracks.iter().collect()
+            }
+            ViewData::Playlist {
+                selected_playlist, ..
+            } => {
+                if let Some(idx) = selected_playlist {
                     self.playlists
                         .playlists
-                        .get(idx)
+                        .get(*idx)
                         .map(|pl| pl.tracks.iter().collect())
                         .unwrap_or_default()
                 } else {
                     Vec::new()
                 }
             }
-            View::Downloads => self.downloaded_tracks.iter().collect(),
         };
 
         for track in &tracks {
@@ -147,37 +152,66 @@ impl MusicPlayer {
     pub fn process_result(&mut self, result: BackendResult) {
         match result {
             BackendResult::SearchResults(tracks) => {
-                self.search_results = tracks;
-                self.search_exhausted = self.search_results.len() < crate::theme::SEARCH_PAGE_SIZE;
-                self.search_loading = false;
-                if matches!(self.current_view, View::Search) {
+                if let ViewData::Search {
+                    results,
+                    loading,
+                    exhausted,
+                    selection,
+                    ..
+                } = &mut self.view_data
+                {
+                    *results = tracks;
+                    *exhausted = results.len() < crate::theme::SEARCH_PAGE_SIZE;
+                    *loading = false;
+                    selection.clear();
+                }
+                if matches!(self.view_data, ViewData::Search { .. }) {
                     self.push_nav_entry();
                 }
                 self.save_session();
-                spawn_thumbnail_download_thread(&self.search_results, self.result_tx.clone());
+                let tracks = self.search_results().to_vec();
+                spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
                 self.clear_notification();
             }
             BackendResult::SearchResultsAppend(tracks) => {
                 let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
-                self.search_results.extend(tracks);
-                self.search_loading = false;
-                self.search_exhausted = exhausted;
+                if let ViewData::Search {
+                    results,
+                    loading,
+                    exhausted: ex,
+                    ..
+                } = &mut self.view_data
+                {
+                    results.extend(tracks);
+                    *loading = false;
+                    *ex = exhausted;
+                }
                 let _ = self.update_current_snapshot();
-                spawn_thumbnail_download_thread(&self.search_results, self.result_tx.clone());
+                let tracks = self.search_results().to_vec();
+                spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
                 self.clear_notification();
                 self.save_session();
             }
             BackendResult::RadioResults(label, tracks) => {
-                self.radio_label = label;
-                self.radio_tracks = tracks;
-                self.search_loading = false;
-                if matches!(self.current_view, View::SongRadio | View::ArtistRadio)
+                if let ViewData::Radio {
+                    label: l,
+                    tracks: t,
+                    loading,
+                    ..
+                } = &mut self.view_data
+                {
+                    *l = label;
+                    *t = tracks;
+                    *loading = false;
+                }
+                if matches!(self.view_data, ViewData::Radio { .. })
                     && !self.update_current_snapshot()
                 {
                     self.push_nav_entry();
                 }
                 self.save_session();
-                spawn_thumbnail_download_thread(&self.radio_tracks, self.result_tx.clone());
+                let tracks = self.radio_tracks().to_vec();
+                spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
             }
             BackendResult::DownloadComplete(track, path) => {
                 self.download_registry.register(track);
@@ -189,7 +223,11 @@ impl MusicPlayer {
                 self.notify_error(msg);
             }
             BackendResult::SearchError(msg) => {
-                self.search_loading = false;
+                if let ViewData::Search { loading, .. } | ViewData::Radio { loading, .. } =
+                    &mut self.view_data
+                {
+                    *loading = false;
+                }
                 self.clear_notification();
                 self.notify_error(msg);
             }

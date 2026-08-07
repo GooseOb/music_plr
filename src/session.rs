@@ -1,14 +1,12 @@
-use crate::{
-    app::ViewSnapshot,
-    types::{PlayQueue, View},
-};
+#[cfg(test)]
+use crate::types::View;
+use crate::{app::ViewData, types::PlayQueue};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
-    pub view: View,
-    pub snapshot: ViewSnapshot,
+    pub data: ViewData,
     pub queue: PlayQueue,
     pub show_queue: bool,
     pub volume: f32,
@@ -17,8 +15,7 @@ pub struct SessionState {
 impl Default for SessionState {
     fn default() -> Self {
         Self {
-            view: View::Search,
-            snapshot: ViewSnapshot::default(),
+            data: ViewData::default(),
             queue: PlayQueue::new(),
             show_queue: false,
             volume: 0.8,
@@ -65,7 +62,7 @@ mod tests {
     #[test]
     fn session_state_default() {
         let state = SessionState::default();
-        assert_eq!(state.view, View::Search);
+        assert_eq!(state.data.view(), View::Search);
         assert!(state.queue.tracks.is_empty());
         assert!(!state.show_queue);
         assert_eq!(state.volume, 0.8);
@@ -74,12 +71,14 @@ mod tests {
     #[test]
     fn session_state_round_trip() {
         let state = SessionState {
-            view: View::SongRadio,
-            snapshot: ViewSnapshot::Radio {
+            data: ViewData::Radio {
+                kind: crate::types::RadioKind::Song,
                 label: "Test Radio".into(),
                 tracks: Vec::new(),
+                loading: false,
                 selection: vec![2],
                 scroll: 42.0,
+                bounds: None,
             },
             queue: PlayQueue::default(),
             show_queue: true,
@@ -87,21 +86,21 @@ mod tests {
         };
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.view, View::SongRadio);
+        assert_eq!(restored.data.view(), View::SongRadio);
         assert!(restored.show_queue);
         assert_eq!(restored.volume, 0.5);
-        if let ViewSnapshot::Radio {
+        if let ViewData::Radio {
             label,
             selection,
             scroll,
             ..
-        } = restored.snapshot
+        } = &restored.data
         {
             assert_eq!(label, "Test Radio");
-            assert_eq!(selection, vec![2]);
-            assert_eq!(scroll, 42.0);
+            assert_eq!(selection, &vec![2]);
+            assert_eq!(*scroll, 42.0);
         } else {
-            panic!("expected Radio snapshot");
+            panic!("expected Radio data");
         }
     }
 }

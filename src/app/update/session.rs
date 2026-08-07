@@ -9,8 +9,7 @@ impl MusicPlayer {
     pub fn flush_session(&mut self) {
         if self.session_dirty {
             let state = SessionState {
-                view: self.current_view.clone(),
-                snapshot: self.snapshot_current(),
+                data: self.view_data.clone(),
                 queue: self.queue.clone(),
                 show_queue: self.show_queue,
                 volume: self.volume,
@@ -26,16 +25,15 @@ impl MusicPlayer {
         self.show_queue = state.show_queue;
         self.volume = state.volume;
         self.audio.set_volume(state.volume);
-        let entry = NavEntry {
-            view: state.view,
-            snapshot: state.snapshot,
-        };
-        // Reuse the same restore logic as nav back/forward
-        let _ = self.restore_nav_entry(&entry);
+
+        let _ = self.restore_nav_entry(&NavEntry {
+            view: state.data.view(),
+            data: state.data,
+        });
 
         self.nav_history = vec![NavEntry {
-            view: self.current_view.clone(),
-            snapshot: self.snapshot_current(),
+            view: self.view_data.view(),
+            data: self.snapshot_current(),
         }];
         self.nav_history_pos = 0;
     }

@@ -1,4 +1,4 @@
-use super::{MusicPlayer, Track, View};
+use super::{MusicPlayer, Track, ViewData};
 use tracing::debug;
 
 impl MusicPlayer {
@@ -38,9 +38,7 @@ impl MusicPlayer {
             self.queue.enqueue(track);
             self.mpris_dirty = true;
 
-            // Enqueue remaining tracks after the played one. Get the slice
-            // once instead of calling get_track_at (which re-dispatches on
-            // current_view) per iteration.
+            // Enqueue remaining tracks after the played one.
             let remaining: Vec<Track> = self.tracks_after(index).to_vec();
             for t in remaining {
                 self.queue.enqueue(t);
@@ -49,16 +47,19 @@ impl MusicPlayer {
         }
     }
 
-    /// Returns the tracks after `index` in the current view, without the
-    /// view dispatch overhead of `get_track_at` called in a loop.
+    /// Returns the tracks after `index` in the current view.
     fn tracks_after(&self, index: usize) -> &[Track] {
         let start = index + 1;
-        match &self.current_view {
-            View::Search => self.search_results.get(start..).unwrap_or(&[]),
-            View::SongRadio | View::ArtistRadio => self.radio_tracks.get(start..).unwrap_or(&[]),
-            View::Playlist => {
-                if let Some(sp) = self.selected_playlist {
-                    if let Some(pl) = self.playlists.playlists.get(sp) {
+        match &self.view_data {
+            ViewData::Search { results, .. } => results.get(start..).unwrap_or(&[]),
+            ViewData::Radio { tracks, .. } | ViewData::Downloads { tracks, .. } => {
+                tracks.get(start..).unwrap_or(&[])
+            }
+            ViewData::Playlist {
+                selected_playlist, ..
+            } => {
+                if let Some(sp) = selected_playlist {
+                    if let Some(pl) = self.playlists.playlists.get(*sp) {
                         pl.tracks.get(start..).unwrap_or(&[])
                     } else {
                         &[]
@@ -67,13 +68,10 @@ impl MusicPlayer {
                     &[]
                 }
             }
-            View::Downloads => self.downloaded_tracks.get(start..).unwrap_or(&[]),
         }
     }
 
-    /// Play a track picked from the Recently Played list. The old current
-    /// track (if any) is recorded as recently played, then the queue is
-    /// rebuilt with *only* the selected track so the old queue is discarded.
+    /// Play a track picked from the Recently Played list.
     pub fn play_recent_track(&mut self, track: Track) {
         if let Some(old) = self.queue.current().cloned() {
             if old.url != track.url {

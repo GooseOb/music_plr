@@ -1,6 +1,6 @@
 use crate::app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID};
 
-use super::{DragTargetList, Message, MusicPlayer, Task, Track, View, DOUBLE_CLICK_MS};
+use super::{DragTargetList, Message, MusicPlayer, Task, Track, ViewData, DOUBLE_CLICK_MS};
 
 /// Reorder `tracks` by moving the items at `indices` to `drop_idx`.
 ///
@@ -37,22 +37,11 @@ pub(super) fn reorder_tracks(
         tracks.insert(adjusted_drop + j, track);
     }
 
-    // Build a map from original index → new index for every position in the
-    // list, so we can remap both moved and shifted selected tracks.
-    //
-    // For indices that were NOT moved: they shift left by the count of
-    // moved items removed before them, then shift right by the insertion
-    // offset relative to the adjusted_drop.
-    // For indices that WERE moved: their new position is in
-    // [adjusted_drop .. adjusted_drop + new_count).
     let mut new_selected: Vec<usize> = Vec::with_capacity(selection.len());
     for &sel_idx in selection {
         if let Some(pos) = sorted_indices.iter().position(|&i| i == sel_idx) {
-            // This selected track was moved.
             new_selected.push(adjusted_drop + pos);
         } else {
-            // This selected track was NOT moved — compute its new position
-            // after the removal and insertion.
             let removed_before_sel = sorted_indices.iter().filter(|&&i| i < sel_idx).count();
             let after_removal = sel_idx - removed_before_sel;
             let insert_shift = if after_removal >= adjusted_drop {
@@ -79,11 +68,6 @@ impl MusicPlayer {
         if self.drag.cursor_pos.x >= crate::theme::SIDEBAR_WIDTH {
             return None;
         }
-        // Use the actual scrollable viewport bounds when available (set via
-        // `on_scroll`). Fall back to a constant offset from the top of the
-        // sidebar when no scroll has occurred yet — iced's `on_scroll` callback
-        // does not fire when the scrollable content fits entirely within the
-        // viewport, leaving `sidebar_bounds` as `None`.
         let y_start = self
             .sidebar_bounds
             .map_or(crate::theme::SIDEBAR_PLAYLIST_LIST_OFFSET_Y, |b| b.y);
@@ -130,15 +114,15 @@ impl MusicPlayer {
         if is_queue {
             &self.queue_selected_indices
         } else {
-            &self.selected_indices
+            self.view_data.selection()
         }
     }
 
-    pub const fn selection_mut(&mut self, is_queue: bool) -> &mut Vec<usize> {
+    pub fn selection_mut(&mut self, is_queue: bool) -> &mut Vec<usize> {
         if is_queue {
             &mut self.queue_selected_indices
         } else {
-            &mut self.selected_indices
+            self.view_data.selection_mut()
         }
     }
 
@@ -340,10 +324,6 @@ impl MusicPlayer {
             Some(_) if Self::target_is_same_as_source(target, source_is_queue) => {
                 self.handle_same_list_reorder(drop_idx, &indices, source_is_queue);
             }
-            // None target: cursor is over no valid drop zone.
-            // Some(target) where target_is_same_as_source is false is
-            // unreachable: the two cross-list arms above cover all mismatched
-            // targets, and same-list targets are caught by the guard above.
             _ => {}
         }
     }
@@ -384,8 +364,8 @@ impl MusicPlayer {
     /// drop index. `indices` are positions in the queue's up-next list
     /// (starting after index 0, i.e. the current track).
     fn copy_from_queue(&mut self, indices: &[usize], drop_idx: usize) {
-        let Some(sp) = self.selected_playlist else {
-            if matches!(self.current_view, View::Playlist | View::Downloads) {
+        let Some(sp) = self.selected_playlist() else {
+            if !self.is_search_like() {
                 self.notify("Select a playlist to drop tracks into".into());
             }
             return;
@@ -437,10 +417,10 @@ impl MusicPlayer {
         } else {
             let count = self.current_track_count(false);
             if drop_idx <= count && is_valid_drop {
-                let selection = self.selected_indices.clone();
+                let selection = self.view_data.selection().to_vec();
                 let new_positions =
                     self.handle_reorder_tracks_selected(drop_idx, indices, &selection);
-                self.selected_indices = new_positions;
+                *self.view_data.selection_mut() = new_positions;
             }
         }
     }
@@ -475,7 +455,7 @@ impl MusicPlayer {
     }
 
     pub fn clear_selection(&mut self) {
-        self.selected_indices.clear();
+        self.view_data.clear_selection();
         self.queue_selected_indices.clear();
         self.show_playlist_picker = false;
         self.picker_target_indices.clear();
@@ -485,15 +465,17 @@ impl MusicPlayer {
         if is_queue {
             return self.queue.tracks.get(index).cloned();
         }
-        match &self.current_view {
-            View::Search => self.search_results.get(index).cloned(),
-            View::SongRadio | View::ArtistRadio => self.radio_tracks.get(index).cloned(),
-            View::Playlist => self
-                .selected_playlist
+        match &self.view_data {
+            ViewData::Search { results, .. } => results.get(index).cloned(),
+            ViewData::Radio { tracks, .. } | ViewData::Downloads { tracks, .. } => {
+                tracks.get(index).cloned()
+            }
+            ViewData::Playlist {
+                selected_playlist, ..
+            } => selected_playlist
                 .and_then(|sp| self.playlists.playlists.get(sp))
                 .and_then(|p| p.tracks.get(index))
                 .cloned(),
-            View::Downloads => self.downloaded_tracks.get(index).cloned(),
         }
     }
 
@@ -501,31 +483,23 @@ impl MusicPlayer {
         if is_queue {
             return self.queue.tracks.len();
         }
-        match &self.current_view {
-            View::Search => self.search_results.len(),
-            View::SongRadio | View::ArtistRadio => self.radio_tracks.len(),
-            View::Playlist => self
-                .selected_playlist
+        match &self.view_data {
+            ViewData::Search { results, .. } => results.len(),
+            ViewData::Radio { tracks, .. } | ViewData::Downloads { tracks, .. } => tracks.len(),
+            ViewData::Playlist {
+                selected_playlist, ..
+            } => selected_playlist
                 .and_then(|sp| self.playlists.playlists.get(sp))
                 .map_or(0, |p| p.tracks.len()),
-            View::Downloads => self.downloaded_tracks.len(),
         }
     }
 
     pub fn get_current_list_bounds(&self) -> Option<iced::Rectangle> {
-        if self.current_view.is_search_like() {
-            self.search_list_bounds
-        } else {
-            self.playlist_list_bounds
-        }
+        self.view_data.bounds()
     }
 
     pub fn get_current_list_scroll(&self) -> f32 {
-        if self.current_view.is_search_like() {
-            self.search_list_scroll
-        } else {
-            self.playlist_list_scroll
-        }
+        self.view_data.scroll()
     }
 }
 

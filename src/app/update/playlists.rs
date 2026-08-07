@@ -1,4 +1,4 @@
-use super::{MusicPlayer, Track, TrackSource, View};
+use super::{MusicPlayer, Track, TrackSource, ViewData};
 use std::path::Path;
 
 impl MusicPlayer {
@@ -13,16 +13,15 @@ impl MusicPlayer {
     }
 
     pub fn handle_select_playlist(&mut self, index: usize) {
-        if index < self.playlists.playlists.len() && self.selected_playlist != Some(index) {
+        if index < self.playlists.playlists.len() && self.selected_playlist() != Some(index) {
             self.show_playlist_picker = false;
             self.clear_selection();
             self.cleanup_drag_state();
             self.drag.hovered_track = None;
 
-            self.current_view = View::Playlist;
-            self.selected_playlist = Some(index);
-            self.selected_playlist_name = self.playlists.playlists[index].name.clone();
-            self.selected_indices.clear();
+            let playlist_name = self.playlists.playlists[index].name.clone();
+            self.view_data =
+                ViewData::new_playlist(Some(index), playlist_name, None);
 
             self.push_nav_entry();
             self.save_session();
@@ -31,22 +30,31 @@ impl MusicPlayer {
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn handle_rename_playlist(&mut self, new_name: String) {
-        if let Some(idx) = self.selected_playlist {
+        if let Some(idx) = self.selected_playlist() {
             if !new_name.trim().is_empty() {
                 self.playlists.playlists[idx].name = new_name.trim().to_string();
                 self.playlists.save();
-                self.selected_playlist_name = new_name.trim().to_string();
+                if let ViewData::Playlist { playlist_name, .. } = &mut self.view_data {
+                    *playlist_name = new_name.trim().to_string();
+                }
             }
         }
     }
 
     pub fn handle_delete_playlist(&mut self, index: usize) {
         self.playlists.delete(index);
-        if self.selected_playlist == Some(index) {
-            self.selected_playlist = None;
-            self.selected_playlist_name.clear();
-        } else if self.selected_playlist > Some(index) {
-            self.selected_playlist = self.selected_playlist.map(|sp| sp - 1);
+        if let ViewData::Playlist {
+            selected_playlist,
+            playlist_name,
+            ..
+        } = &mut self.view_data
+        {
+            if *selected_playlist == Some(index) {
+                *selected_playlist = None;
+                playlist_name.clear();
+            } else if *selected_playlist > Some(index) {
+                *selected_playlist = selected_playlist.map(|sp| sp - 1);
+            }
         }
         self.show_delete_confirm = false;
         self.delete_confirm_index = None;
@@ -70,7 +78,7 @@ impl MusicPlayer {
             }
         }
 
-        let Some(idx) = self.selected_playlist else {
+        let Some(idx) = self.selected_playlist() else {
             let count = new_tracks.len();
             self.notify(format!(
                 "Added {} local track{} (select a playlist to organize)",
@@ -123,7 +131,7 @@ impl MusicPlayer {
     }
 
     pub fn handle_remove_from_playlist_batch(&mut self, indices: &[usize]) {
-        if let Some(sp) = self.selected_playlist {
+        if let Some(sp) = self.selected_playlist() {
             if sp < self.playlists.playlists.len() {
                 let removed = self.playlists.remove_tracks_at(sp, indices);
                 self.notify(format!(
@@ -133,7 +141,7 @@ impl MusicPlayer {
                 ));
                 // Clear selection if any removed indices were selected,
                 // since the list shifted.
-                let sel = self.selected_indices.clone();
+                let sel = self.view_selection().to_vec();
                 if indices.iter().any(|&i| sel.contains(&i)) {
                     self.clear_selection();
                 }
@@ -147,7 +155,7 @@ impl MusicPlayer {
         indices: &[usize],
         selection: &[usize],
     ) -> Vec<usize> {
-        let new_positions = if let Some(sp) = self.selected_playlist {
+        let new_positions = if let Some(sp) = self.selected_playlist() {
             if sp < self.playlists.playlists.len() {
                 super::drag::reorder_tracks(
                     &mut self.playlists.playlists[sp].tracks,
@@ -167,7 +175,8 @@ impl MusicPlayer {
 
     pub fn handle_copy_selected(&mut self) {
         self.clipboard.clear();
-        for &i in &self.selected_indices {
+        let selection: Vec<usize> = self.view_selection().to_vec();
+        for &i in &selection {
             if let Some(track) = self.get_track_at(i, false) {
                 self.clipboard.push(track.clone());
             }
@@ -178,7 +187,7 @@ impl MusicPlayer {
         if self.clipboard.is_empty() {
             return;
         }
-        let Some(idx) = self.selected_playlist else {
+        let Some(idx) = self.selected_playlist() else {
             return;
         };
         for track in self.clipboard.iter().rev() {
@@ -197,42 +206,39 @@ impl MusicPlayer {
     }
 
     pub fn handle_delete_selected(&mut self) {
-        if self.selected_indices.is_empty() {
+        if self.view_selection().is_empty() {
             return;
         }
-        match &self.current_view {
-            View::Playlist => {
-                if let Some(sp) = self.selected_playlist {
-                    if sp < self.playlists.playlists.len() {
-                        let indices: Vec<usize> = self.selected_indices.clone();
-                        let removed = self.playlists.remove_tracks_at(sp, &indices);
-                        self.notify(format!(
-                            "Removed {} track{}",
-                            removed,
-                            crate::util::plural_suffix(removed)
-                        ));
-                    }
+        let indices: Vec<usize> = self.view_selection().to_vec();
+
+        if matches!(self.view_data, ViewData::Playlist { .. }) {
+            if let Some(sp) = self.selected_playlist() {
+                if sp < self.playlists.playlists.len() {
+                    let removed = self.playlists.remove_tracks_at(sp, &indices);
+                    self.notify(format!(
+                        "Removed {} track{}",
+                        removed,
+                        crate::util::plural_suffix(removed)
+                    ));
                 }
             }
-            View::Downloads => {
-                let mut sorted: Vec<usize> = self.selected_indices.clone();
-                sorted.sort_unstable();
-                sorted.dedup();
-                let mut removed = 0;
-                for &i in sorted.iter().rev() {
-                    if i < self.downloaded_tracks.len() {
-                        let track = self.downloaded_tracks.remove(i);
-                        self.download_registry.remove(&track.url);
-                        removed += 1;
-                    }
+        } else if let ViewData::Downloads { tracks, .. } = &mut self.view_data {
+            let mut sorted: Vec<usize> = indices.clone();
+            sorted.sort_unstable();
+            sorted.dedup();
+            let mut removed = 0;
+            for &i in sorted.iter().rev() {
+                if i < tracks.len() {
+                    let track = tracks.remove(i);
+                    self.download_registry.remove(&track.url);
+                    removed += 1;
                 }
-                self.notify(format!(
-                    "Removed {} download{}",
-                    removed,
-                    crate::util::plural_suffix(removed)
-                ));
             }
-            _ => {}
+            self.notify(format!(
+                "Removed {} download{}",
+                removed,
+                crate::util::plural_suffix(removed)
+            ));
         }
         self.clear_selection();
     }

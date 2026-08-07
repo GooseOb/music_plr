@@ -49,17 +49,13 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
 }
 
 pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let track_list = view_search_results(
-        player,
-        &player.search_results,
-        player.search_loading,
-        "Searching...",
-    );
+    let loading = player.is_loading();
+    let results = player.search_results();
+    let exhausted = player.search_exhausted();
 
-    let load_more = if !player.search_loading
-        && !player.search_exhausted
-        && !player.search_results.is_empty()
-    {
+    let track_list = view_search_results(player, results, loading, "Searching...");
+
+    let load_more = if !loading && !exhausted && !results.is_empty() {
         let btn = Button::new(text("Load More").color(Color::WHITE))
             .padding(theme::SPACING_SM)
             .width(Length::Fill)
@@ -98,19 +94,14 @@ fn view_search_results<'a>(
 }
 
 pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let header = Container::new(
-        text(player.radio_label.clone())
-            .width(Length::Fill)
-            .center(),
-    )
-    .padding([theme::SPACING_SM, theme::SPACING_XL]);
+    let label = player.radio_label().to_owned();
+    let loading = player.is_loading();
+    let tracks = player.radio_tracks();
 
-    let track_list = view_search_results(
-        player,
-        &player.radio_tracks,
-        player.search_loading,
-        "Generating radio...",
-    );
+    let header = Container::new(text(label).width(Length::Fill).center())
+        .padding([theme::SPACING_SM, theme::SPACING_XL]);
+
+    let track_list = view_search_results(player, tracks, loading, "Generating radio...");
 
     Column::with_children(vec![header.into(), track_list])
         .spacing(0)

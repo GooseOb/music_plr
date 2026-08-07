@@ -26,7 +26,7 @@ pub enum QueueTab {
     RecentlyPlayed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum View {
     #[default]
     Search,
@@ -36,10 +36,18 @@ pub enum View {
     Downloads,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum RadioKind {
+    #[default]
+    Song,
+    Artist,
+}
+
 impl View {
     // True for the text-list views (search/radio) whose scroll bounds and
-    // track data are keyed off the live `search_results` / `radio_tracks`
-    // fields rather than the playlist store.
+    // track data are keyed off the live `ViewData` rather than the
+    // playlist store.
+    #[allow(dead_code, clippy::trivially_copy_pass_by_ref)]
     pub const fn is_search_like(&self) -> bool {
         matches!(self, Self::Search | Self::SongRadio | Self::ArtistRadio)
     }

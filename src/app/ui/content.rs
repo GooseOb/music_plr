@@ -5,15 +5,15 @@ use iced::{
 
 use crate::theme::AppTheme;
 
-use super::{playlist, search, theme, Element, Message, MusicPlayer, View};
+use super::{playlist, search, theme, Element, Message, MusicPlayer, ViewData};
 
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let search_bar = search::view_search_bar(player);
 
-    let content: Element<'a, Message, AppTheme> = match &player.current_view {
-        View::Search => search::view_search(player),
-        View::SongRadio | View::ArtistRadio => search::view_search_radio(player),
-        View::Playlist | View::Downloads => playlist::view_playlist(player),
+    let content: Element<'a, Message, AppTheme> = match &player.view_data {
+        ViewData::Search { .. } => search::view_search(player),
+        ViewData::Radio { .. } => search::view_search_radio(player),
+        ViewData::Playlist { .. } | ViewData::Downloads { .. } => playlist::view_playlist(player),
     };
 
     let inner = Container::new(content)

@@ -66,7 +66,7 @@ impl MusicPlayer {
             iced::keyboard::Key::Named(Named::Escape) => {
                 if self.show_search_history {
                     self.show_search_history = false;
-                } else if self.selected_indices.is_empty() {
+                } else if self.view_data.selection().is_empty() {
                     self.handle_navigate_to(View::Search);
                 } else {
                     self.clear_selection();
@@ -74,7 +74,7 @@ impl MusicPlayer {
                 Task::none()
             }
             iced::keyboard::Key::Named(Named::Delete) => {
-                if self.selected_playlist.is_some() {
+                if self.selected_playlist().is_some() {
                     self.handle_delete_selected();
                 }
                 Task::none()
@@ -170,10 +170,11 @@ impl MusicPlayer {
 
         let (bounds, scroll_offset) = if is_queue {
             (self.queue_list_bounds, self.queue_list_scroll)
-        } else if self.current_view.is_search_like() {
-            (self.search_list_bounds, self.search_list_scroll)
         } else {
-            (self.playlist_list_bounds, self.playlist_list_scroll)
+            (
+                self.get_current_list_bounds(),
+                self.get_current_list_scroll(),
+            )
         };
 
         let Some(bounds) = bounds else {
