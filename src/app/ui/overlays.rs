@@ -61,12 +61,14 @@ pub(super) fn view_context_menu<'a>(
             );
         }
 
+        let target_indices = &menu.target_indices;
+
         v.push(
             menu_item(
                 "Add to Playlist",
                 icons::FOLDER_ICON,
                 p,
-                Message::TogglePicker(menu.track_index),
+                Message::TogglePicker(target_indices.clone()),
             )
             .width(Length::Fill)
             .into(),
@@ -83,7 +85,7 @@ pub(super) fn view_context_menu<'a>(
                     label,
                     icons::DOWNLOAD_ICON,
                     p,
-                    Message::ContextMenuDownloadOrDelete(menu.track_index),
+                    Message::ContextMenuDownloadOrDelete(target_indices.clone()),
                 )
                 .width(Length::Fill)
                 .into(),
@@ -96,7 +98,7 @@ pub(super) fn view_context_menu<'a>(
                     "Remove from Queue",
                     icons::DELETE_ICON,
                     p,
-                    Message::ContextMenuRemoveFromQueue(menu.track_index),
+                    Message::ContextMenuRemoveFromQueue(target_indices.clone()),
                 )
                 .width(Length::Fill)
                 .into(),
@@ -107,7 +109,7 @@ pub(super) fn view_context_menu<'a>(
                     "Remove from Playlist",
                     icons::DELETE_ICON,
                     p,
-                    Message::ContextMenuRemoveFromPlaylist(menu.track_index),
+                    Message::ContextMenuRemoveFromPlaylist(target_indices.clone()),
                 )
                 .width(Length::Fill)
                 .into(),

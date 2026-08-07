@@ -81,6 +81,10 @@ pub struct ContextMenuState {
     pub is_downloaded: bool,
     pub in_playlist: bool,
     pub is_queue: bool,
+    /// Resolved target indices for selection-aware operations: all selected
+    /// indices if the right-clicked track is selected, otherwise just
+    /// `[track_index]`.
+    pub target_indices: Vec<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -139,7 +143,7 @@ pub enum Message {
     RenamePlaylist(String),
     AddLocalMusic,
     AddToPlaylist(usize),
-    TogglePicker(usize),
+    TogglePicker(Vec<usize>),
     ClosePicker,
     ShowDeleteConfirm(usize),
     ConfirmDeletePlaylist,
@@ -156,9 +160,9 @@ pub enum Message {
     ContextMenuPlayTrack(usize),
     ContextMenuStartSongRadio(usize),
     ContextMenuStartArtistRadio(usize),
-    ContextMenuDownloadOrDelete(usize),
-    ContextMenuRemoveFromPlaylist(usize),
-    ContextMenuRemoveFromQueue(usize),
+    ContextMenuDownloadOrDelete(Vec<usize>),
+    ContextMenuRemoveFromPlaylist(Vec<usize>),
+    ContextMenuRemoveFromQueue(Vec<usize>),
     CloseContextMenu,
 }
 
@@ -238,6 +242,11 @@ pub struct MusicPlayer {
     pub playlist_create_name: String,
     pub show_playlist_picker: Option<usize>,
     pub picker_focused_index: usize,
+    /// Indices resolved from the context menu / picker trigger: if the
+    /// right-clicked track was part of the selection, this holds all
+    /// selected indices; otherwise just that one track. Used by
+    /// `AddToPlaylist` to apply to the right set of tracks.
+    pub picker_target_indices: Vec<usize>,
     pub show_delete_confirm: bool,
     pub delete_confirm_index: Option<usize>,
 
@@ -329,6 +338,7 @@ impl MusicPlayer {
             thumbnail_cache: std::collections::HashMap::new(),
             downloaded_tracks: Vec::new(),
             picker_focused_index: 0,
+            picker_target_indices: Vec::new(),
             show_delete_confirm: false,
             delete_confirm_index: None,
             nav_history: vec![NavEntry {
@@ -573,15 +583,17 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::AddToPlaylist(playlist_idx) => {
-                self.handle_add_to_playlist(playlist_idx);
+                let indices = std::mem::take(&mut self.picker_target_indices);
+                self.handle_add_to_playlist(playlist_idx, &indices);
                 Task::none()
             }
-            Message::TogglePicker(index) => {
-                self.handle_toggle_picker(index);
+            Message::TogglePicker(indices) => {
+                self.handle_toggle_picker(indices);
                 Task::none()
             }
             Message::ClosePicker => {
                 self.show_playlist_picker = None;
+                self.picker_target_indices.clear();
                 Task::none()
             }
             Message::ShowDeleteConfirm(index) => {
@@ -653,28 +665,20 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Message::ContextMenuDownloadOrDelete(index) => {
-                let menu = self.take_context_menu();
-                let is_queue = menu.as_ref().is_some_and(|m| m.is_queue);
-                let track = self.get_track_at(index, is_queue);
+            Message::ContextMenuDownloadOrDelete(indices) => {
+                self.take_context_menu();
                 self.drag.pressed_track = None;
-                if let Some(track) = track {
-                    if self.download_registry.contains(&track.url) {
-                        self.handle_remove_download(index, is_queue);
-                    } else {
-                        self.handle_download_track(index, is_queue);
-                    }
-                }
+                self.handle_download_or_remove_tracks(&indices);
                 Task::none()
             }
-            Message::ContextMenuRemoveFromPlaylist(index) => {
+            Message::ContextMenuRemoveFromPlaylist(indices) => {
                 self.take_context_menu();
-                self.handle_remove_from_playlist(index);
+                self.handle_remove_from_playlist_batch(&indices);
                 Task::none()
             }
-            Message::ContextMenuRemoveFromQueue(index) => {
+            Message::ContextMenuRemoveFromQueue(indices) => {
                 self.take_context_menu();
-                self.handle_remove_from_queue(index);
+                self.handle_remove_from_queue_batch(&indices);
                 Task::none()
             }
             Message::CloseContextMenu => {

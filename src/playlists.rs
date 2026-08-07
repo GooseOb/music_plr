@@ -79,6 +79,23 @@ impl PlaylistStore {
         }
         self.save();
     }
+
+    /// Remove tracks at the given indices (in any order), writing to disk
+    /// only once. Indices that are out of bounds are silently skipped.
+    pub fn remove_tracks_at(&mut self, playlist_idx: usize, indices: &[usize]) {
+        let Some(pl) = self.playlists.get_mut(playlist_idx) else {
+            return;
+        };
+        let mut sorted: Vec<usize> = indices.to_vec();
+        sorted.sort_unstable();
+        sorted.dedup();
+        for &i in sorted.iter().rev() {
+            if i < pl.tracks.len() {
+                pl.tracks.remove(i);
+            }
+        }
+        self.save();
+    }
 }
 
 fn store_path() -> PathBuf {
@@ -219,5 +236,54 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["a", "b", "c"]
         );
+    }
+
+    #[test]
+    fn remove_tracks_at_multiple() {
+        let mut store = make_store(&["a", "b", "c", "d", "e"]);
+        store.remove_tracks_at(0, &[1, 3]);
+        assert_eq!(
+            store.playlists[0]
+                .tracks
+                .iter()
+                .map(|t| t.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a", "c", "e"]
+        );
+    }
+
+    #[test]
+    fn remove_tracks_at_out_of_bounds_ignored() {
+        let mut store = make_store(&["a", "b", "c"]);
+        store.remove_tracks_at(0, &[0, 99]);
+        assert_eq!(
+            store.playlists[0]
+                .tracks
+                .iter()
+                .map(|t| t.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["b", "c"]
+        );
+    }
+
+    #[test]
+    fn remove_tracks_at_unsorted() {
+        let mut store = make_store(&["a", "b", "c", "d", "e"]);
+        store.remove_tracks_at(0, &[3, 0, 4]);
+        assert_eq!(
+            store.playlists[0]
+                .tracks
+                .iter()
+                .map(|t| t.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["b", "c"]
+        );
+    }
+
+    #[test]
+    fn remove_tracks_at_nonexistent_playlist() {
+        let mut store = make_store(&["a"]);
+        store.remove_tracks_at(99, &[0]);
+        assert_eq!(store.playlists[0].tracks.len(), 1);
     }
 }

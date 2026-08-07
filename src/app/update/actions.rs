@@ -1,40 +1,84 @@
-use super::{BackendResult, ContextMenuState, MusicPlayer, TrackSource, View};
+use super::{BackendResult, ContextMenuState, MusicPlayer, Track, TrackSource, View};
 
 impl MusicPlayer {
-    pub fn handle_download_track(&mut self, index: usize, is_queue: bool) {
-        if let Some(track) = self.get_track_at(index, is_queue) {
-            self.downloading_index = Some(index);
-            self.notify(format!("Downloading \"{}\"...", track.title));
-            let download_dir = self.config.download_dir.clone();
-            let tx = self.result_tx.clone();
-            let track_clone = track.clone();
-            std::thread::spawn(move || {
-                let result = crate::youtube::download(&track.url, &download_dir);
-                match result {
-                    Ok(path) => {
-                        let _ = tx.send(BackendResult::DownloadComplete(track_clone, path));
-                    }
-                    Err(e) => {
-                        let _ = tx.send(BackendResult::DownloadError(e.to_string()));
-                    }
+    /// Handle download / delete-download for a set of track indices.
+    /// Tracks already downloaded get removed from the registry; tracks
+    /// not yet downloaded get queued for download.
+    pub fn handle_download_or_remove_tracks(&mut self, indices: &[usize]) {
+        let mut to_download = Vec::new();
+        let mut to_remove = Vec::new();
+
+        for &idx in indices {
+            if let Some(track) = self.get_track_at(idx, false) {
+                if self.download_registry.contains(&track.url) {
+                    to_remove.push(track);
+                } else if track.source == TrackSource::YouTube {
+                    to_download.push(track);
                 }
-            });
+            }
+        }
+
+        for track in &to_remove {
+            self.download_registry.remove(&track.url);
+        }
+
+        if !to_download.is_empty() {
+            self.downloading_index = Some(indices[0]);
+            if to_download.len() == 1 {
+                let track = to_download[0].clone();
+                self.notify(format!("Downloading \"{}\"...", track.title));
+                self.spawn_download_thread(track);
+            } else {
+                let count = to_download.len();
+                self.notify(format!("Downloading {count} tracks..."));
+                for track in &to_download {
+                    let track = track.clone();
+                    self.spawn_download_thread(track);
+                }
+            }
+        }
+
+        if !to_remove.is_empty() {
+            let removed = to_remove.len();
+            self.notify(format!(
+                "Removed {} download{}",
+                removed,
+                if removed == 1 { "" } else { "s" }
+            ));
+        }
+        // Clear selection if any of the operated-on indices were selected,
+        // since the list state has changed.
+        let sel = self.selection(false);
+        if indices.iter().any(|&i| sel.contains(&i)) {
+            self.clear_selection();
         }
     }
 
-    pub fn handle_remove_download(&mut self, index: usize, is_queue: bool) {
-        if let Some(track) = self.get_track_at(index, is_queue) {
-            let url = &track.url;
-            self.download_registry.remove(url);
-        }
+    fn spawn_download_thread(&self, track: Track) {
+        let download_dir = self.config.download_dir.clone();
+        let tx = self.result_tx.clone();
+        let track_clone = track.clone();
+        std::thread::spawn(move || {
+            let result = crate::youtube::download(&track.url, &download_dir);
+            match result {
+                Ok(path) => {
+                    let _ = tx.send(BackendResult::DownloadComplete(track_clone, path));
+                }
+                Err(e) => {
+                    let _ = tx.send(BackendResult::DownloadError(e.to_string()));
+                }
+            }
+        });
     }
 
-    pub fn handle_toggle_picker(&mut self, index: usize) {
-        if self.show_playlist_picker == Some(index) {
+    pub fn handle_toggle_picker(&mut self, indices: Vec<usize>) {
+        if self.show_playlist_picker.is_some() {
             self.show_playlist_picker = None;
+            self.picker_target_indices.clear();
         } else {
-            self.show_playlist_picker = Some(index);
+            self.show_playlist_picker = Some(0);
             self.picker_focused_index = 0;
+            self.picker_target_indices = indices;
         }
     }
 
@@ -43,9 +87,20 @@ impl MusicPlayer {
         let Some(track) = track else {
             return;
         };
+
+        let sel = self.selection(is_queue);
+        let target_indices = if sel.is_empty() {
+            vec![index]
+        } else if sel.contains(&index) {
+            sel.to_vec()
+        } else {
+            vec![index]
+        };
+
         self.context_menu = Some(ContextMenuState {
             visible: true,
             track_index: index,
+            target_indices,
             position: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
             is_youtube: track.source == TrackSource::YouTube,
             is_downloaded: self.download_registry.contains(&track.url),

@@ -93,23 +93,13 @@ impl MusicPlayer {
         ));
     }
 
-    pub fn handle_add_to_playlist(&mut self, playlist_idx: usize) {
+    pub fn handle_add_to_playlist(&mut self, playlist_idx: usize, indices: &[usize]) {
         if playlist_idx >= self.playlists.playlists.len() {
             return;
         }
-        let indices: Vec<usize> = if self.selected_indices.is_empty() {
-            if let Some(t) = self.drag.pressed_track {
-                vec![t]
-            } else {
-                return;
-            }
-        } else {
-            self.selected_indices.clone()
-        };
 
         let tracks: Vec<Track> = indices
             .iter()
-            .rev()
             .filter_map(|&i| self.get_track_at(i, false))
             .collect();
         let count = tracks.len();
@@ -117,6 +107,7 @@ impl MusicPlayer {
             self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
         }
         self.show_playlist_picker = None;
+        self.picker_target_indices.clear();
         let name = self.playlists.playlists[playlist_idx].name.clone();
         self.notify(format!(
             "Added {} track{} to {}",
@@ -126,11 +117,21 @@ impl MusicPlayer {
         ));
     }
 
-    pub fn handle_remove_from_playlist(&mut self, index: usize) {
+    pub fn handle_remove_from_playlist_batch(&mut self, indices: &[usize]) {
         if let Some(sp) = self.selected_playlist {
             if sp < self.playlists.playlists.len() {
-                self.playlists.playlists[sp].tracks.remove(index);
-                self.playlists.save();
+                self.playlists.remove_tracks_at(sp, indices);
+                self.notify(format!(
+                    "Removed {} track{}",
+                    indices.len(),
+                    if indices.len() == 1 { "" } else { "s" }
+                ));
+                // Clear selection if any removed indices were selected,
+                // since the list shifted.
+                let sel = self.selected_indices.clone();
+                if indices.iter().any(|&i| sel.contains(&i)) {
+                    self.clear_selection();
+                }
             }
         }
     }

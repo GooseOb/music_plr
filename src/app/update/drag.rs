@@ -121,7 +121,7 @@ impl MusicPlayer {
 
         self.cleanup_drag_state();
     }
-    
+
     pub(super) fn cleanup_drag_state(&mut self) {
         self.drag.cleanup();
     }
@@ -477,6 +477,7 @@ impl MusicPlayer {
         self.selected_indices.clear();
         self.queue_selected_indices.clear();
         self.show_playlist_picker = None;
+        self.picker_target_indices.clear();
     }
 
     pub fn get_track_at(&self, index: usize, is_queue: bool) -> Option<Track> {

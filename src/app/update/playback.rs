@@ -110,10 +110,27 @@ impl MusicPlayer {
         new_positions
     }
 
-    pub fn handle_remove_from_queue(&mut self, index: usize) {
-        if index < self.queue.tracks.len() {
-            self.queue.tracks.remove(index);
-            self.save_session();
+    pub fn handle_remove_from_queue_batch(&mut self, indices: &[usize]) {
+        let mut sorted: Vec<usize> = indices.to_vec();
+        sorted.sort_unstable();
+        sorted.dedup();
+        for &i in sorted.iter().rev() {
+            if i < self.queue.tracks.len() {
+                self.queue.tracks.remove(i);
+            }
+        }
+        self.save_session();
+        self.mpris_dirty = true;
+        self.notify(format!(
+            "Removed {} track{} from queue",
+            indices.len(),
+            if indices.len() == 1 { "" } else { "s" }
+        ));
+        // Clear selection if any removed indices were selected, since the
+        // queue shifted.
+        let sel = self.queue_selected_indices.clone();
+        if indices.iter().any(|&i| sel.contains(&i)) {
+            self.clear_selection();
         }
     }
 
