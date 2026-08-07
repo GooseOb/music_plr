@@ -2,10 +2,6 @@
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
     clippy::cast_precision_loss,
-    clippy::cast_possible_wrap,
-    clippy::if_not_else,
-    clippy::module_name_repetitions,
-    clippy::option_if_let_else,
     clippy::too_many_lines
 )]
 

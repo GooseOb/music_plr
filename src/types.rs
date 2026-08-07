@@ -72,11 +72,11 @@ impl PlayQueue {
     /// Pop the current (first) track off the front of the queue after it has
     /// finished playing, making the next track the new current.
     pub fn advance(&mut self) -> bool {
-        if !self.tracks.is_empty() {
+        if self.tracks.is_empty() {
+            false
+        } else {
             self.tracks.remove(0);
             true
-        } else {
-            false
         }
     }
 
