@@ -14,7 +14,7 @@ impl MusicPlayer {
 
     pub fn handle_select_playlist(&mut self, index: usize) {
         if index < self.playlists.playlists.len() && self.selected_playlist != Some(index) {
-            self.show_playlist_picker = None;
+            self.show_playlist_picker = false;
             self.clear_selection();
             self.cleanup_drag_state();
             self.drag.hovered_track = None;
@@ -75,7 +75,7 @@ impl MusicPlayer {
             self.notify(format!(
                 "Added {} local track{} (select a playlist to organize)",
                 count,
-                if count == 1 { "" } else { "s" }
+                crate::util::plural_suffix(count)
             ));
             return;
         };
@@ -89,30 +89,35 @@ impl MusicPlayer {
         self.notify(format!(
             "Added {} local track{}",
             count,
-            if count == 1 { "" } else { "s" }
+            crate::util::plural_suffix(count)
         ));
     }
 
-    pub fn handle_add_to_playlist(&mut self, playlist_idx: usize, indices: &[usize]) {
+    pub fn handle_add_to_playlist(
+        &mut self,
+        playlist_idx: usize,
+        indices: &[usize],
+        is_queue: bool,
+    ) {
         if playlist_idx >= self.playlists.playlists.len() {
             return;
         }
 
         let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&i| self.get_track_at(i, false))
+            .filter_map(|&i| self.get_track_at(i, is_queue))
             .collect();
         let count = tracks.len();
         if count > 0 {
             self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
         }
-        self.show_playlist_picker = None;
+        self.show_playlist_picker = false;
         self.picker_target_indices.clear();
         let name = self.playlists.playlists[playlist_idx].name.clone();
         self.notify(format!(
             "Added {} track{} to {}",
             count,
-            if count == 1 { "" } else { "s" },
+            crate::util::plural_suffix(count),
             name
         ));
     }
@@ -120,11 +125,11 @@ impl MusicPlayer {
     pub fn handle_remove_from_playlist_batch(&mut self, indices: &[usize]) {
         if let Some(sp) = self.selected_playlist {
             if sp < self.playlists.playlists.len() {
-                self.playlists.remove_tracks_at(sp, indices);
+                let removed = self.playlists.remove_tracks_at(sp, indices);
                 self.notify(format!(
                     "Removed {} track{}",
-                    indices.len(),
-                    if indices.len() == 1 { "" } else { "s" }
+                    removed,
+                    crate::util::plural_suffix(removed)
                 ));
                 // Clear selection if any removed indices were selected,
                 // since the list shifted.
@@ -185,7 +190,7 @@ impl MusicPlayer {
         self.notify(format!(
             "Pasted {} track{} into {}",
             count,
-            if count == 1 { "" } else { "s" },
+            crate::util::plural_suffix(count),
             name
         ));
         self.clipboard.clear();
@@ -200,26 +205,21 @@ impl MusicPlayer {
                 if let Some(sp) = self.selected_playlist {
                     if sp < self.playlists.playlists.len() {
                         let indices: Vec<usize> = self.selected_indices.clone();
-                        let mut removed = 0;
-                        for &i in indices.iter().rev() {
-                            if i < self.playlists.playlists[sp].tracks.len() {
-                                self.playlists.playlists[sp].tracks.remove(i);
-                                removed += 1;
-                            }
-                        }
-                        self.playlists.save();
+                        let removed = self.playlists.remove_tracks_at(sp, &indices);
                         self.notify(format!(
                             "Removed {} track{}",
                             removed,
-                            if removed == 1 { "" } else { "s" }
+                            crate::util::plural_suffix(removed)
                         ));
                     }
                 }
             }
             View::Downloads => {
-                let indices: Vec<usize> = self.selected_indices.clone();
+                let mut sorted: Vec<usize> = self.selected_indices.clone();
+                sorted.sort_unstable();
+                sorted.dedup();
                 let mut removed = 0;
-                for &i in indices.iter().rev() {
+                for &i in sorted.iter().rev() {
                     if i < self.downloaded_tracks.len() {
                         let track = self.downloaded_tracks.remove(i);
                         self.download_registry.remove(&track.url);
@@ -229,7 +229,7 @@ impl MusicPlayer {
                 self.notify(format!(
                     "Removed {} download{}",
                     removed,
-                    if removed == 1 { "" } else { "s" }
+                    crate::util::plural_suffix(removed)
                 ));
             }
             _ => {}

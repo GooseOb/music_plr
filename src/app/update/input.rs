@@ -29,11 +29,18 @@ impl MusicPlayer {
 
     pub fn search_dropdown_bounds(&self) -> iced::Rectangle {
         let input_bounds = self.search_input_bounds();
+        let count = self.last_filtered_history.len();
+        let height = if count == 0 {
+            crate::theme::SEARCH_HISTORY_ITEM_HEIGHT
+        } else {
+            (count as f32 * crate::theme::SEARCH_HISTORY_ITEM_HEIGHT)
+                .min(crate::theme::SEARCH_DROPDOWN_MAX_HEIGHT)
+        };
         iced::Rectangle {
             x: input_bounds.x,
             y: input_bounds.y + input_bounds.height,
             width: input_bounds.width,
-            height: crate::theme::SEARCH_DROPDOWN_MAX_HEIGHT,
+            height,
         }
     }
 

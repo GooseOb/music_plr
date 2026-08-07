@@ -6,6 +6,15 @@ pub fn format_duration(secs: u32) -> String {
     }
 }
 
+/// Returns "" for 1 item, "s" otherwise, for simple English pluralization.
+pub const fn plural_suffix(count: usize) -> &'static str {
+    if count == 1 {
+        ""
+    } else {
+        "s"
+    }
+}
+
 pub fn fuzzy_match(query: &str, text: &str) -> bool {
     if query.is_empty() {
         return true;

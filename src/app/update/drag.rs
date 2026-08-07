@@ -315,7 +315,7 @@ impl MusicPlayer {
                 self.notify(format!(
                     "Added {} track{} to {}",
                     count,
-                    if count == 1 { "" } else { "s" },
+                    crate::util::plural_suffix(count),
                     name
                 ));
                 return;
@@ -376,7 +376,7 @@ impl MusicPlayer {
         self.notify(format!(
             "Added {} track{} to queue",
             inserted,
-            if inserted == 1 { "" } else { "s" }
+            crate::util::plural_suffix(inserted)
         ));
     }
 
@@ -403,11 +403,12 @@ impl MusicPlayer {
         if inserted > 0 {
             self.playlists.insert_tracks_at(sp, &tracks, clamped);
         }
+        self.save_session();
         let name = self.playlists.playlists[sp].name.clone();
         self.notify(format!(
             "Added {} track{} to {}",
             inserted,
-            if inserted == 1 { "" } else { "s" },
+            crate::util::plural_suffix(inserted),
             name
         ));
     }
@@ -476,7 +477,7 @@ impl MusicPlayer {
     pub fn clear_selection(&mut self) {
         self.selected_indices.clear();
         self.queue_selected_indices.clear();
-        self.show_playlist_picker = None;
+        self.show_playlist_picker = false;
         self.picker_target_indices.clear();
     }
 

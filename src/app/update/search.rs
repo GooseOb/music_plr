@@ -1,4 +1,4 @@
-use super::{BackendResult, MusicPlayer, Track, View};
+use super::{mpsc, thread, BackendResult, MusicPlayer, Track, View};
 
 impl MusicPlayer {
     pub fn handle_search_execute(&mut self) {
@@ -25,20 +25,12 @@ impl MusicPlayer {
 
         let query = self.search_query.clone();
         let tx = self.result_tx.clone();
-
-        std::thread::spawn(move || {
-            let result = crate::youtube::search(&query, 0);
-            match result {
-                Ok(videos) => {
-                    let tracks: Vec<Track> =
-                        videos.into_iter().map(std::convert::Into::into).collect();
-                    let _ = tx.send(BackendResult::SearchResults(tracks));
-                }
-                Err(e) => {
-                    let _ = tx.send(BackendResult::SearchError(e.to_string()));
-                }
-            }
-        });
+        Self::spawn_youtube_thread(
+            query,
+            tx,
+            |q| crate::youtube::search(q, 0),
+            BackendResult::SearchResults,
+        );
     }
 
     pub fn handle_search_load_more(&mut self) {
@@ -54,19 +46,12 @@ impl MusicPlayer {
         let offset = self.search_results.len();
         let tx = self.result_tx.clone();
 
-        std::thread::spawn(move || {
-            let result = crate::youtube::search_more(&query, offset);
-            match result {
-                Ok(videos) => {
-                    let tracks: Vec<Track> =
-                        videos.into_iter().map(std::convert::Into::into).collect();
-                    let _ = tx.send(BackendResult::SearchResultsAppend(tracks));
-                }
-                Err(e) => {
-                    let _ = tx.send(BackendResult::SearchError(e.to_string()));
-                }
-            }
-        });
+        Self::spawn_youtube_thread(
+            query,
+            tx,
+            move |q| crate::youtube::search_more(q, offset),
+            BackendResult::SearchResultsAppend,
+        );
     }
 
     pub fn handle_search_history_select(&mut self, index: usize) {
@@ -104,20 +89,10 @@ impl MusicPlayer {
         self.clear_selection();
         self.drag.hovered_track = None;
 
-        let tx = self.result_tx.clone();
         let label = self.radio_label.clone();
-        std::thread::spawn(move || {
-            let result = crate::youtube::radio_song(&song_name);
-            match result {
-                Ok(videos) => {
-                    let tracks: Vec<Track> =
-                        videos.into_iter().map(std::convert::Into::into).collect();
-                    let _ = tx.send(BackendResult::RadioResults(label, tracks));
-                }
-                Err(e) => {
-                    let _ = tx.send(BackendResult::SearchError(e.to_string()));
-                }
-            }
+        let tx = self.result_tx.clone();
+        Self::spawn_youtube_thread(song_name, tx, crate::youtube::radio_song, move |tracks| {
+            BackendResult::RadioResults(label.clone(), tracks)
         });
     }
 
@@ -131,19 +106,35 @@ impl MusicPlayer {
         self.clear_selection();
         self.drag.hovered_track = None;
 
-        let tx = self.result_tx.clone();
         let label = self.radio_label.clone();
-        std::thread::spawn(move || {
-            let result = crate::youtube::radio_artist(&artist_name);
-            match result {
-                Ok(videos) => {
-                    let tracks: Vec<Track> =
-                        videos.into_iter().map(std::convert::Into::into).collect();
-                    let _ = tx.send(BackendResult::RadioResults(label, tracks));
-                }
-                Err(e) => {
-                    let _ = tx.send(BackendResult::SearchError(e.to_string()));
-                }
+        let tx = self.result_tx.clone();
+        Self::spawn_youtube_thread(
+            artist_name,
+            tx,
+            crate::youtube::radio_artist,
+            move |tracks| BackendResult::RadioResults(label.clone(), tracks),
+        );
+    }
+
+    /// Spawn a background thread that calls a `YouTube` search/radio function,
+    /// converts the results to `Track`s, and sends a `BackendResult` via the
+    /// provided channel. All four search/radio methods share this pattern.
+    fn spawn_youtube_thread<F, R>(
+        query: String,
+        tx: mpsc::Sender<BackendResult>,
+        search_fn: F,
+        make_result: R,
+    ) where
+        F: FnOnce(&str) -> anyhow::Result<Vec<crate::youtube::YouTubeVideo>> + Send + 'static,
+        R: FnOnce(Vec<Track>) -> BackendResult + Send + 'static,
+    {
+        thread::spawn(move || match search_fn(&query) {
+            Ok(videos) => {
+                let tracks: Vec<Track> = videos.into_iter().map(std::convert::Into::into).collect();
+                let _ = tx.send(make_result(tracks));
+            }
+            Err(e) => {
+                let _ = tx.send(BackendResult::SearchError(e.to_string()));
             }
         });
     }

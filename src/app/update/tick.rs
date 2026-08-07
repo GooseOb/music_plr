@@ -60,10 +60,6 @@ impl MusicPlayer {
             self.send_mpris_update();
             self.mpris_dirty = false;
         }
-        if self.mpris_dirty {
-            self.send_mpris_update();
-            self.mpris_dirty = false;
-        }
     }
 
     fn update_thumbnail_cache(&mut self) {
@@ -184,13 +180,11 @@ impl MusicPlayer {
                 spawn_thumbnail_download_thread(&self.radio_tracks, self.result_tx.clone());
             }
             BackendResult::DownloadComplete(track, path) => {
-                self.downloading_index = None;
                 self.download_registry.register(track);
                 self.notify(format!("Download complete! Saved to {path}"));
                 self.thumbnail_cache.clear();
             }
             BackendResult::DownloadError(msg) => {
-                self.downloading_index = None;
                 error!("Download error: {}", msg);
                 self.notify_error(msg);
             }

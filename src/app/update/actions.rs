@@ -1,15 +1,16 @@
 use super::{BackendResult, ContextMenuState, MusicPlayer, Track, TrackSource, View};
+use crate::util::plural_suffix;
 
 impl MusicPlayer {
     /// Handle download / delete-download for a set of track indices.
     /// Tracks already downloaded get removed from the registry; tracks
     /// not yet downloaded get queued for download.
-    pub fn handle_download_or_remove_tracks(&mut self, indices: &[usize]) {
+    pub fn handle_download_or_remove_tracks(&mut self, indices: &[usize], is_queue: bool) {
         let mut to_download = Vec::new();
         let mut to_remove = Vec::new();
 
         for &idx in indices {
-            if let Some(track) = self.get_track_at(idx, false) {
+            if let Some(track) = self.get_track_at(idx, is_queue) {
                 if self.download_registry.contains(&track.url) {
                     to_remove.push(track);
                 } else if track.source == TrackSource::YouTube {
@@ -23,7 +24,6 @@ impl MusicPlayer {
         }
 
         if !to_download.is_empty() {
-            self.downloading_index = Some(indices[0]);
             if to_download.len() == 1 {
                 let track = to_download[0].clone();
                 self.notify(format!("Downloading \"{}\"...", track.title));
@@ -43,12 +43,12 @@ impl MusicPlayer {
             self.notify(format!(
                 "Removed {} download{}",
                 removed,
-                if removed == 1 { "" } else { "s" }
+                plural_suffix(removed)
             ));
         }
         // Clear selection if any of the operated-on indices were selected,
         // since the list state has changed.
-        let sel = self.selection(false);
+        let sel = self.selection(is_queue);
         if indices.iter().any(|&i| sel.contains(&i)) {
             self.clear_selection();
         }
@@ -71,13 +71,14 @@ impl MusicPlayer {
         });
     }
 
-    pub fn handle_toggle_picker(&mut self, indices: Vec<usize>) {
-        if self.show_playlist_picker.is_some() {
-            self.show_playlist_picker = None;
+    pub fn handle_toggle_picker(&mut self, indices: Vec<usize>, is_queue: bool) {
+        if self.show_playlist_picker {
+            self.show_playlist_picker = false;
             self.picker_target_indices.clear();
         } else {
-            self.show_playlist_picker = Some(0);
+            self.show_playlist_picker = true;
             self.picker_focused_index = 0;
+            self.picker_is_queue = is_queue;
             self.picker_target_indices = indices;
         }
     }

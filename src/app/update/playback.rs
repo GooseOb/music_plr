@@ -8,11 +8,19 @@ impl MusicPlayer {
             // (including the current one), keeping the clicked track and
             // everything after it.
             if index < self.queue.tracks.len() {
+                if index > 0 {
+                    if let Some(old) = self.queue.current().cloned() {
+                        self.queue
+                            .record_played(&old, self.config.max_recently_played);
+                    }
+                }
                 self.queue.tracks.drain(0..index);
                 if let Some(t) = self.queue.current() {
                     let t = t.clone();
                     self.play_track_internal(&t);
                 }
+                self.save_session();
+                self.mpris_dirty = true;
             }
             return;
         }
@@ -28,6 +36,7 @@ impl MusicPlayer {
             self.play_track_internal(&track);
             self.queue.clear();
             self.queue.enqueue(track);
+            self.mpris_dirty = true;
 
             // Enqueue remaining tracks after the played one. Get the slice
             // once instead of calling get_track_at (which re-dispatches on
@@ -114,17 +123,19 @@ impl MusicPlayer {
         let mut sorted: Vec<usize> = indices.to_vec();
         sorted.sort_unstable();
         sorted.dedup();
+        let mut removed = 0;
         for &i in sorted.iter().rev() {
             if i < self.queue.tracks.len() {
                 self.queue.tracks.remove(i);
+                removed += 1;
             }
         }
         self.save_session();
         self.mpris_dirty = true;
         self.notify(format!(
             "Removed {} track{} from queue",
-            indices.len(),
-            if indices.len() == 1 { "" } else { "s" }
+            removed,
+            crate::util::plural_suffix(removed)
         ));
         // Clear selection if any removed indices were selected, since the
         // queue shifted.

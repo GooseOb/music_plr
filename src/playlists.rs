@@ -54,13 +54,7 @@ impl PlaylistStore {
     }
 
     pub fn insert_track_at(&mut self, playlist_idx: usize, track: &Track, pos: usize) {
-        if let Some(pl) = self.playlists.get_mut(playlist_idx) {
-            if !pl.tracks.iter().any(|t| t.url == track.url) {
-                let pos = pos.min(pl.tracks.len());
-                pl.tracks.insert(pos, track.clone());
-                self.save();
-            }
-        }
+        self.insert_tracks_at(playlist_idx, std::slice::from_ref(track), pos);
     }
 
     /// Insert multiple tracks at once, writing to disk only once.
@@ -82,19 +76,23 @@ impl PlaylistStore {
 
     /// Remove tracks at the given indices (in any order), writing to disk
     /// only once. Indices that are out of bounds are silently skipped.
-    pub fn remove_tracks_at(&mut self, playlist_idx: usize, indices: &[usize]) {
+    /// Returns the number of tracks actually removed.
+    pub fn remove_tracks_at(&mut self, playlist_idx: usize, indices: &[usize]) -> usize {
         let Some(pl) = self.playlists.get_mut(playlist_idx) else {
-            return;
+            return 0;
         };
         let mut sorted: Vec<usize> = indices.to_vec();
         sorted.sort_unstable();
         sorted.dedup();
+        let mut removed = 0;
         for &i in sorted.iter().rev() {
             if i < pl.tracks.len() {
                 pl.tracks.remove(i);
+                removed += 1;
             }
         }
         self.save();
+        removed
     }
 }
 

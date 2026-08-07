@@ -230,7 +230,6 @@ pub struct MusicPlayer {
     pub total_text: String,
 
     pub download_registry: DownloadRegistry,
-    pub downloading_index: Option<usize>,
 
     pub notification: Option<String>,
 
@@ -240,8 +239,12 @@ pub struct MusicPlayer {
     pub selected_playlist: Option<usize>,
     pub selected_playlist_name: String,
     pub playlist_create_name: String,
-    pub show_playlist_picker: Option<usize>,
+    pub show_playlist_picker: bool,
     pub picker_focused_index: usize,
+    /// Whether the playlist picker was triggered from a queue track (so
+    /// `picker_target_indices` refer to queue positions, not track-list
+    /// positions).
+    pub picker_is_queue: bool,
     /// Indices resolved from the context menu / picker trigger: if the
     /// right-clicked track was part of the selection, this holds all
     /// selected indices; otherwise just that one track. Used by
@@ -326,18 +329,18 @@ impl MusicPlayer {
             progress: 0.0,
             duration: 0.0,
             download_registry: DownloadRegistry::load(),
-            downloading_index: None,
             notification: None,
             track_loading: false,
             playlists: PlaylistStore::load(),
             selected_playlist: None,
             selected_playlist_name: String::new(),
             playlist_create_name: String::new(),
-            show_playlist_picker: None,
+            show_playlist_picker: false,
             show_queue: false,
             thumbnail_cache: std::collections::HashMap::new(),
             downloaded_tracks: Vec::new(),
             picker_focused_index: 0,
+            picker_is_queue: false,
             picker_target_indices: Vec::new(),
             show_delete_confirm: false,
             delete_confirm_index: None,
@@ -584,15 +587,17 @@ impl MusicPlayer {
             }
             Message::AddToPlaylist(playlist_idx) => {
                 let indices = std::mem::take(&mut self.picker_target_indices);
-                self.handle_add_to_playlist(playlist_idx, &indices);
+                let is_queue = self.picker_is_queue;
+                self.handle_add_to_playlist(playlist_idx, &indices, is_queue);
                 Task::none()
             }
             Message::TogglePicker(indices) => {
-                self.handle_toggle_picker(indices);
+                let is_queue = self.context_menu.as_ref().is_some_and(|m| m.is_queue);
+                self.handle_toggle_picker(indices, is_queue);
                 Task::none()
             }
             Message::ClosePicker => {
-                self.show_playlist_picker = None;
+                self.show_playlist_picker = false;
                 self.picker_target_indices.clear();
                 Task::none()
             }
@@ -666,9 +671,10 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuDownloadOrDelete(indices) => {
-                self.take_context_menu();
+                let menu = self.take_context_menu();
+                let is_queue = menu.as_ref().is_some_and(|m| m.is_queue);
                 self.drag.pressed_track = None;
-                self.handle_download_or_remove_tracks(&indices);
+                self.handle_download_or_remove_tracks(&indices, is_queue);
                 Task::none()
             }
             Message::ContextMenuRemoveFromPlaylist(indices) => {

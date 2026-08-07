@@ -19,6 +19,7 @@ use super::{
 };
 
 pub const QUEUE_LIST_ID: Id = Id::new("queue_list");
+pub const QUEUE_RECENT_LIST_ID: Id = Id::new("queue_recent_list");
 
 pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let queue_width = (player.window_width * theme::QUEUE_WIDTH_RATIO).max(theme::QUEUE_MIN_WIDTH);
@@ -191,7 +192,7 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
         .map(|(i, track)| view_recently_played_row(track, i, player))
         .collect();
 
-    scrollable_list(QUEUE_LIST_ID, items)
+    scrollable_list(QUEUE_RECENT_LIST_ID, items)
 }
 
 fn view_recently_played_row<'a>(
