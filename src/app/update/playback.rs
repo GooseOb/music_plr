@@ -98,8 +98,14 @@ impl MusicPlayer {
         }
     }
 
-    pub fn handle_reorder_queue(&mut self, drop_idx: usize, indices: &[usize]) -> Vec<usize> {
-        let new_positions = super::drag::reorder_tracks(&mut self.queue.tracks, drop_idx, indices);
+    pub fn handle_reorder_queue(
+        &mut self,
+        drop_idx: usize,
+        indices: &[usize],
+        selection: &[usize],
+    ) -> Vec<usize> {
+        let new_positions =
+            super::drag::reorder_tracks(&mut self.queue.tracks, drop_idx, indices, selection);
         self.save_session();
         new_positions
     }

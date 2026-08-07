@@ -2,10 +2,19 @@ use crate::app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID};
 
 use super::{DragTargetList, Message, MusicPlayer, Task, Track, View, DOUBLE_CLICK_MS};
 
+/// Reorder `tracks` by moving the items at `indices` to `drop_idx`.
+///
+/// `selection` is the current set of selected indices in the list. It is
+/// remapped so that the returned vector contains the **new** positions of all
+/// originally-selected tracks — both the moved ones and those that merely
+/// shifted due to the removal/insertion. This ensures `selected_indices` stays
+/// correct regardless of whether the dragged tracks were part of the
+/// selection.
 pub(super) fn reorder_tracks(
     tracks: &mut Vec<Track>,
     drop_idx: usize,
     indices: &[usize],
+    selection: &[usize],
 ) -> Vec<usize> {
     let sorted_indices: Vec<usize> = {
         let mut s = indices.to_vec();
@@ -27,7 +36,35 @@ pub(super) fn reorder_tracks(
     for (j, track) in extracted.into_iter().enumerate() {
         tracks.insert(adjusted_drop + j, track);
     }
-    (adjusted_drop..adjusted_drop + new_count).collect()
+
+    // Build a map from original index → new index for every position in the
+    // list, so we can remap both moved and shifted selected tracks.
+    //
+    // For indices that were NOT moved: they shift left by the count of
+    // moved items removed before them, then shift right by the insertion
+    // offset relative to the adjusted_drop.
+    // For indices that WERE moved: their new position is in
+    // [adjusted_drop .. adjusted_drop + new_count).
+    let mut new_selected: Vec<usize> = Vec::with_capacity(selection.len());
+    for &sel_idx in selection {
+        if let Some(pos) = sorted_indices.iter().position(|&i| i == sel_idx) {
+            // This selected track was moved.
+            new_selected.push(adjusted_drop + pos);
+        } else {
+            // This selected track was NOT moved — compute its new position
+            // after the removal and insertion.
+            let removed_before_sel = sorted_indices.iter().filter(|&&i| i < sel_idx).count();
+            let after_removal = sel_idx - removed_before_sel;
+            let insert_shift = if after_removal >= adjusted_drop {
+                new_count
+            } else {
+                0
+            };
+            new_selected.push(after_removal + insert_shift);
+        }
+    }
+    new_selected.sort_unstable();
+    new_selected
 }
 
 impl MusicPlayer {
@@ -302,12 +339,7 @@ impl MusicPlayer {
                 self.copy_from_queue(&indices, drop_idx);
             }
             Some(_) if Self::target_is_same_as_source(target, source_is_queue) => {
-                self.handle_same_list_reorder(
-                    drop_idx,
-                    &indices,
-                    was_in_selection,
-                    source_is_queue,
-                );
+                self.handle_same_list_reorder(drop_idx, &indices, source_is_queue);
             }
             // None target: cursor is over no valid drop zone.
             // Some(target) where target_is_same_as_source is false is
@@ -381,12 +413,13 @@ impl MusicPlayer {
         ));
     }
 
-    /// Handle reordering within the same list (existing behavior).
+    /// Handle reordering within the same list. The selection is always
+    /// remapped to reflect the new positions of all selected tracks — both
+    /// the moved ones and any that merely shifted.
     fn handle_same_list_reorder(
         &mut self,
         drop_idx: usize,
         indices: &[usize],
-        was_in_selection: bool,
         source_is_queue: bool,
     ) {
         let min_idx = *indices.iter().min().unwrap();
@@ -396,20 +429,18 @@ impl MusicPlayer {
         if source_is_queue {
             let count = self.queue.tracks.len();
             if drop_idx <= count && is_valid_drop {
-                let new_positions = self.handle_reorder_queue(drop_idx, indices);
-                if was_in_selection {
-                    let sel = self.selection_mut(source_is_queue);
-                    *sel = new_positions;
-                }
+                let selection = self.queue_selected_indices.clone();
+                let new_positions = self.handle_reorder_queue(drop_idx, indices, &selection);
+                self.queue_selected_indices = new_positions;
                 self.save_session();
             }
         } else {
             let count = self.current_track_count(false);
             if drop_idx <= count && is_valid_drop {
-                let new_positions = self.handle_reorder_tracks_selected(drop_idx, indices);
-                if was_in_selection {
-                    self.selected_indices = new_positions;
-                }
+                let selection = self.selected_indices.clone();
+                let new_positions =
+                    self.handle_reorder_tracks_selected(drop_idx, indices, &selection);
+                self.selected_indices = new_positions;
             }
         }
     }
@@ -496,5 +527,120 @@ impl MusicPlayer {
         } else {
             self.playlist_list_scroll
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reorder_tracks;
+    use crate::types::{Track, TrackSource};
+
+    fn make_tracks(count: usize) -> Vec<Track> {
+        (0..count)
+            .map(|i| Track {
+                id: format!("id{i}"),
+                title: format!("Track {i}"),
+                artist: "Artist".into(),
+                duration: 10,
+                url: format!("url{i}"),
+                source: TrackSource::YouTube,
+                thumbnail: String::new(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn move_single_not_selected_remaps_selection() {
+        let mut tracks = make_tracks(5); // [id0, id1, id2, id3, id4]
+        let selection = vec![1, 2]; // id1, id2 selected
+                                    // Move index 4 (id4) to position 0
+        let new_sel = reorder_tracks(&mut tracks, 0, &[4], &selection);
+        assert_eq!(tracks_ids(&tracks), ["id4", "id0", "id1", "id2", "id3"]);
+        // id1 was at 1, shifted right by 1 (id4 inserted before it) → 2
+        // id2 was at 2, shifted right by 1 → 3
+        assert_eq!(new_sel, [2, 3]);
+    }
+
+    #[test]
+    fn move_single_selected_remaps_selection() {
+        let mut tracks = make_tracks(5); // [id0, id1, id2, id3, id4]
+        let selection = vec![1, 2]; // id1, id2 selected
+                                    // Move index 2 (id2) to position 0
+        let new_sel = reorder_tracks(&mut tracks, 0, &[2], &selection);
+        assert_eq!(tracks_ids(&tracks), ["id2", "id0", "id1", "id3", "id4"]);
+        // id2 was moved to position 0
+        // id1 was at 1, shifted right by 1 (id2 inserted before it) → 2
+        assert_eq!(new_sel, [0, 2]);
+    }
+
+    #[test]
+    fn move_multiple_selected_remaps_selection() {
+        let mut tracks = make_tracks(6); // [id0, id1, id2, id3, id4, id5]
+        let selection = vec![1, 2, 4]; // id1, id2, id4 selected
+                                       // Move indices [1, 2] (id1, id2) to position 5 (after id5)
+        let new_sel = reorder_tracks(&mut tracks, 5, &[1, 2], &selection);
+        assert_eq!(
+            tracks_ids(&tracks),
+            ["id0", "id3", "id4", "id1", "id2", "id5"]
+        );
+        // id1 was moved to position 3
+        // id2 was moved to position 4
+        // id4 was at 4, removed 2 before it (id1, id2), so after_removal = 4 - 2 = 2
+        // adjusted_drop = 5 - 2 = 3; after_removal (2) < 3, so no insert_shift → 2
+        assert_eq!(new_sel, [2, 3, 4]);
+    }
+
+    #[test]
+    fn move_non_selected_above_selection() {
+        let mut tracks = make_tracks(5); // [id0, id1, id2, id3, id4]
+        let selection = vec![2, 3]; // id2, id3 selected
+                                    // Move index 0 (id0) to position 4 (end)
+        let new_sel = reorder_tracks(&mut tracks, 4, &[0], &selection);
+        assert_eq!(tracks_ids(&tracks), ["id1", "id2", "id3", "id0", "id4"]);
+        // id2 was at 2, removed 1 before it (id0), after_removal = 2 - 1 = 1
+        // adjusted_drop = 4 - 1 = 3; after_removal (1) < 3, no shift → 1
+        // id3 was at 3, removed 1 before it, after_removal = 3 - 1 = 2
+        // adjusted_drop = 3; after_removal (2) < 3, no shift → 2
+        assert_eq!(new_sel, [1, 2]);
+    }
+
+    #[test]
+    fn move_non_selected_between_selected() {
+        let mut tracks = make_tracks(6); // [id0, id1, id2, id3, id4, id5]
+        let selection = vec![1, 3, 4]; // id1, id3, id4 selected
+                                       // Move index 0 (id0) to position 2 (between id1 and id2)
+        let new_sel = reorder_tracks(&mut tracks, 2, &[0], &selection);
+        assert_eq!(
+            tracks_ids(&tracks),
+            ["id1", "id0", "id2", "id3", "id4", "id5"]
+        );
+        // id1 was at 1, removed 1 before it (id0), after_removal = 0
+        // adjusted_drop = 2 - 1 = 1; after_removal (0) < 1, no shift → 0
+        // id3 was at 3, removed 1 before it, after_removal = 2
+        // adjusted_drop = 1; after_removal (2) >= 1, shift by 1 → 3
+        // id4 was at 4, removed 1 before it, after_removal = 3
+        // adjusted_drop = 1; after_removal (3) >= 1, shift by 1 → 4
+        assert_eq!(new_sel, [0, 3, 4]);
+    }
+
+    #[test]
+    fn empty_selection_returns_empty() {
+        let mut tracks = make_tracks(3);
+        let new_sel = reorder_tracks(&mut tracks, 0, &[1], &[]);
+        assert!(new_sel.is_empty());
+    }
+
+    #[test]
+    fn move_all_selected_to_front() {
+        let mut tracks = make_tracks(5); // [id0, id1, id2, id3, id4]
+        let selection = vec![0, 1, 2, 3, 4];
+        // Move all to position 4 (they stay in order, just re-inserted)
+        let new_sel = reorder_tracks(&mut tracks, 4, &[0, 1, 2, 3, 4], &selection);
+        assert_eq!(tracks_ids(&tracks), ["id0", "id1", "id2", "id3", "id4"]);
+        assert_eq!(new_sel, [0, 1, 2, 3, 4]);
+    }
+
+    fn tracks_ids(tracks: &[Track]) -> Vec<&str> {
+        tracks.iter().map(|t| t.id.as_str()).collect()
     }
 }

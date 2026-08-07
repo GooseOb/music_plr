@@ -139,6 +139,7 @@ impl MusicPlayer {
         &mut self,
         drop_idx: usize,
         indices: &[usize],
+        selection: &[usize],
     ) -> Vec<usize> {
         let new_positions = if let Some(sp) = self.selected_playlist {
             if sp < self.playlists.playlists.len() {
@@ -146,6 +147,7 @@ impl MusicPlayer {
                     &mut self.playlists.playlists[sp].tracks,
                     drop_idx,
                     indices,
+                    selection,
                 )
             } else {
                 Vec::new()
