@@ -18,7 +18,7 @@ impl MusicPlayer {
     pub(super) fn restore_nav_entry(&mut self, entry: &NavEntry) -> Task<Message> {
         // Scroll position is stored relative to the main track_list scrollable.
         // (Queue view uses a different Id and is not navigated via history.)
-        let y = entry.data.scroll();
+        let y = entry.data.scroll;
         self.view_data = entry.data.clone();
 
         iced::widget::operation::scroll_to::<Message>(

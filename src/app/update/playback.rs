@@ -1,4 +1,4 @@
-use super::{MusicPlayer, Track, ViewData};
+use super::{MusicPlayer, Track};
 use tracing::debug;
 
 impl MusicPlayer {
@@ -50,25 +50,7 @@ impl MusicPlayer {
     /// Returns the tracks after `index` in the current view.
     fn tracks_after(&self, index: usize) -> &[Track] {
         let start = index + 1;
-        match &self.view_data {
-            ViewData::Search { results, .. } => results.get(start..).unwrap_or(&[]),
-            ViewData::Radio { tracks, .. } | ViewData::Downloads { tracks, .. } => {
-                tracks.get(start..).unwrap_or(&[])
-            }
-            ViewData::Playlist {
-                selected_playlist, ..
-            } => {
-                if let Some(sp) = selected_playlist {
-                    if let Some(pl) = self.playlists.playlists.get(*sp) {
-                        pl.tracks.get(start..).unwrap_or(&[])
-                    } else {
-                        &[]
-                    }
-                } else {
-                    &[]
-                }
-            }
-        }
+        self.view_tracks().get(start..).unwrap_or(&[])
     }
 
     /// Play a track picked from the Recently Played list.

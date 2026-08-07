@@ -1,6 +1,7 @@
 use crate::app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID};
 
-use super::{DragTargetList, Message, MusicPlayer, Task, Track, ViewData, DOUBLE_CLICK_MS};
+use super::{DragTargetList, Message, MusicPlayer, Task, Track, DOUBLE_CLICK_MS};
+use crate::app::ViewKind;
 
 /// Reorder `tracks` by moving the items at `indices` to `drop_idx`.
 ///
@@ -114,7 +115,7 @@ impl MusicPlayer {
         if is_queue {
             &self.queue_selected_indices
         } else {
-            self.view_data.selection()
+            &self.view_data.selection
         }
     }
 
@@ -122,7 +123,21 @@ impl MusicPlayer {
         if is_queue {
             &mut self.queue_selected_indices
         } else {
-            self.view_data.selection_mut()
+            &mut self.view_data.selection
+        }
+    }
+
+    /// The track list for the current (non-queue) view. For `Playlist` the
+    /// tracks live in the `PlaylistStore`; for all other kinds they are the
+    /// view's own `tracks`.
+    pub fn view_tracks(&self) -> &[Track] {
+        match &self.view_data.kind {
+            ViewKind::Playlist {
+                selected_playlist, ..
+            } => selected_playlist
+                .and_then(|sp| self.playlists.playlists.get(sp))
+                .map_or(&[], |p| &p.tracks),
+            _ => &self.view_data.tracks,
         }
     }
 
@@ -417,10 +432,10 @@ impl MusicPlayer {
         } else {
             let count = self.current_track_count(false);
             if drop_idx <= count && is_valid_drop {
-                let selection = self.view_data.selection().to_vec();
+                let selection = self.view_data.selection.clone();
                 let new_positions =
                     self.handle_reorder_tracks_selected(drop_idx, indices, &selection);
-                *self.view_data.selection_mut() = new_positions;
+                self.view_data.selection = new_positions;
             }
         }
     }
@@ -455,7 +470,7 @@ impl MusicPlayer {
     }
 
     pub fn clear_selection(&mut self) {
-        self.view_data.clear_selection();
+        self.view_data.selection.clear();
         self.queue_selected_indices.clear();
         self.show_playlist_picker = false;
         self.picker_target_indices.clear();
@@ -465,17 +480,9 @@ impl MusicPlayer {
         if is_queue {
             return self.queue.tracks.get(index).cloned();
         }
-        match &self.view_data {
-            ViewData::Search { results, .. } => results.get(index).cloned(),
-            ViewData::Radio { tracks, .. } | ViewData::Downloads { tracks, .. } => {
-                tracks.get(index).cloned()
-            }
-            ViewData::Playlist {
-                selected_playlist, ..
-            } => selected_playlist
-                .and_then(|sp| self.playlists.playlists.get(sp))
-                .and_then(|p| p.tracks.get(index))
-                .cloned(),
+        match &self.view_data.kind {
+            ViewKind::Playlist { .. } => self.view_tracks().get(index).cloned(),
+            _ => self.view_data.tracks.get(index).cloned(),
         }
     }
 
@@ -483,23 +490,15 @@ impl MusicPlayer {
         if is_queue {
             return self.queue.tracks.len();
         }
-        match &self.view_data {
-            ViewData::Search { results, .. } => results.len(),
-            ViewData::Radio { tracks, .. } | ViewData::Downloads { tracks, .. } => tracks.len(),
-            ViewData::Playlist {
-                selected_playlist, ..
-            } => selected_playlist
-                .and_then(|sp| self.playlists.playlists.get(sp))
-                .map_or(0, |p| p.tracks.len()),
-        }
+        self.view_tracks().len()
     }
 
     pub fn get_current_list_bounds(&self) -> Option<iced::Rectangle> {
-        self.view_data.bounds()
+        self.view_data.bounds
     }
 
     pub fn get_current_list_scroll(&self) -> f32 {
-        self.view_data.scroll()
+        self.view_data.scroll
     }
 }
 

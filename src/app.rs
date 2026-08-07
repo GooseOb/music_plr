@@ -26,161 +26,92 @@ pub struct NavEntry {
     pub data: ViewData,
 }
 
-/// Consolidates all per-view state into a single enum. Only one variant is
-/// live at a time, eliminating the need for mutually-exclusive fields on
-/// [`MusicPlayer`]. Serialized into [`NavEntry`] for back/forward history
-/// and [`crate::session::SessionState`] for restore.
+/// All per-view state, stored in one flat struct. The `kind` field is the
+/// only variant-specific part; everything else is shared view chrome that is
+/// identical regardless of which view is active. Serialized into [`NavEntry`]
+/// for back/forward history and [`crate::session::SessionState`] for restore.
 ///
 /// `query` (the search-bar text) is intentionally kept as a field on
 /// [`MusicPlayer`] rather than here: the search bar is always visible
 /// regardless of which view is active, so the query is global UI state
 /// rather than view-specific data.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ViewData {
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ViewData {
+    pub kind: ViewKind,
+    /// The view's own track list. For `Playlist` the tracks live in the
+    /// `PlaylistStore` (see [`MusicPlayer::view_tracks`]); this stays empty.
+    pub tracks: Vec<Track>,
+    /// Used by `Search` and `Radio`; harmless (always false) elsewhere.
+    pub loading: bool,
+    pub selection: Vec<usize>,
+    pub scroll: f32,
+    #[serde(skip)]
+    pub bounds: Option<iced::Rectangle>,
+}
+
+/// The kind of view currently active. Carries everything that differs between
+/// views: the search `exhausted` flag, the radio label, and the selected
+/// playlist identity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ViewKind {
     Search {
-        results: Vec<Track>,
-        loading: bool,
         exhausted: bool,
-        selection: Vec<usize>,
-        scroll: f32,
-        #[serde(skip)]
-        bounds: Option<iced::Rectangle>,
     },
-    Radio {
-        label: String,
-        tracks: Vec<Track>,
-        loading: bool,
-        selection: Vec<usize>,
-        scroll: f32,
-        #[serde(skip)]
-        bounds: Option<iced::Rectangle>,
-    },
+    SongRadio(String),
+    ArtistRadio(String),
     Playlist {
         selected_playlist: Option<usize>,
         playlist_name: String,
-        selection: Vec<usize>,
-        scroll: f32,
-        #[serde(skip)]
-        bounds: Option<iced::Rectangle>,
     },
-    Downloads {
-        tracks: Vec<Track>,
-        selection: Vec<usize>,
-        scroll: f32,
-        #[serde(skip)]
-        bounds: Option<iced::Rectangle>,
-    },
+    Downloads,
 }
 
-impl Default for ViewData {
+impl Default for ViewKind {
     fn default() -> Self {
-        Self::Search {
-            results: Vec::new(),
-            loading: false,
-            exhausted: false,
-            selection: Vec::new(),
-            scroll: 0.0,
-            bounds: None,
-        }
+        ViewKind::Search { exhausted: false }
     }
 }
 
 impl ViewData {
     /// True for Search and Radio views (the scrollable text lists).
     pub fn is_search_like(&self) -> bool {
-        matches!(self, Self::Search { .. } | Self::Radio { .. })
-    }
-
-    /// True if this and `other` are the same view variant (ignoring data).
-    /// Used by navigation to detect a no-op self-navigation.
-    pub fn same_kind(&self, other: &Self) -> bool {
         matches!(
-            (self, other),
-            (Self::Search { .. }, Self::Search { .. })
-                | (Self::Radio { .. }, Self::Radio { .. })
-                | (Self::Playlist { .. }, Self::Playlist { .. })
-                | (Self::Downloads { .. }, Self::Downloads { .. })
+            self.kind,
+            ViewKind::Search { .. } | ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
         )
     }
 
-    pub fn scroll(&self) -> f32 {
-        match self {
-            Self::Search { scroll, .. }
-            | Self::Radio { scroll, .. }
-            | Self::Playlist { scroll, .. }
-            | Self::Downloads { scroll, .. } => *scroll,
+    /// True if this and `other` are the same view kind. Used by navigation to
+    /// detect a no-op self-navigation.
+    pub fn same_kind(&self, other: &Self) -> bool {
+        self.kind == other.kind
+    }
+
+    /// The radio header label, or empty when not on a radio view.
+    pub fn label(&self) -> &str {
+        match &self.kind {
+            ViewKind::SongRadio(l) | ViewKind::ArtistRadio(l) => l,
+            _ => "",
         }
     }
 
-    pub fn selection(&self) -> &[usize] {
-        match self {
-            Self::Search { selection, .. }
-            | Self::Radio { selection, .. }
-            | Self::Playlist { selection, .. }
-            | Self::Downloads { selection, .. } => selection,
+    /// Whether the search results are exhausted (no more pages). Only
+    /// meaningful for `Search`; `false` otherwise.
+    pub fn exhausted(&self) -> bool {
+        matches!(self.kind, ViewKind::Search { exhausted: true })
+    }
+
+    /// Set the search `exhausted` flag. A no-op when not on `Search`.
+    pub fn set_exhausted(&mut self, value: bool) {
+        if let ViewKind::Search { exhausted } = &mut self.kind {
+            *exhausted = value;
         }
     }
 
-    pub fn selection_mut(&mut self) -> &mut Vec<usize> {
-        match self {
-            Self::Search { selection, .. }
-            | Self::Radio { selection, .. }
-            | Self::Playlist { selection, .. }
-            | Self::Downloads { selection, .. } => selection,
-        }
-    }
-
-    pub fn bounds(&self) -> Option<iced::Rectangle> {
-        match self {
-            Self::Search { bounds, .. }
-            | Self::Radio { bounds, .. }
-            | Self::Playlist { bounds, .. }
-            | Self::Downloads { bounds, .. } => *bounds,
-        }
-    }
-
-    /// Update the scroll offset and bounds for the current view's scrollable list.
-    pub fn set_scroll_and_bounds(&mut self, scroll: f32, bounds: Option<iced::Rectangle>) {
-        match self {
-            Self::Search {
-                scroll: s,
-                bounds: b,
-                ..
-            }
-            | Self::Radio {
-                scroll: s,
-                bounds: b,
-                ..
-            }
-            | Self::Playlist {
-                scroll: s,
-                bounds: b,
-                ..
-            }
-            | Self::Downloads {
-                scroll: s,
-                bounds: b,
-                ..
-            } => {
-                *s = scroll;
-                *b = bounds;
-            }
-        }
-    }
-
-    pub fn clear_selection(&mut self) {
-        match self {
-            Self::Search { selection, .. }
-            | Self::Radio { selection, .. }
-            | Self::Playlist { selection, .. }
-            | Self::Downloads { selection, .. } => selection.clear(),
-        }
-    }
-
-    /// Returns the selected playlist index for the Playlist view, or `None`.
+    /// The selected playlist index for the Playlist view, or `None`.
     pub fn selected_playlist_id(&self) -> Option<usize> {
-        match self {
-            Self::Playlist {
+        match &self.kind {
+            ViewKind::Playlist {
                 selected_playlist, ..
             } => *selected_playlist,
             _ => None,
@@ -188,8 +119,8 @@ impl ViewData {
     }
 
     pub fn playlist_name(&self) -> &str {
-        match self {
-            Self::Playlist { playlist_name, .. } => playlist_name,
+        match &self.kind {
+            ViewKind::Playlist { playlist_name, .. } => playlist_name,
             _ => "",
         }
     }
@@ -198,25 +129,19 @@ impl ViewData {
 
     /// Create a fresh `Search` view with empty results.
     pub fn new_search() -> Self {
-        Self::Search {
-            results: Vec::new(),
-            loading: false,
-            exhausted: false,
-            selection: Vec::new(),
-            scroll: 0.0,
-            bounds: None,
+        Self {
+            kind: ViewKind::Search { exhausted: false },
+            ..Default::default()
         }
     }
 
-    /// Create a `Radio` view with the given label, initially loading.
-    pub fn new_radio(label: String) -> Self {
-        Self::Radio {
-            label,
-            tracks: Vec::new(),
+    /// Create a `Radio` view from the given kind (which already holds the
+    /// label), initially loading.
+    pub fn new_radio(kind: ViewKind) -> Self {
+        Self {
+            kind,
             loading: true,
-            selection: Vec::new(),
-            scroll: 0.0,
-            bounds: None,
+            ..Default::default()
         }
     }
 
@@ -228,29 +153,26 @@ impl ViewData {
         old: Option<&Self>,
     ) -> Self {
         let (sp, name) = match old {
-            Some(Self::Playlist {
-                selected_playlist: sp,
-                playlist_name: n,
-                ..
-            }) => (*sp, n.clone()),
+            Some(v) if matches!(v.kind, ViewKind::Playlist { .. }) => {
+                (v.selected_playlist_id(), v.playlist_name().to_string())
+            }
             _ => (selected_playlist, playlist_name),
         };
-        Self::Playlist {
-            selected_playlist: sp,
-            playlist_name: name,
-            selection: Vec::new(),
-            scroll: 0.0,
-            bounds: None,
+        Self {
+            kind: ViewKind::Playlist {
+                selected_playlist: sp,
+                playlist_name: name,
+            },
+            ..Default::default()
         }
     }
 
     /// Create a `Downloads` view with the given tracks.
     pub fn new_downloads(tracks: Vec<Track>) -> Self {
-        Self::Downloads {
+        Self {
+            kind: ViewKind::Downloads,
             tracks,
-            selection: Vec::new(),
-            scroll: 0.0,
-            bounds: None,
+            ..Default::default()
         }
     }
 }
@@ -482,6 +404,8 @@ pub struct MusicPlayer {
     pub window_width: f32,
 }
 
+impl MusicPlayer {}
+
 impl Default for MusicPlayer {
     fn default() -> Self {
         let config = config::load_config();
@@ -645,7 +569,8 @@ impl MusicPlayer {
                     self.queue_list_bounds = Some(bounds);
                     self.queue_list_scroll = offset_y;
                 } else {
-                    self.view_data.set_scroll_and_bounds(offset_y, Some(bounds));
+                    self.view_data.scroll = offset_y;
+                    self.view_data.bounds = Some(bounds);
                 }
                 Task::none()
             }

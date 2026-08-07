@@ -1,4 +1,5 @@
 use super::{mpsc, thread, BackendResult, MusicPlayer, Track, ViewData};
+use crate::app::ViewKind;
 
 impl MusicPlayer {
     pub fn handle_search_execute(&mut self) {
@@ -10,9 +11,7 @@ impl MusicPlayer {
         // state; flip `loading` on and clear the query dropdown.
         self.view_data = ViewData::new_search();
         self.show_search_history = false;
-        if let ViewData::Search { loading, .. } = &mut self.view_data {
-            *loading = true;
-        }
+        self.view_data.loading = true;
         self.drag.hovered_track = None;
 
         self.search_history.push(
@@ -31,22 +30,19 @@ impl MusicPlayer {
     }
 
     pub fn handle_search_load_more(&mut self) {
-        let (loading, exhausted, count) = match &self.view_data {
-            ViewData::Search {
-                loading,
-                exhausted,
-                results,
-                ..
-            } => (*loading, *exhausted, results.len()),
-            _ => return,
-        };
+        if !matches!(self.view_data.kind, ViewKind::Search { .. }) {
+            return;
+        }
+        let (loading, exhausted, count) = (
+            self.view_data.loading,
+            self.view_data.exhausted(),
+            self.view_data.tracks.len(),
+        );
         if loading || exhausted || count == 0 {
             return;
         }
 
-        if let ViewData::Search { loading, .. } = &mut self.view_data {
-            *loading = true;
-        }
+        self.view_data.loading = true;
 
         let query = self.search_query.clone();
         let offset = count;
@@ -87,7 +83,7 @@ impl MusicPlayer {
 
     pub fn start_song_radio(&mut self, song_name: String) {
         let label = format!("Radio: {song_name}");
-        self.view_data = ViewData::new_radio(label.clone());
+        self.view_data = ViewData::new_radio(ViewKind::SongRadio(label.clone()));
         self.notify(format!("Generating radio for song: {song_name}..."));
 
         let tx = self.result_tx.clone();
@@ -98,7 +94,7 @@ impl MusicPlayer {
 
     pub fn start_artist_radio(&mut self, artist_name: String) {
         let label = format!("Radio: {artist_name}");
-        self.view_data = ViewData::new_radio(label.clone());
+        self.view_data = ViewData::new_radio(ViewKind::ArtistRadio(label.clone()));
         self.notify(format!("Generating radio for artist: {artist_name}..."));
 
         let tx = self.result_tx.clone();

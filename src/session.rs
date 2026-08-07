@@ -1,3 +1,5 @@
+#[cfg(test)]
+use crate::app::ViewKind;
 use crate::{app::ViewData, types::PlayQueue};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -60,7 +62,7 @@ mod tests {
     #[test]
     fn session_state_default() {
         let state = SessionState::default();
-        assert!(matches!(state.data, ViewData::Search { .. }));
+        assert!(matches!(state.data.kind, ViewKind::Search { .. }));
         assert!(state.queue.tracks.is_empty());
         assert!(!state.show_queue);
         assert_eq!(state.volume, 0.8);
@@ -69,8 +71,8 @@ mod tests {
     #[test]
     fn session_state_round_trip() {
         let state = SessionState {
-            data: ViewData::Radio {
-                label: "Test Radio".into(),
+            data: ViewData {
+                kind: ViewKind::ArtistRadio("Test Radio".into()),
                 tracks: Vec::new(),
                 loading: false,
                 selection: vec![2],
@@ -83,19 +85,16 @@ mod tests {
         };
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();
-        assert!(matches!(restored.data, ViewData::Radio { .. }));
+        assert!(matches!(
+            restored.data.kind,
+            ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
+        ));
         assert!(restored.show_queue);
         assert_eq!(restored.volume, 0.5);
-        if let ViewData::Radio {
-            label,
-            selection,
-            scroll,
-            ..
-        } = &restored.data
-        {
+        if let ViewKind::ArtistRadio(label) = &restored.data.kind {
             assert_eq!(label, "Test Radio");
-            assert_eq!(selection, &vec![2]);
-            assert_eq!(*scroll, 42.0);
+            assert_eq!(restored.data.selection, vec![2]);
+            assert_eq!(restored.data.scroll, 42.0);
         } else {
             panic!("expected Radio data");
         }

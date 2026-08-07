@@ -1,7 +1,8 @@
 use super::{
     error, format_duration, mpris, mpsc, spawn_thumbnail_download_thread, BackendResult,
-    MprisCommand, MprisUpdate, MusicPlayer, ViewData,
+    MprisCommand, MprisUpdate, MusicPlayer,
 };
+use crate::app::ViewKind;
 use crate::types::Track;
 use tracing::debug;
 
@@ -63,10 +64,10 @@ impl MusicPlayer {
     }
 
     fn update_thumbnail_cache(&mut self) {
-        // Sync downloaded tracks from the registry into ViewData::Downloads
-        // so the list stays fresh when new downloads complete.
-        if let ViewData::Downloads { tracks, .. } = &mut self.view_data {
-            *tracks = self
+        // Sync downloaded tracks from the registry into the Downloads view so
+        // the list stays fresh when new downloads complete.
+        if matches!(self.view_data.kind, ViewKind::Downloads) {
+            self.view_data.tracks = self
                 .download_registry
                 .all_tracks()
                 .into_iter()
@@ -74,25 +75,7 @@ impl MusicPlayer {
                 .collect();
         }
 
-        let tracks: Vec<&Track> = match &self.view_data {
-            ViewData::Search { results, .. } => results.iter().collect(),
-            ViewData::Radio { tracks, .. } | ViewData::Downloads { tracks, .. } => {
-                tracks.iter().collect()
-            }
-            ViewData::Playlist {
-                selected_playlist, ..
-            } => {
-                if let Some(idx) = selected_playlist {
-                    self.playlists
-                        .playlists
-                        .get(*idx)
-                        .map(|pl| pl.tracks.iter().collect())
-                        .unwrap_or_default()
-                } else {
-                    Vec::new()
-                }
-            }
-        };
+        let tracks: Vec<Track> = self.view_tracks().to_vec();
 
         for track in &tracks {
             let id = &track.id;
@@ -152,74 +135,54 @@ impl MusicPlayer {
     pub fn process_result(&mut self, result: BackendResult) {
         match result {
             BackendResult::SearchResults(tracks) => {
-                if let ViewData::Search {
-                    results,
-                    loading,
-                    exhausted,
-                    selection,
-                    ..
-                } = &mut self.view_data
-                {
-                    *results = tracks;
-                    *exhausted = results.len() < crate::theme::SEARCH_PAGE_SIZE;
-                    *loading = false;
-                    selection.clear();
-                }
-                if matches!(self.view_data, ViewData::Search { .. }) {
+                if matches!(self.view_data.kind, ViewKind::Search { .. }) {
+                    self.view_data.tracks = tracks;
+                    self.view_data.set_exhausted(
+                        self.view_data.tracks.len() < crate::theme::SEARCH_PAGE_SIZE,
+                    );
+                    self.view_data.loading = false;
+                    self.view_data.selection.clear();
                     self.push_nav_entry();
                 }
                 self.save_session();
-                let tracks = match &self.view_data {
-                    ViewData::Search { results, .. } => results.clone(),
-                    _ => Vec::new(),
-                };
+                let tracks = self.view_data.tracks.clone();
                 spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
                 self.clear_notification();
             }
             BackendResult::SearchResultsAppend(tracks) => {
                 let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
-                if let ViewData::Search {
-                    results,
-                    loading,
-                    exhausted: ex,
-                    ..
-                } = &mut self.view_data
-                {
-                    results.extend(tracks);
-                    *loading = false;
-                    *ex = exhausted;
+                if matches!(self.view_data.kind, ViewKind::Search { .. }) {
+                    self.view_data.tracks.extend(tracks);
+                    self.view_data.loading = false;
+                    self.view_data.set_exhausted(exhausted);
                 }
                 let _ = self.update_current_snapshot();
-                let tracks = match &self.view_data {
-                    ViewData::Search { results, .. } => results.clone(),
-                    _ => Vec::new(),
-                };
+                let tracks = self.view_data.tracks.clone();
                 spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
                 self.clear_notification();
                 self.save_session();
             }
             BackendResult::RadioResults(label, tracks) => {
-                if let ViewData::Radio {
-                    label: l,
-                    tracks: t,
-                    loading,
-                    ..
-                } = &mut self.view_data
-                {
-                    *l = label;
-                    *t = tracks;
-                    *loading = false;
+                if matches!(
+                    self.view_data.kind,
+                    ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
+                ) {
+                    self.view_data.kind = match &self.view_data.kind {
+                        ViewKind::ArtistRadio(_) => ViewKind::ArtistRadio(label),
+                        _ => ViewKind::SongRadio(label),
+                    };
+                    self.view_data.tracks = tracks;
+                    self.view_data.loading = false;
                 }
-                if matches!(self.view_data, ViewData::Radio { .. })
-                    && !self.update_current_snapshot()
+                if matches!(
+                    self.view_data.kind,
+                    ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
+                ) && !self.update_current_snapshot()
                 {
                     self.push_nav_entry();
                 }
                 self.save_session();
-                let tracks = match &self.view_data {
-                    ViewData::Radio { tracks, .. } => tracks.clone(),
-                    _ => Vec::new(),
-                };
+                let tracks = self.view_data.tracks.clone();
                 spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
             }
             BackendResult::DownloadComplete(track, path) => {
@@ -232,10 +195,11 @@ impl MusicPlayer {
                 self.notify_error(msg);
             }
             BackendResult::SearchError(msg) => {
-                if let ViewData::Search { loading, .. } | ViewData::Radio { loading, .. } =
-                    &mut self.view_data
-                {
-                    *loading = false;
+                if matches!(
+                    self.view_data.kind,
+                    ViewKind::Search { .. } | ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
+                ) {
+                    self.view_data.loading = false;
                 }
                 self.clear_notification();
                 self.notify_error(msg);

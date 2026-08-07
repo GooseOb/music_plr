@@ -1,4 +1,5 @@
-use super::{BackendResult, ContextMenuState, MusicPlayer, Track, TrackSource, ViewData};
+use super::{BackendResult, ContextMenuState, MusicPlayer, Track, TrackSource};
+use crate::app::ViewKind;
 use crate::util::plural_suffix;
 
 impl MusicPlayer {
@@ -104,7 +105,7 @@ impl MusicPlayer {
             position: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
             is_youtube: track.source == TrackSource::YouTube,
             is_downloaded: self.download_registry.contains(&track.url),
-            in_playlist: matches!(self.view_data, ViewData::Playlist { .. }),
+            in_playlist: matches!(self.view_data.kind, ViewKind::Playlist { .. }),
             is_queue,
         });
     }

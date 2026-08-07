@@ -6,7 +6,7 @@ use iced::{
     Element, Length,
 };
 
-use super::{ContextMenuState, DragTargetList, Message, MusicPlayer, ViewData};
+use super::{ContextMenuState, DragTargetList, Message, MusicPlayer};
 
 mod content;
 mod overlays;

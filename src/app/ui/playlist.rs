@@ -4,7 +4,7 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{app::ViewData, icons, theme::AppTheme, types::Track};
+use crate::{app::ViewKind, icons, theme::AppTheme, types::Track};
 
 use super::{
     styles::{button_style_danger, fg_secondary},
@@ -14,7 +14,7 @@ use super::{
 pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
 
-    let is_downloads = matches!(player.view_data, ViewData::Downloads { .. });
+    let is_downloads = matches!(player.view_data.kind, ViewKind::Downloads);
 
     let header: Element<'a, Message, AppTheme> = if is_downloads {
         Row::with_children(vec![
@@ -74,9 +74,10 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
     };
 
     let track_list = if is_downloads {
-        let tracks: &[Track] = match &player.view_data {
-            ViewData::Downloads { tracks, .. } => tracks,
-            _ => &[],
+        let tracks: &[Track] = if matches!(player.view_data.kind, ViewKind::Downloads) {
+            &player.view_data.tracks
+        } else {
+            &[]
         };
         if tracks.is_empty() {
             Container::new(text("No downloaded tracks").style(fg_secondary()))
