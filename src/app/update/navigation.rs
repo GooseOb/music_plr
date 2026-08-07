@@ -1,5 +1,6 @@
 use super::{Message, MusicPlayer, NavEntry, Task, ViewData};
 use crate::app::ui::TRACK_LIST_ID;
+use crate::app::ViewKind;
 
 impl MusicPlayer {
     pub const fn can_navigate_back(&self) -> bool {
@@ -15,11 +16,19 @@ impl MusicPlayer {
         self.view_data.clone()
     }
 
+    /// Sync the global `search_query` from the active `Search` view's stored
+    /// query. Used whenever `view_data` is replaced (navigate / restore) so the
+    /// always-visible search bar reflects the view being shown.
+    fn sync_search_query(&mut self) {
+        self.search_query = self.view_data.search_query().to_string();
+    }
+
     pub(super) fn restore_nav_entry(&mut self, entry: &NavEntry) -> Task<Message> {
         // Scroll position is stored relative to the main track_list scrollable.
         // (Queue view uses a different Id and is not navigated via history.)
         let y = entry.data.scroll;
         self.view_data = entry.data.clone();
+        self.sync_search_query();
 
         iced::widget::operation::scroll_to::<Message>(
             TRACK_LIST_ID,
@@ -31,11 +40,17 @@ impl MusicPlayer {
         if self.view_data.same_kind(&data) {
             return;
         }
+        // Capture the live query into the outgoing `Search` entry (if any) so
+        // Back navigation restores it.
+        if let ViewKind::Search { query, .. } = &mut self.view_data.kind {
+            *query = self.search_query.clone();
+        }
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.cleanup_drag_state();
         self.drag.hovered_track = None;
 
         self.view_data = data;
+        self.sync_search_query();
 
         // Push the new state as a single entry. The previous entry (preserved
         // by truncate) already serves as the back-target for Back navigation.

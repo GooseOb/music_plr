@@ -56,6 +56,7 @@ pub struct ViewData {
 pub enum ViewKind {
     Search {
         exhausted: bool,
+        query: String,
     },
     SongRadio(String),
     ArtistRadio(String),
@@ -68,7 +69,10 @@ pub enum ViewKind {
 
 impl Default for ViewKind {
     fn default() -> Self {
-        ViewKind::Search { exhausted: false }
+        ViewKind::Search {
+            exhausted: false,
+            query: String::new(),
+        }
     }
 }
 
@@ -82,9 +86,29 @@ impl ViewData {
     }
 
     /// True if this and `other` are the same view kind. Used by navigation to
-    /// detect a no-op self-navigation.
+    /// detect a no-op self-navigation. Compares variant identity and the
+    /// fields that distinguish views, but ignores `Search`'s `query` (so a
+    /// re-query in the same Search view is not a navigation).
     pub fn same_kind(&self, other: &Self) -> bool {
-        self.kind == other.kind
+        match (&self.kind, &other.kind) {
+            (ViewKind::Search { exhausted: a, .. }, ViewKind::Search { exhausted: b, .. }) => {
+                a == b
+            }
+            (ViewKind::SongRadio(a), ViewKind::SongRadio(b)) => a == b,
+            (ViewKind::ArtistRadio(a), ViewKind::ArtistRadio(b)) => a == b,
+            (
+                ViewKind::Playlist {
+                    selected_playlist: a,
+                    playlist_name: c,
+                },
+                ViewKind::Playlist {
+                    selected_playlist: b,
+                    playlist_name: d,
+                },
+            ) => a == b && c == d,
+            (ViewKind::Downloads, ViewKind::Downloads) => true,
+            _ => false,
+        }
     }
 
     /// The radio header label, or empty when not on a radio view.
@@ -98,13 +122,27 @@ impl ViewData {
     /// Whether the search results are exhausted (no more pages). Only
     /// meaningful for `Search`; `false` otherwise.
     pub fn exhausted(&self) -> bool {
-        matches!(self.kind, ViewKind::Search { exhausted: true })
+        matches!(
+            self.kind,
+            ViewKind::Search {
+                exhausted: true,
+                ..
+            }
+        )
     }
 
     /// Set the search `exhausted` flag. A no-op when not on `Search`.
     pub fn set_exhausted(&mut self, value: bool) {
-        if let ViewKind::Search { exhausted } = &mut self.kind {
+        if let ViewKind::Search { exhausted, .. } = &mut self.kind {
             *exhausted = value;
+        }
+    }
+
+    /// The search query for the `Search` view, or empty when not on `Search`.
+    pub fn search_query(&self) -> &str {
+        match &self.kind {
+            ViewKind::Search { query, .. } => query,
+            _ => "",
         }
     }
 
@@ -127,10 +165,13 @@ impl ViewData {
 
     // ── constructors ─────────────────────────────────────────────
 
-    /// Create a fresh `Search` view with empty results.
-    pub fn new_search() -> Self {
+    /// Create a fresh `Search` view with the given query.
+    pub fn new_search(query: String) -> Self {
         Self {
-            kind: ViewKind::Search { exhausted: false },
+            kind: ViewKind::Search {
+                exhausted: false,
+                query,
+            },
             ..Default::default()
         }
     }

@@ -79,7 +79,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .width(Length::Fill);
 
     let nav_items: Vec<Element<'_, Message, AppTheme>> = vec![
-        sidebar_nav_item("Search", ViewData::new_search(), player, p),
+        sidebar_nav_item("Search", ViewData::new_search(String::new()), player, p),
         sidebar_nav_item("Downloads", downloads_view_data(player), player, p),
     ];
 

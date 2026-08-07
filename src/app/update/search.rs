@@ -9,7 +9,7 @@ impl MusicPlayer {
 
         // Switch to Search view. `new_search()` returns an empty, non-loading
         // state; flip `loading` on and clear the query dropdown.
-        self.view_data = ViewData::new_search();
+        self.view_data = ViewData::new_search(self.search_query.clone());
         self.show_search_history = false;
         self.view_data.loading = true;
         self.drag.hovered_track = None;
