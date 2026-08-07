@@ -226,7 +226,7 @@ impl MusicPlayer {
             }
         } else if let ViewKind::Downloads = &self.view_data.kind {
             let tracks = &mut self.view_data.tracks;
-            let mut sorted: Vec<usize> = indices.clone();
+            let mut sorted: Vec<usize> = indices.to_vec();
             sorted.sort_unstable();
             sorted.dedup();
             let mut removed = 0;

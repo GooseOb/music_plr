@@ -159,38 +159,40 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
     Ok((videos, valid_ids))
 }
 
-// Second yt-dlp pass (--batch-file) filling duration/channel/url for an ordered
-// list of ids, in place. Skipped silently if yt-dlp is unavailable.
+// Second yt-dlp pass (--batch-file) filling duration/channel/url for the
+// given ids. Keyed by video id (not position) so that a silently dropped id
+// in yt-dlp's batch output can't mis-assign metadata to the wrong video.
 fn enrich_with_metadata(videos: &mut [YouTubeVideo], valid_ids: &[String]) {
     if valid_ids.is_empty() {
         return;
     }
 
-    for (i, item) in fetch_batch_metadata(valid_ids).into_iter().enumerate() {
-        if let Some(video) = videos.get_mut(i) {
+    let metadata = fetch_batch_metadata(valid_ids);
+    for video in videos.iter_mut() {
+        if let Some(item) = metadata.get(&video.id) {
             video.duration = item.duration;
-            video.channel = item.channel;
+            video.channel = item.channel.clone();
             video.url = if item.webpage_url.is_empty() {
                 format!("https://youtube.com/watch?v={}", video.id)
             } else {
-                item.webpage_url
+                item.webpage_url.clone()
             };
         }
-    }
-
-    for video in videos.iter_mut() {
         if video.url.is_empty() {
             video.url = format!("https://youtube.com/watch?v={}", video.id);
         }
     }
 }
 
-// Single batched metadata pass over yt-dlp for a list of video ids. Returns
-// results in input order; a failed yt-dlp invocation yields an empty list so
+// Single batched metadata pass over yt-dlp for a list of video ids. Returns a
+// map keyed by video id; a failed yt-dlp invocation yields an empty map so
 // callers gracefully fall back to the cheap flat-search stubs.
 #[allow(clippy::manual_let_else)]
-fn fetch_batch_metadata(valid_ids: &[String]) -> Vec<YTDLPSearchResult> {
-    let mut results: Vec<YTDLPSearchResult> = Vec::new();
+fn fetch_batch_metadata(
+    valid_ids: &[String],
+) -> std::collections::HashMap<String, YTDLPSearchResult> {
+    use std::collections::HashMap;
+    let mut results: HashMap<String, YTDLPSearchResult> = HashMap::new();
     let mut child = match Command::new("yt-dlp")
         .args([
             "--batch-file",
@@ -222,7 +224,7 @@ fn fetch_batch_metadata(valid_ids: &[String]) -> Vec<YTDLPSearchResult> {
                     continue;
                 }
                 if let Ok(item) = serde_json::from_str::<YTDLPSearchResult>(line) {
-                    results.push(item);
+                    results.insert(item.id.clone(), item);
                 }
             }
         }

@@ -30,6 +30,27 @@ pub fn fuzzy_match(query: &str, text: &str) -> bool {
     qi.peek().is_none()
 }
 
+/// Remove the items at `indices` (in any order) from `list`, writing back to the
+/// same collection only once. Indices that are out of bounds are silently
+/// skipped. Returns the number of items actually removed.
+///
+/// This is the single canonical "remove by index" routine used by the queue,
+/// playlists, and downloads views, so reordering edge-cases are tested in one
+/// place.
+pub fn remove_at<T>(list: &mut Vec<T>, indices: &[usize]) -> usize {
+    let mut sorted: Vec<usize> = indices.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    let mut removed = 0;
+    for &i in sorted.iter().rev() {
+        if i < list.len() {
+            list.remove(i);
+            removed += 1;
+        }
+    }
+    removed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,5 +101,25 @@ mod tests {
     fn fuzzy_match_partial() {
         assert!(fuzzy_match("ell", "hello"));
         assert!(!fuzzy_match("leh", "hello"));
+    }
+
+    #[test]
+    fn remove_at_multiple() {
+        let mut v = vec![0, 1, 2, 3, 4];
+        assert_eq!(remove_at(&mut v, &[1, 3]), 2);
+        assert_eq!(v, vec![0, 2, 4]);
+    }
+
+    #[test]
+    fn remove_at_unsorted_and_dedup() {
+        let mut v = vec![0, 1, 2, 3, 4];
+        assert_eq!(remove_at(&mut v, &[3, 0, 3, 99]), 2);
+        assert_eq!(v, vec![1, 2, 4]);
+    }
+
+    #[test]
+    fn remove_at_empty() {
+        let mut v: Vec<usize> = vec![];
+        assert_eq!(remove_at(&mut v, &[0, 1]), 0);
     }
 }

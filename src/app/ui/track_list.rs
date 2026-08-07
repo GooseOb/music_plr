@@ -194,11 +194,7 @@ pub(super) fn row_layout<'a>(
     player: &'a MusicPlayer,
 ) -> Row<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let thumb_exists = player
-        .thumbnail_cache
-        .get(&track.id)
-        .copied()
-        .unwrap_or(false);
+    let thumb_exists = player.thumbnail_cache.contains(&track.id);
     Row::with_children(vec![
         leading,
         thumbnail(track, p, theme::THUMBNAIL_SIZE, thumb_exists),

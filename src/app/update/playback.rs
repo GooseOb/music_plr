@@ -72,7 +72,9 @@ impl MusicPlayer {
         self.track_loading = true;
         let id = track.id.clone();
 
-        if self.stream_cache.contains(&id) {
+        // Only YouTube tracks go through the stream/cache pipeline; local
+        // files are played directly via their filesystem URL.
+        if track.source == crate::types::TrackSource::YouTube && self.stream_cache.contains(&id) {
             let path = self.stream_cache.path_for(&id);
             debug!("Playing from cache: {}", path.display());
             let duration = track.duration as f32;
@@ -100,16 +102,7 @@ impl MusicPlayer {
     }
 
     pub fn handle_remove_from_queue_batch(&mut self, indices: &[usize]) {
-        let mut sorted: Vec<usize> = indices.to_vec();
-        sorted.sort_unstable();
-        sorted.dedup();
-        let mut removed = 0;
-        for &i in sorted.iter().rev() {
-            if i < self.queue.tracks.len() {
-                self.queue.tracks.remove(i);
-                removed += 1;
-            }
-        }
+        let removed = crate::util::remove_at(&mut self.queue.tracks, indices);
         self.save_session();
         self.mpris_dirty = true;
         self.notify(format!(

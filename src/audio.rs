@@ -42,15 +42,8 @@ enum PlayerCommand {
     Seek(Duration),
 }
 
-/// Extract the video id from a `YouTube` URL for naming temp files.
-fn youtube_id_from_url(url: &str) -> &str {
-    url.split("v=")
-        .nth(1)
-        .and_then(|s| s.split('&').next())
-        .unwrap_or("stream")
-}
-
 impl AudioPlayer {
+    #[allow(unused_assignments)]
     pub fn new(initial_volume: f32) -> Self {
         let state = Arc::new(Mutex::new(PlayerState {
             is_playing: false,
@@ -67,17 +60,42 @@ impl AudioPlayer {
             let mut output: Option<(rodio::OutputStream, rodio::Sink)> = None;
             let mut ffmpeg: Option<std::process::Child> = None;
             let mut ytdlp: Option<std::process::Child> = None;
-            let mut temp_wav: Option<PathBuf> = None;
+            // The WAV file rodio currently reads. For `StreamAndCache` this is
+            // the persistent cache file (written by ffmpeg); for `PlayCached`
+            // it is the already-complete cache file. It is intentionally
+            // *never* deleted here — the `StreamCache` owns its lifecycle
+            // (LRU eviction) — which also avoids a use-after-unlink race
+            // while rodio is still reading.
+            let mut playback_file: Option<PathBuf> = None;
             let mut stream_url: Option<String> = None;
             let mut expected_duration: f32 = 0.0;
             let mut stream_active: bool = false;
 
             /// Kill ffmpeg/yt-dlp, stop playback, and reset pipeline state.
-            /// Shared by both stream-start commands.
+            /// Deletes the previous temp WAV (from a `PlayCached` replay) but
+            /// deliberately leaves cache files alone — those are owned by
+            /// `StreamCache` and must persist for future replays.
             macro_rules! reset_pipeline {
                 () => {
-                    Self::kill_processes(&mut ffmpeg, &mut ytdlp, &mut temp_wav, &mut stream_url);
+                    if let Some(mut p) = ffmpeg.take() {
+                        let _ = p.kill();
+                        let _ = p.wait();
+                    }
+                    if let Some(mut p) = ytdlp.take() {
+                        let _ = p.kill();
+                        let _ = p.wait();
+                    }
+                    // Only remove the playback file if it lives in the temp dir
+                    // (the transient WAV produced for `PlayCached`); the cache
+                    // file under the project cache dir is never touched here.
+                    if let Some(ref path) = playback_file {
+                        if path.starts_with(std::env::temp_dir().join("music_plr")) {
+                            let _ = std::fs::remove_file(path);
+                        }
+                    }
                     stream_active = false;
+                    stream_url = None;
+                    playback_file = None;
                     if let Some((_, s)) = &output {
                         s.stop();
                     }
@@ -88,12 +106,12 @@ impl AudioPlayer {
                 };
             }
 
-            /// Try to start rodio playback from the temp WAV file once enough
-            /// data has been written. Shared by both stream-start commands.
+            /// Try to start rodio playback from `playback_file` once enough
+            /// data has been written (streaming) or immediately (cached).
             macro_rules! try_start_playback {
                 () => {
                     if output.is_none() && stream_active {
-                        if let Some(ref path) = temp_wav {
+                        if let Some(ref path) = playback_file {
                             let ready = std::fs::metadata(path).is_ok_and(|m| m.len() > 2048);
                             let exited = ffmpeg
                                 .as_mut()
@@ -154,14 +172,16 @@ impl AudioPlayer {
 
                             reset_pipeline!();
 
-                            let temp_dir = std::env::temp_dir().join("music_plr");
-                            let _ = std::fs::create_dir_all(&temp_dir);
-                            let temp_path =
-                                temp_dir.join(format!("{}.wav", youtube_id_from_url(&url)));
-                            let temp_str = temp_path.to_string_lossy().to_string();
+                            if let Some(dir) = cache_path.parent() {
+                                let _ = std::fs::create_dir_all(dir);
+                            }
 
-                            debug!("Spawning yt-dlp, teeing raw output to cache + ffmpeg");
+                            debug!(
+                                "Streaming through ffmpeg to cache WAV: {}",
+                                cache_path.display()
+                            );
 
+                            let cache_str = cache_path.to_string_lossy().to_string();
                             let mut ytdlp_child = match Command::new("yt-dlp")
                                 .args([
                                     "-f",
@@ -200,7 +220,7 @@ impl AudioPlayer {
                                     "-flush_packets",
                                     "1",
                                     "-y",
-                                    &temp_str,
+                                    &cache_str,
                                 ])
                                 .stdin(Stdio::piped())
                                 .stdout(Stdio::null())
@@ -211,7 +231,6 @@ impl AudioPlayer {
                                 Err(e) => {
                                     warn!("Failed to spawn ffmpeg: {}", e);
                                     let _ = ytdlp_child.kill();
-                                    let _ = std::fs::remove_file(&temp_path);
                                     continue;
                                 }
                             };
@@ -220,24 +239,15 @@ impl AudioPlayer {
                                 warn!("ffmpeg stdin not available");
                                 let _ = ytdlp_child.kill();
                                 let _ = ffmpeg_child.kill();
-                                let _ = std::fs::remove_file(&temp_path);
                                 continue;
                             };
 
-                            if let Some(dir) = cache_path.parent() {
-                                let _ = std::fs::create_dir_all(dir);
-                            }
-
-                            let cache_path_clone = cache_path.clone();
+                            // Pipe yt-dlp's raw output straight into ffmpeg,
+                            // which decodes it to the persistent cache WAV.
+                            // No separate tee/cache copy: the cache file *is*
+                            // the playback file, so there is exactly one copy
+                            // on disk during streaming.
                             thread::spawn(move || {
-                                let mut cache_file = match std::fs::File::create(&cache_path_clone)
-                                {
-                                    Ok(f) => f,
-                                    Err(e) => {
-                                        warn!("Failed to create cache file: {}", e);
-                                        return;
-                                    }
-                                };
                                 let mut buf = [0u8; 8192];
                                 let mut reader = ytdlp_stdout;
                                 let mut writer = ffmpeg_stdin;
@@ -245,10 +255,6 @@ impl AudioPlayer {
                                     match reader.read(&mut buf) {
                                         Ok(0) => break,
                                         Ok(n) => {
-                                            if let Err(e) = cache_file.write_all(&buf[..n]) {
-                                                warn!("Cache write error: {}", e);
-                                                break;
-                                            }
                                             if writer.write_all(&buf[..n]).is_err() {
                                                 break;
                                             }
@@ -264,7 +270,7 @@ impl AudioPlayer {
 
                             ffmpeg = Some(ffmpeg_child);
                             ytdlp = Some(ytdlp_child);
-                            temp_wav = Some(temp_path);
+                            playback_file = Some(cache_path);
                             stream_url = Some(url);
                             expected_duration = duration;
                             stream_active = true;
@@ -276,6 +282,13 @@ impl AudioPlayer {
                         } => {
                             reset_pipeline!();
 
+                            debug!("Playing cached file (re-decoded via ffmpeg): {:?}", cache_path);
+
+                            // Cached files may be WAV (written by the streaming
+                            // pipeline) or legacy WebM (raw yt-dlp output from
+                            // older builds). Decoding through ffmpeg handles
+                            // both formats uniformly, writing a temp WAV that
+                            // rodio reads.
                             let temp_dir = std::env::temp_dir().join("music_plr");
                             let _ = std::fs::create_dir_all(&temp_dir);
                             let temp_path = temp_dir.join(format!(
@@ -287,10 +300,6 @@ impl AudioPlayer {
                             ));
                             let temp_str = temp_path.to_string_lossy().to_string();
 
-                            debug!("Playing cached file through ffmpeg: {:?}", cache_path);
-
-                            // Pipe the cached file through stdin (sequential read)
-                            // to handle truncated webm containers gracefully.
                             let mut ffmpeg_child = match Command::new("ffmpeg")
                                 .args(["-i", "pipe:0", "-f", "wav", "-bitexact", "-y", &temp_str])
                                 .stdin(Stdio::piped())
@@ -308,7 +317,6 @@ impl AudioPlayer {
                             let Some(ffmpeg_stdin) = ffmpeg_child.stdin.take() else {
                                 warn!("ffmpeg stdin not available");
                                 let _ = ffmpeg_child.kill();
-                                let _ = std::fs::remove_file(&temp_path);
                                 continue;
                             };
 
@@ -338,8 +346,9 @@ impl AudioPlayer {
 
                             ffmpeg = Some(ffmpeg_child);
                             ytdlp = None;
-                            temp_wav = Some(temp_path);
-                            stream_url = None;
+                            // rodio reads the temp WAV; the cache file itself
+                            // is left untouched (owned by StreamCache).
+                            playback_file = Some(temp_path);
                             expected_duration = duration;
                             stream_active = true;
                         }
@@ -391,8 +400,10 @@ impl AudioPlayer {
                     }
                 }
 
-                // Detect stream completion
-                if stream_active {
+                // Detect stream completion (only meaningful while ffmpeg is the
+                // decoder; `PlayCached` has no ffmpeg and finishes via the
+                // sink-empty path above).
+                if stream_active && ffmpeg.is_some() {
                     let ffmpeg_exit = ffmpeg.as_mut().and_then(|p| p.try_wait().ok().flatten());
                     let ytdlp_exit = ytdlp.as_mut().and_then(|p| p.try_wait().ok().flatten());
 
@@ -409,42 +420,20 @@ impl AudioPlayer {
                         ffmpeg.take();
                         ytdlp.take();
                         stream_active = false;
-                        // Temp file cleanup deferred to kill_processes() when
-                        // the next track starts, so rodio can finish reading
-                        // from it without a use-after-unlink race.
+                        // `playback_file` (the cache WAV) is intentionally kept
+                        // so rodio can finish reading; `StreamCache` owns
+                        // deletion.
                     }
                 }
 
                 try_start_playback!();
             }
 
-            if let Some(ref path) = temp_wav {
-                let _ = std::fs::remove_file(path);
-            }
+            // No temp file to remove: the playback file is the cache, owned by
+            // `StreamCache`. Leaving it on disk is correct.
         });
 
         Self { cmd_tx, state }
-    }
-
-    fn kill_processes(
-        ffmpeg: &mut Option<std::process::Child>,
-        ytdlp: &mut Option<std::process::Child>,
-        temp_wav: &mut Option<PathBuf>,
-        stream_url: &mut Option<String>,
-    ) {
-        if let Some(mut p) = ffmpeg.take() {
-            let _ = p.kill();
-            let _ = p.wait();
-        }
-        if let Some(mut p) = ytdlp.take() {
-            let _ = p.kill();
-            let _ = p.wait();
-        }
-        if let Some(ref path) = temp_wav {
-            let _ = std::fs::remove_file(path);
-        }
-        *temp_wav = None;
-        *stream_url = None;
     }
 
     pub fn play_stream_cache(&self, url: &str, duration: f32, cache_path: PathBuf) {
@@ -476,6 +465,15 @@ impl AudioPlayer {
 
     pub fn seek(&self, pos: Duration) {
         let _ = self.cmd_tx.send(PlayerCommand::Seek(pos));
+    }
+
+    /// Clear the `stream_finished` flag in the shared state. Used by the tick
+    /// loop to avoid busy-looping the auto-advance when there is no next track
+    /// (e.g. a corrupt cached file that emptied without more queue items).
+    pub fn clear_stream_finished(&self) {
+        if let Ok(mut st) = self.state.lock() {
+            st.stream_finished = false;
+        }
     }
 
     pub fn get_state(&self) -> PlayerState {

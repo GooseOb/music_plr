@@ -46,6 +46,10 @@ impl DownloadRegistry {
         self.tracks.contains_key(url)
     }
 
+    pub fn len(&self) -> usize {
+        self.tracks.len()
+    }
+
     pub fn all_tracks(&self) -> Vec<&Track> {
         self.tracks.values().collect()
     }

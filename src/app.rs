@@ -87,13 +87,22 @@ impl ViewData {
 
     /// True if this and `other` are the same view kind. Used by navigation to
     /// detect a no-op self-navigation. Compares variant identity and the
-    /// fields that distinguish views, but ignores `Search`'s `query` (so a
-    /// re-query in the same Search view is not a navigation).
+    /// fields that distinguish views. For `Search` the `query` is included so
+    /// that re-running a search for the same query is a no-op (and distinct
+    /// queries are separate history entries), preventing the nav history from
+    /// flooding with duplicate-query `Search` snapshots.
     pub fn same_kind(&self, other: &Self) -> bool {
         match (&self.kind, &other.kind) {
-            (ViewKind::Search { exhausted: a, .. }, ViewKind::Search { exhausted: b, .. }) => {
-                a == b
-            }
+            (
+                ViewKind::Search {
+                    exhausted: a,
+                    query: qa,
+                },
+                ViewKind::Search {
+                    exhausted: b,
+                    query: qb,
+                },
+            ) => a == b && qa == qb,
             (ViewKind::SongRadio(a), ViewKind::SongRadio(b)) => a == b,
             (ViewKind::ArtistRadio(a), ViewKind::ArtistRadio(b)) => a == b,
             (
@@ -395,7 +404,7 @@ pub struct MusicPlayer {
 
     pub notification: Option<String>,
 
-    pub thumbnail_cache: std::collections::HashMap<String, bool>,
+    pub thumbnail_cache: std::collections::HashSet<String>,
     pub playlists: PlaylistStore,
     pub playlist_create_name: String,
     pub show_playlist_picker: bool,
@@ -429,6 +438,9 @@ pub struct MusicPlayer {
     pub mpris_update_tx: Option<mpsc::Sender<MprisUpdate>>,
     pub mpris_dirty: bool,
     pub session_dirty: bool,
+    /// Timestamp of the last `session.json` write, used to throttle flushing
+    /// (see `flush_session`).
+    pub last_session_flush: std::time::Instant,
 
     pub drag: DragState,
 
@@ -485,7 +497,7 @@ impl MusicPlayer {
             playlist_create_name: String::new(),
             show_playlist_picker: false,
             show_queue: false,
-            thumbnail_cache: std::collections::HashMap::new(),
+            thumbnail_cache: std::collections::HashSet::new(),
             picker_is_queue: false,
             picker_target_indices: Vec::new(),
             show_delete_confirm: false,
@@ -501,6 +513,7 @@ impl MusicPlayer {
             mpris_update_tx: None,
             mpris_dirty: true,
             session_dirty: true,
+            last_session_flush: std::time::Instant::now() - std::time::Duration::from_secs(10),
             drag: DragState::default(),
             context_menu: None,
             queue_selected_indices: Vec::new(),

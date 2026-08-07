@@ -67,7 +67,7 @@ impl MusicPlayer {
                 if self.show_search_history {
                     self.show_search_history = false;
                 } else if self.view_data.selection.is_empty() {
-                    self.handle_navigate_to(ViewData::new_search(self.search_query.clone()));
+                    self.handle_navigate_to(ViewData::new_search(String::new()));
                 } else {
                     self.clear_selection();
                 }

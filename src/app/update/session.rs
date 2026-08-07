@@ -1,22 +1,39 @@
 use super::{warn, MusicPlayer, NavEntry};
 use crate::session::SessionState;
+use std::time::Duration;
+
+/// Minimum time between `session.json` writes. `save_session()` marks the
+/// session dirty on many code paths, but the tick drains that into a write at
+/// most this often to avoid rewriting the full state 4×/second.
+const SESSION_FLUSH_MIN_INTERVAL: Duration = Duration::from_secs(1);
 
 impl MusicPlayer {
     pub fn save_session(&mut self) {
         self.session_dirty = true;
     }
 
+    /// Persist the session, but at most once per `SESSION_FLUSH_MIN_INTERVAL`
+    /// so that the frequent `save_session()` callers (volume, seek, drag,
+    /// navigation) don't rewrite `session.json` on every 250ms tick.
     pub fn flush_session(&mut self) {
-        if self.session_dirty {
-            let state = SessionState {
-                data: self.view_data.clone(),
-                queue: self.queue.clone(),
-                show_queue: self.show_queue,
-                volume: self.volume,
-            };
-            state.save();
-            self.session_dirty = false;
+        if !self.session_dirty {
+            return;
         }
+        let now = std::time::Instant::now();
+        if now.duration_since(self.last_session_flush)
+            < crate::app::update::session::SESSION_FLUSH_MIN_INTERVAL
+        {
+            return;
+        }
+        self.last_session_flush = now;
+        let state = SessionState {
+            data: self.view_data.clone(),
+            queue: self.queue.clone(),
+            show_queue: self.show_queue,
+            volume: self.volume,
+        };
+        state.save();
+        self.session_dirty = false;
     }
 
     pub fn restore_session(&mut self) {

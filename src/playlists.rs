@@ -81,16 +81,7 @@ impl PlaylistStore {
         let Some(pl) = self.playlists.get_mut(playlist_idx) else {
             return 0;
         };
-        let mut sorted: Vec<usize> = indices.to_vec();
-        sorted.sort_unstable();
-        sorted.dedup();
-        let mut removed = 0;
-        for &i in sorted.iter().rev() {
-            if i < pl.tracks.len() {
-                pl.tracks.remove(i);
-                removed += 1;
-            }
-        }
+        let removed = crate::util::remove_at(&mut pl.tracks, indices);
         self.save();
         removed
     }
@@ -233,48 +224,6 @@ mod tests {
                 .map(|t| t.id.as_str())
                 .collect::<Vec<_>>(),
             vec!["a", "b", "c"]
-        );
-    }
-
-    #[test]
-    fn remove_tracks_at_multiple() {
-        let mut store = make_store(&["a", "b", "c", "d", "e"]);
-        store.remove_tracks_at(0, &[1, 3]);
-        assert_eq!(
-            store.playlists[0]
-                .tracks
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["a", "c", "e"]
-        );
-    }
-
-    #[test]
-    fn remove_tracks_at_out_of_bounds_ignored() {
-        let mut store = make_store(&["a", "b", "c"]);
-        store.remove_tracks_at(0, &[0, 99]);
-        assert_eq!(
-            store.playlists[0]
-                .tracks
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["b", "c"]
-        );
-    }
-
-    #[test]
-    fn remove_tracks_at_unsorted() {
-        let mut store = make_store(&["a", "b", "c", "d", "e"]);
-        store.remove_tracks_at(0, &[3, 0, 4]);
-        assert_eq!(
-            store.playlists[0]
-                .tracks
-                .iter()
-                .map(|t| t.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["b", "c"]
         );
     }
 

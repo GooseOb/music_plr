@@ -3,7 +3,6 @@ use super::{
     MprisCommand, MprisUpdate, MusicPlayer,
 };
 use crate::app::ViewKind;
-use crate::types::Track;
 use tracing::debug;
 
 impl MusicPlayer {
@@ -48,7 +47,14 @@ impl MusicPlayer {
         }
 
         if s.stream_finished && !s.is_playing && !self.track_loading {
-            self.next_track();
+            // Don't busy-loop if there is nothing left to advance to (e.g. a
+            // corrupt cached file that emptied without a next track); clear
+            // the finished flag so we don't repeatedly call `next_track`.
+            if self.queue.current().is_some() {
+                self.next_track();
+            } else {
+                self.audio.clear_stream_finished();
+            }
         }
 
         self.update_mpris_if_dirty();
@@ -65,31 +71,47 @@ impl MusicPlayer {
 
     fn update_thumbnail_cache(&mut self) {
         // Sync downloaded tracks from the registry into the Downloads view so
-        // the list stays fresh when new downloads complete.
-        if matches!(self.view_data.kind, ViewKind::Downloads) {
-            self.view_data.tracks = self
+        // the list stays fresh when new downloads complete. Guarded by the
+        // registry version so we only re-clone the track list when it actually
+        // changed, not on every 250ms tick.
+        if matches!(self.view_data.kind, ViewKind::Downloads)
+            && self.view_data.tracks.len() != self.download_registry.len()
+        {
+            let ids: std::collections::HashSet<String> = self
                 .download_registry
                 .all_tracks()
-                .into_iter()
-                .cloned()
+                .iter()
+                .map(|t| t.id.clone())
                 .collect();
-        }
-
-        let tracks: Vec<Track> = self.view_tracks().to_vec();
-
-        for track in &tracks {
-            let id = &track.id;
-            if !self.thumbnail_cache.contains_key(id) {
-                let exists = crate::thumbnails::thumbnail_path(id).exists();
-                self.thumbnail_cache.insert(id.clone(), exists);
+            let changed = self.view_data.tracks.iter().map(|t| &t.id).ne(ids.iter());
+            if changed {
+                self.view_data.tracks = self
+                    .download_registry
+                    .all_tracks()
+                    .into_iter()
+                    .cloned()
+                    .collect();
             }
         }
 
+        // Populate the thumbnail-exists set incrementally: only check the
+        // filesystem for ids we haven't seen yet. `thumbnail_cache` now holds
+        // the ids whose thumbnail file exists (a `HashSet`, not a
+        // value-carrying `HashMap`).
+        let mut to_check: Vec<String> = Vec::new();
+        for track in self.view_tracks() {
+            if !self.thumbnail_cache.contains(&track.id) {
+                to_check.push(track.id.clone());
+            }
+        }
         if let Some(current) = self.queue.current() {
-            let id = &current.id;
-            if !self.thumbnail_cache.contains_key(id) {
-                let exists = crate::thumbnails::thumbnail_path(id).exists();
-                self.thumbnail_cache.insert(id.clone(), exists);
+            if !self.thumbnail_cache.contains(&current.id) {
+                to_check.push(current.id.clone());
+            }
+        }
+        for id in to_check {
+            if crate::thumbnails::thumbnail_path(&id).exists() {
+                self.thumbnail_cache.insert(id);
             }
         }
     }
