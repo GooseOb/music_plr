@@ -76,6 +76,14 @@ impl StreamCache {
         self.index.entries.contains_key(id) && self.path_for(id).exists()
     }
 
+    /// In-memory check of whether `id` has a completed cache entry in the
+    /// index. Unlike `contains`, this does NOT touch the filesystem — the
+    /// index is loaded into memory at startup and updated as streams finish,
+    /// so it's safe to call on every redraw.
+    pub fn index_contains(&self, id: &str) -> bool {
+        self.index.entries.contains_key(id)
+    }
+
     pub fn insert(&mut self, id: &str) -> bool {
         let path = self.path_for(id);
         if !path.exists() {

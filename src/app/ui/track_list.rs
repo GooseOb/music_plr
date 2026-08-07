@@ -195,10 +195,22 @@ pub(super) fn row_layout<'a>(
 ) -> Row<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let thumb_exists = player.thumbnail_cache.contains(&track.id);
+    let is_downloaded = player.download_registry.contains(&track.url);
+    let is_cached = player.stream_cache.index_contains(&track.id);
+
+    let status_icon: Element<'a, Message, AppTheme> = if is_downloaded {
+        icons::icon(icons::DOWNLOAD_ICON, p.accent, theme::ICON_SIZE_MD).into()
+    } else if is_cached {
+        icons::icon(icons::CACHE_ICON, p.accent, theme::ICON_SIZE_MD).into()
+    } else {
+        Container::new(text("")).into()
+    };
+
     Row::with_children(vec![
         leading,
         thumbnail(track, p, theme::THUMBNAIL_SIZE, thumb_exists),
         title_artist_column(track).into(),
+        status_icon,
         Container::new(
             text(crate::util::format_duration(track.duration))
                 .size(theme::TEXT_SIZE_SM)

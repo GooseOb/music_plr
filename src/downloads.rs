@@ -46,6 +46,12 @@ impl DownloadRegistry {
         self.tracks.contains_key(url)
     }
 
+    /// Returns the on-disk path of the downloaded audio file for `url`, if the
+    /// track is registered and was downloaded to a known location.
+    pub fn path_for(&self, url: &str) -> Option<String> {
+        self.tracks.get(url).and_then(|t| t.download_path.clone())
+    }
+
     pub fn len(&self) -> usize {
         self.tracks.len()
     }

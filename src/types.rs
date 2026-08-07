@@ -17,6 +17,10 @@ pub struct Track {
     pub source: TrackSource,
     #[serde(default)]
     pub thumbnail: String,
+    /// Absolute path to the downloaded audio file on disk, if this track has
+    /// been downloaded. `None` for streamed/cached-only or local tracks.
+    #[serde(default)]
+    pub download_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -101,6 +105,7 @@ impl From<crate::youtube::YouTubeVideo> for Track {
             url: v.url,
             source: TrackSource::YouTube,
             thumbnail: v.thumbnail,
+            download_path: None,
         }
     }
 }
@@ -118,6 +123,7 @@ mod tests {
             url: url.into(),
             source: TrackSource::YouTube,
             thumbnail: String::new(),
+            download_path: None,
         }
     }
 
@@ -133,6 +139,7 @@ mod tests {
                 url: String::new(),
                 source: TrackSource::YouTube,
                 thumbnail: String::new(),
+                download_path: None,
             },
             Track {
                 id: "2".into(),
@@ -142,6 +149,7 @@ mod tests {
                 url: String::new(),
                 source: TrackSource::YouTube,
                 thumbnail: String::new(),
+                download_path: None,
             },
             Track {
                 id: "3".into(),
@@ -151,6 +159,7 @@ mod tests {
                 url: String::new(),
                 source: TrackSource::YouTube,
                 thumbnail: String::new(),
+                download_path: None,
             },
         ];
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));

@@ -36,10 +36,10 @@ impl MusicPlayer {
         }
 
         if let Some(pending) = self.pending_cache_id.clone() {
-            if s.stream_finished {
-                if self.stream_cache.path_for(&pending).exists()
-                    && self.stream_cache.insert(&pending)
-                {
+            // Register the cache as soon as the stream pipeline
+            // finishes writing the file (`cache_ready`)
+            if s.cache_ready {
+                if self.stream_cache.insert(&pending) {
                     debug!("Registered cached track: {}", pending);
                 }
                 self.pending_cache_id = None;
@@ -208,6 +208,8 @@ impl MusicPlayer {
                 spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
             }
             BackendResult::DownloadComplete(track, path) => {
+                let mut track = track;
+                track.download_path = Some(path.clone());
                 self.download_registry.register(track);
                 self.notify(format!("Download complete! Saved to {path}"));
                 self.thumbnail_cache.clear();

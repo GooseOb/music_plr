@@ -73,6 +73,20 @@ impl MusicPlayer {
         self.track_loading = true;
         let id = track.id.clone();
 
+        // Prefer a downloaded file on disk over streaming. Downloaded tracks
+        // carry an absolute path in the registry; if it still exists we play
+        // it directly (ffmpeg-decoded) instead of hitting yt-dlp.
+        if let Some(dl_path) = self.download_registry.path_for(&track.url) {
+            let path = PathBuf::from(&dl_path);
+            if path.exists() {
+                debug!("Playing downloaded file: {}", path.display());
+                let duration = track.duration as f32;
+                self.audio.play_cached(path, duration);
+                self.pending_cache_id = None;
+                return;
+            }
+        }
+
         // YouTube tracks go through the stream/cache pipeline (yt-dlp →
         // ffmpeg → cached WAV). Local files are played directly by decoding
         // the on-disk file through ffmpeg (the `PlayCached` path handles any

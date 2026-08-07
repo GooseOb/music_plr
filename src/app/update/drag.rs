@@ -517,6 +517,7 @@ mod tests {
                 url: format!("url{i}"),
                 source: TrackSource::YouTube,
                 thumbnail: String::new(),
+                download_path: None,
             })
             .collect()
     }

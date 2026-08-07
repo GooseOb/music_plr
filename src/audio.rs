@@ -24,6 +24,12 @@ pub struct PlayerState {
     pub progress: f32,
     pub volume: f32,
     pub stream_finished: bool,
+    /// Set once the stream pipeline (yt-dlp + ffmpeg) has finished writing
+    /// the cache file to disk. Distinct from `stream_finished`, which is only
+    /// true after the track has *played* to the end — `cache_ready` fires as
+    /// soon as the download completes, so the cache can be registered
+    /// independently of whether the user listened to the whole track.
+    pub cache_ready: bool,
 }
 
 enum PlayerCommand {
@@ -51,6 +57,7 @@ impl AudioPlayer {
             progress: 0.0,
             volume: initial_volume,
             stream_finished: false,
+            cache_ready: false,
         }));
 
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
@@ -102,6 +109,7 @@ impl AudioPlayer {
                     output = None;
                     if let Ok(mut st) = state_clone.lock() {
                         st.stream_finished = false;
+                        st.cache_ready = false;
                     }
                 };
             }
@@ -282,74 +290,71 @@ impl AudioPlayer {
                         } => {
                             reset_pipeline!();
 
-                            debug!("Playing cached file (re-decoded via ffmpeg): {:?}", cache_path);
-
-                            // The cache file is a WAV written by the
-                            // streaming pipeline. Decoding it through ffmpeg
-                            // (which also normalizes the sample format) writes
-                            // a temp WAV that rodio reads.
-                            let temp_dir = std::env::temp_dir().join("music_plr");
-                            let _ = std::fs::create_dir_all(&temp_dir);
-                            let temp_path = temp_dir.join(format!(
-                                "{}.wav",
+                            debug!(
+                                "Playing cached file (decoded directly via rodio/symphonia): {:?}",
                                 cache_path
-                                    .file_stem()
-                                    .and_then(|s| s.to_str())
-                                    .unwrap_or("cache")
-                            ));
-                            let temp_str = temp_path.to_string_lossy().to_string();
+                            );
 
-                            let mut ffmpeg_child = match Command::new("ffmpeg")
-                                .args(["-i", "pipe:0", "-f", "wav", "-bitexact", "-y", &temp_str])
-                                .stdin(Stdio::piped())
-                                .stdout(Stdio::null())
-                                .stderr(Stdio::null())
-                                .spawn()
-                            {
-                                Ok(c) => c,
-                                Err(e) => {
-                                    warn!("Failed to spawn ffmpeg for cache: {}", e);
-                                    continue;
-                                }
-                            };
-
-                            let Some(ffmpeg_stdin) = ffmpeg_child.stdin.take() else {
-                                warn!("ffmpeg stdin not available");
-                                let _ = ffmpeg_child.kill();
-                                continue;
-                            };
-
-                            let cache_path_clone = cache_path.clone();
-                            thread::spawn(move || {
-                                let file = match std::fs::File::open(&cache_path_clone) {
-                                    Ok(f) => f,
-                                    Err(e) => {
-                                        warn!("Failed to open cache: {}", e);
-                                        return;
-                                    }
-                                };
-                                let mut reader = BufReader::new(file);
-                                let mut buf = [0u8; 8192];
-                                let mut writer = ffmpeg_stdin;
-                                loop {
-                                    match reader.read(&mut buf) {
-                                        Ok(0) | Err(_) => break,
-                                        Ok(n) => {
-                                            if writer.write_all(&buf[..n]).is_err() {
-                                                break;
+                            // The file is already on disk (a streamed cache WAV or a
+                            // local import), so decode it directly with rodio's
+                            // symphonia-backed decoders — no ffmpeg subprocess needed.
+                            match std::fs::File::open(&cache_path) {
+                                Ok(file) => match rodio::Decoder::new(BufReader::new(file)) {
+                                    Ok(source) => {
+                                        match rodio::OutputStream::try_default() {
+                                            Ok((stream, handle)) => {
+                                                match rodio::Sink::try_new(&handle) {
+                                                    Ok(sink) => {
+                                                        let vol = state_clone
+                                                            .lock()
+                                                            .map_or(1.0, |st| st.volume);
+                                                        let actual_duration = if duration > 0.0 {
+                                                            duration
+                                                        } else {
+                                                            source
+                                                                .total_duration()
+                                                                .map_or(0.0, |d| d.as_secs_f32())
+                                                        };
+                                                        sink.set_volume(vol);
+                                                        sink.append(source);
+                                                        sink.play();
+                                                        if let Ok(mut st) = state_clone.lock() {
+                                                            st.is_playing = true;
+                                                            st.duration = actual_duration;
+                                                            st.progress = 0.0;
+                                                            st.stream_finished = false;
+                                                            st.cache_ready = false;
+                                                        }
+                                                        output = Some((stream, sink));
+                                                    }
+                                                    Err(e) => {
+                                                        warn!(
+                                                            "Failed to create sink for cache: {}",
+                                                            e
+                                                        );
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                warn!(
+                                                    "Failed to open output stream for cache: {}",
+                                                    e
+                                                );
                                             }
                                         }
                                     }
-                                }
-                            });
+                                    Err(e) => {
+                                        warn!("Failed to decode cached file {:?}: {}", cache_path, e);
+                                    }
+                                },
+                                Err(e) => warn!("Failed to open cached file {:?}: {}", cache_path, e),
+                            }
 
-                            ffmpeg = Some(ffmpeg_child);
-                            ytdlp = None;
-                            // rodio reads the temp WAV; the cache file itself
-                            // is left untouched (owned by StreamCache).
-                            playback_file = Some(temp_path);
+                            // No temp file or streaming state for direct playback;
+                            // the cache file is owned by StreamCache and left on disk.
+                            playback_file = None;
                             expected_duration = duration;
-                            stream_active = true;
+                            stream_active = false;
                         }
 
                         PlayerCommand::Pause => {
@@ -422,6 +427,9 @@ impl AudioPlayer {
                         // `playback_file` (the cache WAV) is intentionally kept
                         // so rodio can finish reading; `StreamCache` owns
                         // deletion.
+                        if let Ok(mut st) = state_clone.lock() {
+                            st.cache_ready = true;
+                        }
                     }
                 }
 

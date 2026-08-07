@@ -77,6 +77,7 @@ impl MusicPlayer {
                     url: path_str.clone(),
                     source: TrackSource::Local,
                     thumbnail: String::new(),
+                    download_path: None,
                 });
             }
         }

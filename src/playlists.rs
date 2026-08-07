@@ -112,6 +112,7 @@ mod tests {
                     url: s.to_string(),
                     source: crate::types::TrackSource::YouTube,
                     thumbnail: String::new(),
+                    download_path: None,
                 })
                 .collect(),
         };
@@ -146,6 +147,7 @@ mod tests {
             url: "new".to_string(),
             source: crate::types::TrackSource::YouTube,
             thumbnail: String::new(),
+            download_path: None,
         };
         store.insert_track_at(0, &new_track, 0);
         assert_eq!(
@@ -169,6 +171,7 @@ mod tests {
             url: "new".to_string(),
             source: crate::types::TrackSource::YouTube,
             thumbnail: String::new(),
+            download_path: None,
         };
         store.insert_track_at(0, &new_track, 2);
         assert_eq!(
@@ -192,6 +195,7 @@ mod tests {
             url: "new".to_string(),
             source: crate::types::TrackSource::YouTube,
             thumbnail: String::new(),
+            download_path: None,
         };
         store.insert_track_at(0, &new_track, 100);
         assert_eq!(
@@ -215,6 +219,7 @@ mod tests {
             url: "a".to_string(),
             source: crate::types::TrackSource::YouTube,
             thumbnail: String::new(),
+            download_path: None,
         };
         store.insert_track_at(0, &dup_track, 0);
         assert_eq!(
