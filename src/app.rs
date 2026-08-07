@@ -240,7 +240,6 @@ pub struct MusicPlayer {
     pub selected_playlist_name: String,
     pub playlist_create_name: String,
     pub show_playlist_picker: bool,
-    pub picker_focused_index: usize,
     /// Whether the playlist picker was triggered from a queue track (so
     /// `picker_target_indices` refer to queue positions, not track-list
     /// positions).
@@ -339,7 +338,6 @@ impl MusicPlayer {
             show_queue: false,
             thumbnail_cache: std::collections::HashMap::new(),
             downloaded_tracks: Vec::new(),
-            picker_focused_index: 0,
             picker_is_queue: false,
             picker_target_indices: Vec::new(),
             show_delete_confirm: false,

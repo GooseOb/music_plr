@@ -184,22 +184,12 @@ fn menu_item<'a>(
 }
 
 pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
-
     let playlists: Vec<&crate::playlists::Playlist> = player.playlists.playlists.iter().collect();
 
     let items: Vec<Element<'a, Message, AppTheme>> = playlists
         .iter()
         .enumerate()
         .map(|(i, pl)| {
-            let is_focused = player.picker_focused_index == i;
-            let bg_color = if is_focused {
-                p.bg_hover
-            } else {
-                p.bg_secondary
-            };
-            let bg_hover = p.bg_hover;
-
             Button::new(
                 Row::with_children(vec![text(&pl.name).into()])
                     .spacing(theme::SPACING_SM)
@@ -209,14 +199,11 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
             )
             .width(Length::Fill)
             .padding(0)
-            .style(move |_, status| {
-                let bg = if is_focused {
-                    bg_color
-                } else {
-                    match status {
-                        button::Status::Hovered | button::Status::Pressed => bg_hover,
-                        _ => bg_color,
-                    }
+            .style(|t: &AppTheme, status| {
+                let p = &t.palette;
+                let bg = match status {
+                    button::Status::Hovered | button::Status::Pressed => p.bg_hover,
+                    _ => p.bg_secondary,
                 };
                 button::Style {
                     background: Some(bg.into()),

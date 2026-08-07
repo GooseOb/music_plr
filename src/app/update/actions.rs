@@ -77,7 +77,6 @@ impl MusicPlayer {
             self.picker_target_indices.clear();
         } else {
             self.show_playlist_picker = true;
-            self.picker_focused_index = 0;
             self.picker_is_queue = is_queue;
             self.picker_target_indices = indices;
         }
