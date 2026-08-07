@@ -5,13 +5,14 @@ use iced::{
 };
 
 use crate::{
+    app::ViewData,
     icons,
     theme::{AppTheme, Palette},
 };
 
 use super::{
     styles::{bg_secondary, button_style_nav, button_style_primary},
-    theme, widget, Message, MusicPlayer, View,
+    theme, widget, Message, MusicPlayer,
 };
 
 fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
@@ -77,8 +78,8 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .width(Length::Fill);
 
     let nav_items: Vec<Element<'_, Message, AppTheme>> = vec![
-        sidebar_nav_item("Search", View::Search, player, p),
-        sidebar_nav_item("Downloads", View::Downloads, player, p),
+        sidebar_nav_item("Search", ViewData::new_search(), player, p),
+        sidebar_nav_item("Downloads", downloads_view_data(player), player, p),
     ];
 
     let playlist_items: Vec<Element<'_, Message, AppTheme>> = player
@@ -87,8 +88,8 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .iter()
         .enumerate()
         .map(|(i, pl)| {
-            let is_active =
-                player.current_view() == View::Playlist && player.selected_playlist() == Some(i);
+            let is_active = matches!(player.view_data, ViewData::Playlist { .. })
+                && player.view_data.selected_playlist_id() == Some(i);
             let is_dragged_over = player.drag.sidebar_hover_playlist == Some(i);
             let is_interacting = is_active || is_dragged_over;
 
@@ -198,16 +199,16 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
 
 fn sidebar_nav_item<'a>(
     name: &'a str,
-    view: View,
+    target: ViewData,
     player: &'a MusicPlayer,
     p: &'a Palette,
 ) -> Element<'a, Message, AppTheme> {
-    let is_active = player.current_view() == view;
+    let is_active = player.view_data.same_kind(&target);
     let icon_color = if is_active { p.accent } else { p.fg_muted };
     let text_color = if is_active { p.fg } else { p.fg_secondary };
-    let icon_name: &[u8] = match view {
-        View::Search => icons::SEARCH_ICON,
-        View::Downloads => icons::DOWNLOAD_ICON,
+    let icon_name: &[u8] = match target {
+        ViewData::Search { .. } => icons::SEARCH_ICON,
+        ViewData::Downloads { .. } => icons::DOWNLOAD_ICON,
         _ => icons::MUSIC_ICON,
     };
 
@@ -241,6 +242,17 @@ fn sidebar_nav_item<'a>(
             ..Default::default()
         }
     })
-    .on_press(Message::NavigateTo(view))
+    .on_press(Message::NavigateTo(target))
     .into()
+}
+
+/// Build the `Downloads` view data from the current download registry.
+fn downloads_view_data(player: &MusicPlayer) -> ViewData {
+    let tracks = player
+        .download_registry
+        .all_tracks()
+        .into_iter()
+        .cloned()
+        .collect();
+    ViewData::new_downloads(tracks)
 }

@@ -13,15 +13,16 @@ impl MusicPlayer {
     }
 
     pub fn handle_select_playlist(&mut self, index: usize) {
-        if index < self.playlists.playlists.len() && self.selected_playlist() != Some(index) {
+        if index < self.playlists.playlists.len()
+            && self.view_data.selected_playlist_id() != Some(index)
+        {
             self.show_playlist_picker = false;
             self.clear_selection();
             self.cleanup_drag_state();
             self.drag.hovered_track = None;
 
             let playlist_name = self.playlists.playlists[index].name.clone();
-            self.view_data =
-                ViewData::new_playlist(Some(index), playlist_name, None);
+            self.view_data = ViewData::new_playlist(Some(index), playlist_name, None);
 
             self.push_nav_entry();
             self.save_session();
@@ -30,7 +31,7 @@ impl MusicPlayer {
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn handle_rename_playlist(&mut self, new_name: String) {
-        if let Some(idx) = self.selected_playlist() {
+        if let Some(idx) = self.view_data.selected_playlist_id() {
             if !new_name.trim().is_empty() {
                 self.playlists.playlists[idx].name = new_name.trim().to_string();
                 self.playlists.save();
@@ -78,7 +79,7 @@ impl MusicPlayer {
             }
         }
 
-        let Some(idx) = self.selected_playlist() else {
+        let Some(idx) = self.view_data.selected_playlist_id() else {
             let count = new_tracks.len();
             self.notify(format!(
                 "Added {} local track{} (select a playlist to organize)",
@@ -131,7 +132,7 @@ impl MusicPlayer {
     }
 
     pub fn handle_remove_from_playlist_batch(&mut self, indices: &[usize]) {
-        if let Some(sp) = self.selected_playlist() {
+        if let Some(sp) = self.view_data.selected_playlist_id() {
             if sp < self.playlists.playlists.len() {
                 let removed = self.playlists.remove_tracks_at(sp, indices);
                 self.notify(format!(
@@ -141,7 +142,7 @@ impl MusicPlayer {
                 ));
                 // Clear selection if any removed indices were selected,
                 // since the list shifted.
-                let sel = self.view_selection().to_vec();
+                let sel = self.view_data.selection().to_vec();
                 if indices.iter().any(|&i| sel.contains(&i)) {
                     self.clear_selection();
                 }
@@ -155,7 +156,7 @@ impl MusicPlayer {
         indices: &[usize],
         selection: &[usize],
     ) -> Vec<usize> {
-        let new_positions = if let Some(sp) = self.selected_playlist() {
+        let new_positions = if let Some(sp) = self.view_data.selected_playlist_id() {
             if sp < self.playlists.playlists.len() {
                 super::drag::reorder_tracks(
                     &mut self.playlists.playlists[sp].tracks,
@@ -175,7 +176,7 @@ impl MusicPlayer {
 
     pub fn handle_copy_selected(&mut self) {
         self.clipboard.clear();
-        let selection: Vec<usize> = self.view_selection().to_vec();
+        let selection: Vec<usize> = self.view_data.selection().to_vec();
         for &i in &selection {
             if let Some(track) = self.get_track_at(i, false) {
                 self.clipboard.push(track.clone());
@@ -187,7 +188,7 @@ impl MusicPlayer {
         if self.clipboard.is_empty() {
             return;
         }
-        let Some(idx) = self.selected_playlist() else {
+        let Some(idx) = self.view_data.selected_playlist_id() else {
             return;
         };
         for track in self.clipboard.iter().rev() {
@@ -206,13 +207,13 @@ impl MusicPlayer {
     }
 
     pub fn handle_delete_selected(&mut self) {
-        if self.view_selection().is_empty() {
+        if self.view_data.selection().is_empty() {
             return;
         }
-        let indices: Vec<usize> = self.view_selection().to_vec();
+        let indices: Vec<usize> = self.view_data.selection().to_vec();
 
         if matches!(self.view_data, ViewData::Playlist { .. }) {
-            if let Some(sp) = self.selected_playlist() {
+            if let Some(sp) = self.view_data.selected_playlist_id() {
                 if sp < self.playlists.playlists.len() {
                     let removed = self.playlists.remove_tracks_at(sp, &indices);
                     self.notify(format!(

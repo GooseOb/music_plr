@@ -1,7 +1,4 @@
-use crate::{
-    theme::{self, AppTheme},
-    types::View,
-};
+use crate::theme::{self, AppTheme};
 
 use iced::{
     alignment,

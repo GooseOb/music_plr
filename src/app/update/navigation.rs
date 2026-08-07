@@ -1,4 +1,4 @@
-use super::{Message, MusicPlayer, NavEntry, Task, View, ViewData};
+use super::{Message, MusicPlayer, NavEntry, Task, ViewData};
 use crate::app::ui::TRACK_LIST_ID;
 
 impl MusicPlayer {
@@ -27,46 +27,19 @@ impl MusicPlayer {
         )
     }
 
-    pub fn handle_navigate_to(&mut self, view: View) {
-        if self.view_data.view() == view {
+    pub fn handle_navigate_to(&mut self, data: ViewData) {
+        if self.view_data.same_kind(&data) {
             return;
         }
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.cleanup_drag_state();
         self.drag.hovered_track = None;
 
-        let prev = &self.view_data;
-        self.view_data = match view {
-            View::Search => ViewData::new_search(),
-            View::SongRadio | View::ArtistRadio => {
-                let kind = if view == View::SongRadio {
-                    crate::types::RadioKind::Song
-                } else {
-                    crate::types::RadioKind::Artist
-                };
-                // Preserve query from the search bar (stays on MusicPlayer).
-                ViewData::new_radio(kind, String::new())
-            }
-            View::Playlist => {
-                let old_sp = prev.selected_playlist_id();
-                let old_name = prev.playlist_name().to_string();
-                ViewData::new_playlist(old_sp, old_name, Some(prev))
-            }
-            View::Downloads => {
-                let tracks: Vec<crate::types::Track> = self
-                    .download_registry
-                    .all_tracks()
-                    .into_iter()
-                    .cloned()
-                    .collect();
-                ViewData::new_downloads(tracks)
-            }
-        };
+        self.view_data = data;
 
         // Push the new state as a single entry. The previous entry (preserved
         // by truncate) already serves as the back-target for Back navigation.
         self.nav_history.push(NavEntry {
-            view,
             data: self.view_data.clone(),
         });
 
@@ -105,7 +78,6 @@ impl MusicPlayer {
     pub(super) fn push_nav_entry(&mut self) {
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.nav_history.push(NavEntry {
-            view: self.view_data.view(),
             data: self.snapshot_current(),
         });
         if self.nav_history.len() > 20 {
@@ -122,7 +94,7 @@ impl MusicPlayer {
         if !self
             .nav_history
             .get(pos)
-            .is_some_and(|e| e.view == self.view_data.view())
+            .is_some_and(|e| e.data.same_kind(&self.view_data))
         {
             return false;
         }

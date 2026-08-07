@@ -1,6 +1,6 @@
 use super::{
     error, format_duration, mpris, mpsc, warn, BackendResult, ContextMenuState, DragTargetList,
-    Message, MprisCommand, MprisUpdate, MusicPlayer, NavEntry, Task, Track, View, ViewData,
+    Message, MprisCommand, MprisUpdate, MusicPlayer, NavEntry, Task, Track, ViewData,
 };
 use crate::types::TrackSource;
 use std::thread;

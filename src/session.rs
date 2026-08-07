@@ -1,5 +1,3 @@
-#[cfg(test)]
-use crate::types::View;
 use crate::{app::ViewData, types::PlayQueue};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -62,7 +60,7 @@ mod tests {
     #[test]
     fn session_state_default() {
         let state = SessionState::default();
-        assert_eq!(state.data.view(), View::Search);
+        assert!(matches!(state.data, ViewData::Search { .. }));
         assert!(state.queue.tracks.is_empty());
         assert!(!state.show_queue);
         assert_eq!(state.volume, 0.8);
@@ -72,7 +70,6 @@ mod tests {
     fn session_state_round_trip() {
         let state = SessionState {
             data: ViewData::Radio {
-                kind: crate::types::RadioKind::Song,
                 label: "Test Radio".into(),
                 tracks: Vec::new(),
                 loading: false,
@@ -86,7 +83,7 @@ mod tests {
         };
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.data.view(), View::SongRadio);
+        assert!(matches!(restored.data, ViewData::Radio { .. }));
         assert!(restored.show_queue);
         assert_eq!(restored.volume, 0.5);
         if let ViewData::Radio {

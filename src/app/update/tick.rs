@@ -169,7 +169,10 @@ impl MusicPlayer {
                     self.push_nav_entry();
                 }
                 self.save_session();
-                let tracks = self.search_results().to_vec();
+                let tracks = match &self.view_data {
+                    ViewData::Search { results, .. } => results.clone(),
+                    _ => Vec::new(),
+                };
                 spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
                 self.clear_notification();
             }
@@ -187,7 +190,10 @@ impl MusicPlayer {
                     *ex = exhausted;
                 }
                 let _ = self.update_current_snapshot();
-                let tracks = self.search_results().to_vec();
+                let tracks = match &self.view_data {
+                    ViewData::Search { results, .. } => results.clone(),
+                    _ => Vec::new(),
+                };
                 spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
                 self.clear_notification();
                 self.save_session();
@@ -210,7 +216,10 @@ impl MusicPlayer {
                     self.push_nav_entry();
                 }
                 self.save_session();
-                let tracks = self.radio_tracks().to_vec();
+                let tracks = match &self.view_data {
+                    ViewData::Radio { tracks, .. } => tracks.clone(),
+                    _ => Vec::new(),
+                };
                 spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
             }
             BackendResult::DownloadComplete(track, path) => {

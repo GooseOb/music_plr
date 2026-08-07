@@ -26,13 +26,9 @@ impl MusicPlayer {
         self.volume = state.volume;
         self.audio.set_volume(state.volume);
 
-        let _ = self.restore_nav_entry(&NavEntry {
-            view: state.data.view(),
-            data: state.data,
-        });
+        let _ = self.restore_nav_entry(&NavEntry { data: state.data });
 
         self.nav_history = vec![NavEntry {
-            view: self.view_data.view(),
             data: self.snapshot_current(),
         }];
         self.nav_history_pos = 0;

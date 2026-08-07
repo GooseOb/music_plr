@@ -4,7 +4,7 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{icons, theme::AppTheme};
+use crate::{app::ViewData, icons, theme::AppTheme};
 
 use super::{
     styles::{
@@ -49,9 +49,15 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
 }
 
 pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let loading = player.is_loading();
-    let results = player.search_results();
-    let exhausted = player.search_exhausted();
+    let (results, loading, exhausted) = match &player.view_data {
+        ViewData::Search {
+            results,
+            loading,
+            exhausted,
+            ..
+        } => (results.as_slice(), *loading, *exhausted),
+        _ => (&[][..], false, false),
+    };
 
     let track_list = view_search_results(player, results, loading, "Searching...");
 
@@ -94,9 +100,15 @@ fn view_search_results<'a>(
 }
 
 pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let label = player.radio_label().to_owned();
-    let loading = player.is_loading();
-    let tracks = player.radio_tracks();
+    let (label, tracks, loading) = match &player.view_data {
+        ViewData::Radio {
+            label,
+            tracks,
+            loading,
+            ..
+        } => (label.clone(), tracks.as_slice(), *loading),
+        _ => (String::new(), &[][..], false),
+    };
 
     let header = Container::new(text(label).width(Length::Fill).center())
         .padding([theme::SPACING_SM, theme::SPACING_XL]);

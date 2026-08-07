@@ -7,7 +7,7 @@ use crate::{
     playlists::PlaylistStore,
     search_history::SearchHistory,
     theme::{AppTheme, Palette},
-    types::{PlayQueue, QueueTab, RadioKind, Track, View},
+    types::{PlayQueue, QueueTab, Track},
     util::format_duration,
 };
 use iced::{Point, Subscription, Task};
@@ -23,7 +23,6 @@ mod update;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct NavEntry {
-    pub view: View,
     pub data: ViewData,
 }
 
@@ -48,7 +47,6 @@ pub enum ViewData {
         bounds: Option<iced::Rectangle>,
     },
     Radio {
-        kind: RadioKind,
         label: String,
         tracks: Vec<Track>,
         loading: bool,
@@ -88,22 +86,21 @@ impl Default for ViewData {
 }
 
 impl ViewData {
-    /// Derive the [`View`] enum from the active variant.
-    pub fn view(&self) -> View {
-        match self {
-            Self::Search { .. } => View::Search,
-            Self::Radio { kind, .. } => match kind {
-                RadioKind::Song => View::SongRadio,
-                RadioKind::Artist => View::ArtistRadio,
-            },
-            Self::Playlist { .. } => View::Playlist,
-            Self::Downloads { .. } => View::Downloads,
-        }
-    }
-
     /// True for Search and Radio views (the scrollable text lists).
     pub fn is_search_like(&self) -> bool {
         matches!(self, Self::Search { .. } | Self::Radio { .. })
+    }
+
+    /// True if this and `other` are the same view variant (ignoring data).
+    /// Used by navigation to detect a no-op self-navigation.
+    pub fn same_kind(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (Self::Search { .. }, Self::Search { .. })
+                | (Self::Radio { .. }, Self::Radio { .. })
+                | (Self::Playlist { .. }, Self::Playlist { .. })
+                | (Self::Downloads { .. }, Self::Downloads { .. })
+        )
     }
 
     pub fn scroll(&self) -> f32 {
@@ -211,10 +208,9 @@ impl ViewData {
         }
     }
 
-    /// Create a `Radio` view with the given kind and label, initially loading.
-    pub fn new_radio(kind: RadioKind, label: String) -> Self {
+    /// Create a `Radio` view with the given label, initially loading.
+    pub fn new_radio(label: String) -> Self {
         Self::Radio {
-            kind,
             label,
             tracks: Vec::new(),
             loading: true,
@@ -352,7 +348,7 @@ pub enum Message {
     SwitchQueueTab(QueueTab),
     PlayRecentTrack(usize),
 
-    NavigateTo(View),
+    NavigateTo(ViewData),
     NavigateBack,
     NavigateForward,
 
@@ -406,9 +402,9 @@ pub enum DragTargetList {
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
     pub config: crate::config::Config,
-    /// All per-view state lives here. The active variant is always consistent
-    /// with [`MusicPlayer::current_view`]. Replaces the previously separate
-    /// fields: `search_query`, `search_results`, `radio_tracks`,
+    /// All per-view state lives here. The active variant is the single source
+    /// of truth for which view is active and its data. Replaces the previously
+    /// separate fields: `search_query`, `search_results`, `radio_tracks`,
     /// `selected_playlist`, `selected_playlist_name`, `downloaded_tracks`,
     /// `selected_indices`, scroll/bounds, and `search_loading`.
     pub view_data: ViewData,
@@ -486,76 +482,6 @@ pub struct MusicPlayer {
     pub window_width: f32,
 }
 
-impl MusicPlayer {
-    /// Derive the current [`View`] from `view_data`. Cheaper than a field
-    /// access (one match) but avoids the sync risk of a separate field.
-    pub fn current_view(&self) -> View {
-        self.view_data.view()
-    }
-
-    /// True for Search and Radio views (the scrollable text lists).
-    pub fn is_search_like(&self) -> bool {
-        self.view_data.is_search_like()
-    }
-
-    /// Returns the non-queue selection for the current view.
-    pub fn view_selection(&self) -> &[usize] {
-        self.view_data.selection()
-    }
-
-    pub fn search_results(&self) -> &[Track] {
-        match &self.view_data {
-            ViewData::Search {
-                results: tracks, ..
-            } => tracks,
-            _ => &[],
-        }
-    }
-
-    pub fn radio_tracks(&self) -> &[Track] {
-        match &self.view_data {
-            ViewData::Radio { tracks, .. } => tracks,
-            _ => &[],
-        }
-    }
-
-    pub fn downloaded_tracks(&self) -> &[Track] {
-        match &self.view_data {
-            ViewData::Downloads { tracks, .. } => tracks,
-            _ => &[],
-        }
-    }
-
-    pub fn is_loading(&self) -> bool {
-        match &self.view_data {
-            ViewData::Search { loading, .. } | ViewData::Radio { loading, .. } => *loading,
-            _ => false,
-        }
-    }
-
-    pub fn search_exhausted(&self) -> bool {
-        match &self.view_data {
-            ViewData::Search { exhausted, .. } => *exhausted,
-            _ => false,
-        }
-    }
-
-    pub fn radio_label(&self) -> &str {
-        match &self.view_data {
-            ViewData::Radio { label, .. } => label,
-            _ => "",
-        }
-    }
-
-    pub fn selected_playlist(&self) -> Option<usize> {
-        self.view_data.selected_playlist_id()
-    }
-
-    pub fn selected_playlist_name(&self) -> &str {
-        self.view_data.playlist_name()
-    }
-}
-
 impl Default for MusicPlayer {
     fn default() -> Self {
         let config = config::load_config();
@@ -600,7 +526,6 @@ impl MusicPlayer {
             show_delete_confirm: false,
             delete_confirm_index: None,
             nav_history: vec![NavEntry {
-                view: View::Search,
                 data: ViewData::default(),
             }],
             nav_history_pos: 0,
@@ -880,8 +805,8 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Message::NavigateTo(view) => {
-                self.handle_navigate_to(view);
+            Message::NavigateTo(data) => {
+                self.handle_navigate_to(data);
                 Task::none()
             }
             Message::NavigateBack => self.handle_navigate_back(),

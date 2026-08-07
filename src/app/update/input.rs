@@ -1,4 +1,4 @@
-use super::{Message, MusicPlayer, Task, View};
+use super::{Message, MusicPlayer, Task, ViewData};
 
 impl MusicPlayer {
     pub fn search_input_geometry(&self) -> (f32, f32) {
@@ -67,14 +67,14 @@ impl MusicPlayer {
                 if self.show_search_history {
                     self.show_search_history = false;
                 } else if self.view_data.selection().is_empty() {
-                    self.handle_navigate_to(View::Search);
+                    self.handle_navigate_to(ViewData::new_search());
                 } else {
                     self.clear_selection();
                 }
                 Task::none()
             }
             iced::keyboard::Key::Named(Named::Delete) => {
-                if self.selected_playlist().is_some() {
+                if self.view_data.selected_playlist_id().is_some() {
                     self.handle_delete_selected();
                 }
                 Task::none()

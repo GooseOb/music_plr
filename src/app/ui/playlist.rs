@@ -4,7 +4,7 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{icons, theme::AppTheme};
+use crate::{app::ViewData, icons, theme::AppTheme, types::Track};
 
 use super::{
     styles::{button_style_danger, fg_secondary},
@@ -14,7 +14,7 @@ use super::{
 pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
 
-    let is_downloads = matches!(player.view_data, super::ViewData::Downloads { .. });
+    let is_downloads = matches!(player.view_data, ViewData::Downloads { .. });
 
     let header: Element<'a, Message, AppTheme> = if is_downloads {
         Row::with_children(vec![
@@ -25,11 +25,11 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
         .align_y(alignment::Vertical::Center)
         .padding([theme::SPACING_SM, theme::SPACING_XL])
         .into()
-    } else if let Some(idx) = player.selected_playlist() {
+    } else if let Some(idx) = player.view_data.selected_playlist_id() {
         if let Some(pl) = player.playlists.playlists.get(idx) {
             let track_count = pl.tracks.len();
             Row::with_children(vec![
-                text_input(&pl.name, player.selected_playlist_name())
+                text_input(&pl.name, player.view_data.playlist_name())
                     .on_input(Message::RenamePlaylist)
                     .padding([theme::SPACING_SM, theme::SPACING_MD])
                     .width(Length::Fill)
@@ -74,7 +74,10 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
     };
 
     let track_list = if is_downloads {
-        let tracks = player.downloaded_tracks();
+        let tracks: &[Track] = match &player.view_data {
+            ViewData::Downloads { tracks, .. } => tracks,
+            _ => &[],
+        };
         if tracks.is_empty() {
             Container::new(text("No downloaded tracks").style(fg_secondary()))
                 .padding(theme::SPACING_XL)
@@ -84,7 +87,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
         } else {
             view_track_list(tracks, player, false, 0)
         }
-    } else if let Some(idx) = player.selected_playlist() {
+    } else if let Some(idx) = player.view_data.selected_playlist_id() {
         if let Some(pl) = player.playlists.playlists.get(idx) {
             view_track_list(&pl.tracks, player, false, 0)
         } else {
