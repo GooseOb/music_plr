@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::io::Write;
-use std::process::{Command, Stdio};
+use std::{
+    io::Write,
+    process::{Command, Stdio},
+};
 
 #[derive(Debug, Clone)]
 pub struct YouTubeVideo {

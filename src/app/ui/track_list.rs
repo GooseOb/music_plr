@@ -240,10 +240,10 @@ pub(super) fn empty_state(msg: &str, color: Color) -> Element<'_, Message, AppTh
 }
 
 /// A scrollable column of pre-built elements with a stable id.
-pub(super) fn scrollable_list<'a>(
+pub(super) fn scrollable_list(
     id: Id,
-    items: Vec<Element<'a, Message, AppTheme>>,
-) -> Element<'a, Message, AppTheme> {
+    items: Vec<Element<Message, AppTheme>>,
+) -> Element<Message, AppTheme> {
     Container::new(
         scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
             .id(id)

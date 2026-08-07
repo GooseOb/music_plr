@@ -1,11 +1,15 @@
 use rodio::Source;
-use std::io::{BufReader, Read, Write};
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
+use std::{
+    io::{BufReader, Read, Write},
+    path::PathBuf,
+    process::{Command, Stdio},
+    sync::{
+        mpsc::{self, Sender},
+        Arc, Mutex,
+    },
+    thread,
+    time::Duration,
+};
 use tracing::{debug, warn};
 
 pub struct AudioPlayer {

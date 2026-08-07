@@ -1,20 +1,22 @@
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
-
+use crate::{
+    audio::AudioPlayer,
+    cache::StreamCache,
+    config,
+    downloads::DownloadRegistry,
+    mpris::{self, MprisCommand, MprisUpdate},
+    playlists::PlaylistStore,
+    search_history::SearchHistory,
+    theme::{AppTheme, Palette},
+    types::{PlayQueue, QueueTab, Track, View},
+    util::format_duration,
+};
 use iced::{Point, Subscription, Task};
-use tracing::{error, warn};
-
-use crate::audio::AudioPlayer;
-use crate::cache::StreamCache;
-use crate::config;
-use crate::downloads::DownloadRegistry;
-use crate::mpris::{self, MprisCommand, MprisUpdate};
-use crate::playlists::PlaylistStore;
-use crate::search_history::SearchHistory;
-use crate::theme::{AppTheme, Palette};
-use crate::types::{PlayQueue, QueueTab, Track, View};
-use crate::util::format_duration;
 use serde::{Deserialize, Serialize};
+use std::{
+    sync::mpsc,
+    time::{Duration, Instant},
+};
+use tracing::{error, warn};
 
 mod ui;
 mod update;

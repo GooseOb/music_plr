@@ -121,8 +121,7 @@ impl MusicPlayer {
 
         self.cleanup_drag_state();
     }
-
-    #[allow(clippy::missing_const_for_fn)]
+    
     pub(super) fn cleanup_drag_state(&mut self) {
         self.drag.cleanup();
     }
@@ -511,7 +510,6 @@ impl MusicPlayer {
         }
     }
 
-    #[allow(clippy::missing_const_for_fn)]
     pub fn get_current_list_bounds(&self) -> Option<iced::Rectangle> {
         if self.current_view.is_search_like() {
             self.search_list_bounds
@@ -520,7 +518,6 @@ impl MusicPlayer {
         }
     }
 
-    #[allow(clippy::missing_const_for_fn)]
     pub fn get_current_list_scroll(&self) -> f32 {
         if self.current_view.is_search_like() {
             self.search_list_scroll

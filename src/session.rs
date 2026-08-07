@@ -1,5 +1,7 @@
-use crate::app::ViewSnapshot;
-use crate::types::{PlayQueue, View};
+use crate::{
+    app::ViewSnapshot,
+    types::{PlayQueue, View},
+};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 

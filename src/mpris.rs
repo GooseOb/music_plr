@@ -1,10 +1,6 @@
-use std::collections::HashMap;
-use std::sync::mpsc;
-use std::time::Duration;
+use std::{collections::HashMap, sync::mpsc, time::Duration};
 use tracing::{error, info, warn};
-use zbus::connection;
-use zbus::interface;
-use zbus::zvariant;
+use zbus::{connection, interface, zvariant};
 
 #[derive(Debug, Clone)]
 pub enum MprisCommand {

@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CacheEntry {
