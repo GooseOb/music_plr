@@ -74,8 +74,8 @@ impl MusicPlayer {
         // the list stays fresh when new downloads complete. Guarded by the
         // registry version so we only re-clone the track list when it actually
         // changed, not on every 250ms tick.
-        if matches!(self.view_data.kind, ViewKind::Downloads)
-            && self.view_data.tracks.len() != self.download_registry.len()
+        if matches!(self.view_data().kind, ViewKind::Downloads)
+            && self.view_data().tracks.len() != self.download_registry.len()
         {
             let ids: std::collections::HashSet<String> = self
                 .download_registry
@@ -83,9 +83,9 @@ impl MusicPlayer {
                 .iter()
                 .map(|t| t.id.clone())
                 .collect();
-            let changed = self.view_data.tracks.iter().map(|t| &t.id).ne(ids.iter());
+            let changed = self.view_data().tracks.iter().map(|t| &t.id).ne(ids.iter());
             if changed {
-                self.view_data.tracks = self
+                self.view_data_mut().tracks = self
                     .download_registry
                     .all_tracks()
                     .into_iter()
@@ -116,21 +116,22 @@ impl MusicPlayer {
 
         // Also track non-track card thumbnails (artist/album/playlist browse
         // ids) on the Search view so they flip to "downloaded" once present.
-        if let ViewKind::Search { tab, .. } = &self.view_data.kind {
-            let ids: Vec<&str> = match tab {
+        let ids: Vec<String> = match &self.view_data().kind {
+            ViewKind::Search { tab, .. } => match tab {
                 crate::youtube::SearchTab::Artists(cards)
                 | crate::youtube::SearchTab::Albums(cards)
                 | crate::youtube::SearchTab::Playlists(cards) => {
-                    cards.iter().map(|c| c.id.as_str()).collect()
+                    cards.iter().map(|c| c.id.clone()).collect()
                 }
                 _ => Vec::new(),
-            };
-            for id in ids {
-                if !self.thumbnail_cache.contains(id)
-                    && crate::data::thumbnails::thumbnail_path(id).exists()
-                {
-                    self.thumbnail_cache.insert(id.to_string());
-                }
+            },
+            _ => Vec::new(),
+        };
+        for id in ids {
+            if !self.thumbnail_cache.contains(&id)
+                && crate::data::thumbnails::thumbnail_path(&id).exists()
+            {
+                self.thumbnail_cache.insert(id.to_string());
             }
         }
     }
@@ -175,7 +176,7 @@ impl MusicPlayer {
 
     pub fn process_result(&mut self, result: BackendResult) {
         match result {
-            BackendResult::SearchResults(tracks, tab) => {
+            BackendResult::SearchResults(rid, tracks, tab) => {
                 // Card thumbnail entries come from the result tab itself, so build
                 // them from `tab` before it is moved into view state below.
                 let mut entries: Vec<(String, String)> = match &tab {
@@ -187,94 +188,79 @@ impl MusicPlayer {
                         .collect(),
                     _ => Vec::new(),
                 };
-                if let ViewKind::Search {
-                    exhausted,
-                    tab: kind_tab,
-                    ..
-                } = &mut self.view_data.kind
-                {
-                    let count = if tab.is_track_tab() {
-                        tracks.len()
-                    } else {
-                        tab.len()
-                    };
-                    *exhausted = count < crate::theme::SEARCH_PAGE_SIZE;
-                    *kind_tab = tab;
-                    self.view_data.tracks = tracks;
-                    self.view_data.loading = false;
-                    self.view_data.selection.clear();
-                    self.push_nav_entry();
+                // Apply to the slot that requested this search
+                if let Some(idx) = self.slot_for_request(rid) {
+                    if let ViewKind::Search {
+                        exhausted,
+                        tab: kind_tab,
+                        ..
+                    } = &mut self.nav_history[idx].kind
+                    {
+                        let count = if tab.is_track_tab() {
+                            tracks.len()
+                        } else {
+                            tab.len()
+                        };
+                        *exhausted = count < crate::theme::SEARCH_PAGE_SIZE;
+                        *kind_tab = tab;
+                        self.nav_history[idx].tracks = tracks;
+                        self.nav_history[idx].loading = false;
+                        self.nav_history[idx].selection.clear();
+                        self.nav_history[idx].request_id = 0;
+                    }
+                    self.save_session();
+                    entries.extend(
+                        self.nav_history[idx]
+                            .tracks
+                            .iter()
+                            .filter(|t| t.source == crate::types::TrackSource::YouTube)
+                            .map(|t| (t.id.clone(), t.thumbnail.clone())),
+                    );
+                    spawn_thumbnail_download(entries, self.result_tx.clone());
+                    self.clear_notification();
                 }
-                self.save_session();
-                // Download both track and non-track (artist/album/playlist)
-                // thumbnails so the search results render with art. Card ids
-                // are browse ids keyed by their own thumbnail url.
-                entries.extend(
-                    self.view_data
-                        .tracks
-                        .iter()
-                        .filter(|t| t.source == crate::types::TrackSource::YouTube)
-                        .map(|t| (t.id.clone(), t.thumbnail.clone())),
-                );
-                spawn_thumbnail_download(entries, self.result_tx.clone());
-                self.clear_notification();
+                // Stale result (slot truncated away by navigation): ignore.
             }
-            BackendResult::SearchResultsAppend(tracks) => {
+            BackendResult::SearchResultsAppend(rid, tracks) => {
                 let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
-                if matches!(self.view_data.kind, ViewKind::Search { .. }) {
-                    self.view_data.tracks.extend(tracks);
-                    self.view_data.loading = false;
-                    self.view_data.set_exhausted(exhausted);
+                if let Some(idx) = self.slot_for_request(rid) {
+                    self.nav_history[idx].tracks.extend(tracks);
+                    self.nav_history[idx].loading = false;
+                    self.nav_history[idx].set_exhausted(exhausted);
+                    self.nav_history[idx].request_id = 0;
+                    self.save_session();
+                    let tracks = self.nav_history[idx].tracks.clone();
+                    spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
+                    self.clear_notification();
                 }
-                let _ = self.update_current_snapshot();
-                let tracks = self.view_data.tracks.clone();
-                spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
-                self.clear_notification();
-                self.save_session();
             }
-            BackendResult::BrowseResults(browse_id, tracks) => {
-                // Match the result to whichever browse view is currently
-                // active; ignore stale results from a superseded view.
-                let active = matches!(
-                    &self.view_data.kind,
-                    ViewKind::Artist { browse_id: b, .. }
-                        | ViewKind::Album { browse_id: b, .. }
-                        | ViewKind::PlaylistView { playlist_id: b, .. }
-                        if *b == browse_id
-                );
-                if active {
-                    self.view_data.tracks = tracks;
-                    self.view_data.loading = false;
-                    self.view_data.selection.clear();
-                    self.push_nav_entry();
+            BackendResult::BrowseResults(rid, tracks) => {
+                // Apply to the slot that issued the browse, matched by request id
+                if let Some(idx) = self.slot_for_request(rid) {
+                    self.nav_history[idx].tracks = tracks;
+                    self.nav_history[idx].loading = false;
+                    self.nav_history[idx].selection.clear();
+                    self.nav_history[idx].request_id = 0;
+                    self.save_session();
+                    let tracks = self.nav_history[idx].tracks.clone();
+                    spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
+                    self.clear_notification();
                 }
-                self.save_session();
-                let tracks = self.view_data.tracks.clone();
-                spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
-                self.clear_notification();
             }
-            BackendResult::RadioResults(label, tracks) => {
-                if matches!(
-                    self.view_data.kind,
-                    ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
-                ) {
-                    self.view_data.kind = match &self.view_data.kind {
+            BackendResult::RadioResults(rid, label, tracks) => {
+                if let Some(idx) = self.slot_for_request(rid) {
+                    let kind = match self.nav_history[idx].kind {
                         ViewKind::ArtistRadio(_) => ViewKind::ArtistRadio(label),
                         _ => ViewKind::SongRadio(label),
                     };
-                    self.view_data.tracks = tracks;
-                    self.view_data.loading = false;
+                    self.nav_history[idx].kind = kind;
+                    self.nav_history[idx].tracks = tracks;
+                    self.nav_history[idx].loading = false;
+                    self.nav_history[idx].request_id = 0;
+                    self.save_session();
+                    let tracks = self.nav_history[idx].tracks.clone();
+                    spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
                 }
-                if matches!(
-                    self.view_data.kind,
-                    ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
-                ) && !self.update_current_snapshot()
-                {
-                    self.push_nav_entry();
-                }
-                self.save_session();
-                let tracks = self.view_data.tracks.clone();
-                spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
             }
             BackendResult::DownloadComplete(track, path) => {
                 let mut track = track;
@@ -289,10 +275,10 @@ impl MusicPlayer {
             }
             BackendResult::SearchError(msg) => {
                 if matches!(
-                    self.view_data.kind,
+                    self.view_data().kind,
                     ViewKind::Search { .. } | ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
                 ) {
-                    self.view_data.loading = false;
+                    self.view_data_mut().loading = false;
                 }
                 self.clear_notification();
                 self.notify_error(msg);

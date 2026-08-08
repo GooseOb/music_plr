@@ -80,11 +80,11 @@ pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme
     // Dispatched from `content.rs` on `ViewKind::Search`; pull the active tab
     // out of the view kind. Track tabs (Songs/Videos) render the playable
     // list; card tabs (Artists/Albums/Playlists) render their own list.
-    let ViewKind::Search { tab, .. } = &player.view_data.kind else {
+    let ViewKind::Search { tab, .. } = &player.view_data().kind else {
         return Column::new().into();
     };
 
-    if player.view_data.loading {
+    if player.view_data().loading {
         loading_placeholder("Searching...")
     } else if tab.is_track_tab() {
         view_search_track_tab(player)
@@ -95,8 +95,8 @@ pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme
 
 /// The Songs/Videos tab: a scrollable, paged track list with "Load More".
 fn view_search_track_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let results = player.view_data.tracks.as_slice();
-    let exhausted = player.view_data.exhausted();
+    let results = player.view_data().tracks.as_slice();
+    let exhausted = player.view_data().exhausted();
 
     let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
 
@@ -179,7 +179,7 @@ fn view_search_card_tab<'a>(
     };
 
     if cards.is_empty() {
-        if player.view_data.loading {
+        if player.view_data().loading {
             return Container::new(
                 text("Searching...")
                     .color(player.app_theme.palette.fg_secondary)
@@ -241,10 +241,10 @@ fn card_row<'a>(
 }
 
 pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let tracks = player.view_data.tracks.as_slice();
-    let loading = player.view_data.loading;
+    let tracks = player.view_data().tracks.as_slice();
+    let loading = player.view_data().loading;
 
-    let label: &str = match &player.view_data.kind {
+    let label: &str = match &player.view_data().kind {
         ViewKind::Artist { name, .. } => name,
         ViewKind::Album { title, .. } => title,
         ViewKind::PlaylistView { title, .. } => title,
@@ -266,9 +266,9 @@ pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme
 }
 
 pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let label = player.view_data.label();
-    let tracks = player.view_data.tracks.as_slice();
-    let loading = player.view_data.loading;
+    let label = player.view_data().label();
+    let tracks = player.view_data().tracks.as_slice();
+    let loading = player.view_data().loading;
 
     let header = Container::new(text(label).width(Length::Fill).center())
         .padding([theme::SPACING_SM, theme::SPACING_XL]);

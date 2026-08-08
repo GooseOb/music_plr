@@ -1,20 +1,17 @@
 use crate::types::Track;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct NavEntry {
-    pub data: ViewData,
-}
-
 /// All per-view state, stored in one flat struct. The `kind` field is the
 /// only variant-specific part; everything else is shared view chrome that is
-/// identical regardless of which view is active. Serialized into [`NavEntry`]
-/// for back/forward history and [`crate::data::session::SessionState`] for restore.
+/// identical regardless of which view is active. Serialized directly into
+/// [`crate::app::MusicPlayer::nav_history`] (one entry per history slot) and
+/// into [`crate::data::session::SessionState`] for restore.
 ///
-/// `query` (the search-bar text) is intentionally kept as a field on
-/// [`MusicPlayer`] rather than here: the search bar is always visible
-/// regardless of which view is active, so the query is global UI state
-/// rather than view-specific data.
+/// The active instance lives in `nav_history[nav_history_pos]`; there is no
+/// separate live copy. The `query` (search-bar text) is intentionally kept
+/// on [`crate::app::MusicPlayer`] rather than here: the search bar is always
+/// visible regardless of which view is active, so the query is global UI
+/// state rather than view-specific data.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ViewData {
     pub kind: ViewKind,
@@ -27,6 +24,13 @@ pub struct ViewData {
     pub scroll: f32,
     #[serde(skip)]
     pub bounds: Option<iced::Rectangle>,
+    /// Monotonic id of the in-flight request (search/radio/browse) that this
+    /// slot is waiting on, or `0` if none. Lets background results be applied
+    /// to the slot that issued them even if the user has navigated elsewhere
+    /// in the meantime, avoiding a race where results land in the active view
+    /// instead of the requesting one. Not persisted (transient correlation).
+    #[serde(skip)]
+    pub request_id: u64,
 }
 
 /// The kind of view currently active. Carries everything that differs between

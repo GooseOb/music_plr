@@ -285,8 +285,8 @@ impl MusicPlayer {
     /// drop index. `indices` are positions in the queue's up-next list
     /// (starting after index 0, i.e. the current track).
     fn copy_from_queue(&mut self, indices: &[usize], drop_idx: usize) {
-        let Some(sp) = self.view_data.selected_playlist_id() else {
-            if !self.view_data.is_search_like() {
+        let Some(sp) = self.view_data_mut().selected_playlist_id() else {
+            if !self.view_data_mut().is_search_like() {
                 self.notify("Select a playlist to drop tracks into".into());
             }
             return;
@@ -333,10 +333,10 @@ impl MusicPlayer {
         } else {
             let count = self.current_track_count(false);
             if drop_idx <= count && is_valid_drop {
-                let selection = self.view_data.selection.clone();
+                let selection = self.view_data_mut().selection.clone();
                 let new_positions =
                     self.handle_reorder_tracks_selected(drop_idx, indices, &selection);
-                self.view_data.selection = new_positions;
+                self.view_data_mut().selection = new_positions;
             }
         }
     }

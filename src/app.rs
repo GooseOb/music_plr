@@ -24,15 +24,21 @@ mod view_data;
 
 pub use interaction::{ContextMenuState, DragState, DragTargetList};
 pub use message::{BackendResult, Message};
-pub use view_data::{NavEntry, ViewData, ViewKind};
+pub use view_data::{ViewData, ViewKind};
 
 #[allow(clippy::struct_excessive_bools)]
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
     pub config: crate::data::config::Config,
-    /// All per-view state lives here. The active variant is the single source
-    /// of truth for which view is active and its data.
-    pub view_data: ViewData,
+    /// Back/forward navigation history. Each entry is a full `View` snapshot;
+    /// `nav_history_pos` indexes the active one, which is the single source of
+    /// truth for which view is active and its data (see [`Self::view_data`]).
+    pub nav_history: Vec<ViewData>,
+    pub nav_history_pos: usize,
+    /// Source of monotonic request ids stamped onto the view slot that issues
+    /// an in-flight search/radio/browse, so results can be correlated back to
+    /// it regardless of which view is active when they arrive.
+    pub next_request_id: u64,
     /// The search-bar text. Kept on `MusicPlayer` because the search bar is
     /// always visible regardless of which view is active.
     pub search_query: String,
@@ -75,9 +81,6 @@ pub struct MusicPlayer {
     pub picker_target_indices: Vec<usize>,
     pub show_delete_confirm: bool,
     pub delete_confirm_index: Option<usize>,
-
-    pub nav_history: Vec<NavEntry>,
-    pub nav_history_pos: usize,
 
     pub search_history: SearchHistory,
     pub stream_cache: StreamCache,
@@ -135,7 +138,6 @@ impl MusicPlayer {
             stream_cache: StreamCache::new(config.cache_max_size_mb),
             pending_cache_id: None,
             config,
-            view_data: ViewData::default(),
             search_query: String::new(),
             search_scope: crate::youtube::SearchScope::Songs,
             show_search_history: false,
@@ -157,10 +159,9 @@ impl MusicPlayer {
             picker_target_indices: Vec::new(),
             show_delete_confirm: false,
             delete_confirm_index: None,
-            nav_history: vec![NavEntry {
-                data: ViewData::default(),
-            }],
+            nav_history: vec![ViewData::default()],
             nav_history_pos: 0,
+            next_request_id: 1,
             result_tx,
             result_rx,
             mpris_cmd_tx,
@@ -193,6 +194,20 @@ impl MusicPlayer {
         player.resume_playback();
         player.update_progress_text();
         player
+    }
+
+    /// Borrow the active view state (the live `nav_history[nav_history_pos]`).
+    /// This is the single source of truth for the current view; there is no
+    /// separate `view_data` field, so all reads go through here.
+    #[inline]
+    pub fn view_data(&self) -> &ViewData {
+        &self.nav_history[self.nav_history_pos]
+    }
+
+    /// Mutably borrow the active view state.
+    #[inline]
+    pub fn view_data_mut(&mut self) -> &mut ViewData {
+        &mut self.nav_history[self.nav_history_pos]
     }
 
     pub fn view(&self) -> iced::Element<'_, Message, AppTheme> {
@@ -284,8 +299,8 @@ impl MusicPlayer {
                     self.queue_list_bounds = Some(bounds);
                     self.queue_list_scroll = offset_y;
                 } else {
-                    self.view_data.scroll = offset_y;
-                    self.view_data.bounds = Some(bounds);
+                    self.view_data_mut().scroll = offset_y;
+                    self.view_data_mut().bounds = Some(bounds);
                 }
                 Task::none()
             }

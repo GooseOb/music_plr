@@ -50,6 +50,7 @@ mod tests {
                 selection: vec![2],
                 scroll: 42.0,
                 bounds: None,
+                request_id: 0,
             },
             queue: PlayQueue::default(),
             show_queue: true,

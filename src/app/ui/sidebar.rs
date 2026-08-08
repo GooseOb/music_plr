@@ -89,8 +89,8 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .iter()
         .enumerate()
         .map(|(i, pl)| {
-            let is_active = matches!(player.view_data.kind, ViewKind::Playlist { .. })
-                && player.view_data.selected_playlist_id() == Some(i);
+            let is_active = matches!(player.view_data().kind, ViewKind::Playlist { .. })
+                && player.view_data().selected_playlist_id() == Some(i);
             let is_dragged_over = player.drag.sidebar_hover_playlist == Some(i);
             let is_interacting = is_active || is_dragged_over;
 
@@ -205,7 +205,7 @@ fn sidebar_nav_item<'a>(
     player: &'a MusicPlayer,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let is_active = player.view_data.same_kind(&target);
+    let is_active = player.view_data().same_kind(&target);
     let icon_color = if is_active { p.accent } else { p.fg_muted };
     let text_color = if is_active { p.fg } else { p.fg_secondary };
     let icon_name: &[u8] = match target.kind {

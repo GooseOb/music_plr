@@ -66,7 +66,7 @@ impl MusicPlayer {
             iced::keyboard::Key::Named(Named::Escape) => {
                 if self.show_search_history {
                     self.show_search_history = false;
-                } else if self.view_data.selection.is_empty() {
+                } else if self.view_data_mut().selection.is_empty() {
                     self.handle_navigate_to(ViewData::new_search(String::new(), self.search_scope));
                 } else {
                     self.clear_selection();
@@ -74,7 +74,7 @@ impl MusicPlayer {
                 Task::none()
             }
             iced::keyboard::Key::Named(Named::Delete) => {
-                if self.view_data.selected_playlist_id().is_some() {
+                if self.view_data_mut().selected_playlist_id().is_some() {
                     self.handle_delete_selected();
                 }
                 Task::none()

@@ -6,12 +6,13 @@ use iced::Point;
 
 #[derive(Debug, Clone)]
 pub enum BackendResult {
-    SearchResults(Vec<Track>, crate::youtube::SearchTab),
-    SearchResultsAppend(Vec<Track>),
-    RadioResults(String, Vec<Track>),
+    SearchResults(u64, Vec<Track>, crate::youtube::SearchTab),
+    SearchResultsAppend(u64, Vec<Track>),
+    RadioResults(u64, String, Vec<Track>),
     /// Tracks returned by drilling into an artist/album/playlist. Carries the
-    /// browse id so the result can be matched to the right view kind.
-    BrowseResults(String, Vec<Track>),
+    /// request id of the slot that issued the browse so results land in the
+    /// correct view even after navigation.
+    BrowseResults(u64, Vec<Track>),
     DownloadComplete(Track, String),
     DownloadError(String),
     SearchError(String),

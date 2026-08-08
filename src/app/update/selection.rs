@@ -12,7 +12,7 @@ impl MusicPlayer {
         if is_queue {
             &self.queue_selected_indices
         } else {
-            &self.view_data.selection
+            &self.view_data().selection
         }
     }
 
@@ -20,7 +20,7 @@ impl MusicPlayer {
         if is_queue {
             &mut self.queue_selected_indices
         } else {
-            &mut self.view_data.selection
+            &mut self.view_data_mut().selection
         }
     }
 
@@ -28,13 +28,14 @@ impl MusicPlayer {
     /// tracks live in the `PlaylistStore`; for all other kinds they are the
     /// view's own `tracks`.
     pub fn view_tracks(&self) -> &[Track] {
-        match &self.view_data.kind {
+        let vd = self.view_data();
+        match &vd.kind {
             ViewKind::Playlist {
                 selected_playlist, ..
             } => selected_playlist
                 .and_then(|sp| self.playlists.playlists.get(sp))
                 .map_or(&[], |p| &p.tracks),
-            _ => &self.view_data.tracks,
+            _ => &vd.tracks,
         }
     }
 
@@ -48,7 +49,7 @@ impl MusicPlayer {
     }
 
     pub fn clear_selection(&mut self) {
-        self.view_data.selection.clear();
+        self.view_data_mut().selection.clear();
         self.queue_selected_indices.clear();
         self.show_playlist_picker = false;
         self.picker_target_indices.clear();
@@ -58,9 +59,10 @@ impl MusicPlayer {
         if is_queue {
             return self.queue.tracks.get(index).cloned();
         }
-        match &self.view_data.kind {
+        let vd = self.view_data();
+        match &vd.kind {
             ViewKind::Playlist { .. } => self.view_tracks().get(index).cloned(),
-            _ => self.view_data.tracks.get(index).cloned(),
+            _ => vd.tracks.get(index).cloned(),
         }
     }
 
@@ -72,10 +74,10 @@ impl MusicPlayer {
     }
 
     pub fn get_current_list_bounds(&self) -> Option<iced::Rectangle> {
-        self.view_data.bounds
+        self.view_data().bounds
     }
 
     pub fn get_current_list_scroll(&self) -> f32 {
-        self.view_data.scroll
+        self.view_data().scroll
     }
 }

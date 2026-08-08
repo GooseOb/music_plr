@@ -15,7 +15,7 @@ impl MusicPlayer {
 
     pub fn handle_select_playlist(&mut self, index: usize) {
         if index < self.playlists.playlists.len()
-            && self.view_data.selected_playlist_id() != Some(index)
+            && self.view_data_mut().selected_playlist_id() != Some(index)
         {
             self.show_playlist_picker = false;
             self.clear_selection();
@@ -23,20 +23,19 @@ impl MusicPlayer {
             self.drag.hovered_track = None;
 
             let playlist_name = self.playlists.playlists[index].name.clone();
-            self.view_data = ViewData::new_playlist(Some(index), playlist_name, None);
+            self.push_new_view(ViewData::new_playlist(Some(index), playlist_name, None));
 
-            self.push_nav_entry();
             self.save_session();
         }
     }
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn handle_rename_playlist(&mut self, new_name: String) {
-        if let Some(idx) = self.view_data.selected_playlist_id() {
+        if let Some(idx) = self.view_data_mut().selected_playlist_id() {
             if !new_name.trim().is_empty() {
                 self.playlists.playlists[idx].name = new_name.trim().to_string();
                 self.playlists.save();
-                if let ViewKind::Playlist { playlist_name, .. } = &mut self.view_data.kind {
+                if let ViewKind::Playlist { playlist_name, .. } = &mut self.view_data_mut().kind {
                     *playlist_name = new_name.trim().to_string();
                 }
             }
@@ -49,7 +48,7 @@ impl MusicPlayer {
             selected_playlist,
             playlist_name,
             ..
-        } = &mut self.view_data.kind
+        } = &mut self.view_data_mut().kind
         {
             if *selected_playlist == Some(index) {
                 *selected_playlist = None;
@@ -82,7 +81,7 @@ impl MusicPlayer {
             }
         }
 
-        let Some(idx) = self.view_data.selected_playlist_id() else {
+        let Some(idx) = self.view_data_mut().selected_playlist_id() else {
             let count = new_tracks.len();
             self.notify(format!(
                 "Added {} local track{} (select a playlist to organize)",
@@ -125,12 +124,12 @@ impl MusicPlayer {
     }
 
     pub fn handle_remove_from_playlist_batch(&mut self, indices: &[usize]) {
-        if let Some(sp) = self.view_data.selected_playlist_id() {
+        if let Some(sp) = self.view_data_mut().selected_playlist_id() {
             if sp < self.playlists.playlists.len() {
                 let removed = self.playlists.remove_tracks_at(sp, indices);
                 self.notify_tracks("Removed", removed, "");
                 // Drop a now-stale selection if any removed index was selected.
-                let sel = self.view_data.selection.clone();
+                let sel = self.view_data_mut().selection.clone();
                 if indices.iter().any(|&i| sel.contains(&i)) {
                     self.clear_selection();
                 }
@@ -144,7 +143,7 @@ impl MusicPlayer {
         indices: &[usize],
         selection: &[usize],
     ) -> Vec<usize> {
-        let new_positions = if let Some(sp) = self.view_data.selected_playlist_id() {
+        let new_positions = if let Some(sp) = self.view_data_mut().selected_playlist_id() {
             if sp < self.playlists.playlists.len() {
                 crate::util::reorder_tracks(
                     &mut self.playlists.playlists[sp].tracks,
@@ -164,7 +163,7 @@ impl MusicPlayer {
 
     pub fn handle_copy_selected(&mut self) {
         self.clipboard.clear();
-        let selection: Vec<usize> = self.view_data.selection.clone();
+        let selection: Vec<usize> = self.view_data_mut().selection.clone();
         for &i in &selection {
             if let Some(track) = self.get_track_at(i, false) {
                 self.clipboard.push(track.clone());
@@ -176,7 +175,7 @@ impl MusicPlayer {
         if self.clipboard.is_empty() {
             return;
         }
-        let Some(idx) = self.view_data.selected_playlist_id() else {
+        let Some(idx) = self.view_data_mut().selected_playlist_id() else {
             return;
         };
         for track in self.clipboard.iter().rev() {
@@ -190,30 +189,36 @@ impl MusicPlayer {
     }
 
     pub fn handle_delete_selected(&mut self) {
-        if self.view_data.selection.is_empty() {
+        if self.view_data_mut().selection.is_empty() {
             return;
         }
-        let indices: Vec<usize> = self.view_data.selection.clone();
+        let indices: Vec<usize> = self.view_data_mut().selection.clone();
 
-        if matches!(self.view_data.kind, ViewKind::Playlist { .. }) {
-            if let Some(sp) = self.view_data.selected_playlist_id() {
+        if matches!(self.view_data_mut().kind, ViewKind::Playlist { .. }) {
+            if let Some(sp) = self.view_data_mut().selected_playlist_id() {
                 if sp < self.playlists.playlists.len() {
                     let removed = self.playlists.remove_tracks_at(sp, &indices);
                     self.notify_tracks("Removed", removed, "");
                 }
             }
-        } else if let ViewKind::Downloads = &self.view_data.kind {
-            let tracks = &mut self.view_data.tracks;
+        } else if let ViewKind::Downloads = &self.view_data_mut().kind {
             let mut sorted: Vec<usize> = indices.clone();
             sorted.sort_unstable();
             sorted.dedup();
             let mut removed = 0;
-            for &i in sorted.iter().rev() {
-                if i < tracks.len() {
-                    let track = tracks.remove(i);
-                    self.download_registry.remove(&track.url);
-                    removed += 1;
+            let mut removed_urls: Vec<String> = Vec::new();
+            {
+                let tracks = &mut self.view_data_mut().tracks;
+                for &i in sorted.iter().rev() {
+                    if i < tracks.len() {
+                        let track = tracks.remove(i);
+                        removed_urls.push(track.url);
+                        removed += 1;
+                    }
                 }
+            }
+            for url in removed_urls {
+                self.download_registry.remove(&url);
             }
             self.notify(format!(
                 "Removed {} download{}",

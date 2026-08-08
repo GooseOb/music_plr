@@ -1,10 +1,7 @@
-use super::{warn, MusicPlayer, NavEntry};
+use super::{warn, MusicPlayer};
 use crate::data::{session::SessionState, JsonStore};
 use std::time::Duration;
 
-/// Minimum time between `session.json` writes. `save_session()` marks the
-/// session dirty on many code paths, but the tick drains that into a write at
-/// most this often to avoid rewriting the full state 4×/second.
 const SESSION_FLUSH_MIN_INTERVAL: Duration = Duration::from_secs(1);
 
 impl MusicPlayer {
@@ -25,7 +22,7 @@ impl MusicPlayer {
         }
         self.last_session_flush = now;
         let state = SessionState {
-            data: self.view_data.clone(),
+            data: self.view_data().clone(),
             queue: self.queue.clone(),
             show_queue: self.show_queue,
             volume: self.volume,
@@ -41,11 +38,9 @@ impl MusicPlayer {
         self.volume = state.volume;
         self.audio.set_volume(state.volume);
 
-        let _ = self.restore_nav_entry(&NavEntry { data: state.data });
+        let _ = self.restore_nav_entry(&state.data);
 
-        self.nav_history = vec![NavEntry {
-            data: self.snapshot_current(),
-        }];
+        self.nav_history = vec![self.snapshot_current()];
         self.nav_history_pos = 0;
     }
 
@@ -69,10 +64,6 @@ impl MusicPlayer {
         self.notification = Some(msg);
     }
 
-    /// Notify about an operation on `n` tracks, pluralizing automatically.
-    /// `suffix` is appended verbatim so callers control the preposition:
-    /// `notify_tracks("Added", 3, "to Chill")` → "Added 3 tracks to Chill";
-    /// `notify_tracks("Removed", 1, "")` → "Removed 1 track".
     pub fn notify_tracks(&mut self, verb: &str, n: usize, suffix: &str) {
         let plural = crate::util::plural_suffix(n);
         let tail = if suffix.is_empty() {

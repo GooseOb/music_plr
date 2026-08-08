@@ -104,7 +104,7 @@ impl MusicPlayer {
             position: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
             is_youtube: track.source == TrackSource::YouTube,
             is_downloaded: self.download_registry.contains(&track.url),
-            in_playlist: matches!(self.view_data.kind, ViewKind::Playlist { .. }),
+            in_playlist: matches!(self.view_data_mut().kind, ViewKind::Playlist { .. }),
             is_queue,
         });
     }

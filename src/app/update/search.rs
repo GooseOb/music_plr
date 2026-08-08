@@ -18,29 +18,38 @@ impl MusicPlayer {
 
         // Switch to Search view. `new_search()` returns an empty, non-loading
         // state for the active scope; flip `loading` on and clear the dropdown.
-        self.view_data = ViewData::new_search(query.clone(), scope);
+        // Push as a fresh history slot so the outgoing view survives for Back.
+        let mut new_view = ViewData::new_search(query.clone(), scope);
+        new_view.loading = true;
+        self.push_new_view(new_view);
+        // Stamp the new slot with a request id so results correlate back to it
+        // even if the user navigates elsewhere before they arrive.
+        let rid = self.next_request_id;
+        self.next_request_id += 1;
+        self.view_data_mut().request_id = rid;
         self.sync_search_scope();
         self.show_search_history = false;
-        self.view_data.loading = true;
         self.drag.hovered_track = None;
 
         self.search_history
             .push(query.clone(), self.config.max_search_history_stored);
 
         let tx = self.result_tx.clone();
-        Self::spawn_search_thread(query, scope, tx, |tracks, tab| {
-            BackendResult::SearchResults(tracks, tab)
+        Self::spawn_search_thread(query, scope, tx, move |tracks, tab| {
+            BackendResult::SearchResults(rid, tracks, tab)
         });
     }
 
     /// Spawn a search that returns `(Vec<Track>, SearchTab)`, then wrap it in a
     /// `BackendResult` for the result channel.
-    fn spawn_search_thread(
+    fn spawn_search_thread<F>(
         query: String,
         scope: crate::youtube::SearchScope,
         tx: mpsc::Sender<BackendResult>,
-        make_result: fn(Vec<Track>, SearchTab) -> BackendResult,
-    ) {
+        make_result: F,
+    ) where
+        F: FnOnce(Vec<Track>, SearchTab) -> BackendResult + Send + 'static,
+    {
         thread::spawn(move || {
             let (tracks, tab) = match crate::youtube::search(&query, scope, 0) {
                 Ok(parts) => parts,
@@ -54,19 +63,21 @@ impl MusicPlayer {
     }
 
     pub fn handle_search_load_more(&mut self) {
-        if !matches!(self.view_data.kind, ViewKind::Search { .. }) {
+        if !matches!(self.view_data_mut().kind, ViewKind::Search { .. }) {
             return;
         }
         let (loading, exhausted, count) = (
-            self.view_data.loading,
-            self.view_data.exhausted(),
-            self.view_data.tracks.len(),
+            self.view_data_mut().loading,
+            self.view_data_mut().exhausted(),
+            self.view_data_mut().tracks.len(),
         );
         if loading || exhausted || count == 0 {
             return;
         }
 
-        self.view_data.loading = true;
+        // Append targets the slot that issued the original search.
+        let rid = self.view_data_mut().request_id;
+        self.view_data_mut().loading = true;
 
         let query = self.search_query.clone();
         let scope = self.search_scope;
@@ -81,7 +92,7 @@ impl MusicPlayer {
                     return;
                 }
             };
-            let _ = tx.send(BackendResult::SearchResultsAppend(tracks));
+            let _ = tx.send(BackendResult::SearchResultsAppend(rid, tracks));
         });
     }
 
@@ -112,18 +123,24 @@ impl MusicPlayer {
 
     pub fn start_song_radio(&mut self, song_name: String) {
         let label = format!("Radio: {song_name}");
-        self.view_data = ViewData::new_radio(ViewKind::SongRadio(label.clone()));
+        self.push_new_view(ViewData::new_radio(ViewKind::SongRadio(label.clone())));
+        let rid = self.next_request_id;
+        self.next_request_id += 1;
+        self.view_data_mut().request_id = rid;
         self.notify(format!("Generating radio for song: {song_name}..."));
 
         let tx = self.result_tx.clone();
         Self::spawn_youtube_thread(song_name, tx, crate::youtube::radio_song, move |tracks| {
-            BackendResult::RadioResults(label.clone(), tracks)
+            BackendResult::RadioResults(rid, label.clone(), tracks)
         });
     }
 
     pub fn start_artist_radio(&mut self, artist_name: String) {
         let label = format!("Radio: {artist_name}");
-        self.view_data = ViewData::new_radio(ViewKind::ArtistRadio(label.clone()));
+        self.push_new_view(ViewData::new_radio(ViewKind::ArtistRadio(label.clone())));
+        let rid = self.next_request_id;
+        self.next_request_id += 1;
+        self.view_data_mut().request_id = rid;
         self.notify(format!("Generating radio for artist: {artist_name}..."));
 
         let tx = self.result_tx.clone();
@@ -131,7 +148,7 @@ impl MusicPlayer {
             artist_name,
             tx,
             crate::youtube::radio_artist,
-            move |tracks| BackendResult::RadioResults(label.clone(), tracks),
+            move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
         );
     }
 
@@ -181,23 +198,25 @@ impl MusicPlayer {
         kind_str: &'static str,
         label: String,
     ) {
-        self.view_data = ViewData {
+        self.push_new_view(ViewData {
             kind: kind.clone(),
             loading: true,
             ..Default::default()
-        };
+        });
+        let rid = self.next_request_id;
+        self.next_request_id += 1;
+        self.view_data_mut().request_id = rid;
         self.notify(format!("Opening: {label}..."));
         let tx = self.result_tx.clone();
-        let bid = browse_id.clone();
         thread::spawn(move || {
-            let tracks = match crate::youtube::browse(&bid, kind_str) {
+            let tracks = match crate::youtube::browse(&browse_id, kind_str) {
                 Ok(videos) => videos.into_iter().map(Track::from).collect(),
                 Err(e) => {
                     let _ = tx.send(BackendResult::SearchError(e.to_string()));
                     return;
                 }
             };
-            let _ = tx.send(BackendResult::BrowseResults(bid, tracks));
+            let _ = tx.send(BackendResult::BrowseResults(rid, tracks));
         });
     }
 
