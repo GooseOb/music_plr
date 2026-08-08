@@ -5,13 +5,13 @@ YouTube-search music player with local playback and MPRIS, built with iced.
 ## Stack
 
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`)
-- **Audio**: rodio + symphonia (WAV via ffmpeg); **pipeline**: yt-dlp (stream/download) + ffmpeg
+- **Audio**: rodio + symphonia (native decode, no ffmpeg); **pipeline**: yt-dlp (stream/download)
 - **MPRIS**: zbus 4 (D-Bus, tokio); **Config**: confy + directories; **HTTP**: ureq 3; **Dialogs**: rfd 0.15
 - **Logging**: tracing + tracing-subscriber
 
 ## Prerequisites
 
-- **yt-dlp** (stream/download) + **ffmpeg** (decode audio → WAV)
+- **yt-dlp** (stream/download, serves AAC-in-M4A which symphonia decodes)
 - **Python 3** + `ytmusicapi` for search (falls back to yt-dlp); **D-Bus** session bus (Linux) for MPRIS
 
 ## Build & Run
@@ -26,7 +26,7 @@ cargo fmt && cargo clippy && cargo test
 - Comments only where logic is non-obvious (audio pipeline, drag geometry, nav-history); else self-documenting.
 - **Single source of truth**: `MusicPlayer` (`app.rs`) holds all state; `view()` is pure over `&MusicPlayer` — no `Rc<RefCell<Backend>>`, no sync methods. `MusicPlayer` is NOT `Clone` (channels).
 - **Async**: `mpsc` channels for cross-thread results (backend, MPRIS); `Task`/`Subscription` for timer tick + raw events; shared state via `&mut self`.
-- `notify()` / `notify_error()` for user-facing errors; avoid new files — edit existing structure.
+- `notify()` / `notify_error()` for user-facing errors;
 
 ## Architecture
 
@@ -36,7 +36,7 @@ src/
 ├── app.rs             # MusicPlayer (all state) + Message + ViewData/ViewKind (per-view state)
 ├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, track_list)
 ├── app/update/        # Handlers (mod, actions, drag, input, navigation, playback, playlists, search, session, tick)
-├── audio.rs           # rodio sink + yt-dlp/ffmpeg process management
+├── audio.rs           # rodio sink + yt-dlp process management + symphonia streaming decode
 ├── youtube.rs         # Search (yt-dlp primary, ytmusicapi fallback) + download
 ├── mpris.rs           # MPRIS D-Bus (MediaPlayer2 + Player)
 ├── thumbnails.rs      # Thumbnail download cache
@@ -93,7 +93,12 @@ src/
 
 ## Audio Pipeline
 
-`AudioPlayer` runs a dedicated output thread (mpsc command channel). **Stream+cache**: `yt-dlp -f bestaudio -o -` is tee'd to a cache file and ffmpeg stdin; ffmpeg decodes to WAV in `temp_dir()/music_plr/`; rodio plays once >2KB available (symphonia). Cached playback re-pipes the cache file through ffmpeg → rodio. Stream end detected by process exit → auto-advance. Temp file cleaned by `kill_processes()` on next stream start/thread exit (not on completion, to avoid use-after-unlink).
+`AudioPlayer` runs a dedicated output thread (mpsc command channel). **No ffmpeg** — decoding is fully native via symphonia.
+
+- **Stream+cache**: `yt-dlp -f bestaudio[ext=m4a]/bestaudio -o -` writes raw AAC-in-M4A bytes straight to the cache file (`.cache`, owned by `StreamCache`). A copy thread drains yt-dlp stdout → cache file and flips `writer_alive` when done.
+- **Decoding** goes through a custom `SymphoniaStreamingSource` (rodio `Source` + `Iterator<Item=i16>`) wrapping a non-seekable `GrowingMediaSource`. The non-seekable source makes symphonia demux *sequentially* (no init seek), so it can probe and play a still-growing file without the `SeekError` panic that `rodio::Decoder::new` hits (it hardcodes `byte_len() = None`). The reader blocks at EOF while `writer_alive`, so playback starts within a few KB and runs seamlessly to the end.
+- **Cached/downloaded/local playback** (`PlayCached`) uses the same `SymphoniaStreamingSource` with `writer_alive = None` (complete, seekable file with real `byte_len`), so seeking works on replay. `rodio::Decoder::new` is intentionally avoided for both paths.
+- **Stream completion**: detected when yt-dlp exits AND the copy thread finishes (`writer_alive` false) → `cache_ready` flips, tick loop calls `stream_cache.insert(id)` to register the cache. Track end → sink empties → `stream_finished` → auto-advance (no subprocess exit polling needed).
 
 ## YouTube & Key Files
 
