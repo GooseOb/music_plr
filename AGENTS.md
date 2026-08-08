@@ -26,30 +26,33 @@ cargo fmt && cargo clippy && cargo test
 - Comments only where logic is non-obvious (audio pipeline, drag geometry, nav-history); else self-documenting.
 - **Single source of truth**: `MusicPlayer` (`app.rs`) holds all state; `view()` is pure over `&MusicPlayer` — no `Rc<RefCell<Backend>>`, no sync methods. `MusicPlayer` is NOT `Clone` (channels).
 - **Async**: `mpsc` channels for cross-thread results (backend, MPRIS); `Task`/`Subscription` for timer tick + raw events; shared state via `&mut self`.
-- `notify()` / `notify_error()` for user-facing errors;
+- `notify()` / `notify_error()` for user-facing errors; `notify_tracks(verb, n, suffix)` for pluralized counts.
+- Persistence goes through the `JsonStore` trait (`data/mod.rs`): implementors declare only `FILE`.
 
 ## Architecture
 
 ```
 src/
 ├── main.rs            # Entry point
-├── app.rs             # MusicPlayer (all state) + Message + ViewData/ViewKind (per-view state)
+├── app.rs             # MusicPlayer (all state) + subscription + update() dispatch
+├── app/view_data.rs   # ViewData / ViewKind / NavEntry (per-view state)
+├── app/message.rs     # Message + BackendResult
+├── app/interaction.rs # DragState, DragTargetList, ContextMenuState
 ├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, track_list)
-├── app/update/        # Handlers (mod, actions, drag, input, navigation, playback, playlists, search, session, tick)
-├── audio.rs           # rodio sink + yt-dlp process management + symphonia streaming decode
+├── app/update/        # Handlers (mod, actions, drag, input, navigation, playback, playlists, search, selection, session, tick)
+├── audio/mod.rs       # AudioPlayer: rodio sink + yt-dlp process management
+├── audio/growing.rs   # GrowingMediaSource (MediaSource over a still-growing file)
+├── audio/symphonia_source.rs # SymphoniaStreamingSource (rodio Source + Iterator)
+├── data/mod.rs        # JsonStore trait + config_path()/cache_path()
+├── data/              # cache, config, downloads, playlists, search_history, session, thumbnails
+├── theme/mod.rs       # Palette + AppTheme
+├── theme/layout.rs    # Spacing / size / geometry constants (re-exported from theme)
+├── theme/catalog.rs   # widget::*::Catalog impls for AppTheme
 ├── youtube.rs         # Search (yt-dlp primary, ytmusicapi fallback) + download
 ├── mpris.rs           # MPRIS D-Bus (MediaPlayer2 + Player)
-├── thumbnails.rs      # Thumbnail download cache
-├── downloads.rs       # DownloadRegistry (Track by URL)
-├── cache.rs           # StreamCache (LRU file cache)
-├── config.rs          # confy config (preferences only)
-├── playlists.rs       # PlaylistStore
-├── search_history.rs  # SearchHistory (persisted queries)
-├── session.rs         # SessionState (restore)
-├── theme.rs           # Palette + layout constants
 ├── types.rs           # Track, TrackSource, PlayQueue
 ├── icons.rs           # SVG embedding via include_bytes! + icon()
-└── util.rs            # format_duration, fuzzy_match
+└── util.rs            # format_duration, fuzzy_match, remove_at, reorder_tracks
 ```
 
 ## State Management
@@ -62,7 +65,8 @@ src/
   differs per view (search `exhausted`, radio label, selected playlist). No separate `View`/`RadioKind`
   enum or per-view fields exist.
 - **`ContextMenuState`**: `track_index`, `target_indices` (selection-aware), flags `is_youtube`/`is_downloaded`/`in_playlist`/`is_queue`. Menu ops apply to all selected if the right-clicked track is selected, else just it; "Play"/radio target only the right-clicked track.
-- **`DragState`**: cursor/track/hover/drop-target/origin/active flags + `drag_target_list`/`sidebar_hover_playlist`; cleaned via `DragState::cleanup()`. Dragging a selected track moves all selected.
+- **`DragState`** (`app/interaction.rs`): cursor/track/hover/drop-target/origin/active flags + `drag_target_list`/`sidebar_hover_playlist`; cleaned via `DragState::cleanup()`. Dragging a selected track moves all selected.
+- **Selection / list access** (`app/update/selection.rs`): `selection(_mut)`, `toggle_selection`, `clear_selection`, `view_tracks`, `get_track_at`, `current_track_count` — all keyed by an `is_queue` flag choosing queue vs. active view.
 - **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailsDownloaded` (clears `thumbnail_cache`). 250ms tick drains → `process_result`.
 - **MPRIS**: D-Bus thread → `MprisCommand` → `process_mpris_command` (tick); `MprisUpdate` flows main → thread.
 - **Nav history**: full `ViewData` in `NavEntry.data` (no separate `view`/`snapshot`); capped at 20. `push_nav_entry()` snapshots live `view_data`.
@@ -104,7 +108,9 @@ src/
 
 - `search()`: `ytmusicapi` (`youtube_search.py`) for first page, else `yt-dlp --flat-playlist`; two-pass yt-dlp (stubs → batched `--batch-file` metadata). `search_more()` paginates; `SEARCH_PAGE_SIZE = 10`.
 - `radio_song()`/`radio_artist()`: query-modified search; `download()`/`download_audio()` use `yt-dlp --extract-audio` → MP3.
-- `theme.rs`: `Palette` + layout constants; `SEARCH_PAGE_SIZE` referenced by `youtube.rs` + `app/update/tick.rs`. `ViewKind` (`app.rs`) selects the active view in `ui/content.rs`, `drag.rs`, `navigation.rs`, `playback.rs`.
+- `theme/`: `Palette` + `AppTheme` (`mod.rs`), constants (`layout.rs`, re-exported so `crate::theme::SPACING_SM` still resolves), `Catalog` impls (`catalog.rs`). `SEARCH_PAGE_SIZE` referenced by `youtube.rs` + `app/update/tick.rs`.
+- `ViewKind` (`app/view_data.rs`) selects the active view in `ui/content.rs`, `drag.rs`, `navigation.rs`, `playback.rs`.
+- `util.rs`: `format_duration`, `fuzzy_match`, `plural_suffix`, `try_probe_duration`, plus the two index-manipulation routines `remove_at` and `reorder_tracks` (generic, unit-tested in one place).
 
 ## Maintenance
 
