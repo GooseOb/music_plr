@@ -28,8 +28,20 @@ pub fn thumbnail<'a>(
     size: f32,
     exists: bool,
 ) -> Element<'a, Message, AppTheme> {
+    thumbnail_by_id(&track.id, p, size, exists)
+}
+
+/// Render a thumbnail image if it exists on disk, otherwise a music-note
+/// placeholder. `id` names the cache file (video id for tracks, browse id
+/// for artist/album/playlist cards); `exists` comes from the thumbnail cache.
+pub fn thumbnail_by_id<'a>(
+    id: &'a str,
+    p: &'a Palette,
+    size: f32,
+    exists: bool,
+) -> Element<'a, Message, AppTheme> {
     if exists {
-        let thumb_path = crate::data::thumbnails::thumbnail_path(&track.id);
+        let thumb_path = crate::data::thumbnails::thumbnail_path(id);
         image(image::Handle::from_path(thumb_path))
             .width(size)
             .height(size)
@@ -109,7 +121,7 @@ pub(super) fn view_track_list<'a>(
     .into()
 }
 
-fn view_track_row<'a>(
+pub(super) fn view_track_row<'a>(
     track: &'a Track,
     index: usize,
     player: &'a MusicPlayer,
@@ -162,7 +174,7 @@ fn view_track_row<'a>(
             .into()
     };
 
-    let inner = row_layout(leading, track, player);
+    let inner = track_row_layout(leading, track, player);
 
     let track_area = MouseArea::new(inner)
         .on_press(Message::TrackPressed { index, is_queue })
@@ -174,21 +186,47 @@ fn view_track_row<'a>(
 
 // ── shared helpers ─────────────────────────────────────────────
 
-/// A title + artist column, used by all track rows.
-pub(super) fn title_artist_column(track: &Track) -> Column<'_, Message, AppTheme> {
-    Column::with_children(vec![
-        text(track.title.clone()).width(Length::Fill).into(),
-        text(track.artist.clone())
-            .size(theme::TEXT_SIZE_SM)
-            .style(fg_secondary())
-            .width(Length::Fill)
-            .into(),
-    ])
-    .spacing(2)
+/// The shared inner row layout used by both track rows and the non-track
+/// card rows (artists/albums/playlists): leading | optional thumbnail |
+/// title(+subtitle) | optional trailing. `subtitle`/`trailing` are `None`
+/// when not needed.
+pub(super) fn inner_row_layout<'a>(
+    leading: Element<'a, Message, AppTheme>,
+    thumbnail: Option<Element<'a, Message, AppTheme>>,
+    title: &'a str,
+    subtitle: Option<&'a str>,
+    trailing: Option<Element<'a, Message, AppTheme>>,
+) -> Row<'a, Message, AppTheme> {
+    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(5);
+    children.push(leading);
+    if let Some(thumbnail) = thumbnail {
+        children.push(thumbnail);
+    }
+    let title_el = text(title).size(theme::TEXT_SIZE_MD).width(Length::Fill);
+    children.push(match subtitle {
+        Some(sub) => Column::with_children(vec![
+            title_el.into(),
+            text(sub)
+                .size(theme::TEXT_SIZE_SM)
+                .style(fg_secondary())
+                .into(),
+        ])
+        .spacing(theme::SPACING_2XS)
+        .into(),
+        None => title_el.into(),
+    });
+    if let Some(trailing) = trailing {
+        children.push(trailing);
+    }
+    Row::with_children(children)
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center)
+        .padding([theme::SPACING_XS, theme::SPACING_SM])
 }
 
-/// The inner row layout: leading | thumbnail | `title_artist` | duration.
-pub(super) fn row_layout<'a>(
+/// The inner row layout for a track: leading | thumbnail | title/artist |
+/// status icon | duration. Delegates to [`inner_row_layout`].
+pub(super) fn track_row_layout<'a>(
     leading: Element<'a, Message, AppTheme>,
     track: &'a Track,
     player: &'a MusicPlayer,
@@ -206,22 +244,26 @@ pub(super) fn row_layout<'a>(
         Container::new(text("")).into()
     };
 
-    Row::with_children(vec![
+    inner_row_layout(
         leading,
-        thumbnail(track, p, theme::THUMBNAIL_SIZE, thumb_exists),
-        title_artist_column(track).into(),
-        status_icon,
-        Container::new(
-            text(crate::util::format_duration(track.duration))
-                .size(theme::TEXT_SIZE_SM)
-                .style(fg_secondary()),
-        )
-        .padding([0.0, theme::SPACING_2XL])
-        .into(),
-    ])
-    .spacing(theme::SPACING_SM)
-    .align_y(alignment::Vertical::Center)
-    .padding([theme::SPACING_XS, theme::SPACING_SM])
+        Some(thumbnail(track, p, theme::THUMBNAIL_SIZE, thumb_exists)),
+        &track.title,
+        Some(&track.artist),
+        Some(
+            Row::with_children(vec![
+                status_icon,
+                Container::new(
+                    text(crate::util::format_duration(track.duration))
+                        .size(theme::TEXT_SIZE_SM)
+                        .style(fg_secondary()),
+                )
+                .padding([0.0, theme::SPACING_2XL])
+                .into(),
+            ])
+            .align_y(alignment::Vertical::Center)
+            .into(),
+        ),
+    )
 }
 
 /// Wraps row content in a fixed-height container with a background color.

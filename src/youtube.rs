@@ -1,9 +1,58 @@
+use crate::types::Track;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::{
     io::Write,
     process::{Command, Stdio},
 };
+
+/// Which subset of YouTube Music a search is scoped to. `Songs` is the default;
+/// the others map to ytmusicapi's `filter=` endpoints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SearchScope {
+    #[default]
+    Songs,
+    Videos,
+    Artists,
+    Albums,
+    Playlists,
+}
+
+impl SearchScope {
+    /// The `filter=` argument ytmusicapi expects, or `None` for the general
+    /// The `filter=` argument ytmusicapi expects.
+    pub fn ytm_filter(self) -> Option<&'static str> {
+        match self {
+            SearchScope::Songs => Some("songs"),
+            SearchScope::Videos => Some("videos"),
+            SearchScope::Artists => Some("artists"),
+            SearchScope::Albums => Some("albums"),
+            SearchScope::Playlists => Some("playlists"),
+        }
+    }
+
+    /// Label shown on the scope tab.
+    pub fn label(self) -> &'static str {
+        match self {
+            SearchScope::Songs => "Songs",
+            SearchScope::Videos => "Videos",
+            SearchScope::Artists => "Artists",
+            SearchScope::Albums => "Albums",
+            SearchScope::Playlists => "Playlists",
+        }
+    }
+
+    /// All scopes in display order.
+    pub fn all() -> &'static [SearchScope] {
+        &[
+            SearchScope::Songs,
+            SearchScope::Videos,
+            SearchScope::Artists,
+            SearchScope::Albums,
+            SearchScope::Playlists,
+        ]
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct YouTubeVideo {
@@ -13,6 +62,71 @@ pub struct YouTubeVideo {
     pub duration: f64,
     pub channel: String,
     pub thumbnail: String,
+}
+
+/// A non-track search result (artist/album/playlist) available for
+/// drill-down. The three search tabs share this one concrete shape; the
+/// active `SearchTab` variant says which kind it is.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CardData {
+    /// `browse_id` for artists/albums, `playlist_id` for playlists.
+    pub id: String,
+    pub title: String,
+    /// Artist (album) or author (playlist); empty for artists.
+    pub subtitle: String,
+    pub thumbnail: String,
+}
+
+/// Which tab a `Search` view is on. `Songs`/`Videos` show the playable track
+/// list (stored in `ViewData.tracks`); the others carry their concrete card
+/// list for drill-down.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum SearchTab {
+    Songs,
+    Videos,
+    Artists(Vec<CardData>),
+    Albums(Vec<CardData>),
+    Playlists(Vec<CardData>),
+}
+
+impl SearchTab {
+    /// The tab for a search scope when no results have arrived yet.
+    pub fn from_scope(scope: SearchScope) -> Self {
+        match scope {
+            SearchScope::Songs => SearchTab::Songs,
+            SearchScope::Videos => SearchTab::Videos,
+            SearchScope::Artists => SearchTab::Artists(Vec::new()),
+            SearchScope::Albums => SearchTab::Albums(Vec::new()),
+            SearchScope::Playlists => SearchTab::Playlists(Vec::new()),
+        }
+    }
+
+    /// The search scope represented by this tab (inverse of [`from_scope`]).
+    pub fn scope(&self) -> SearchScope {
+        match self {
+            SearchTab::Songs => SearchScope::Songs,
+            SearchTab::Videos => SearchScope::Videos,
+            SearchTab::Artists(_) => SearchScope::Artists,
+            SearchTab::Albums(_) => SearchScope::Albums,
+            SearchTab::Playlists(_) => SearchScope::Playlists,
+        }
+    }
+
+    /// Whether this tab shows the playable track list (vs. card results).
+    pub fn is_track_tab(&self) -> bool {
+        matches!(self, SearchTab::Songs | SearchTab::Videos)
+    }
+
+    /// Number of results shown by this tab (tracks for track tabs, cards
+    /// otherwise). Used to decide whether more pages are available.
+    pub fn len(&self) -> usize {
+        match self {
+            SearchTab::Songs | SearchTab::Videos => 0,
+            SearchTab::Artists(items) => items.len(),
+            SearchTab::Albums(items) => items.len(),
+            SearchTab::Playlists(items) => items.len(),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -28,40 +142,45 @@ struct YTDLPSearchResult {
 
 const YTM_SEARCH_URL: &str = "https://music.youtube.com/search?q=";
 
-pub fn search(query: &str, offset: usize) -> Result<Vec<YouTubeVideo>> {
-    // Primary: ytmusicapi for the initial page (songs, not channels).
-    // yt-dlp is the fallback for pagination (search_more) and when ytmusicapi
-    // is unavailable. yt-dlp's YTM search mixes channel/mix entries that
-    // get filtered out, so it's less useful for the initial page.
+/// Run a search and split the result into the playable `Track` list (for
+/// Songs/Videos) and the `SearchTab` describing which tab is active (carrying
+/// the concrete card lists for Artists/Albums/Playlists). yt-dlp is the
+/// fallback for pagination (`search_more`) and when ytmusicapi is unavailable;
+/// it only yields playable tracks, so the scoped card tabs rely on ytmusicapi.
+pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Track>, SearchTab)> {
     if offset == 0 {
-        if let Ok(videos) = search_ytmusic(query) {
-            return Ok(videos);
+        if let Ok(parts) = search_ytmusic(query, scope) {
+            return Ok(parts);
         }
     }
-    search_ytdlp(query, offset, crate::theme::SEARCH_PAGE_SIZE)
+    let videos = search_ytdlp(query, offset, crate::theme::SEARCH_PAGE_SIZE)?;
+    let tracks: Vec<Track> = videos.into_iter().map(Track::from).collect();
+    Ok((tracks, SearchTab::Songs))
 }
 
-fn search_ytmusic(query: &str) -> Result<Vec<YouTubeVideo>> {
+/// Browse the contents of an artist/album/playlist, returning its tracks.
+pub fn browse(browse_id: &str, kind: &str) -> Result<Vec<YouTubeVideo>> {
     let script_path = std::env::temp_dir().join("music_plr_search.py");
     std::fs::write(&script_path, include_str!("./youtube_search.py"))
         .context("Failed to write ytmusicapi script")?;
 
-    let limit = 20;
     let output = Command::new("python3")
         .arg(&script_path)
-        .arg(query)
-        .arg(limit.to_string())
+        .arg("browse")
+        .arg(browse_id)
+        .arg("50")
+        .arg(kind)
         .output()
         .context("Failed to run python3. Is it installed?")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("ytmusicapi failed: {stderr}");
+        anyhow::bail!("ytmusicapi browse failed: {stderr}");
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let items: Vec<YtMusicResult> =
-        serde_json::from_str(&stdout).context("Failed to parse ytmusicapi output")?;
+        serde_json::from_str(&stdout).context("Failed to parse ytmusicapi browse output")?;
 
     Ok(items
         .into_iter()
@@ -74,6 +193,86 @@ fn search_ytmusic(query: &str) -> Result<Vec<YouTubeVideo>> {
             thumbnail: r.thumbnail,
         })
         .collect())
+}
+
+fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, SearchTab)> {
+    let script_path = std::env::temp_dir().join("music_plr_search.py");
+    std::fs::write(&script_path, include_str!("./youtube_search.py"))
+        .context("Failed to write ytmusicapi script")?;
+
+    let limit = 20;
+    let scope_arg = scope.ytm_filter().unwrap_or("songs");
+    let output = Command::new("python3")
+        .arg(&script_path)
+        .arg("search")
+        .arg(query)
+        .arg(scope_arg)
+        .arg(limit.to_string())
+        .output()
+        .context("Failed to run python3. Is it installed?")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("ytmusicapi failed: {stderr}");
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let raw: Vec<serde_json::Value> =
+        serde_json::from_str(&stdout).context("Failed to parse ytmusicapi output")?;
+
+    let mut tracks: Vec<Track> = Vec::new();
+    let mut artists: Vec<CardData> = Vec::new();
+    let mut albums: Vec<CardData> = Vec::new();
+    let mut playlists: Vec<CardData> = Vec::new();
+    for v in raw {
+        let kind = v.get("kind").and_then(|k| k.as_str()).unwrap_or("track");
+        let id = v["id"].as_str().unwrap_or_default().to_string();
+        let title = v["title"].as_str().unwrap_or_default().to_string();
+        let subtitle = v["subtitle"].as_str().unwrap_or_default().to_string();
+        let thumbnail = v["thumbnail"].as_str().unwrap_or_default().to_string();
+        match kind {
+            "artist" => artists.push(CardData {
+                id,
+                title,
+                subtitle: String::new(),
+                thumbnail,
+            }),
+            "album" => albums.push(CardData {
+                id,
+                title,
+                subtitle,
+                thumbnail,
+            }),
+            "playlist" => playlists.push(CardData {
+                id,
+                title,
+                subtitle,
+                thumbnail,
+            }),
+            _ => {
+                // song / video -> YouTubeVideo
+                if let Ok(r) = serde_json::from_value::<YtMusicResult>(v.clone()) {
+                    tracks.push(Track::from(YouTubeVideo {
+                        id: r.id,
+                        title: r.title,
+                        url: r.url,
+                        duration: f64::from(r.duration),
+                        channel: r.channel,
+                        thumbnail: r.thumbnail,
+                    }));
+                }
+            }
+        }
+    }
+
+    let tab = match scope {
+        SearchScope::Songs => SearchTab::Songs,
+        SearchScope::Videos => SearchTab::Videos,
+        SearchScope::Artists => SearchTab::Artists(artists),
+        SearchScope::Albums => SearchTab::Albums(albums),
+        SearchScope::Playlists => SearchTab::Playlists(playlists),
+    };
+    Ok((tracks, tab))
 }
 
 #[derive(Deserialize)]
@@ -97,8 +296,13 @@ fn search_ytdlp(query: &str, offset: usize, page_size: usize) -> Result<Vec<YouT
     Ok(videos)
 }
 
-pub fn search_more(query: &str, offset: usize) -> Result<Vec<YouTubeVideo>> {
-    search_ytdlp(query, offset, crate::theme::SEARCH_PAGE_SIZE)
+pub fn search_more(query: &str, scope: SearchScope, offset: usize) -> Result<Vec<Track>> {
+    // Pagination only works through yt-dlp, which yields playable tracks.
+    // (Scoped non-All searches get their first page from ytmusicapi; further
+    // pages fall back to general track results — acceptable for "Load More".)
+    let _ = scope;
+    let videos = search_ytdlp(query, offset, crate::theme::SEARCH_PAGE_SIZE)?;
+    Ok(videos.into_iter().map(Track::from).collect())
 }
 
 // yt-dlp --flat-playlist pass: collect lightweight video stubs plus the ids
@@ -233,12 +437,18 @@ fn fetch_batch_metadata(
     results
 }
 
-pub fn radio_song(song_name: &str) -> Result<Vec<YouTubeVideo>> {
-    search(&format!("{song_name} similar songs"), 0)
+pub fn radio_song(song_name: &str) -> Result<Vec<Track>> {
+    let (tracks, _) = search(&format!("{song_name} similar songs"), SearchScope::Songs, 0)?;
+    Ok(tracks)
 }
 
-pub fn radio_artist(artist_name: &str) -> Result<Vec<YouTubeVideo>> {
-    search(&format!("{artist_name} official songs"), 0)
+pub fn radio_artist(artist_name: &str) -> Result<Vec<Track>> {
+    let (tracks, _) = search(
+        &format!("{artist_name} official songs"),
+        SearchScope::Songs,
+        0,
+    )?;
+    Ok(tracks)
 }
 
 pub fn download(video_url: &str, download_dir: &str) -> Result<String> {

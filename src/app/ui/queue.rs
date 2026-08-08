@@ -13,7 +13,7 @@ use crate::{
 use super::{
     styles::{bg_secondary, button_style_primary, fg_secondary},
     track_list::{
-        empty_state, row_layout, scrollable_list, section_header, track_row, view_track_list,
+        empty_state, scrollable_list, section_header, track_row, track_row_layout, view_track_list,
     },
     Message, MusicPlayer,
 };
@@ -166,7 +166,7 @@ fn view_now_playing_row<'a>(
     track: &'a crate::types::Track,
     player: &'a MusicPlayer,
 ) -> Element<'a, Message, AppTheme> {
-    let inner = row_layout(Row::new().into(), track, player);
+    let inner = track_row_layout(Row::new().into(), track, player);
 
     Container::new(inner)
         .width(Length::Fill)
@@ -223,7 +223,7 @@ fn view_recently_played_row<'a>(
             .into()
     };
 
-    let inner = row_layout(leading, track, player);
+    let inner = track_row_layout(leading, track, player);
 
     let track_area = MouseArea::new(inner)
         .on_press(Message::PlayRecentTrack(index))

@@ -37,9 +37,28 @@ pub enum ViewKind {
     Search {
         exhausted: bool,
         query: String,
+        /// Which search tab is active. For `Songs`/`Videos` the playable track
+        /// list lives in `ViewData.tracks`; the other variants carry their own
+        /// concrete-typed card lists for drill-down.
+        tab: crate::youtube::SearchTab,
     },
     SongRadio(String),
     ArtistRadio(String),
+    /// Drill-down into an artist's songs (browse id from a search result).
+    Artist {
+        browse_id: String,
+        name: String,
+    },
+    /// Drill-down into an album's tracklist (browse id from a search result).
+    Album {
+        browse_id: String,
+        title: String,
+    },
+    /// Drill-down into a playlist's tracks (playlist id from a search result).
+    PlaylistView {
+        playlist_id: String,
+        title: String,
+    },
     Playlist {
         selected_playlist: Option<usize>,
         playlist_name: String,
@@ -52,6 +71,7 @@ impl Default for ViewKind {
         ViewKind::Search {
             exhausted: false,
             query: String::new(),
+            tab: crate::youtube::SearchTab::Songs,
         }
     }
 }
@@ -61,7 +81,12 @@ impl ViewData {
     pub fn is_search_like(&self) -> bool {
         matches!(
             self.kind,
-            ViewKind::Search { .. } | ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
+            ViewKind::Search { .. }
+                | ViewKind::SongRadio(_)
+                | ViewKind::ArtistRadio(_)
+                | ViewKind::Artist { .. }
+                | ViewKind::Album { .. }
+                | ViewKind::PlaylistView { .. }
         )
     }
 
@@ -77,12 +102,14 @@ impl ViewData {
                 ViewKind::Search {
                     exhausted: a,
                     query: qa,
+                    tab: ta,
                 },
                 ViewKind::Search {
                     exhausted: b,
                     query: qb,
+                    tab: tb,
                 },
-            ) => a == b && qa == qb,
+            ) => a == b && qa == qb && ta == tb,
             // Distinct variants despite identical bodies: a SongRadio and an
             // ArtistRadio with the same label are different views.
             (ViewKind::SongRadio(a), ViewKind::SongRadio(b))
@@ -156,12 +183,13 @@ impl ViewData {
 
     // ── constructors ─────────────────────────────────────────────
 
-    /// Create a fresh `Search` view with the given query.
-    pub fn new_search(query: String) -> Self {
+    /// Create a fresh `Search` view for `query` on the given search `scope`.
+    pub fn new_search(query: String, scope: crate::youtube::SearchScope) -> Self {
         Self {
             kind: ViewKind::Search {
                 exhausted: false,
                 query,
+                tab: crate::youtube::SearchTab::from_scope(scope),
             },
             ..Default::default()
         }

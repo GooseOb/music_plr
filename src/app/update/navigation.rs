@@ -23,12 +23,23 @@ impl MusicPlayer {
         self.search_query = self.view_data.search_query().to_string();
     }
 
+    /// Sync the global `search_scope` from the active `Search` view's tab. The
+    /// scope selector (and `run_search`) are driven by `search_scope`, so this
+    /// keeps the tab highlight correct when navigating to / between / back to
+    /// Search views whose tab differs from the previously selected scope.
+    pub(super) fn sync_search_scope(&mut self) {
+        if let ViewKind::Search { tab, .. } = &self.view_data.kind {
+            self.search_scope = tab.scope();
+        }
+    }
+
     pub(super) fn restore_nav_entry(&mut self, entry: &NavEntry) -> Task<Message> {
         // Scroll position is stored relative to the main track_list scrollable.
         // (Queue view uses a different Id and is not navigated via history.)
         let y = entry.data.scroll;
         self.view_data = entry.data.clone();
         self.sync_search_query();
+        self.sync_search_scope();
 
         iced::widget::operation::scroll_to::<Message>(
             TRACK_LIST_ID,
@@ -51,6 +62,7 @@ impl MusicPlayer {
 
         self.view_data = data;
         self.sync_search_query();
+        self.sync_search_scope();
 
         // Push the new state as a single entry. The previous entry (preserved
         // by truncate) already serves as the back-target for Back navigation.

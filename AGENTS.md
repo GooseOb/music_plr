@@ -118,7 +118,7 @@ src/
 
 ## YouTube & Key Files
 
-- `search()`: `ytmusicapi` (`youtube_search.py`) for first page, else `yt-dlp --flat-playlist`; two-pass yt-dlp (stubs → batched `--batch-file` metadata). `search_more()` paginates; `SEARCH_PAGE_SIZE = 10`.
+- `search()`: scoped search via `ytmusicapi` (`youtube_search.py`); `scope` (`SearchScope`: Songs/Videos/Artists/Albums/Playlists, default Songs) maps to ytmusicapi `filter=` for all scopes. First page from `ytmusicapi`; pagination (`search_more`) falls back to `yt-dlp --flat-playlist` (tracks only). Returns `(Vec<Track>, SearchTab)` where `SearchTab` carries the concrete card lists (Artists/Albums/Playlists) or marks a track tab (Songs/Videos). `browse()` drills into an artist/album/playlist via ytmusicapi `get_artist`/`get_album`/`get_playlist`. `SEARCH_PAGE_SIZE = 10`.
 - `radio_song()`/`radio_artist()`: query-modified search; `download()`/`download_audio()` use `yt-dlp --extract-audio` → MP3.
 - `theme/`: `Palette` + `AppTheme` (`mod.rs`), constants (`layout.rs`, re-exported so `crate::theme::SPACING_SM` still resolves), `Catalog` impls (`catalog.rs`). `SEARCH_PAGE_SIZE` referenced by `youtube.rs` + `app/update/tick.rs`.
 - `ViewKind` (`app/view_data.rs`) selects the active view in `ui/content.rs`, `drag.rs`, `navigation.rs`, `playback.rs`.

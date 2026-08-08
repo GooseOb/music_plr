@@ -1,32 +1,56 @@
 use super::{mpsc, thread, BackendResult, MusicPlayer, Track, ViewData};
 use crate::app::ViewKind;
+use crate::youtube::SearchTab;
 
 impl MusicPlayer {
     pub fn handle_search_execute(&mut self) {
         if self.search_query.is_empty() {
             return;
         }
+        self.run_search(self.search_query.clone(), self.search_scope);
+    }
+
+    /// Run a fresh search for `query` at `scope`, replacing the Search view.
+    pub fn run_search(&mut self, query: String, scope: crate::youtube::SearchScope) {
+        if query.is_empty() {
+            return;
+        }
 
         // Switch to Search view. `new_search()` returns an empty, non-loading
-        // state; flip `loading` on and clear the query dropdown.
-        self.view_data = ViewData::new_search(self.search_query.clone());
+        // state for the active scope; flip `loading` on and clear the dropdown.
+        self.view_data = ViewData::new_search(query.clone(), scope);
+        self.sync_search_scope();
         self.show_search_history = false;
         self.view_data.loading = true;
         self.drag.hovered_track = None;
 
-        self.search_history.push(
-            self.search_query.clone(),
-            self.config.max_search_history_stored,
-        );
+        self.search_history
+            .push(query.clone(), self.config.max_search_history_stored);
 
-        let query = self.search_query.clone();
         let tx = self.result_tx.clone();
-        Self::spawn_youtube_thread(
-            query,
-            tx,
-            |q| crate::youtube::search(q, 0),
-            BackendResult::SearchResults,
-        );
+        Self::spawn_search_thread(query, scope, tx, |tracks, tab| {
+            BackendResult::SearchResults(tracks, tab)
+        });
+    }
+
+    /// Spawn a search that returns `(Vec<Track>, SearchTab)`, then wrap it in a
+    /// `BackendResult` for the result channel.
+    fn spawn_search_thread(
+        query: String,
+        scope: crate::youtube::SearchScope,
+        tx: mpsc::Sender<BackendResult>,
+        make_result: fn(Vec<Track>, SearchTab) -> BackendResult,
+    ) {
+        thread::spawn(move || {
+            let (tracks, tab) = match crate::youtube::search(&query, scope, 0) {
+                Ok(parts) => parts,
+                Err(e) => {
+                    let _ = tx.send(BackendResult::SearchError(e.to_string()));
+                    return;
+                }
+            };
+            let _ = tx.send(make_result(tracks, tab));
+        });
     }
 
     pub fn handle_search_load_more(&mut self) {
@@ -45,15 +69,20 @@ impl MusicPlayer {
         self.view_data.loading = true;
 
         let query = self.search_query.clone();
+        let scope = self.search_scope;
         let offset = count;
         let tx = self.result_tx.clone();
 
-        Self::spawn_youtube_thread(
-            query,
-            tx,
-            move |q| crate::youtube::search_more(q, offset),
-            BackendResult::SearchResultsAppend,
-        );
+        thread::spawn(move || {
+            let tracks = match crate::youtube::search_more(&query, scope, offset) {
+                Ok(tracks) => tracks,
+                Err(e) => {
+                    let _ = tx.send(BackendResult::SearchError(e.to_string()));
+                    return;
+                }
+            };
+            let _ = tx.send(BackendResult::SearchResultsAppend(tracks));
+        });
     }
 
     pub fn handle_search_history_select(&mut self, index: usize) {
@@ -106,6 +135,72 @@ impl MusicPlayer {
         );
     }
 
+    /// Open an artist/album/playlist drill-down view, fetching its tracks.
+    pub fn handle_open_artist(&mut self, browse_id: String, name: String) {
+        self.start_browse(
+            ViewKind::Artist {
+                browse_id: browse_id.clone(),
+                name: name.clone(),
+            },
+            browse_id,
+            "artist",
+            name,
+        );
+    }
+
+    pub fn handle_open_album(&mut self, browse_id: String, title: String) {
+        self.start_browse(
+            ViewKind::Album {
+                browse_id: browse_id.clone(),
+                title: title.clone(),
+            },
+            browse_id,
+            "album",
+            title,
+        );
+    }
+
+    pub fn handle_open_playlist(&mut self, playlist_id: String, title: String) {
+        self.start_browse(
+            ViewKind::PlaylistView {
+                playlist_id: playlist_id.clone(),
+                title: title.clone(),
+            },
+            playlist_id,
+            "playlist",
+            title,
+        );
+    }
+
+    /// Shared drill-down: switch to the given browse view kind (loading),
+    /// fetch its tracks via ytmusicapi `browse()`, and send `BrowseResults`.
+    fn start_browse(
+        &mut self,
+        kind: ViewKind,
+        browse_id: String,
+        kind_str: &'static str,
+        label: String,
+    ) {
+        self.view_data = ViewData {
+            kind: kind.clone(),
+            loading: true,
+            ..Default::default()
+        };
+        self.notify(format!("Opening: {label}..."));
+        let tx = self.result_tx.clone();
+        let bid = browse_id.clone();
+        thread::spawn(move || {
+            let tracks = match crate::youtube::browse(&bid, kind_str) {
+                Ok(videos) => videos.into_iter().map(Track::from).collect(),
+                Err(e) => {
+                    let _ = tx.send(BackendResult::SearchError(e.to_string()));
+                    return;
+                }
+            };
+            let _ = tx.send(BackendResult::BrowseResults(bid, tracks));
+        });
+    }
+
     /// Spawn a background thread that calls a `YouTube` search/radio function,
     /// converts the results to `Track`s, and sends a `BackendResult` via the
     /// provided channel. All four search/radio methods share this pattern.
@@ -115,12 +210,11 @@ impl MusicPlayer {
         search_fn: F,
         make_result: R,
     ) where
-        F: FnOnce(&str) -> anyhow::Result<Vec<crate::youtube::YouTubeVideo>> + Send + 'static,
+        F: FnOnce(&str) -> anyhow::Result<Vec<Track>> + Send + 'static,
         R: FnOnce(Vec<Track>) -> BackendResult + Send + 'static,
     {
         thread::spawn(move || match search_fn(&query) {
-            Ok(videos) => {
-                let tracks: Vec<Track> = videos.into_iter().map(std::convert::Into::into).collect();
+            Ok(tracks) => {
                 let _ = tx.send(make_result(tracks));
             }
             Err(e) => {

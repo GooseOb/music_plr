@@ -6,9 +6,12 @@ use iced::Point;
 
 #[derive(Debug, Clone)]
 pub enum BackendResult {
-    SearchResults(Vec<Track>),
+    SearchResults(Vec<Track>, crate::youtube::SearchTab),
     SearchResultsAppend(Vec<Track>),
     RadioResults(String, Vec<Track>),
+    /// Tracks returned by drilling into an artist/album/playlist. Carries the
+    /// browse id so the result can be matched to the right view kind.
+    BrowseResults(String, Vec<Track>),
     DownloadComplete(Track, String),
     DownloadError(String),
     SearchError(String),
@@ -39,8 +42,12 @@ pub enum Message {
 
     SearchInputChanged(String),
     SearchExecute,
+    SearchScopeChanged(crate::youtube::SearchScope),
     SearchLoadMore,
     SearchHistorySelected(usize),
+    OpenArtist(String, String),
+    OpenAlbum(String, String),
+    OpenPlaylist(String, String),
     DeleteSearchHistory(usize),
 
     TrackPressed {

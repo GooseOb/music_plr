@@ -4,7 +4,7 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 
 ## Features
 
-- **YouTube Music Search** — Search for songs via ytmusicapi (Python) with yt-dlp fallback, plus paginated "Load More"
+- **YouTube Music Search** — Scoped search (Songs / Videos / Artists / Albums / Playlists) via ytmusicapi with yt-dlp fallback; click artists/albums/playlists to drill down into their tracks; paginated "Load More"
 - **Local Music** — Add local audio files (MP3, FLAC, WAV, OGG, M4A, AAC, OPUS, WMA) to playlists
 - **Streaming + Caching** — Streams audio via yt-dlp with fully native decoding (symphonia, **no ffmpeg**), caching to disk for instant replay
 - **Downloads** — Download tracks to MP3 via yt-dlp, with a Downloads view and on-row indicators

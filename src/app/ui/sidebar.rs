@@ -4,12 +4,7 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{
-    app::ViewData,
-    app::ViewKind,
-    icons,
-    theme::{AppTheme, Palette},
-};
+use crate::{app::ViewData, app::ViewKind, icons, theme::AppTheme};
 
 use super::{
     styles::{bg_secondary, button_style_nav, button_style_primary},
@@ -80,8 +75,12 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .width(Length::Fill);
 
     let nav_items: Vec<Element<'_, Message, AppTheme>> = vec![
-        sidebar_nav_item("Search", ViewData::new_search(String::new()), player, p),
-        sidebar_nav_item("Downloads", downloads_view_data(player), player, p),
+        sidebar_nav_item(
+            "Search",
+            ViewData::new_search(String::new(), player.search_scope),
+            player,
+        ),
+        sidebar_nav_item("Downloads", downloads_view_data(player), player),
     ];
 
     let playlist_items: Vec<Element<'_, Message, AppTheme>> = player
@@ -203,8 +202,8 @@ fn sidebar_nav_item<'a>(
     name: &'a str,
     target: ViewData,
     player: &'a MusicPlayer,
-    p: &'a Palette,
 ) -> Element<'a, Message, AppTheme> {
+    let p = &player.app_theme.palette;
     let is_active = player.view_data.same_kind(&target);
     let icon_color = if is_active { p.accent } else { p.fg_muted };
     let text_color = if is_active { p.fg } else { p.fg_secondary };

@@ -1,6 +1,6 @@
 use super::{
-    error, format_duration, mpris, mpsc, spawn_thumbnail_download_thread, BackendResult,
-    MprisCommand, MprisUpdate, MusicPlayer,
+    error, format_duration, mpris, mpsc, spawn_thumbnail_download, spawn_thumbnail_download_thread,
+    BackendResult, MprisCommand, MprisUpdate, MusicPlayer,
 };
 use crate::app::ViewKind;
 use tracing::debug;
@@ -113,6 +113,26 @@ impl MusicPlayer {
                 self.thumbnail_cache.insert(id);
             }
         }
+
+        // Also track non-track card thumbnails (artist/album/playlist browse
+        // ids) on the Search view so they flip to "downloaded" once present.
+        if let ViewKind::Search { tab, .. } = &self.view_data.kind {
+            let ids: Vec<&str> = match tab {
+                crate::youtube::SearchTab::Artists(cards)
+                | crate::youtube::SearchTab::Albums(cards)
+                | crate::youtube::SearchTab::Playlists(cards) => {
+                    cards.iter().map(|c| c.id.as_str()).collect()
+                }
+                _ => Vec::new(),
+            };
+            for id in ids {
+                if !self.thumbnail_cache.contains(id)
+                    && crate::data::thumbnails::thumbnail_path(id).exists()
+                {
+                    self.thumbnail_cache.insert(id.to_string());
+                }
+            }
+        }
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -155,19 +175,48 @@ impl MusicPlayer {
 
     pub fn process_result(&mut self, result: BackendResult) {
         match result {
-            BackendResult::SearchResults(tracks) => {
-                if matches!(self.view_data.kind, ViewKind::Search { .. }) {
+            BackendResult::SearchResults(tracks, tab) => {
+                // Card thumbnail entries come from the result tab itself, so build
+                // them from `tab` before it is moved into view state below.
+                let mut entries: Vec<(String, String)> = match &tab {
+                    crate::youtube::SearchTab::Artists(cards)
+                    | crate::youtube::SearchTab::Albums(cards)
+                    | crate::youtube::SearchTab::Playlists(cards) => cards
+                        .iter()
+                        .map(|c| (c.id.clone(), c.thumbnail.clone()))
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                if let ViewKind::Search {
+                    exhausted,
+                    tab: kind_tab,
+                    ..
+                } = &mut self.view_data.kind
+                {
+                    let count = if tab.is_track_tab() {
+                        tracks.len()
+                    } else {
+                        tab.len()
+                    };
+                    *exhausted = count < crate::theme::SEARCH_PAGE_SIZE;
+                    *kind_tab = tab;
                     self.view_data.tracks = tracks;
-                    self.view_data.set_exhausted(
-                        self.view_data.tracks.len() < crate::theme::SEARCH_PAGE_SIZE,
-                    );
                     self.view_data.loading = false;
                     self.view_data.selection.clear();
                     self.push_nav_entry();
                 }
                 self.save_session();
-                let tracks = self.view_data.tracks.clone();
-                spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
+                // Download both track and non-track (artist/album/playlist)
+                // thumbnails so the search results render with art. Card ids
+                // are browse ids keyed by their own thumbnail url.
+                entries.extend(
+                    self.view_data
+                        .tracks
+                        .iter()
+                        .filter(|t| t.source == crate::types::TrackSource::YouTube)
+                        .map(|t| (t.id.clone(), t.thumbnail.clone())),
+                );
+                spawn_thumbnail_download(entries, self.result_tx.clone());
                 self.clear_notification();
             }
             BackendResult::SearchResultsAppend(tracks) => {
@@ -182,6 +231,27 @@ impl MusicPlayer {
                 spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
                 self.clear_notification();
                 self.save_session();
+            }
+            BackendResult::BrowseResults(browse_id, tracks) => {
+                // Match the result to whichever browse view is currently
+                // active; ignore stale results from a superseded view.
+                let active = matches!(
+                    &self.view_data.kind,
+                    ViewKind::Artist { browse_id: b, .. }
+                        | ViewKind::Album { browse_id: b, .. }
+                        | ViewKind::PlaylistView { playlist_id: b, .. }
+                        if *b == browse_id
+                );
+                if active {
+                    self.view_data.tracks = tracks;
+                    self.view_data.loading = false;
+                    self.view_data.selection.clear();
+                    self.push_nav_entry();
+                }
+                self.save_session();
+                let tracks = self.view_data.tracks.clone();
+                spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
+                self.clear_notification();
             }
             BackendResult::RadioResults(label, tracks) => {
                 if matches!(

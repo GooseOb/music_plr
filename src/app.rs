@@ -36,6 +36,9 @@ pub struct MusicPlayer {
     /// The search-bar text. Kept on `MusicPlayer` because the search bar is
     /// always visible regardless of which view is active.
     pub search_query: String,
+    /// The active search scope (All / Songs / Videos / Artists / Albums /
+    /// Playlists). Global UI state, like `search_query`.
+    pub search_scope: crate::youtube::SearchScope,
     /// Whether the search-history dropdown is open (global UI state).
     pub show_search_history: bool,
     /// Filtered history list for the dropdown (derived from
@@ -134,6 +137,7 @@ impl MusicPlayer {
             config,
             view_data: ViewData::default(),
             search_query: String::new(),
+            search_scope: crate::youtube::SearchScope::Songs,
             show_search_history: false,
             last_filtered_history: Vec::new(),
             queue: PlayQueue::new(),
@@ -299,6 +303,29 @@ impl MusicPlayer {
             }
             Message::SearchExecute => {
                 self.handle_search_execute();
+                Task::none()
+            }
+            Message::SearchScopeChanged(scope) => {
+                if scope != self.search_scope {
+                    self.search_scope = scope;
+                    // Re-run the current query under the new scope (only if
+                    // there is one; otherwise just remember the preference).
+                    if !self.search_query.is_empty() {
+                        self.run_search(self.search_query.clone(), scope);
+                    }
+                }
+                Task::none()
+            }
+            Message::OpenArtist(browse_id, title) => {
+                self.handle_open_artist(browse_id, title);
+                Task::none()
+            }
+            Message::OpenAlbum(browse_id, title) => {
+                self.handle_open_album(browse_id, title);
+                Task::none()
+            }
+            Message::OpenPlaylist(playlist_id, title) => {
+                self.handle_open_playlist(playlist_id, title);
                 Task::none()
             }
             Message::SearchLoadMore => {
