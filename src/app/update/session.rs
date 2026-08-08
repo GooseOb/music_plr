@@ -20,9 +20,7 @@ impl MusicPlayer {
             return;
         }
         let now = std::time::Instant::now();
-        if now.duration_since(self.last_session_flush)
-            < crate::app::update::session::SESSION_FLUSH_MIN_INTERVAL
-        {
+        if now.duration_since(self.last_session_flush) < SESSION_FLUSH_MIN_INTERVAL {
             return;
         }
         self.last_session_flush = now;

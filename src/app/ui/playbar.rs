@@ -13,6 +13,7 @@ use super::{
     Message, MusicPlayer,
 };
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
 

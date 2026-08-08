@@ -17,6 +17,7 @@ use super::{
     theme, ContextMenuState, Message, MusicPlayer,
 };
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn view_context_menu<'a>(
     menu: &'a ContextMenuState,
     p: &'a Palette,

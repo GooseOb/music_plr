@@ -75,7 +75,7 @@ impl MusicPlayer {
 
         // Prefer a downloaded file on disk over streaming. Downloaded tracks
         // carry an absolute path in the registry; if it still exists we play
-        // it directly (ffmpeg-decoded) instead of hitting yt-dlp.
+        // it directly (decoded natively by symphonia) instead of hitting yt-dlp.
         if let Some(dl_path) = self.download_registry.path_for(&track.url) {
             let path = PathBuf::from(&dl_path);
             if path.exists() {
@@ -87,10 +87,10 @@ impl MusicPlayer {
             }
         }
 
-        // YouTube tracks go through the stream/cache pipeline (yt-dlp →
-        // ffmpeg → cached WAV). Local files are played directly by decoding
-        // the on-disk file through ffmpeg (the `PlayCached` path handles any
-        // ffmpeg-readable format uniformly), so they never hit yt-dlp.
+        // YouTube tracks go through the stream/cache pipeline (yt-dlp writes
+        // raw AAC-in-M4A straight to the cache file). Local files are played
+        // directly from disk (the `PlayCached` path handles any
+        // symphonia-decodable format uniformly), so they never hit yt-dlp.
         if track.source == crate::types::TrackSource::YouTube && self.stream_cache.contains(&id) {
             let path = self.stream_cache.path_for(&id);
             debug!("Playing from cache: {}", path.display());

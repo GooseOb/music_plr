@@ -43,7 +43,7 @@ impl MusicPlayer {
         // Capture the live query into the outgoing `Search` entry (if any) so
         // Back navigation restores it.
         if let ViewKind::Search { query, .. } = &mut self.view_data.kind {
-            *query = self.search_query.clone();
+            query.clone_from(&self.search_query);
         }
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.cleanup_drag_state();

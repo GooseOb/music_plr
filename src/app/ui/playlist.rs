@@ -74,11 +74,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
     };
 
     let track_list = if is_downloads {
-        let tracks: &[Track] = if matches!(player.view_data.kind, ViewKind::Downloads) {
-            &player.view_data.tracks
-        } else {
-            &[]
-        };
+        let tracks: &[Track] = &player.view_data.tracks;
         if tracks.is_empty() {
             Container::new(text("No downloaded tracks").style(fg_secondary()))
                 .padding(theme::SPACING_XL)

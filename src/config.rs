@@ -50,7 +50,7 @@ mod tests {
     #[test]
     fn config_default_values() {
         let cfg = Config::default();
-        assert_eq!(cfg.volume, 0.8);
+        assert!((cfg.volume - 0.8).abs() < f32::EPSILON);
         assert_eq!(cfg.max_search_history_visible, 10);
         assert_eq!(cfg.max_search_history_stored, 100);
         assert_eq!(cfg.cache_max_size_mb, 1024);
@@ -65,6 +65,6 @@ mod tests {
         };
         let json = serde_json::to_string(&cfg).unwrap();
         let restored: Config = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.volume, cfg.volume);
+        assert!((restored.volume - cfg.volume).abs() < f32::EPSILON);
     }
 }

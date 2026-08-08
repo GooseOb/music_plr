@@ -89,10 +89,10 @@ impl MusicPlayer {
             return;
         };
 
+        // Selection-aware: operate on the whole selection when the
+        // right-clicked track is part of it, otherwise just that track.
         let sel = self.selection(is_queue);
-        let target_indices = if sel.is_empty() {
-            vec![index]
-        } else if sel.contains(&index) {
+        let target_indices = if sel.contains(&index) {
             sel.to_vec()
         } else {
             vec![index]
@@ -110,10 +110,12 @@ impl MusicPlayer {
         });
     }
 
-    /// Extracts the context menu state (clearing it), returning `None` if
-    /// no menu was open.  This avoids the repeated
-    /// `context_menu.as_ref().map(|m| m.is_queue).unwrap_or(false)` pattern.
-    pub fn take_context_menu(&mut self) -> Option<ContextMenuState> {
-        self.context_menu.take().filter(|m| m.visible)
+    /// Close the context menu and report whether it targeted the queue list.
+    /// Every caller only needs the `is_queue` flag, so this avoids the
+    /// repeated `take().as_ref().is_some_and(|m| m.is_queue)` dance.
+    pub fn take_context_menu_is_queue(&mut self) -> bool {
+        self.context_menu
+            .take()
+            .is_some_and(|m| m.visible && m.is_queue)
     }
 }

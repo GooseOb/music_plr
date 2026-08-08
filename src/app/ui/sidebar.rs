@@ -29,6 +29,7 @@ fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .into()
 }
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.app_theme.palette;
 

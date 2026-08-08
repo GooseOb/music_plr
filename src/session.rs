@@ -65,7 +65,7 @@ mod tests {
         assert!(matches!(state.data.kind, ViewKind::Search { .. }));
         assert!(state.queue.tracks.is_empty());
         assert!(!state.show_queue);
-        assert_eq!(state.volume, 0.8);
+        assert!((state.volume - 0.8).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -90,11 +90,11 @@ mod tests {
             ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
         ));
         assert!(restored.show_queue);
-        assert_eq!(restored.volume, 0.5);
+        assert!((restored.volume - 0.5).abs() < f32::EPSILON);
         if let ViewKind::ArtistRadio(label) = &restored.data.kind {
             assert_eq!(label, "Test Radio");
             assert_eq!(restored.data.selection, vec![2]);
-            assert_eq!(restored.data.scroll, 42.0);
+            assert!((restored.data.scroll - 42.0).abs() < f32::EPSILON);
         } else {
             panic!("expected Radio data");
         }

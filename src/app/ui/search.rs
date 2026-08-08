@@ -4,7 +4,7 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{app::ViewKind, icons, theme::AppTheme};
+use crate::{icons, theme::AppTheme};
 
 use super::{
     styles::{
@@ -49,16 +49,11 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
 }
 
 pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let (results, loading, exhausted) = if matches!(player.view_data.kind, ViewKind::Search { .. })
-    {
-        (
-            player.view_data.tracks.as_slice(),
-            player.view_data.loading,
-            player.view_data.exhausted(),
-        )
-    } else {
-        (&[][..], false, false)
-    };
+    // Dispatched from `content.rs` on `ViewKind::Search`, so the view data is
+    // always the search view's own state.
+    let results = player.view_data.tracks.as_slice();
+    let loading = player.view_data.loading;
+    let exhausted = player.view_data.exhausted();
 
     let track_list = view_search_results(player, results, loading, "Searching...");
 
@@ -101,18 +96,10 @@ fn view_search_results<'a>(
 }
 
 pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let (label, tracks, loading) = if matches!(
-        player.view_data.kind,
-        ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
-    ) {
-        (
-            player.view_data.label().to_string(),
-            player.view_data.tracks.as_slice(),
-            player.view_data.loading,
-        )
-    } else {
-        (String::new(), &[][..], false)
-    };
+    // Dispatched from `content.rs` on the two radio kinds.
+    let label = player.view_data.label();
+    let tracks = player.view_data.tracks.as_slice();
+    let loading = player.view_data.loading;
 
     let header = Container::new(text(label).width(Length::Fill).center())
         .padding([theme::SPACING_SM, theme::SPACING_XL]);
