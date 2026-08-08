@@ -32,7 +32,7 @@ pub fn spawn_thumbnail_download_thread(tracks: &[Track], tx: mpsc::Sender<Backen
     }
     thread::spawn(move || {
         for (id, thumb) in &entries {
-            crate::thumbnails::download(id, thumb);
+            crate::data::thumbnails::download(id, thumb);
         }
         let _ = tx.send(BackendResult::ThumbnailsDownloaded);
     });

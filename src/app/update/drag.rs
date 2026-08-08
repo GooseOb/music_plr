@@ -311,12 +311,7 @@ impl MusicPlayer {
                     self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
                 }
                 let name = self.playlists.playlists[playlist_idx].name.clone();
-                self.notify(format!(
-                    "Added {} track{} to {}",
-                    count,
-                    crate::util::plural_suffix(count),
-                    name
-                ));
+                self.notify_tracks("Added", count, &format!("to {name}"));
                 return;
             }
         }
@@ -368,11 +363,7 @@ impl MusicPlayer {
             self.queue.tracks.insert(clamped + j, track);
         }
         self.save_session();
-        self.notify(format!(
-            "Added {} track{} to queue",
-            inserted,
-            crate::util::plural_suffix(inserted)
-        ));
+        self.notify_tracks("Added", inserted, "to queue");
     }
 
     /// Insert tracks from the queue into the current playlist at the given
@@ -400,12 +391,7 @@ impl MusicPlayer {
         }
         self.save_session();
         let name = self.playlists.playlists[sp].name.clone();
-        self.notify(format!(
-            "Added {} track{} to {}",
-            inserted,
-            crate::util::plural_suffix(inserted),
-            name
-        ));
+        self.notify_tracks("Added", inserted, &format!("to {name}"));
     }
 
     /// Handle reordering within the same list. The selection is always

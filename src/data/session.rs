@@ -1,8 +1,8 @@
+use super::JsonStore;
 #[cfg(test)]
 use crate::app::ViewKind;
 use crate::{app::ViewData, types::PlayQueue};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {
@@ -23,36 +23,8 @@ impl Default for SessionState {
     }
 }
 
-impl SessionState {
-    pub fn load() -> Self {
-        let path = store_path();
-        std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    }
-
-    #[cfg(not(test))]
-    pub fn save(&self) {
-        let path = store_path();
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        if let Ok(s) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(&path, s);
-        }
-    }
-
-    #[cfg(test)]
-    pub fn save(&self) {}
-}
-
-fn store_path() -> PathBuf {
-    if let Some(dirs) = directories::ProjectDirs::from("", "", "music_plr") {
-        dirs.config_dir().join("session.json")
-    } else {
-        PathBuf::from("session.json")
-    }
+impl JsonStore for SessionState {
+    const FILE: &'static str = "session.json";
 }
 
 #[cfg(test)]

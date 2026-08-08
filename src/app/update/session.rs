@@ -1,5 +1,5 @@
 use super::{warn, MusicPlayer, NavEntry};
-use crate::session::SessionState;
+use crate::data::{session::SessionState, JsonStore};
 use std::time::Duration;
 
 /// Minimum time between `session.json` writes. `save_session()` marks the
@@ -67,6 +67,20 @@ impl MusicPlayer {
     pub fn notify_error(&mut self, msg: String) {
         warn!("Backend error: {}", msg);
         self.notification = Some(msg);
+    }
+
+    /// Notify about an operation on `n` tracks, pluralizing automatically.
+    /// `suffix` is appended verbatim so callers control the preposition:
+    /// `notify_tracks("Added", 3, "to Chill")` → "Added 3 tracks to Chill";
+    /// `notify_tracks("Removed", 1, "")` → "Removed 1 track".
+    pub fn notify_tracks(&mut self, verb: &str, n: usize, suffix: &str) {
+        let plural = crate::util::plural_suffix(n);
+        let tail = if suffix.is_empty() {
+            String::new()
+        } else {
+            format!(" {suffix}")
+        };
+        self.notify(format!("{verb} {n} track{plural}{tail}"));
     }
 
     pub fn clear_notification(&mut self) {

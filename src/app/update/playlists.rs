@@ -1,5 +1,5 @@
 use super::{MusicPlayer, Track, TrackSource, ViewData};
-use crate::app::ViewKind;
+use crate::{app::ViewKind, data::JsonStore};
 use std::path::Path;
 
 impl MusicPlayer {
@@ -97,12 +97,7 @@ impl MusicPlayer {
         }
         self.playlists.save();
 
-        let count = new_tracks.len();
-        self.notify(format!(
-            "Added {} local track{}",
-            count,
-            crate::util::plural_suffix(count)
-        ));
+        self.notify_tracks("Added", new_tracks.len(), "");
     }
 
     pub fn handle_add_to_playlist(
@@ -126,23 +121,14 @@ impl MusicPlayer {
         self.show_playlist_picker = false;
         self.picker_target_indices.clear();
         let name = self.playlists.playlists[playlist_idx].name.clone();
-        self.notify(format!(
-            "Added {} track{} to {}",
-            count,
-            crate::util::plural_suffix(count),
-            name
-        ));
+        self.notify_tracks("Added", count, &format!("to {name}"));
     }
 
     pub fn handle_remove_from_playlist_batch(&mut self, indices: &[usize]) {
         if let Some(sp) = self.view_data.selected_playlist_id() {
             if sp < self.playlists.playlists.len() {
                 let removed = self.playlists.remove_tracks_at(sp, indices);
-                self.notify(format!(
-                    "Removed {} track{}",
-                    removed,
-                    crate::util::plural_suffix(removed)
-                ));
+                self.notify_tracks("Removed", removed, "");
                 // Clear selection if any removed indices were selected,
                 // since the list shifted.
                 let sel = self.view_data.selection.clone();
@@ -200,12 +186,7 @@ impl MusicPlayer {
         self.playlists.save();
         let count = self.clipboard.len();
         let name = self.playlists.playlists[idx].name.clone();
-        self.notify(format!(
-            "Pasted {} track{} into {}",
-            count,
-            crate::util::plural_suffix(count),
-            name
-        ));
+        self.notify_tracks("Pasted", count, &format!("into {name}"));
         self.clipboard.clear();
     }
 
@@ -219,11 +200,7 @@ impl MusicPlayer {
             if let Some(sp) = self.view_data.selected_playlist_id() {
                 if sp < self.playlists.playlists.len() {
                     let removed = self.playlists.remove_tracks_at(sp, &indices);
-                    self.notify(format!(
-                        "Removed {} track{}",
-                        removed,
-                        crate::util::plural_suffix(removed)
-                    ));
+                    self.notify_tracks("Removed", removed, "");
                 }
             }
         } else if let ViewKind::Downloads = &self.view_data.kind {

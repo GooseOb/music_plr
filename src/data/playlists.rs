@@ -1,6 +1,6 @@
+use super::JsonStore;
 use crate::types::Track;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Playlist {
@@ -13,29 +13,11 @@ pub struct PlaylistStore {
     pub playlists: Vec<Playlist>,
 }
 
+impl JsonStore for PlaylistStore {
+    const FILE: &'static str = "playlists.json";
+}
+
 impl PlaylistStore {
-    pub fn load() -> Self {
-        let path = store_path();
-        std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    }
-
-    #[cfg(not(test))]
-    pub fn save(&self) {
-        let path = store_path();
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        if let Ok(s) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(&path, s);
-        }
-    }
-
-    #[cfg(test)]
-    pub fn save(&self) {}
-
     pub fn create(&mut self, name: &str) {
         if !name.trim().is_empty() && !self.playlists.iter().any(|p| p.name == name.trim()) {
             self.playlists.push(Playlist {
@@ -84,14 +66,6 @@ impl PlaylistStore {
         let removed = crate::util::remove_at(&mut pl.tracks, indices);
         self.save();
         removed
-    }
-}
-
-fn store_path() -> PathBuf {
-    if let Some(dirs) = directories::ProjectDirs::from("", "", "music_plr") {
-        dirs.config_dir().join("playlists.json")
-    } else {
-        PathBuf::from("playlists.json")
     }
 }
 

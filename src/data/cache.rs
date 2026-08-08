@@ -31,13 +31,8 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
-fn project_dirs() -> directories::ProjectDirs {
-    directories::ProjectDirs::from("", "", "music_plr")
-        .expect("failed to determine project directories")
-}
-
 fn cache_dir() -> PathBuf {
-    project_dirs().cache_dir().join("youtube")
+    super::cache_path("youtube")
 }
 
 fn index_path() -> PathBuf {

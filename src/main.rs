@@ -6,16 +6,10 @@
 
 mod app;
 mod audio;
-mod cache;
-mod config;
-mod downloads;
+mod data;
 mod icons;
 mod mpris;
-mod playlists;
-mod search_history;
-mod session;
 mod theme;
-mod thumbnails;
 mod types;
 mod util;
 mod youtube;

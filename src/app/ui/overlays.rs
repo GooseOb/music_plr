@@ -185,7 +185,8 @@ fn menu_item<'a>(
 }
 
 pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let playlists: Vec<&crate::playlists::Playlist> = player.playlists.playlists.iter().collect();
+    let playlists: Vec<&crate::data::playlists::Playlist> =
+        player.playlists.playlists.iter().collect();
 
     let items: Vec<Element<'a, Message, AppTheme>> = playlists
         .iter()

@@ -1,3 +1,4 @@
+use super::JsonStore;
 use serde::{Deserialize, Serialize};
 
 /// User data: the persisted list of past search queries.
@@ -7,36 +8,11 @@ pub struct SearchHistory {
     queries: Vec<String>,
 }
 
-fn store_path() -> std::path::PathBuf {
-    if let Some(dirs) = directories::ProjectDirs::from("", "", "music_plr") {
-        dirs.config_dir().join("search_history.json")
-    } else {
-        std::path::PathBuf::from("search_history.json")
-    }
+impl JsonStore for SearchHistory {
+    const FILE: &'static str = "search_history.json";
 }
 
 impl SearchHistory {
-    pub fn load() -> Self {
-        std::fs::read_to_string(store_path())
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    }
-
-    #[cfg(not(test))]
-    pub fn save(&self) {
-        let path = store_path();
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        if let Ok(s) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(path, s);
-        }
-    }
-
-    #[cfg(test)]
-    pub fn save(&self) {}
-
     pub fn get(&self) -> &[String] {
         &self.queries
     }

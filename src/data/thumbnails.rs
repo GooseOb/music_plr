@@ -1,12 +1,8 @@
 use std::path::PathBuf;
 use tracing::warn;
 
-fn project_dirs() -> directories::ProjectDirs {
-    directories::ProjectDirs::from("", "", "music_plr").expect("project dirs")
-}
-
 fn thumbnails_dir() -> PathBuf {
-    project_dirs().cache_dir().join("thumbnails")
+    super::cache_path("thumbnails")
 }
 
 pub fn thumbnail_path(video_id: &str) -> PathBuf {

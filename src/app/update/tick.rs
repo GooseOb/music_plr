@@ -110,7 +110,7 @@ impl MusicPlayer {
             }
         }
         for id in to_check {
-            if crate::thumbnails::thumbnail_path(&id).exists() {
+            if crate::data::thumbnails::thumbnail_path(&id).exists() {
                 self.thumbnail_cache.insert(id);
             }
         }

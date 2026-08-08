@@ -1,11 +1,10 @@
 use crate::{
     audio::AudioPlayer,
-    cache::StreamCache,
-    config,
-    downloads::DownloadRegistry,
+    data::{
+        cache::StreamCache, config, downloads::DownloadRegistry, playlists::PlaylistStore,
+        search_history::SearchHistory, JsonStore,
+    },
     mpris::{self, MprisCommand, MprisUpdate},
-    playlists::PlaylistStore,
-    search_history::SearchHistory,
     theme::{AppTheme, Palette},
     types::{PlayQueue, QueueTab, Track},
     util::format_duration,
@@ -29,7 +28,7 @@ pub struct NavEntry {
 /// All per-view state, stored in one flat struct. The `kind` field is the
 /// only variant-specific part; everything else is shared view chrome that is
 /// identical regardless of which view is active. Serialized into [`NavEntry`]
-/// for back/forward history and [`crate::session::SessionState`] for restore.
+/// for back/forward history and [`crate::data::session::SessionState`] for restore.
 ///
 /// `query` (the search-bar text) is intentionally kept as a field on
 /// [`MusicPlayer`] rather than here: the search bar is always visible
@@ -375,7 +374,7 @@ pub enum DragTargetList {
 #[allow(clippy::struct_excessive_bools)]
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
-    pub config: crate::config::Config,
+    pub config: crate::data::config::Config,
     /// All per-view state lives here. The active variant is the single source
     /// of truth for which view is active and its data. Replaces the previously
     /// separate fields: `search_query`, `search_results`, `radio_tracks`,
@@ -471,7 +470,7 @@ impl MusicPlayer {
         (Self::default(), Task::none())
     }
 
-    fn new_with(config: crate::config::Config) -> Self {
+    fn new_with(config: crate::data::config::Config) -> Self {
         let (result_tx, result_rx) = mpsc::channel();
         let (mpris_cmd_tx, mpris_cmd_rx) = mpsc::channel();
 

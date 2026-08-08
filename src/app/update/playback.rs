@@ -128,11 +128,7 @@ impl MusicPlayer {
         let removed = crate::util::remove_at(&mut self.queue.tracks, indices);
         self.save_session();
         self.mpris_dirty = true;
-        self.notify(format!(
-            "Removed {} track{} from queue",
-            removed,
-            crate::util::plural_suffix(removed)
-        ));
+        self.notify_tracks("Removed", removed, "from queue");
         // Clear selection if any removed indices were selected, since the
         // queue shifted.
         let sel = self.queue_selected_indices.clone();

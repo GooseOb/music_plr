@@ -29,7 +29,7 @@ pub fn thumbnail<'a>(
     exists: bool,
 ) -> Element<'a, Message, AppTheme> {
     if exists {
-        let thumb_path = crate::thumbnails::thumbnail_path(&track.id);
+        let thumb_path = crate::data::thumbnails::thumbnail_path(&track.id);
         image(image::Handle::from_path(thumb_path))
             .width(size)
             .height(size)
