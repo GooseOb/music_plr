@@ -27,15 +27,11 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
         .into()
     } else if let Some(idx) = player.view_data.selected_playlist_id() {
         if let Some(pl) = player.playlists.playlists.get(idx) {
-            let track_count = pl.tracks.len();
             Row::with_children(vec![
                 text_input(&pl.name, player.view_data.playlist_name())
                     .on_input(Message::RenamePlaylist)
                     .padding([theme::SPACING_SM, theme::SPACING_MD])
                     .width(Length::Fill)
-                    .into(),
-                text(format!("({track_count} tracks)"))
-                    .style(fg_secondary())
                     .into(),
                 Button::new(
                     Row::with_children(vec![

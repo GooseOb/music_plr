@@ -117,6 +117,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
                 Row::with_children(vec![
                     icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_MD).into(),
                     text(&pl.name).color(text_color).into(),
+                    iced::widget::right(text(pl.tracks.len()).color(p.fg_secondary)).into(),
                 ])
                 .spacing(10)
                 .padding([theme::SPACING_SM, theme::SPACING_MD])
