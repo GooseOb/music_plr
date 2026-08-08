@@ -21,6 +21,18 @@ cargo build && cargo run
 cargo fmt && cargo clippy && cargo test
 ```
 
+## Version Control
+
+**Do not commit unless explicitly asked.** Leave changes in the working tree and report what was
+changed; the user decides when and how it lands. This applies to `git commit` as well as anything
+that implicitly commits (`git merge`, `git rebase`, `git stash`, `git checkout` over local edits).
+Never `push`, amend, or rewrite history unprompted.
+
+When a commit *is* requested: one logical change per commit, imperative subject under ~72 chars,
+and a body explaining **why** when it isn't obvious from the diff.
+
+Run `cargo fmt && cargo clippy && cargo test` before handing work back, committed or not.
+
 ## Conventions
 
 - Comments only where logic is non-obvious (audio pipeline, drag geometry, nav-history); else self-documenting.
@@ -100,7 +112,7 @@ src/
 `AudioPlayer` runs a dedicated output thread (mpsc command channel). **No ffmpeg** — decoding is fully native via symphonia.
 
 - **Stream+cache**: `yt-dlp -f bestaudio[ext=m4a]/bestaudio -o -` writes raw AAC-in-M4A bytes straight to the cache file (`.cache`, owned by `StreamCache`). A copy thread drains yt-dlp stdout → cache file and flips `writer_alive` when done.
-- **Decoding** goes through a custom `SymphoniaStreamingSource` (rodio `Source` + `Iterator<Item=i16>`) wrapping a non-seekable `GrowingMediaSource`. The non-seekable source makes symphonia demux *sequentially* (no init seek), so it can probe and play a still-growing file without the `SeekError` panic that `rodio::Decoder::new` hits (it hardcodes `byte_len() = None`). The reader blocks at EOF while `writer_alive`, so playback starts within a few KB and runs seamlessly to the end.
+- **Decoding** goes through a custom `SymphoniaStreamingSource` (rodio `Source` + `Iterator<Item=i16>`) wrapping a non-seekable `GrowingMediaSource`. The non-seekable source makes symphonia demux _sequentially_ (no init seek), so it can probe and play a still-growing file without the `SeekError` panic that `rodio::Decoder::new` hits (it hardcodes `byte_len() = None`). The reader blocks at EOF while `writer_alive`, so playback starts within a few KB and runs seamlessly to the end.
 - **Cached/downloaded/local playback** (`PlayCached`) uses the same `SymphoniaStreamingSource` with `writer_alive = None` (complete, seekable file with real `byte_len`), so seeking works on replay. `rodio::Decoder::new` is intentionally avoided for both paths.
 - **Stream completion**: detected when yt-dlp exits AND the copy thread finishes (`writer_alive` false) → `cache_ready` flips, tick loop calls `stream_cache.insert(id)` to register the cache. Track end → sink empties → `stream_finished` → auto-advance (no subprocess exit polling needed).
 
@@ -114,4 +126,16 @@ src/
 
 ## Maintenance
 
-After structural changes (new/removed files, renamed types/functions), verify this file reflects actual state. Keep it under ~150 lines.
+After structural changes (new/removed files, renamed types/functions), verify `AGENTS.md` reflects actual state. Keep it under ~150 lines.
+
+**`README.md` must be kept up to date too.** It is user-facing, so it drifts in ways this file
+does not — check it whenever any of the following change:
+
+- **Module layout** — it carries its own `src/` tree (less granular than the one above).
+- **Keyboard shortcuts** — handled in `app/update/input.rs`. Never document a binding without
+  confirming a handler exists; a stale <kbd>Ctrl</kbd>+<kbd>F</kbd> row survived there for a while.
+- **Config fields** — must match `data/config.rs` exactly, including defaults. The file is
+  `config.toml` (confy), not JSON.
+- **On-disk paths** — the `FILE` consts in `data/*.rs` and the dirs in `data/mod.rs`.
+- **External tool requirements** — e.g. ffmpeg was dropped, but the README still listed it.
+- **Features / audio pipeline** — keep the pipeline summary consistent with the one above.
