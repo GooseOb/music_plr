@@ -147,7 +147,7 @@ impl MusicPlayer {
     ) -> Vec<usize> {
         let new_positions = if let Some(sp) = self.view_data.selected_playlist_id() {
             if sp < self.playlists.playlists.len() {
-                super::drag::reorder_tracks(
+                crate::util::reorder_tracks(
                     &mut self.playlists.playlists[sp].tracks,
                     drop_idx,
                     indices,

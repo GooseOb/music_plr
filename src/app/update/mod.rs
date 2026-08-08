@@ -12,6 +12,7 @@ mod navigation;
 mod playback;
 mod playlists;
 mod search;
+mod selection;
 mod session;
 mod tick;
 

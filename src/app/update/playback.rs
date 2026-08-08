@@ -119,7 +119,7 @@ impl MusicPlayer {
         selection: &[usize],
     ) -> Vec<usize> {
         let new_positions =
-            super::drag::reorder_tracks(&mut self.queue.tracks, drop_idx, indices, selection);
+            crate::util::reorder_tracks(&mut self.queue.tracks, drop_idx, indices, selection);
         self.save_session();
         new_positions
     }
