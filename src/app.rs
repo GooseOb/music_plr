@@ -31,10 +31,7 @@ pub struct MusicPlayer {
     pub audio: AudioPlayer,
     pub config: crate::data::config::Config,
     /// All per-view state lives here. The active variant is the single source
-    /// of truth for which view is active and its data. Replaces the previously
-    /// separate fields: `search_query`, `search_results`, `radio_tracks`,
-    /// `selected_playlist`, `selected_playlist_name`, `downloaded_tracks`,
-    /// `selected_indices`, scroll/bounds, and `search_loading`.
+    /// of truth for which view is active and its data.
     pub view_data: ViewData,
     /// The search-bar text. Kept on `MusicPlayer` because the search bar is
     /// always visible regardless of which view is active.

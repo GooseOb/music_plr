@@ -75,7 +75,7 @@ impl MusicPlayer {
 
         // Prefer a downloaded file on disk over streaming. Downloaded tracks
         // carry an absolute path in the registry; if it still exists we play
-        // it directly (decoded natively by symphonia) instead of hitting yt-dlp.
+        // it directly, decoded natively by symphonia.
         if let Some(dl_path) = self.download_registry.path_for(&track.url) {
             let path = PathBuf::from(&dl_path);
             if path.exists() {
@@ -129,8 +129,7 @@ impl MusicPlayer {
         self.save_session();
         self.mpris_dirty = true;
         self.notify_tracks("Removed", removed, "from queue");
-        // Clear selection if any removed indices were selected, since the
-        // queue shifted.
+        // Drop a now-stale selection if any removed index was selected.
         let sel = self.queue_selected_indices.clone();
         if indices.iter().any(|&i| sel.contains(&i)) {
             self.clear_selection();
@@ -171,8 +170,6 @@ impl MusicPlayer {
     /// front of the queue (becomes the new current track).  When history is
     /// empty there is nothing to go back to.
     pub fn previous_track(&mut self) {
-        // Restore the most recently played track to the front of the queue
-        // (becomes the new current track).
         if self.queue.restore_previous() {
             self.track_loading = true;
             if let Some(t) = self.queue.current() {

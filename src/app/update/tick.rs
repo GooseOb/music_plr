@@ -95,9 +95,8 @@ impl MusicPlayer {
         }
 
         // Populate the thumbnail-exists set incrementally: only check the
-        // filesystem for ids we haven't seen yet. `thumbnail_cache` now holds
-        // the ids whose thumbnail file exists (a `HashSet`, not a
-        // value-carrying `HashMap`).
+        // filesystem for ids not yet in `thumbnail_cache`, which holds the ids
+        // whose thumbnail file exists.
         let mut to_check: Vec<String> = Vec::new();
         for track in self.view_tracks() {
             if !self.thumbnail_cache.contains(&track.id) {

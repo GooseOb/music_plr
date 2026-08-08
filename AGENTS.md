@@ -35,7 +35,7 @@ Run `cargo fmt && cargo clippy && cargo test` before handing work back, committe
 
 ## Conventions
 
-- Comments only where logic is non-obvious (audio pipeline, drag geometry, nav-history); else self-documenting.
+- Comments describe the code's *current* state, not what a change did or undid. Comment hygiene: keep them short; never restate what the code obviously does, never narrate history ("now does X instead of Y", "replaces the old field"), and don't repeat the same explanatory comment in every caller of a shared pattern — say it once at the canonical routine (e.g. `util::remove_at`/`reorder_tracks`).
 - **Single source of truth**: `MusicPlayer` (`app.rs`) holds all state; `view()` is pure over `&MusicPlayer` — no `Rc<RefCell<Backend>>`, no sync methods. `MusicPlayer` is NOT `Clone` (channels).
 - **Async**: `mpsc` channels for cross-thread results (backend, MPRIS); `Task`/`Subscription` for timer tick + raw events; shared state via `&mut self`.
 - `notify()` / `notify_error()` for user-facing errors; `notify_tracks(verb, n, suffix)` for pluralized counts.

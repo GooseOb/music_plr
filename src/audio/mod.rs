@@ -82,8 +82,7 @@ impl AudioPlayer {
             // Set to `true` while the copy thread is still draining yt-dlp's
             // stdout into the cache file. The native decoder reads the (growing)
             // cache file and blocks at EOF until this flips to `false`, then
-            // treats EOF as genuine end-of-track. Replaces the old ffmpeg
-            // transmux step.
+            // treats EOF as genuine end-of-track.
             let mut writer_alive: Option<Arc<AtomicBool>> = None;
             // The cache file rodio currently reads. For `StreamAndCache` this
             // is the persistent cache file (written directly from yt-dlp's

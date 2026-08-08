@@ -11,13 +11,12 @@ use std::{
 /// A symphonia `MediaSource` over a cache file that yt-dlp is still writing.
 ///
 /// Reports itself as **non-seekable** so symphonia's format readers demux
-/// *sequentially* during initialization instead of seeking to parse headers
-/// (which, on a partial file, would hit missing bytes and trip rodio's
-/// `unreachable!("Seek errors should not occur during initialization")`).
+/// *sequentially* during initialization. On a partial file a seek would hit
+/// missing bytes and trip rodio's
+/// `unreachable!("Seek errors should not occur during initialization")`.
 /// Reads at EOF *block* (with a short sleep) while the writer is alive, so the
 /// decoder sees a file that grows until the download finishes — at which
-/// point a real `EOF` is reported and the track ends normally. This is the
-/// native replacement for the old ffmpeg transmux step.
+/// point a real `EOF` is reported and the track ends normally.
 pub(super) struct GrowingMediaSource {
     pub(super) file: std::fs::File,
     /// `Some(flag)` while the copy thread is still writing: reads block at

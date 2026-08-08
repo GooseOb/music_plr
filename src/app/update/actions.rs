@@ -47,8 +47,7 @@ impl MusicPlayer {
                 plural_suffix(removed)
             ));
         }
-        // Clear selection if any of the operated-on indices were selected,
-        // since the list state has changed.
+        // Drop a now-stale selection if any operated-on index was selected.
         let sel = self.selection(is_queue);
         if indices.iter().any(|&i| sel.contains(&i)) {
             self.clear_selection();

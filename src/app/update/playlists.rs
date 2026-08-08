@@ -129,8 +129,7 @@ impl MusicPlayer {
             if sp < self.playlists.playlists.len() {
                 let removed = self.playlists.remove_tracks_at(sp, indices);
                 self.notify_tracks("Removed", removed, "");
-                // Clear selection if any removed indices were selected,
-                // since the list shifted.
+                // Drop a now-stale selection if any removed index was selected.
                 let sel = self.view_data.selection.clone();
                 if indices.iter().any(|&i| sel.contains(&i)) {
                     self.clear_selection();
