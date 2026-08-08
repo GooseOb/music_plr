@@ -1,6 +1,5 @@
 use std::{
-    io,
-    io::{Read, SeekFrom, Write},
+    io::{Read, Write},
     path::PathBuf,
     process::{Command, Stdio},
     sync::{
@@ -12,6 +11,12 @@ use std::{
     time::Duration,
 };
 use tracing::{debug, warn};
+
+mod growing;
+mod symphonia_source;
+
+use growing::GrowingMediaSource;
+use symphonia_source::SymphoniaStreamingSource;
 
 pub struct AudioPlayer {
     cmd_tx: Sender<PlayerCommand>,
@@ -50,7 +55,14 @@ enum PlayerCommand {
 }
 
 impl AudioPlayer {
-    #[allow(unused_assignments)]
+    /// Spawn the dedicated output thread and return a handle to it.
+    ///
+    /// The thread body is one long-lived state machine: it owns the sink,
+    /// yt-dlp child, and cache-file handles as locals, and each loop iteration
+    /// drains a command then polls playback/download progress. Splitting it
+    /// further would mean hoisting that state into a struct purely to satisfy
+    /// a line count, so the length is deliberate.
+    #[allow(unused_assignments, clippy::too_many_lines)]
     pub fn new(initial_volume: f32) -> Self {
         let state = Arc::new(Mutex::new(PlayerState {
             is_playing: false,
@@ -139,84 +151,13 @@ impl AudioPlayer {
                                 duration
                             );
 
-                            // Request AAC-in-M4A: symphonia can decode AAC
-                            // (unlike Opus/WebM, which neither rodio's
-                            // `symphonia-all` nor the standalone `symphonia`
-                            // 0.5 crate can decode), and YouTube serves it as a
-                            // fast-start DASH stream (moov at the front) that
-                            // demuxes sequentially — ideal for streaming.
-                            let mut ytdlp_child = match Command::new("yt-dlp")
-                                .args([
-                                    "-f",
-                                    "bestaudio[ext=m4a]/bestaudio",
-                                    "-o",
-                                    "-",
-                                    "--no-warnings",
-                                    "--no-check-formats",
-                                    "--extractor-args",
-                                    "youtube:skip=webpage,dash,msn,player_client=android",
-                                    &url,
-                                ])
-                                .stdout(Stdio::piped())
-                                .stderr(Stdio::null())
-                                .spawn()
-                            {
-                                Ok(c) => c,
-                                Err(e) => {
-                                    warn!("Failed to spawn yt-dlp: {}", e);
-                                    continue;
-                                }
-                            };
-
-                            let Some(ytdlp_stdout) = ytdlp_child.stdout.take() else {
-                                warn!("yt-dlp stdout not available");
+                            let Some((child, alive_flag)) =
+                                spawn_stream_to_cache(&url, &cache_path)
+                            else {
                                 continue;
                             };
 
-                            // yt-dlp emits raw `bestaudio` bytes (WebM/Opus or
-                            // M4A/AAC) on stdout; write them straight to the
-                            // cache file. symphonia decodes that growing file
-                            // directly during playback, so there is no ffmpeg
-                            // transmux step — exactly one copy on disk.
-                            let alive_flag = Arc::new(AtomicBool::new(true));
-                            let cache_path_copy = cache_path.clone();
-                            let alive_flag_copy = alive_flag.clone();
-                            thread::spawn(move || {
-                                let mut file = match std::fs::File::create(&cache_path_copy) {
-                                    Ok(f) => f,
-                                    Err(e) => {
-                                        warn!("Failed to create cache file: {}", e);
-                                        alive_flag_copy.store(false, Ordering::SeqCst);
-                                        return;
-                                    }
-                                };
-                                let mut buf = [0u8; 8192];
-                                let mut reader = ytdlp_stdout;
-                                loop {
-                                    match reader.read(&mut buf) {
-                                        Ok(0) => break,
-                                        Ok(n) => {
-                                            if file.write_all(&buf[..n]).is_err() {
-                                                break;
-                                            }
-                                        }
-                                        Err(e) => {
-                                            warn!("yt-dlp read error: {}", e);
-                                            break;
-                                        }
-                                    }
-                                }
-                                // Download finished: signal the reader that no
-                                // more bytes are coming so symphonia sees EOF.
-                                warn!(
-                                    "stream copy thread done: {} ({} bytes), writer_alive=false",
-                                    cache_path_copy.display(),
-                                    file.metadata().map_or(0, |m| m.len())
-                                );
-                                alive_flag_copy.store(false, Ordering::SeqCst);
-                            });
-
-                            ytdlp = Some(ytdlp_child);
+                            ytdlp = Some(child);
                             writer_alive = Some(alive_flag);
                             playback_file = Some(cache_path);
                             stream_url = Some(url);
@@ -443,286 +384,88 @@ impl AudioPlayer {
     }
 }
 
-/// A symphonia `MediaSource` over a cache file that yt-dlp is still writing.
+/// Spawn `yt-dlp` streaming `url` to stdout, plus a copy thread draining that
+/// stdout into `cache_path`.
 ///
-/// Reports itself as **non-seekable** so symphonia's format readers demux
-/// *sequentially* during initialization instead of seeking to parse headers
-/// (which, on a partial file, would hit missing bytes and trip rodio's
-/// `unreachable!("Seek errors should not occur during initialization")`).
-/// Reads at EOF *block* (with a short sleep) while the writer is alive, so the
-/// decoder sees a file that grows until the download finishes — at which
-/// point a real `EOF` is reported and the track ends normally. This is the
-/// native replacement for the old ffmpeg transmux step.
-struct GrowingMediaSource {
-    file: std::fs::File,
-    /// `Some(flag)` while the copy thread is still writing: reads block at
-    /// EOF until the flag flips to `false`. `None` means the download is
-    /// already complete, so a 0-byte read is a genuine EOF.
-    writer_alive: Option<Arc<AtomicBool>>,
-}
+/// Returns the child process and a "writer alive" flag that the copy thread
+/// clears once the download finishes, so a reader blocked at EOF on the still
+/// growing cache file knows when EOF is genuine. Returns `None` if yt-dlp
+/// could not be spawned or exposed no stdout.
+fn spawn_stream_to_cache(
+    url: &str,
+    cache_path: &std::path::Path,
+) -> Option<(std::process::Child, Arc<AtomicBool>)> {
+    // Request AAC-in-M4A: symphonia can decode AAC (unlike Opus/WebM, which
+    // neither rodio's `symphonia-all` nor the standalone `symphonia` 0.5 crate
+    // can decode), and YouTube serves it as a fast-start DASH stream (moov at
+    // the front) that demuxes sequentially — ideal for streaming.
+    let mut child = match Command::new("yt-dlp")
+        .args([
+            "-f",
+            "bestaudio[ext=m4a]/bestaudio",
+            "-o",
+            "-",
+            "--no-warnings",
+            "--no-check-formats",
+            "--extractor-args",
+            "youtube:skip=webpage,dash,msn,player_client=android",
+            url,
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            warn!("Failed to spawn yt-dlp: {}", e);
+            return None;
+        }
+    };
 
-impl io::Read for GrowingMediaSource {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+    let Some(mut stdout) = child.stdout.take() else {
+        warn!("yt-dlp stdout not available");
+        return None;
+    };
+
+    // yt-dlp emits raw `bestaudio` bytes on stdout; write them straight to the
+    // cache file. symphonia decodes that growing file directly during
+    // playback, so there is no transmux step — exactly one copy on disk.
+    let alive_flag = Arc::new(AtomicBool::new(true));
+    let path = cache_path.to_path_buf();
+    let flag = alive_flag.clone();
+    thread::spawn(move || {
+        let mut file = match std::fs::File::create(&path) {
+            Ok(f) => f,
+            Err(e) => {
+                warn!("Failed to create cache file: {}", e);
+                flag.store(false, Ordering::SeqCst);
+                return;
+            }
+        };
+        let mut buf = [0u8; 8192];
         loop {
-            match self.file.read(buf) {
-                Ok(0) => {
-                    let still_writing = self
-                        .writer_alive
-                        .as_ref()
-                        .is_some_and(|w| w.load(Ordering::SeqCst));
-                    if !still_writing {
-                        return Ok(0);
+            match stdout.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if file.write_all(&buf[..n]).is_err() {
+                        break;
                     }
-                    // Writer still has bytes coming; wait briefly and retry
-                    // rather than signalling premature EOF.
-                    thread::sleep(Duration::from_millis(15));
                 }
-                result => return result,
-            }
-        }
-    }
-}
-
-impl io::Seek for GrowingMediaSource {
-    fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-        // Seeking is only valid once the download is complete (cached file),
-        // where `writer_alive` is `None`. During live streaming the source is
-        // intentionally non-seekable.
-        if self.writer_alive.is_none() {
-            self.file.seek(pos)
-        } else {
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "streaming source is not seekable",
-            ))
-        }
-    }
-}
-
-impl symphonia::core::io::MediaSource for GrowingMediaSource {
-    fn is_seekable(&self) -> bool {
-        // Live (partial) files are non-seekable so symphonia demuxes
-        // sequentially; the probe then never seeks (and never hits the
-        // `byte_len() == None` seek-error panic inside rodio's `Decoder`).
-        // Complete (cached) files are seekable, enabling seeking on replay.
-        self.writer_alive.is_none()
-    }
-
-    fn byte_len(&self) -> Option<u64> {
-        if self.writer_alive.is_none() {
-            self.file.metadata().ok().map(|m| m.len())
-        } else {
-            None
-        }
-    }
-}
-
-/// A rodio `Source` that decodes a (growing) cache file via symphonia,
-/// streaming samples as they arrive. Mirrors rodio's internal
-/// `SymphoniaDecoder` but built over our non-seekable `GrowingMediaSource`,
-/// so it works on a partially-downloaded file without seeking. Samples are
-/// produced as `i16` (matching rodio's `Sink` expectation) and the known
-/// `expected_duration` is reported so the progress bar works even though the
-/// container length is unknown mid-stream.
-struct SymphoniaStreamingSource {
-    format: Box<dyn symphonia::core::formats::FormatReader>,
-    decoder: Box<dyn symphonia::core::codecs::Decoder>,
-    spec: symphonia::core::audio::SignalSpec,
-    buffer: symphonia::core::audio::SampleBuffer<i16>,
-    current_frame_offset: usize,
-    expected_duration: f32,
-    track_id: u32,
-}
-
-impl SymphoniaStreamingSource {
-    fn new(source: GrowingMediaSource, expected_duration: f32) -> Result<Self, String> {
-        use symphonia::core::{
-            codecs::{DecoderOptions, CODEC_TYPE_NULL},
-            formats::FormatOptions,
-            io::MediaSourceStream,
-            meta::MetadataOptions,
-            probe::Hint,
-        };
-
-        let mss = MediaSourceStream::new(
-            Box::new(source),
-            symphonia::core::io::MediaSourceStreamOptions::default(),
-        );
-
-        let mut probed = symphonia::default::get_probe()
-            .format(
-                &Hint::new(),
-                mss,
-                &FormatOptions::default(),
-                &MetadataOptions::default(),
-            )
-            .map_err(|e| format!("probe failed: {e:?}"))?;
-
-        let track = probed
-            .format
-            .tracks()
-            .iter()
-            .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
-            .ok_or_else(|| "no supported audio track".to_string())?;
-        let track_id = track.id;
-
-        let mut decoder = symphonia::default::get_codecs()
-            .make(&track.codec_params, &DecoderOptions::default())
-            .map_err(|e| format!("codec init failed: {e:?}"))?;
-
-        // Decode the first packet to establish the signal spec / buffer.
-        let first_decoded = loop {
-            let packet = match probed.format.next_packet() {
-                Ok(p) => p,
-                // IoError here means the (still-growing) source hit a
-                // temporary EOF while blocking; treat as not-yet-ready.
-                Err(symphonia::core::errors::Error::IoError(_)) => {
-                    return Err("not enough data yet".to_string())
-                }
-                Err(e) => return Err(format!("packet read failed: {e:?}")),
-            };
-            if packet.track_id() == track_id {
-                break match decoder.decode(&packet) {
-                    Ok(d) => d,
-                    Err(symphonia::core::errors::Error::DecodeError(_)) => continue,
-                    Err(e) => return Err(format!("decode failed: {e:?}")),
-                };
-            }
-        };
-
-        let spec = first_decoded.spec().to_owned();
-        let mut buffer = symphonia::core::audio::SampleBuffer::<i16>::new(
-            symphonia::core::units::Duration::from(first_decoded.capacity() as u64),
-            spec,
-        );
-        buffer.copy_interleaved_ref(first_decoded);
-
-        Ok(Self {
-            format: probed.format,
-            decoder,
-            spec,
-            buffer,
-            current_frame_offset: 0,
-            expected_duration,
-            track_id,
-        })
-    }
-}
-
-impl Iterator for SymphoniaStreamingSource {
-    type Item = i16;
-
-    fn next(&mut self) -> Option<i16> {
-        if self.current_frame_offset >= self.buffer.len() {
-            // Pull the next *audio* packet; skip packets from other tracks.
-            let packet = loop {
-                let p = self.format.next_packet().ok()?;
-                if p.track_id() == self.track_id {
-                    break p;
-                }
-            };
-            let mut decoded = self.decoder.decode(&packet);
-            for _ in 0..3 {
-                if decoded.is_err() {
-                    let p = self.format.next_packet().ok()?;
-                    decoded = self.decoder.decode(&p);
-                } else {
+                Err(e) => {
+                    warn!("yt-dlp read error: {}", e);
                     break;
                 }
             }
-            let decoded = decoded.ok()?;
-            let spec = decoded.spec().to_owned();
-            let duration = symphonia::core::units::Duration::from(decoded.capacity() as u64);
-            let mut buffer = symphonia::core::audio::SampleBuffer::<i16>::new(duration, spec);
-            buffer.copy_interleaved_ref(decoded);
-            self.spec = spec;
-            self.buffer = buffer;
-            self.current_frame_offset = 0;
         }
-        let sample = self.buffer.samples()[self.current_frame_offset];
-        self.current_frame_offset += 1;
-        Some(sample)
-    }
-}
+        // Download finished: signal the reader that no more bytes are coming
+        // so symphonia sees a genuine EOF.
+        debug!(
+            "stream copy thread done: {} ({} bytes)",
+            path.display(),
+            file.metadata().map_or(0, |m| m.len())
+        );
+        flag.store(false, Ordering::SeqCst);
+    });
 
-impl rodio::Source for SymphoniaStreamingSource {
-    fn current_frame_len(&self) -> Option<usize> {
-        Some(self.buffer.samples().len())
-    }
-
-    fn channels(&self) -> u16 {
-        self.spec.channels.count() as u16
-    }
-
-    fn sample_rate(&self) -> u32 {
-        self.spec.rate
-    }
-
-    fn total_duration(&self) -> Option<std::time::Duration> {
-        if self.expected_duration > 0.0 {
-            Some(std::time::Duration::from_secs_f32(self.expected_duration))
-        } else {
-            None
-        }
-    }
-
-    fn try_seek(&mut self, pos: std::time::Duration) -> Result<(), rodio::source::SeekError> {
-        use symphonia::core::formats::{SeekMode, SeekTo};
-
-        // Live (still-downloading) sources are non-seekable, so the underlying
-        // `format.seek` returns an error that we surface as a seek failure.
-        let seek_res = self
-            .format
-            .seek(
-                SeekMode::Accurate,
-                SeekTo::Time {
-                    time: pos.as_secs_f64().into(),
-                    track_id: None,
-                },
-            )
-            .map_err(|_| rodio::source::SeekError::NotSupported {
-                underlying_source: "streaming source seek failed",
-            })?;
-
-        // Refine: decode forward until the requested sample position is
-        // reached, then cache the current decoded frame.
-        let mut samples_to_pass = seek_res.required_ts - seek_res.actual_ts;
-        let packet = loop {
-            let candidate =
-                self.format
-                    .next_packet()
-                    .map_err(|_e| rodio::source::SeekError::NotSupported {
-                        underlying_source: "streaming source seek failed",
-                    })?;
-            if candidate.dur() > samples_to_pass {
-                break candidate;
-            }
-            samples_to_pass -= candidate.dur();
-        };
-
-        let mut decoded = self.decoder.decode(&packet);
-        for _ in 0..3 {
-            if decoded.is_err() {
-                let packet = self.format.next_packet().map_err(|_e| {
-                    rodio::source::SeekError::NotSupported {
-                        underlying_source: "streaming source seek failed",
-                    }
-                })?;
-                decoded = self.decoder.decode(&packet);
-            } else {
-                break;
-            }
-        }
-        let decoded = decoded.map_err(|_e| rodio::source::SeekError::NotSupported {
-            underlying_source: "streaming source seek failed",
-        })?;
-        let spec = decoded.spec().to_owned();
-        let duration = symphonia::core::units::Duration::from(decoded.capacity() as u64);
-        let mut buffer = symphonia::core::audio::SampleBuffer::<i16>::new(duration, spec);
-        buffer.copy_interleaved_ref(decoded);
-        self.spec = spec;
-        self.buffer = buffer;
-        self.current_frame_offset = samples_to_pass as usize * self.channels() as usize;
-        Ok(())
-    }
+    Some((child, alive_flag))
 }
