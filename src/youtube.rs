@@ -148,7 +148,12 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
             videos.push(YouTubeVideo {
                 id: id.clone(),
                 title: item.title,
-                url: String::new(),
+                // Reuse the flat pass's real webpage_url (preserves Music URLs)
+                url: if item.webpage_url.is_empty() {
+                    format!("https://youtube.com/watch?v={id}")
+                } else {
+                    item.webpage_url
+                },
                 duration: 0.0,
                 channel: String::new(),
                 thumbnail: format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg"),
@@ -172,14 +177,11 @@ fn enrich_with_metadata(videos: &mut [YouTubeVideo], valid_ids: &[String]) {
         if let Some(item) = metadata.get(&video.id) {
             video.duration = item.duration;
             video.channel = item.channel.clone();
-            video.url = if item.webpage_url.is_empty() {
-                format!("https://youtube.com/watch?v={}", video.id)
-            } else {
-                item.webpage_url.clone()
-            };
-        }
-        if video.url.is_empty() {
-            video.url = format!("https://youtube.com/watch?v={}", video.id);
+            // Prefer the metadata pass's url (it may correct/normalize the
+            // flat pass's url); otherwise keep the already-set flat url.
+            if !item.webpage_url.is_empty() {
+                video.url = item.webpage_url.clone();
+            }
         }
     }
 }
@@ -187,13 +189,13 @@ fn enrich_with_metadata(videos: &mut [YouTubeVideo], valid_ids: &[String]) {
 // Single batched metadata pass over yt-dlp for a list of video ids. Returns a
 // map keyed by video id; a failed yt-dlp invocation yields an empty map so
 // callers gracefully fall back to the cheap flat-search stubs.
-#[allow(clippy::manual_let_else)]
 fn fetch_batch_metadata(
     valid_ids: &[String],
 ) -> std::collections::HashMap<String, YTDLPSearchResult> {
     use std::collections::HashMap;
     let mut results: HashMap<String, YTDLPSearchResult> = HashMap::new();
-    let mut child = match Command::new("yt-dlp")
+
+    let Ok(mut child) = Command::new("yt-dlp")
         .args([
             "--batch-file",
             "-",
@@ -205,9 +207,8 @@ fn fetch_batch_metadata(
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
-    {
-        Ok(c) => c,
-        Err(_) => return results,
+    else {
+        return results;
     };
 
     if let Some(ref mut stdin) = child.stdin {
