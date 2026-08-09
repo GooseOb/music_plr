@@ -51,8 +51,7 @@ impl MusicPlayer {
     pub fn clear_selection(&mut self) {
         self.view_data_mut().selection.clear();
         self.queue_selected_indices.clear();
-        self.show_playlist_picker = false;
-        self.picker_target_indices.clear();
+        self.picker = None;
     }
 
     pub fn get_track_at(&self, index: usize, is_queue: bool) -> Option<Track> {

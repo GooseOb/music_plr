@@ -69,16 +69,13 @@ pub struct MusicPlayer {
     pub thumbnail_cache: std::collections::HashSet<String>,
     pub playlists: PlaylistStore,
     pub playlist_create_name: String,
-    pub show_playlist_picker: bool,
-    /// Whether the playlist picker was triggered from a queue track (so
-    /// `picker_target_indices` refer to queue positions, not track-list
-    /// positions).
-    pub picker_is_queue: bool,
-    /// Indices resolved from the context menu / picker trigger: if the
-    /// right-clicked track was part of the selection, this holds all
-    /// selected indices; otherwise just that one track. Used by
-    /// `AddToPlaylist` to apply to the right set of tracks.
-    pub picker_target_indices: Vec<usize>,
+    /// Active playlist picker, if open. Holds the resolved target indices and
+    /// whether they refer to queue positions (`is_queue`) rather than
+    /// track-list positions. The `Option` encodes the "picker open ⟺ has
+    /// target data" invariant: indices are selection-aware (all selected
+    /// indices when the right-clicked track is part of the selection,
+    /// otherwise just that one track), used by `AddToPlaylist`.
+    pub picker: Option<PlaylistPicker>,
     pub show_delete_confirm: bool,
     pub delete_confirm_index: Option<usize>,
 
@@ -114,6 +111,11 @@ pub struct MusicPlayer {
     pub sidebar_bounds: Option<iced::Rectangle>,
     pub sidebar_list_scroll: f32,
     pub window_width: f32,
+}
+
+pub struct PlaylistPicker {
+    pub indices: Vec<usize>,
+    pub is_queue: bool,
 }
 
 impl Default for MusicPlayer {
@@ -152,11 +154,9 @@ impl MusicPlayer {
             track_loading: false,
             playlists: PlaylistStore::load(),
             playlist_create_name: String::new(),
-            show_playlist_picker: false,
             show_queue: false,
             thumbnail_cache: std::collections::HashSet::new(),
-            picker_is_queue: false,
-            picker_target_indices: Vec::new(),
+            picker: None,
             show_delete_confirm: false,
             delete_confirm_index: None,
             nav_history: vec![ViewData::default()],
@@ -435,9 +435,9 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::AddToPlaylist(playlist_idx) => {
-                let indices = std::mem::take(&mut self.picker_target_indices);
-                let is_queue = self.picker_is_queue;
-                self.handle_add_to_playlist(playlist_idx, &indices, is_queue);
+                if let Some(picker) = self.picker.take() {
+                    self.handle_add_to_playlist(playlist_idx, &picker.indices, picker.is_queue);
+                }
                 Task::none()
             }
             Message::TogglePicker(indices) => {
@@ -446,8 +446,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ClosePicker => {
-                self.show_playlist_picker = false;
-                self.picker_target_indices.clear();
+                self.picker = None;
                 Task::none()
             }
             Message::ShowDeleteConfirm(index) => {

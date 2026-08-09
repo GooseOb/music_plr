@@ -17,7 +17,7 @@ impl MusicPlayer {
         if index < self.playlists.playlists.len()
             && self.view_data_mut().selected_playlist_id() != Some(index)
         {
-            self.show_playlist_picker = false;
+            self.picker = None;
             self.clear_selection();
             self.cleanup_drag_state();
             self.drag.hovered_track = None;
@@ -117,8 +117,7 @@ impl MusicPlayer {
         if count > 0 {
             self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
         }
-        self.show_playlist_picker = false;
-        self.picker_target_indices.clear();
+        self.picker = None;
         let name = self.playlists.playlists[playlist_idx].name.clone();
         self.notify_tracks("Added", count, &format!("to {name}"));
     }

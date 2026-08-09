@@ -1,6 +1,8 @@
 use super::{BackendResult, ContextMenuState, MusicPlayer, Track, TrackSource};
-use crate::app::ViewKind;
-use crate::util::plural_suffix;
+use crate::{
+    app::{PlaylistPicker, ViewKind},
+    util::plural_suffix,
+};
 
 impl MusicPlayer {
     /// Handle download / delete-download for a set of track indices.
@@ -72,13 +74,10 @@ impl MusicPlayer {
     }
 
     pub fn handle_toggle_picker(&mut self, indices: Vec<usize>, is_queue: bool) {
-        if self.show_playlist_picker {
-            self.show_playlist_picker = false;
-            self.picker_target_indices.clear();
+        self.picker = if self.picker.is_some() {
+            None
         } else {
-            self.show_playlist_picker = true;
-            self.picker_is_queue = is_queue;
-            self.picker_target_indices = indices;
+            Some(PlaylistPicker { indices, is_queue })
         }
     }
 

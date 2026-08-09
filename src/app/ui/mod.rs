@@ -48,7 +48,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .height(Length::Fill)
         .push(main);
 
-    if player.show_playlist_picker {
+    if player.picker.is_some() {
         stack = stack.push(overlays::view_playlist_picker(player));
     } else if player.show_delete_confirm {
         stack = stack.push(overlays::view_delete_confirm());
