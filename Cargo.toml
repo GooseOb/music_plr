@@ -7,6 +7,14 @@ license = "MIT"
 
 [dependencies]
 iced = { version = "0.14", features = ["image", "svg", "tokio", "debug"] }
+# Pinned to the same version iced resolves to, so we can implement the
+# `widget::operation::Operation` trait (not publicly re-exported by `iced`).
+# Keep this in lockstep with `iced`'s `iced_core` when upgrading.
+iced_core = { package = "iced_core", version = "0.14" }
+# Same reasoning as `iced_core`: `iced` doesn't publicly re-export the
+# `task::widget(operation)` constructor we need to run a custom `Operation`.
+# Keep in lockstep with `iced`'s `iced_runtime` when upgrading.
+iced_runtime = { package = "iced_runtime", version = "0.14" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

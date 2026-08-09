@@ -9,6 +9,7 @@ mod actions;
 mod drag;
 mod input;
 mod navigation;
+pub mod operation;
 mod playback;
 mod playlists;
 mod search;

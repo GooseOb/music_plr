@@ -178,10 +178,6 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
                 .width(Length::Fill),
         )
         .id(iced::widget::Id::new("sidebar_playlist_list"))
-        .on_scroll(|vp| Message::SidebarListScrolled {
-            offset_y: vp.absolute_offset().y,
-            bounds: vp.bounds(),
-        })
         .width(Length::Fill)
         .height(Length::Fill)
         .into(),

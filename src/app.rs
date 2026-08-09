@@ -281,32 +281,37 @@ impl MusicPlayer {
                         }
                     }
                 }
+                // Refresh scrollable geometry every cursor move so drag,
+                // drop hit-testing, and scroll-into-view read live bounds
+                // without depending on `on_scroll` (which never fires when a
+                // list doesn't overflow).
+                let capture = iced_runtime::task::widget(update::operation::CaptureBounds::new());
                 if self.drag.drag_active {
-                    return self.handle_drag_update();
+                    return iced::Task::batch([capture, self.handle_drag_update()]);
                 }
-                Task::none()
+                capture
             }
             Message::LeftButtonReleased => {
                 self.handle_left_release();
                 Task::none()
             }
-            Message::ListScrolled {
-                offset_y,
-                bounds,
-                is_queue,
+            Message::ListBoundsCaptured {
+                sidebar,
+                queue,
+                track,
             } => {
-                if is_queue {
-                    self.queue_list_bounds = Some(bounds);
-                    self.queue_list_scroll = offset_y;
-                } else {
-                    self.view_data_mut().scroll = offset_y;
-                    self.view_data_mut().bounds = Some(bounds);
+                if let Some(s) = sidebar {
+                    self.sidebar_bounds = Some(s.bounds);
+                    self.sidebar_list_scroll = s.scroll_offset();
                 }
-                Task::none()
-            }
-            Message::SidebarListScrolled { offset_y, bounds } => {
-                self.sidebar_bounds = Some(bounds);
-                self.sidebar_list_scroll = offset_y;
+                if let Some(q) = queue {
+                    self.queue_list_bounds = Some(q.bounds);
+                    self.queue_list_scroll = q.scroll_offset();
+                }
+                if let Some(t) = track {
+                    self.view_data_mut().scroll = t.scroll_offset();
+                    self.view_data_mut().bounds = Some(t.bounds);
+                }
                 Task::none()
             }
             Message::KeyPressed { key, modifiers } => self.handle_key_press(&key, modifiers),

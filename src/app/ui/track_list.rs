@@ -19,7 +19,7 @@ use super::{
     queue::QUEUE_LIST_ID,
     shared_components::play_pause_button,
     styles::{button_style_primary, fg_secondary},
-    theme, DragTargetList, Message, MusicPlayer,
+    theme, Message, MusicPlayer,
 };
 
 pub fn thumbnail<'a>(
@@ -72,13 +72,7 @@ pub(super) fn view_track_list<'a>(
         return empty_state("No tracks found", player.app_theme.palette.fg_secondary);
     }
 
-    let target_matches = matches!(
-        player.drag.drag_target_list,
-        Some(DragTargetList::Queue) if is_queue,
-    ) || matches!(
-        player.drag.drag_target_list,
-        Some(DragTargetList::TrackList) if !is_queue,
-    );
+    let target_matches = MusicPlayer::same_list_kind_as(player.drag.drag_target_list, is_queue);
 
     let mut items: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(tracks.len());
     for (i, track) in tracks.iter().enumerate() {
@@ -107,11 +101,6 @@ pub(super) fn view_track_list<'a>(
                 QUEUE_LIST_ID
             } else {
                 TRACK_LIST_ID
-            })
-            .on_scroll(move |vp| Message::ListScrolled {
-                offset_y: vp.absolute_offset().y,
-                bounds: vp.bounds(),
-                is_queue,
             })
             .width(Length::Fill)
             .height(Length::Fill),

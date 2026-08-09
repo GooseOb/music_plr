@@ -2623,6 +2623,8 @@ dependencies = [
  "confy",
  "directories 6.0.0",
  "iced",
+ "iced_core",
+ "iced_runtime",
  "rfd",
  "rodio",
  "serde",

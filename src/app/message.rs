@@ -27,14 +27,13 @@ pub enum Message {
     WindowResized(iced::Size),
     CursorMoved(Point),
     LeftButtonReleased,
-    ListScrolled {
-        offset_y: f32,
-        bounds: iced::Rectangle,
-        is_queue: bool,
-    },
-    SidebarListScrolled {
-        offset_y: f32,
-        bounds: iced::Rectangle,
+    /// Geometry captured from every scrollable via a `CaptureBounds`
+    /// operation (replaces the old `on_scroll`-driven messages). `None` means
+    /// that list wasn't present in the tree on the last operate pass.
+    ListBoundsCaptured {
+        sidebar: Option<crate::app::update::operation::ListGeometry>,
+        queue: Option<crate::app::update::operation::ListGeometry>,
+        track: Option<crate::app::update::operation::ListGeometry>,
     },
     KeyPressed {
         key: iced::keyboard::key::Key,

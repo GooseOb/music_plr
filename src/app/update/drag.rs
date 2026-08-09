@@ -14,9 +14,7 @@ impl MusicPlayer {
         if self.drag.cursor_pos.x >= crate::theme::SIDEBAR_WIDTH {
             return None;
         }
-        let y_start = self
-            .sidebar_bounds
-            .map_or(crate::theme::SIDEBAR_PLAYLIST_LIST_OFFSET_Y, |b| b.y);
+        let y_start = self.sidebar_bounds.map_or(0.0, |b| b.y);
         let y_offset = self.drag.cursor_pos.y - y_start;
         if y_offset < 0.0 {
             return None;
@@ -31,11 +29,10 @@ impl MusicPlayer {
     }
 
     pub fn handle_left_release(&mut self) {
+        let is_queue = self.drag.pressed_track_is_queue;
         if self.drag.drag_active {
-            let is_queue = self.drag.pressed_track_is_queue;
             self.handle_drag_drop(is_queue);
         } else if let Some(track_idx) = self.drag.pressed_track {
-            let is_queue = self.drag.pressed_track_is_queue;
             self.toggle_selection(track_idx, is_queue);
         }
 
@@ -246,21 +243,22 @@ impl MusicPlayer {
             Some(DragTargetList::TrackList) if source_is_queue => {
                 self.copy_from_queue(&indices, drop_idx);
             }
-            Some(_) if Self::target_is_same_as_source(target, source_is_queue) => {
+            Some(_) if Self::same_list_kind_as(target, source_is_queue) => {
                 self.handle_same_list_reorder(drop_idx, &indices, source_is_queue);
             }
             _ => {}
         }
     }
 
-    /// Returns true when the drag target list is the same as the source list.
-    const fn target_is_same_as_source(
-        target: Option<DragTargetList>,
-        source_is_queue: bool,
-    ) -> bool {
+    /// Returns true when `target` names the same list kind as a list flagged
+    /// by `is_queue` (queue when `true`, track list when `false`). `None` is
+    /// never a match. Used both to decide same-list reorder vs cross-list
+    /// copy (with `is_queue` = the drag's origin) and to draw the drop
+    /// indicator in the view (with `is_queue` = the rendered list).
+    pub(crate) const fn same_list_kind_as(target: Option<DragTargetList>, is_queue: bool) -> bool {
         match target {
-            Some(DragTargetList::Queue) => source_is_queue,
-            Some(DragTargetList::TrackList) => !source_is_queue,
+            Some(DragTargetList::Queue) => is_queue,
+            Some(DragTargetList::TrackList) => !is_queue,
             None => false,
         }
     }
