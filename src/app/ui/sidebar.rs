@@ -24,6 +24,17 @@ fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .into()
 }
 
+fn sidebar_button(row: Row<'_, Message, AppTheme>) -> Button<'_, Message, AppTheme> {
+    Button::new(
+        row.spacing(theme::SPACING_MD)
+            .padding([theme::SPACING_SM, theme::SPACING_MD])
+            .align_y(alignment::Vertical::Center)
+            .width(Length::Fill),
+    )
+    .width(Length::Fill)
+    .padding(0)
+}
+
 #[allow(clippy::too_many_lines)]
 pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.app_theme.palette;
@@ -113,19 +124,11 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             let icon_color = if is_interacting { p.accent } else { p.fg_muted };
             let text_color = if is_interacting { p.fg } else { p.fg_secondary };
 
-            Button::new(
-                Row::with_children(vec![
-                    icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_MD).into(),
-                    text(&pl.name).color(text_color).into(),
-                    iced::widget::right(text(pl.tracks.len()).color(p.fg_secondary)).into(),
-                ])
-                .spacing(10)
-                .padding([theme::SPACING_SM, theme::SPACING_MD])
-                .align_y(alignment::Vertical::Center)
-                .width(Length::Fill),
-            )
-            .width(Length::Fill)
-            .padding(0)
+            sidebar_button(Row::with_children(vec![
+                icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_MD).into(),
+                text(&pl.name).color(text_color).into(),
+                iced::widget::right(text(pl.tracks.len()).color(p.fg_secondary)).into(),
+            ]))
             .style(move |_, status| {
                 let bg = match status {
                     button::Status::Hovered | button::Status::Pressed => bg_hover,
@@ -210,18 +213,10 @@ fn sidebar_nav_item<'a>(
         _ => icons::MUSIC_ICON,
     };
 
-    Button::new(
-        Row::with_children(vec![
-            icons::icon(icon_name, icon_color, theme::ICON_SIZE_MD).into(),
-            text(name).color(text_color).into(),
-        ])
-        .spacing(theme::SPACING_MD)
-        .padding([theme::SPACING_SM, theme::SPACING_MD])
-        .align_y(alignment::Vertical::Center)
-        .width(Length::Fill),
-    )
-    .width(Length::Fill)
-    .padding(0)
+    sidebar_button(Row::with_children(vec![
+        icons::icon(icon_name, icon_color, theme::ICON_SIZE_MD).into(),
+        text(name).color(text_color).into(),
+    ]))
     .style(move |_, status| {
         let bg = match status {
             button::Status::Hovered | button::Status::Pressed => p.bg_hover,
