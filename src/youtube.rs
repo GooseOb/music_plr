@@ -6,7 +6,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-/// Which subset of YouTube Music a search is scoped to. `Songs` is the default;
+/// Which subset of `YouTube Music` a search is scoped to. `Songs` is the default;
 /// the others map to ytmusicapi's `filter=` endpoints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SearchScope {
@@ -19,15 +19,14 @@ pub enum SearchScope {
 }
 
 impl SearchScope {
-    /// The `filter=` argument ytmusicapi expects, or `None` for the general
     /// The `filter=` argument ytmusicapi expects.
-    pub fn ytm_filter(self) -> Option<&'static str> {
+    pub fn ytm_filter(self) -> &'static str {
         match self {
-            SearchScope::Songs => Some("songs"),
-            SearchScope::Videos => Some("videos"),
-            SearchScope::Artists => Some("artists"),
-            SearchScope::Albums => Some("albums"),
-            SearchScope::Playlists => Some("playlists"),
+            SearchScope::Songs => "songs",
+            SearchScope::Videos => "videos",
+            SearchScope::Artists => "artists",
+            SearchScope::Albums => "albums",
+            SearchScope::Playlists => "playlists",
         }
     }
 
@@ -122,9 +121,9 @@ impl SearchTab {
     pub fn len(&self) -> usize {
         match self {
             SearchTab::Songs | SearchTab::Videos => 0,
-            SearchTab::Artists(items) => items.len(),
-            SearchTab::Albums(items) => items.len(),
-            SearchTab::Playlists(items) => items.len(),
+            SearchTab::Artists(items) | SearchTab::Albums(items) | SearchTab::Playlists(items) => {
+                items.len()
+            }
         }
     }
 }
@@ -201,7 +200,7 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
         .context("Failed to write ytmusicapi script")?;
 
     let limit = 20;
-    let scope_arg = scope.ytm_filter().unwrap_or("songs");
+    let scope_arg = scope.ytm_filter();
     let output = Command::new("python3")
         .arg(&script_path)
         .arg("search")

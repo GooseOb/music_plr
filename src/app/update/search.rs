@@ -153,11 +153,11 @@ impl MusicPlayer {
     }
 
     /// Open an artist/album/playlist drill-down view, fetching its tracks.
-    pub fn handle_open_artist(&mut self, browse_id: String, name: String) {
+    pub fn handle_open_artist(&mut self, browse_id: String, name: &str) {
         self.start_browse(
-            ViewKind::Artist {
+            &ViewKind::Artist {
                 browse_id: browse_id.clone(),
-                name: name.clone(),
+                name: name.to_string(),
             },
             browse_id,
             "artist",
@@ -165,11 +165,11 @@ impl MusicPlayer {
         );
     }
 
-    pub fn handle_open_album(&mut self, browse_id: String, title: String) {
+    pub fn handle_open_album(&mut self, browse_id: String, title: &str) {
         self.start_browse(
-            ViewKind::Album {
+            &ViewKind::Album {
                 browse_id: browse_id.clone(),
-                title: title.clone(),
+                title: title.to_string(),
             },
             browse_id,
             "album",
@@ -177,11 +177,11 @@ impl MusicPlayer {
         );
     }
 
-    pub fn handle_open_playlist(&mut self, playlist_id: String, title: String) {
+    pub fn handle_open_playlist(&mut self, playlist_id: String, title: &str) {
         self.start_browse(
-            ViewKind::PlaylistView {
+            &ViewKind::PlaylistView {
                 playlist_id: playlist_id.clone(),
-                title: title.clone(),
+                title: title.to_string(),
             },
             playlist_id,
             "playlist",
@@ -193,10 +193,10 @@ impl MusicPlayer {
     /// fetch its tracks via ytmusicapi `browse()`, and send `BrowseResults`.
     fn start_browse(
         &mut self,
-        kind: ViewKind,
+        kind: &ViewKind,
         browse_id: String,
         kind_str: &'static str,
-        label: String,
+        label: &str,
     ) {
         self.push_new_view(ViewData {
             kind: kind.clone(),

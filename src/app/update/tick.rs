@@ -117,21 +117,20 @@ impl MusicPlayer {
         // Also track non-track card thumbnails (artist/album/playlist browse
         // ids) on the Search view so they flip to "downloaded" once present.
         let ids: Vec<String> = match &self.view_data().kind {
-            ViewKind::Search { tab, .. } => match tab {
-                crate::youtube::SearchTab::Artists(cards)
-                | crate::youtube::SearchTab::Albums(cards)
-                | crate::youtube::SearchTab::Playlists(cards) => {
-                    cards.iter().map(|c| c.id.clone()).collect()
-                }
-                _ => Vec::new(),
-            },
+            ViewKind::Search {
+                tab:
+                    crate::youtube::SearchTab::Artists(cards)
+                    | crate::youtube::SearchTab::Albums(cards)
+                    | crate::youtube::SearchTab::Playlists(cards),
+                ..
+            } => cards.iter().map(|c| c.id.clone()).collect(),
             _ => Vec::new(),
         };
         for id in ids {
             if !self.thumbnail_cache.contains(&id)
                 && crate::data::thumbnails::thumbnail_path(&id).exists()
             {
-                self.thumbnail_cache.insert(id.to_string());
+                self.thumbnail_cache.insert(id.clone());
             }
         }
     }
@@ -167,6 +166,58 @@ impl MusicPlayer {
         }
     }
 
+    /// Handle a fresh `SearchResults`: install the tab into the requesting
+    /// nav slot, flip exhausted/loading flags, and kick off thumbnail downloads.
+    /// Stale results (slot truncated away by navigation) are ignored.
+    fn process_search_results(
+        &mut self,
+        rid: u64,
+        tracks: Vec<crate::types::Track>,
+        tab: crate::youtube::SearchTab,
+    ) {
+        // Card thumbnail entries come from the result tab itself.
+        let mut entries: Vec<(String, String)> = match &tab {
+            crate::youtube::SearchTab::Artists(cards)
+            | crate::youtube::SearchTab::Albums(cards)
+            | crate::youtube::SearchTab::Playlists(cards) => cards
+                .iter()
+                .map(|c| (c.id.clone(), c.thumbnail.clone()))
+                .collect(),
+            _ => Vec::new(),
+        };
+        // Apply to the slot that requested this search.
+        if let Some(idx) = self.slot_for_request(rid) {
+            if let ViewKind::Search {
+                exhausted,
+                tab: kind_tab,
+                ..
+            } = &mut self.nav_history[idx].kind
+            {
+                let count = if tab.is_track_tab() {
+                    tracks.len()
+                } else {
+                    tab.len()
+                };
+                *exhausted = count < crate::theme::SEARCH_PAGE_SIZE;
+                *kind_tab = tab;
+                self.nav_history[idx].tracks = tracks;
+                self.nav_history[idx].loading = false;
+                self.nav_history[idx].selection.clear();
+                self.nav_history[idx].request_id = 0;
+            }
+            self.save_session();
+            entries.extend(
+                self.nav_history[idx]
+                    .tracks
+                    .iter()
+                    .filter(|t| t.source == crate::types::TrackSource::YouTube)
+                    .map(|t| (t.id.clone(), t.thumbnail.clone())),
+            );
+            spawn_thumbnail_download(entries, self.result_tx.clone());
+            self.clear_notification();
+        }
+    }
+
     pub fn update_progress_text(&mut self) {
         let elapsed = (self.progress * self.duration) as u32;
         self.elapsed_text = format_duration(elapsed);
@@ -177,49 +228,7 @@ impl MusicPlayer {
     pub fn process_result(&mut self, result: BackendResult) {
         match result {
             BackendResult::SearchResults(rid, tracks, tab) => {
-                // Card thumbnail entries come from the result tab itself, so build
-                // them from `tab` before it is moved into view state below.
-                let mut entries: Vec<(String, String)> = match &tab {
-                    crate::youtube::SearchTab::Artists(cards)
-                    | crate::youtube::SearchTab::Albums(cards)
-                    | crate::youtube::SearchTab::Playlists(cards) => cards
-                        .iter()
-                        .map(|c| (c.id.clone(), c.thumbnail.clone()))
-                        .collect(),
-                    _ => Vec::new(),
-                };
-                // Apply to the slot that requested this search
-                if let Some(idx) = self.slot_for_request(rid) {
-                    if let ViewKind::Search {
-                        exhausted,
-                        tab: kind_tab,
-                        ..
-                    } = &mut self.nav_history[idx].kind
-                    {
-                        let count = if tab.is_track_tab() {
-                            tracks.len()
-                        } else {
-                            tab.len()
-                        };
-                        *exhausted = count < crate::theme::SEARCH_PAGE_SIZE;
-                        *kind_tab = tab;
-                        self.nav_history[idx].tracks = tracks;
-                        self.nav_history[idx].loading = false;
-                        self.nav_history[idx].selection.clear();
-                        self.nav_history[idx].request_id = 0;
-                    }
-                    self.save_session();
-                    entries.extend(
-                        self.nav_history[idx]
-                            .tracks
-                            .iter()
-                            .filter(|t| t.source == crate::types::TrackSource::YouTube)
-                            .map(|t| (t.id.clone(), t.thumbnail.clone())),
-                    );
-                    spawn_thumbnail_download(entries, self.result_tx.clone());
-                    self.clear_notification();
-                }
-                // Stale result (slot truncated away by navigation): ignore.
+                self.process_search_results(rid, tracks, tab);
             }
             BackendResult::SearchResultsAppend(rid, tracks) => {
                 let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
@@ -294,12 +303,13 @@ impl MusicPlayer {
             let track = self.queue.current();
             let update = MprisUpdate {
                 playback_status: if self.is_playing {
-                    "Playing".into()
+                    "Playing"
                 } else if track.is_some() {
-                    "Paused".into()
+                    "Paused"
                 } else {
-                    "Stopped".into()
-                },
+                    "Stopped"
+                }
+                .into(),
                 title: track.map(|t| t.title.clone()).unwrap_or_default(),
                 artist: track.map(|t| t.artist.clone()).unwrap_or_default(),
                 duration_secs: self.duration,

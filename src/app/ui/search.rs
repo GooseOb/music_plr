@@ -246,8 +246,7 @@ pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme
 
     let label: &str = match &player.view_data().kind {
         ViewKind::Artist { name, .. } => name,
-        ViewKind::Album { title, .. } => title,
-        ViewKind::PlaylistView { title, .. } => title,
+        ViewKind::Album { title, .. } | ViewKind::PlaylistView { title, .. } => title,
         _ => "",
     };
     let header = Container::new(text(label).width(Length::Fill).center())
@@ -286,7 +285,7 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
         .into()
 }
 
-fn loading_placeholder<'a>(msg: &'a str) -> Element<'a, Message, AppTheme> {
+fn loading_placeholder(msg: &str) -> Element<'_, Message, AppTheme> {
     Container::new(text(msg).style(fg_secondary()).center())
         .width(Length::Fill)
         .height(Length::Fill)

@@ -29,7 +29,7 @@ pub fn spawn_thumbnail_download_thread(tracks: &[Track], tx: mpsc::Sender<Backen
 }
 
 /// Download thumbnails for the given `(id, url)` pairs. `id` names the cache
-/// file; `url` is the source (empty falls back to the default YouTube still).
+/// file; `url` is the source (empty falls back to the default `YouTube` still).
 pub fn spawn_thumbnail_download(entries: Vec<(String, String)>, tx: mpsc::Sender<BackendResult>) {
     tracing::debug!(
         "Spawning thumbnail download thread for {} entries",

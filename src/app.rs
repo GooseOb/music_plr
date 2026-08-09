@@ -337,15 +337,15 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::OpenArtist(browse_id, title) => {
-                self.handle_open_artist(browse_id, title);
+                self.handle_open_artist(browse_id, &title);
                 Task::none()
             }
             Message::OpenAlbum(browse_id, title) => {
-                self.handle_open_album(browse_id, title);
+                self.handle_open_album(browse_id, &title);
                 Task::none()
             }
             Message::OpenPlaylist(playlist_id, title) => {
-                self.handle_open_playlist(playlist_id, title);
+                self.handle_open_playlist(playlist_id, &title);
                 Task::none()
             }
             Message::SearchLoadMore => {
