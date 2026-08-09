@@ -97,7 +97,6 @@ impl MusicPlayer {
         };
 
         self.context_menu = Some(ContextMenuState {
-            visible: true,
             track_index: index,
             target_indices,
             position: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
@@ -112,8 +111,6 @@ impl MusicPlayer {
     /// Every caller only needs the `is_queue` flag, so this avoids the
     /// repeated `take().as_ref().is_some_and(|m| m.is_queue)` dance.
     pub fn take_context_menu_is_queue(&mut self) -> bool {
-        self.context_menu
-            .take()
-            .is_some_and(|m| m.visible && m.is_queue)
+        self.context_menu.take().is_some_and(|m| m.is_queue)
     }
 }

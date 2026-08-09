@@ -5,7 +5,6 @@ use iced::Point;
 #[derive(Debug, Clone, Default)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct ContextMenuState {
-    pub visible: bool,
     pub track_index: usize,
     pub position: (f32, f32),
     pub is_youtube: bool,
