@@ -1,7 +1,7 @@
 use iced::{
     alignment,
     widget::{button, rule, text, Button, Column, Container, Id, MouseArea, Row},
-    Color, Element, Length,
+    Element, Length,
 };
 
 use crate::{
@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    styles::{bg_secondary, button_style_primary, fg_secondary},
+    styles::{bg_secondary, fg_secondary},
     track_list::{
         empty_state, scrollable_list, section_header, track_row, track_row_layout, view_track_list,
     },
@@ -99,9 +99,6 @@ fn queue_tab<'a>(
     .into()
 }
 
-/// Renders the Queue tab: a "Now Playing" section header followed by the
-/// current track (non-interactive), a separator, then a draggable "Up Next"
-/// list.
 fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.app_theme.palette;
 
@@ -122,7 +119,6 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let up_next_header = section_header("UP NEXT", p);
 
-    // Up Next: all tracks after the current (first) track.
     let offset = 1;
     let upcoming = if offset <= player.queue.tracks.len() {
         &player.queue.tracks[offset..]
@@ -174,16 +170,11 @@ fn view_now_playing_row<'a>(
         .into()
 }
 
-/// Renders the Recently Played tab: a simple scrollable list with no
-/// drag / selection / context-menu support.
 fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let tracks = &player.queue.recently_played;
 
     if tracks.is_empty() {
-        return empty_state(
-            "No recently played tracks",
-            player.app_theme.palette.fg_secondary,
-        );
+        return empty_state("No recently played tracks");
     }
 
     let items: Vec<Element<'_, Message, AppTheme>> = tracks
@@ -201,32 +192,27 @@ fn view_recently_played_row<'a>(
     player: &'a MusicPlayer,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let is_hovered = player.drag.hovered_track == Some((index, true));
-    let row_bg = if is_hovered { p.bg_hover } else { p.bg };
-
-    let leading = if is_hovered {
-        Button::new(icons::icon(
-            icons::PLAY_ICON,
-            Color::BLACK,
-            theme::ICON_SIZE_LG,
-        ))
-        .padding(theme::SPACING_2XS)
-        .style(button_style_primary())
-        .on_press(Message::PlayRecentTrack(index))
-        .into()
+    let row_bg = if player.drag.hovered_track == Some((index, true)) {
+        p.bg_hover
     } else {
-        text((index + 1).to_string())
-            .size(theme::TEXT_SIZE_SM)
-            .style(fg_secondary())
-            .width(theme::TRACK_LEADING_WIDTH)
-            .center()
-            .into()
+        p.bg
     };
+
+    let leading = super::track_list::leading_control(
+        (index, true),
+        track,
+        player,
+        Message::PlayRecentTrack(index),
+    );
 
     let inner = track_row_layout(leading, track, player);
 
     let track_area = MouseArea::new(inner)
         .on_press(Message::PlayRecentTrack(index))
+        .on_right_press(Message::TrackRightClicked {
+            index,
+            list: crate::app::interaction::TrackListKind::Recent,
+        })
         .on_move(move |_| Message::TrackHoverStart {
             index,
             is_queue: true,

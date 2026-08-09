@@ -1,4 +1,5 @@
 use super::{BackendResult, ContextMenuState, MusicPlayer, Track, TrackSource};
+use crate::app::interaction::TrackListKind;
 use crate::{
     app::{PlaylistPicker, ViewKind},
     util::plural_suffix,
@@ -7,13 +8,15 @@ use crate::{
 impl MusicPlayer {
     /// Handle download / delete-download for a set of track indices.
     /// Tracks already downloaded get removed from the registry; tracks
-    /// not yet downloaded get queued for download.
-    pub fn handle_download_or_remove_tracks(&mut self, indices: &[usize], is_queue: bool) {
+    /// not yet downloaded get queued for download. `list` sources the tracks
+    /// from the matching list (queue, active track list, or Recently Played).
+    pub fn handle_download_or_remove_tracks(&mut self, indices: &[usize], list: TrackListKind) {
         let mut to_download = Vec::new();
         let mut to_remove = Vec::new();
 
         for &idx in indices {
-            if let Some(track) = self.get_track_at(idx, is_queue) {
+            let track = self.track_at(list, idx);
+            if let Some(track) = track {
                 if self.download_registry.contains(&track.url) {
                     to_remove.push(track);
                 } else if track.source == TrackSource::YouTube {
@@ -50,7 +53,7 @@ impl MusicPlayer {
             ));
         }
         // Drop a now-stale selection if any operated-on index was selected.
-        let sel = self.selection(is_queue);
+        let sel = self.selection(list.is_queue());
         if indices.iter().any(|&i| sel.contains(&i)) {
             self.clear_selection();
         }
@@ -81,15 +84,16 @@ impl MusicPlayer {
         }
     }
 
-    pub fn show_context_menu(&mut self, index: usize, is_queue: bool) {
-        let track = self.get_track_at(index, is_queue);
-        let Some(track) = track else {
+    pub fn show_context_menu(&mut self, index: usize, list: TrackListKind) {
+        let Some(track) = self.track_at(list, index) else {
             return;
         };
 
-        // Selection-aware: operate on the whole selection when the
-        // right-clicked track is part of it, otherwise just that track.
-        let sel = self.selection(is_queue);
+        let sel = if list == TrackListKind::Recent {
+            &[][..]
+        } else {
+            self.selection(list.is_queue())
+        };
         let target_indices = if sel.contains(&index) {
             sel.to_vec()
         } else {
@@ -103,14 +107,18 @@ impl MusicPlayer {
             is_youtube: track.source == TrackSource::YouTube,
             is_downloaded: self.download_registry.contains(&track.url),
             in_playlist: matches!(self.view_data_mut().kind, ViewKind::Playlist { .. }),
-            is_queue,
+            list,
+            track,
         });
     }
 
-    /// Close the context menu and report whether it targeted the queue list.
-    /// Every caller only needs the `is_queue` flag, so this avoids the
-    /// repeated `take().as_ref().is_some_and(|m| m.is_queue)` dance.
-    pub fn take_context_menu_is_queue(&mut self) -> bool {
-        self.context_menu.take().is_some_and(|m| m.is_queue)
+    /// Resolve the track a context-menu op targets from whichever list it
+    /// lives in.
+    fn track_at(&self, list: TrackListKind, index: usize) -> Option<Track> {
+        match list {
+            TrackListKind::Queue => self.get_track_at(index, true),
+            TrackListKind::Active => self.get_track_at(index, false),
+            TrackListKind::Recent => self.queue.recently_played.get(index).cloned(),
+        }
     }
 }

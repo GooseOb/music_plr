@@ -16,41 +16,24 @@ use iced::widget::Id;
 use iced::Rectangle;
 use iced_core::widget::operation::{Operation, Outcome, Scrollable};
 
-/// Viewport + scroll state for one list, captured by [`CaptureBounds`].
 #[derive(Debug, Clone, Copy)]
 pub struct ListGeometry {
-    /// Visible viewport rectangle (absolute window coordinates).
     pub bounds: Rectangle,
-    /// Current scroll translation (`.y` is the vertical offset).
     pub translation_y: f32,
 }
 
-impl ListGeometry {
-    /// The vertical scroll offset, matching what `on_scroll`'s
-    /// `absolute_offset().y` reported.
-    pub fn scroll_offset(&self) -> f32 {
-        self.translation_y
-    }
-}
-
-/// Sidebar playlist list id, defined here to keep all captured ids together.
 pub const SIDEBAR_LIST_ID: Id = Id::new("sidebar_playlist_list");
 
-/// Captures `ListGeometry` for each known scrollable by id, then emits a
-/// `Message::ListBoundsCaptured` carrying the results on `finish`.
+#[derive(Default, Clone, Copy, Debug)]
 pub struct CaptureBounds {
-    sidebar: Option<ListGeometry>,
-    queue: Option<ListGeometry>,
-    track: Option<ListGeometry>,
+    pub sidebar: Option<ListGeometry>,
+    pub queue: Option<ListGeometry>,
+    pub track: Option<ListGeometry>,
 }
 
 impl CaptureBounds {
     pub fn new() -> Self {
-        Self {
-            sidebar: None,
-            queue: None,
-            track: None,
-        }
+        Self::default()
     }
 
     fn record(&mut self, id: Option<&Id>, bounds: Rectangle, translation_y: f32) {
@@ -88,10 +71,6 @@ impl Operation<Message> for CaptureBounds {
     }
 
     fn finish(&self) -> Outcome<Message> {
-        Outcome::Some(Message::ListBoundsCaptured {
-            sidebar: self.sidebar,
-            queue: self.queue,
-            track: self.track,
-        })
+        Outcome::Some(Message::ListBoundsCaptured(self.clone()))
     }
 }

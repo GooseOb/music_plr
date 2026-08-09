@@ -40,7 +40,7 @@ impl MusicPlayer {
 
         let _ = self.restore_nav_entry(&state.data);
 
-        self.nav_history = vec![self.snapshot_current()];
+        self.nav_history = vec![self.view_data().clone()];
         self.nav_history_pos = 0;
     }
 

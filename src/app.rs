@@ -94,8 +94,6 @@ pub struct MusicPlayer {
     pub mpris_update_tx: Option<mpsc::Sender<MprisUpdate>>,
     pub mpris_dirty: bool,
     pub session_dirty: bool,
-    /// Timestamp of the last `session.json` write, used to throttle flushing
-    /// (see `flush_session`).
     pub last_session_flush: std::time::Instant,
 
     pub drag: DragState,
@@ -106,10 +104,7 @@ pub struct MusicPlayer {
 
     pub app_theme: AppTheme,
 
-    pub queue_list_bounds: Option<iced::Rectangle>,
-    pub queue_list_scroll: f32,
-    pub sidebar_bounds: Option<iced::Rectangle>,
-    pub sidebar_list_scroll: f32,
+    pub bounds: crate::app::update::operation::CaptureBounds,
     pub window_width: f32,
 }
 
@@ -177,10 +172,7 @@ impl MusicPlayer {
             context_menu: None,
             queue_selected_indices: Vec::new(),
             app_theme: AppTheme::new(Palette::dark()),
-            queue_list_bounds: None,
-            queue_list_scroll: 0.0,
-            sidebar_bounds: None,
-            sidebar_list_scroll: 0.0,
+            bounds: crate::app::update::operation::CaptureBounds::default(),
             window_width: 1280.0,
             elapsed_text: String::new(),
             total_text: String::new(),
@@ -295,23 +287,10 @@ impl MusicPlayer {
                 self.handle_left_release();
                 Task::none()
             }
-            Message::ListBoundsCaptured {
-                sidebar,
-                queue,
-                track,
-            } => {
-                if let Some(s) = sidebar {
-                    self.sidebar_bounds = Some(s.bounds);
-                    self.sidebar_list_scroll = s.scroll_offset();
-                }
-                if let Some(q) = queue {
-                    self.queue_list_bounds = Some(q.bounds);
-                    self.queue_list_scroll = q.scroll_offset();
-                }
-                if let Some(t) = track {
-                    self.view_data_mut().scroll = t.scroll_offset();
-                    self.view_data_mut().bounds = Some(t.bounds);
-                }
+            Message::ListBoundsCaptured(bounds) => {
+                self.bounds = bounds;
+                self.view_data_mut().scroll = bounds.track.map_or(0.0, |b| b.translation_y);
+
                 Task::none()
             }
             Message::KeyPressed { key, modifiers } => self.handle_key_press(&key, modifiers),
@@ -368,11 +347,8 @@ impl MusicPlayer {
                 self.drag.hovered_track = Some((index, is_queue));
                 Task::none()
             }
-            Message::TrackRightClicked { index, is_queue } => {
-                if !is_queue {
-                    self.drag.hovered_track = None;
-                }
-                self.show_context_menu(index, is_queue);
+            Message::TrackRightClicked { index, list } => {
+                self.show_context_menu(index, list);
                 Task::none()
             }
             Message::PlayTrackAtIndex { index, is_queue } => {
@@ -441,7 +417,10 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::TogglePicker(indices) => {
-                let is_queue = self.context_menu.as_ref().is_some_and(|m| m.is_queue);
+                let is_queue = self
+                    .context_menu
+                    .as_ref()
+                    .is_some_and(|m| m.list.is_queue());
                 self.handle_toggle_picker(indices, is_queue);
                 Task::none()
             }
@@ -494,38 +473,46 @@ impl MusicPlayer {
             Message::NavigateBack => self.handle_navigate_back(),
             Message::NavigateForward => self.handle_navigate_forward(),
             Message::ContextMenuPlayTrack(index) => {
-                let is_queue = self.take_context_menu_is_queue();
+                let menu = self.context_menu.take();
                 self.drag.pressed_track = None;
-                self.handle_play_track(index, is_queue);
-                Task::none()
-            }
-            Message::ContextMenuStartSongRadio(index) => {
-                let is_queue = self.take_context_menu_is_queue();
-                if let Some(t) = self.get_track_at(index, is_queue) {
-                    self.start_song_radio(t.title);
+                if let Some(menu) = menu {
+                    if menu.list == crate::app::interaction::TrackListKind::Recent {
+                        self.play_recent_track(menu.track);
+                    } else {
+                        self.handle_play_track(index, menu.list.is_queue());
+                    }
                 }
                 Task::none()
             }
-            Message::ContextMenuStartArtistRadio(index) => {
-                let is_queue = self.take_context_menu_is_queue();
-                if let Some(t) = self.get_track_at(index, is_queue) {
-                    self.start_artist_radio(t.artist);
+            Message::ContextMenuStartSongRadio => {
+                if let Some(track) = self.context_menu.take().map(|m| m.track) {
+                    self.start_song_radio(track.title);
+                }
+                Task::none()
+            }
+            Message::ContextMenuStartArtistRadio => {
+                if let Some(track) = self.context_menu.take().map(|m| m.track) {
+                    self.start_artist_radio(track.artist);
                 }
                 Task::none()
             }
             Message::ContextMenuDownloadOrDelete(indices) => {
-                let is_queue = self.take_context_menu_is_queue();
+                let list = self.context_menu.as_ref().map(|m| m.list);
                 self.drag.pressed_track = None;
-                self.handle_download_or_remove_tracks(&indices, is_queue);
+                // Resolved per-index inside the handler (it reports per-track
+                // download state), so only the list kind is needed here.
+                if let Some(list) = list {
+                    self.handle_download_or_remove_tracks(&indices, list);
+                }
                 Task::none()
             }
             Message::ContextMenuRemoveFromPlaylist(indices) => {
-                self.take_context_menu_is_queue();
+                self.context_menu = None;
                 self.handle_remove_from_playlist_batch(&indices);
                 Task::none()
             }
             Message::ContextMenuRemoveFromQueue(indices) => {
-                self.take_context_menu_is_queue();
+                self.context_menu = None;
                 self.handle_remove_from_queue_batch(&indices);
                 Task::none()
             }

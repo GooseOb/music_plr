@@ -45,7 +45,7 @@ pub(super) fn view_context_menu<'a>(
                     "Song Radio",
                     icons::RADIO_ICON,
                     p,
-                    Message::ContextMenuStartSongRadio(menu.track_index),
+                    Message::ContextMenuStartSongRadio,
                 )
                 .width(Length::Fill)
                 .into(),
@@ -55,7 +55,7 @@ pub(super) fn view_context_menu<'a>(
                     "Artist Radio",
                     icons::RADIO_ICON,
                     p,
-                    Message::ContextMenuStartArtistRadio(menu.track_index),
+                    Message::ContextMenuStartArtistRadio,
                 )
                 .width(Length::Fill)
                 .into(),
@@ -93,7 +93,7 @@ pub(super) fn view_context_menu<'a>(
             );
         }
 
-        if menu.is_queue {
+        if menu.list == crate::app::interaction::TrackListKind::Queue {
             v.push(
                 menu_item(
                     "Remove from Queue",
@@ -104,7 +104,7 @@ pub(super) fn view_context_menu<'a>(
                 .width(Length::Fill)
                 .into(),
             );
-        } else if menu.in_playlist {
+        } else if menu.in_playlist && menu.list != crate::app::interaction::TrackListKind::Recent {
             v.push(
                 menu_item(
                     "Remove from Playlist",

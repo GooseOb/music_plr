@@ -26,8 +26,6 @@ impl MusicPlayer {
             return;
         }
         if let Some(track) = self.get_track_at(index, false) {
-            // Record the current track as recently played before replacing
-            // the queue with a new one.
             if let Some(old) = self.queue.current().cloned() {
                 if old.url != track.url {
                     self.queue
@@ -38,8 +36,6 @@ impl MusicPlayer {
             self.queue.clear();
             self.queue.enqueue(track);
             self.mpris_dirty = true;
-
-            // Enqueue remaining tracks after the played one.
             let remaining: Vec<Track> = self.tracks_after(index).to_vec();
             for t in remaining {
                 self.queue.enqueue(t);
@@ -54,7 +50,6 @@ impl MusicPlayer {
         self.view_tracks().get(start..).unwrap_or(&[])
     }
 
-    /// Play a track picked from the Recently Played list.
     pub fn play_recent_track(&mut self, track: Track) {
         if let Some(old) = self.queue.current().cloned() {
             if old.url != track.url {
@@ -73,9 +68,7 @@ impl MusicPlayer {
         self.track_loading = true;
         let id = track.id.clone();
 
-        // Prefer a downloaded file on disk over streaming. Downloaded tracks
-        // carry an absolute path in the registry; if it still exists we play
-        // it directly, decoded natively by symphonia.
+        // Prefer a downloaded file on disk over streaming.
         if let Some(dl_path) = self.download_registry.path_for(&track.url) {
             let path = PathBuf::from(&dl_path);
             if path.exists() {

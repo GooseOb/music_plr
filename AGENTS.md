@@ -71,12 +71,13 @@ src/
 
 - **`MusicPlayer`** (`app.rs`): audio, config, `search_history`, `queue`, `playlists`, UI flags, mpsc
   channels, `DragState`, context menu, `nav_history`, clipboard, last-click timing, `download_registry`,
-  `stream_cache`, `thumbnail_cache` (ID→exists bool, filled in tick), `picker_target_indices`
-  (all selected indices if right-clicked track is selected, else just it). **All per-view state** lives
+  `stream_cache`, `thumbnail_cache` (ID→exists bool, filled in tick), `picker`
+  (`Option<PlaylistPicker>` carrying the resolved target indices — all selected indices if the
+  right-clicked track is selected, else just it). **All per-view state** lives
   in one `view_data: ViewData` field — a flat struct whose `kind: ViewKind` enum carries only what
   differs per view (search `exhausted`, radio label, selected playlist). No separate `View`/`RadioKind`
   enum or per-view fields exist.
-- **`ContextMenuState`**: `track_index`, `target_indices` (selection-aware), flags `is_youtube`/`is_downloaded`/`in_playlist`/`is_queue`. Menu ops apply to all selected if the right-clicked track is selected, else just it; "Play"/radio target only the right-clicked track.
+- **`ContextMenuState`**: `track_index`, `target_indices` (selection-aware), `list: TrackListKind` (Queue/Active/Recent), flags `is_youtube`/`is_downloaded`/`in_playlist`. Menu ops apply to all selected if the right-clicked track is selected, else just it; "Play"/radio target only the right-clicked track. `TrackListKind::Recent` marks tracks in the Recently Played list (sourced from `recently_played`, queue/playlist-specific items suppressed).
 - **`DragState`** (`app/interaction.rs`): cursor/track/hover/drop-target/origin/active flags + `drag_target_list`/`sidebar_hover_playlist`; cleaned via `DragState::cleanup()`. Dragging a selected track moves all selected.
 - **Selection / list access** (`app/update/selection.rs`): `selection(_mut)`, `toggle_selection`, `clear_selection`, `view_tracks`, `get_track_at`, `current_track_count` — all keyed by an `is_queue` flag choosing queue vs. active view.
 - **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailsDownloaded` (clears `thumbnail_cache`). 250ms tick drains → `process_result`.

@@ -169,12 +169,12 @@ impl MusicPlayer {
         };
 
         let (bounds, scroll_offset) = if is_queue {
-            (self.queue_list_bounds, self.queue_list_scroll)
-        } else {
             (
-                self.get_current_list_bounds(),
-                self.get_current_list_scroll(),
+                self.bounds.queue.map(|g| g.bounds),
+                self.bounds.queue.map_or(0.0, |g| g.translation_y),
             )
+        } else {
+            (self.bounds.track.map(|g| g.bounds), self.view_data().scroll)
         };
 
         let Some(bounds) = bounds else {

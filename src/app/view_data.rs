@@ -23,13 +23,6 @@ pub struct ViewData {
     pub selection: Vec<usize>,
     pub scroll: f32,
     #[serde(skip)]
-    pub bounds: Option<iced::Rectangle>,
-    /// Monotonic id of the in-flight request (search/radio/browse) that this
-    /// slot is waiting on, or `0` if none. Lets background results be applied
-    /// to the slot that issued them even if the user has navigated elsewhere
-    /// in the meantime, avoiding a race where results land in the active view
-    /// instead of the requesting one. Not persisted (transient correlation).
-    #[serde(skip)]
     pub request_id: u64,
 }
 
@@ -41,24 +34,18 @@ pub enum ViewKind {
     Search {
         exhausted: bool,
         query: String,
-        /// Which search tab is active. For `Songs`/`Videos` the playable track
-        /// list lives in `ViewData.tracks`; the other variants carry their own
-        /// concrete-typed card lists for drill-down.
         tab: crate::youtube::SearchTab,
     },
     SongRadio(String),
     ArtistRadio(String),
-    /// Drill-down into an artist's songs (browse id from a search result).
     Artist {
         browse_id: String,
         name: String,
     },
-    /// Drill-down into an album's tracklist (browse id from a search result).
     Album {
         browse_id: String,
         title: String,
     },
-    /// Drill-down into a playlist's tracks (playlist id from a search result).
     PlaylistView {
         playlist_id: String,
         title: String,

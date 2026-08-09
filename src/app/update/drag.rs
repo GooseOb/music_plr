@@ -4,8 +4,8 @@ use super::{DragTargetList, Message, MusicPlayer, Task, Track, DOUBLE_CLICK_MS};
 
 impl MusicPlayer {
     fn cursor_in_sidebar(&self) -> bool {
-        match self.sidebar_bounds {
-            Some(b) => self.drag.cursor_pos.x < b.x + crate::theme::SIDEBAR_WIDTH,
+        match self.bounds.sidebar {
+            Some(b) => self.drag.cursor_pos.x < b.bounds.x + crate::theme::SIDEBAR_WIDTH,
             None => self.drag.cursor_pos.x < crate::theme::SIDEBAR_WIDTH,
         }
     }
@@ -14,12 +14,13 @@ impl MusicPlayer {
         if self.drag.cursor_pos.x >= crate::theme::SIDEBAR_WIDTH {
             return None;
         }
-        let y_start = self.sidebar_bounds.map_or(0.0, |b| b.y);
+        let sidebar = self.bounds.sidebar?;
+        let y_start = sidebar.bounds.y;
         let y_offset = self.drag.cursor_pos.y - y_start;
         if y_offset < 0.0 {
             return None;
         }
-        let playlist_idx = ((y_offset + self.sidebar_list_scroll)
+        let playlist_idx = ((y_offset + sidebar.translation_y)
             / (crate::theme::SIDEBAR_ITEM_HEIGHT + 2.0)) as usize;
         if playlist_idx < self.playlists.playlists.len() {
             Some(playlist_idx)
@@ -29,10 +30,13 @@ impl MusicPlayer {
     }
 
     pub fn handle_left_release(&mut self) {
-        let is_queue = self.drag.pressed_track_is_queue;
+        let Some((track_idx, is_queue)) = self.drag.pressed_track else {
+            self.cleanup_drag_state();
+            return;
+        };
         if self.drag.drag_active {
             self.handle_drag_drop(is_queue);
-        } else if let Some(track_idx) = self.drag.pressed_track {
+        } else {
             self.toggle_selection(track_idx, is_queue);
         }
 
@@ -63,27 +67,32 @@ impl MusicPlayer {
             return Task::none();
         }
 
-        let is_source_queue = self.drag.pressed_track_is_queue;
+        let is_source_queue = self.drag.pressed_track.is_some_and(|(_, q)| q);
 
         // Check if cursor is over the queue list (for cross-list copy to queue).
         if self.show_queue {
-            if let (Some(qb), qs) = (self.queue_list_bounds, self.queue_list_scroll) {
-                if qb.contains(self.drag.cursor_pos) {
+            if let Some(q) = self.bounds.queue {
+                if q.bounds.contains(self.drag.cursor_pos) {
                     self.drag.drag_target_list = Some(DragTargetList::Queue);
-                    let drop_idx = self.compute_drop_idx(qb, qs, true, 1);
+                    let drop_idx = self.compute_drop_idx(q.bounds, q.translation_y, true, 1);
                     self.drag.drag_drop_target = Some(drop_idx);
                     let track_count = self.queue.tracks.len().saturating_sub(1);
-                    return self.handle_drag_autoscroll(qb, qs, true, track_count);
+                    return self.handle_drag_autoscroll(
+                        q.bounds,
+                        q.translation_y,
+                        true,
+                        track_count,
+                    );
                 }
             }
         }
 
         // Check if cursor is over the current track list (for same-list reorder
-        // or copy from queue to track list).
-        if let (Some(lb), ls) = (
-            self.get_current_list_bounds(),
-            self.get_current_list_scroll(),
-        ) {
+        // or copy from queue to track list). Track bounds come from the live
+        // capture; the scroll offset stays on `view_data` (persisted per slot).
+        if let Some(t) = self.bounds.track {
+            let ls = self.view_data().scroll;
+            let lb = t.bounds;
             if lb.contains(self.drag.cursor_pos) {
                 self.drag.drag_target_list = Some(DragTargetList::TrackList);
                 let is_queue_target = false;
@@ -196,7 +205,7 @@ impl MusicPlayer {
     }
 
     pub fn handle_drag_drop(&mut self, is_queue: bool) {
-        let Some(track_idx) = self.drag.pressed_track else {
+        let Some((track_idx, _)) = self.drag.pressed_track else {
             return;
         };
 
@@ -250,11 +259,6 @@ impl MusicPlayer {
         }
     }
 
-    /// Returns true when `target` names the same list kind as a list flagged
-    /// by `is_queue` (queue when `true`, track list when `false`). `None` is
-    /// never a match. Used both to decide same-list reorder vs cross-list
-    /// copy (with `is_queue` = the drag's origin) and to draw the drop
-    /// indicator in the view (with `is_queue` = the rendered list).
     pub(crate) const fn same_list_kind_as(target: Option<DragTargetList>, is_queue: bool) -> bool {
         match target {
             Some(DragTargetList::Queue) => is_queue,
@@ -346,8 +350,7 @@ impl MusicPlayer {
 
         self.last_click_index = Some(index);
         self.last_click_time = now;
-        self.drag.pressed_track = Some(index);
-        self.drag.pressed_track_is_queue = is_queue;
+        self.drag.pressed_track = Some((index, is_queue));
         self.drag.drag_origin = Some(self.drag.cursor_pos);
         self.drag.drag_active = false;
 

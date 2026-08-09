@@ -58,7 +58,7 @@ pub(super) fn view_track_list<'a>(
     index_offset: usize,
 ) -> Element<'a, Message, AppTheme> {
     if tracks.is_empty() {
-        return empty_state("No tracks found", player.app_theme.palette.fg_secondary);
+        return empty_state("No tracks found");
     }
 
     let target_matches = MusicPlayer::same_list_kind_as(player.drag.drag_target_list, is_queue);
@@ -99,6 +99,40 @@ pub(super) fn view_track_list<'a>(
     .into()
 }
 
+pub(super) fn leading_control<'a>(
+    position: (usize, bool),
+    track: &'a Track,
+    player: &'a MusicPlayer,
+    message: Message,
+) -> Element<'a, Message, AppTheme> {
+    let is_current = player.queue.current().is_some_and(|t| t.url == track.url);
+    let is_hovered = player.drag.hovered_track == Some(position);
+
+    if is_current {
+        play_pause_button(player.is_playing)
+            .padding(theme::SPACING_2XS)
+            .on_press(Message::TogglePlayPause)
+            .into()
+    } else if is_hovered {
+        Button::new(icons::icon(
+            icons::PLAY_ICON,
+            Color::BLACK,
+            theme::ICON_SIZE_LG,
+        ))
+        .padding(theme::SPACING_2XS)
+        .style(button_style_primary())
+        .on_press(message)
+        .into()
+    } else {
+        text((position.0 + 1).to_string())
+            .size(theme::TEXT_SIZE_SM)
+            .style(fg_secondary())
+            .width(theme::TRACK_LEADING_WIDTH)
+            .center()
+            .into()
+    }
+}
+
 pub(super) fn view_track_row<'a>(
     track: &'a Track,
     index: usize,
@@ -128,35 +162,25 @@ pub(super) fn view_track_row<'a>(
         }
     };
 
-    let leading = if is_current {
-        play_pause_button(player.is_playing)
-            .padding(theme::SPACING_2XS)
-            .on_press(Message::TogglePlayPause)
-            .into()
-    } else if is_hovered {
-        Button::new(icons::icon(
-            icons::PLAY_ICON,
-            Color::BLACK,
-            theme::ICON_SIZE_LG,
-        ))
-        .padding(theme::SPACING_2XS)
-        .style(button_style_primary())
-        .on_press(Message::PlayTrackAtIndex { index, is_queue })
-        .into()
-    } else {
-        text((index + 1).to_string())
-            .size(theme::TEXT_SIZE_SM)
-            .style(fg_secondary())
-            .width(theme::TRACK_LEADING_WIDTH)
-            .center()
-            .into()
-    };
+    let leading = leading_control(
+        (index, is_queue),
+        track,
+        player,
+        Message::PlayTrackAtIndex { index, is_queue },
+    );
 
     let inner = track_row_layout(leading, track, player);
 
     let track_area = MouseArea::new(inner)
         .on_press(Message::TrackPressed { index, is_queue })
-        .on_right_press(Message::TrackRightClicked { index, is_queue })
+        .on_right_press(Message::TrackRightClicked {
+            index,
+            list: if is_queue {
+                crate::app::interaction::TrackListKind::Queue
+            } else {
+                crate::app::interaction::TrackListKind::Active
+            },
+        })
         .on_move(move |_| Message::TrackHoverStart { index, is_queue });
 
     track_row(track_area, row_bg).into()
@@ -259,8 +283,8 @@ pub(super) fn track_row<'a>(
 }
 
 /// An empty-state message centered in the available space.
-pub(super) fn empty_state(msg: &str, color: Color) -> Element<'_, Message, AppTheme> {
-    Container::new(text(msg).color(color).center())
+pub(super) fn empty_state(msg: &str) -> Element<'_, Message, AppTheme> {
+    Container::new(text(msg).style(fg_secondary()).center())
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(theme::SPACING_XL)

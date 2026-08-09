@@ -1,7 +1,10 @@
 //! Messages produced by the UI and results produced by background work.
 
 use super::ViewData;
-use crate::types::{QueueTab, Track};
+use crate::{
+    app::update::operation::CaptureBounds,
+    types::{QueueTab, Track},
+};
 use iced::Point;
 
 #[derive(Debug, Clone)]
@@ -9,9 +12,6 @@ pub enum BackendResult {
     SearchResults(u64, Vec<Track>, crate::youtube::SearchTab),
     SearchResultsAppend(u64, Vec<Track>),
     RadioResults(u64, String, Vec<Track>),
-    /// Tracks returned by drilling into an artist/album/playlist. Carries the
-    /// request id of the slot that issued the browse so results land in the
-    /// correct view even after navigation.
     BrowseResults(u64, Vec<Track>),
     DownloadComplete(Track, String),
     DownloadError(String),
@@ -27,14 +27,7 @@ pub enum Message {
     WindowResized(iced::Size),
     CursorMoved(Point),
     LeftButtonReleased,
-    /// Geometry captured from every scrollable via a `CaptureBounds`
-    /// operation (replaces the old `on_scroll`-driven messages). `None` means
-    /// that list wasn't present in the tree on the last operate pass.
-    ListBoundsCaptured {
-        sidebar: Option<crate::app::update::operation::ListGeometry>,
-        queue: Option<crate::app::update::operation::ListGeometry>,
-        track: Option<crate::app::update::operation::ListGeometry>,
-    },
+    ListBoundsCaptured(CaptureBounds),
     KeyPressed {
         key: iced::keyboard::key::Key,
         modifiers: iced::keyboard::Modifiers,
@@ -60,7 +53,7 @@ pub enum Message {
     },
     TrackRightClicked {
         index: usize,
-        is_queue: bool,
+        list: crate::app::interaction::TrackListKind,
     },
     PlayTrackAtIndex {
         index: usize,
@@ -93,8 +86,8 @@ pub enum Message {
     NavigateForward,
 
     ContextMenuPlayTrack(usize),
-    ContextMenuStartSongRadio(usize),
-    ContextMenuStartArtistRadio(usize),
+    ContextMenuStartSongRadio,
+    ContextMenuStartArtistRadio,
     ContextMenuDownloadOrDelete(Vec<usize>),
     ContextMenuRemoveFromPlaylist(Vec<usize>),
     ContextMenuRemoveFromQueue(Vec<usize>),

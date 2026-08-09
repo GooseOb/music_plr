@@ -101,12 +101,7 @@ fn view_search_track_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme>
     let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
 
     if results.is_empty() {
-        children.push(
-            Container::new(text("No tracks found").style(fg_secondary()).center())
-                .width(Length::Fill)
-                .padding(theme::SPACING_LG)
-                .into(),
-        );
+        children.push(track_list::empty_state("No tracks found"));
     } else {
         children.push(view_track_list(results, player, false, 0));
 
@@ -190,7 +185,7 @@ fn view_search_card_tab<'a>(
             .padding(theme::SPACING_XL)
             .into();
         }
-        return track_list::empty_state("No results found", player.app_theme.palette.fg_secondary);
+        return track_list::empty_state("No results found");
     }
 
     scrollable(Column::with_children(cards))

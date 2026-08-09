@@ -24,9 +24,7 @@ impl MusicPlayer {
         }
     }
 
-    /// The track list for the current (non-queue) view. For `Playlist` the
-    /// tracks live in the `PlaylistStore`; for all other kinds they are the
-    /// view's own `tracks`.
+    /// The track list for the current (non-queue) view.
     pub fn view_tracks(&self) -> &[Track] {
         let vd = self.view_data();
         match &vd.kind {
@@ -70,13 +68,5 @@ impl MusicPlayer {
             return self.queue.tracks.len();
         }
         self.view_tracks().len()
-    }
-
-    pub fn get_current_list_bounds(&self) -> Option<iced::Rectangle> {
-        self.view_data().bounds
-    }
-
-    pub fn get_current_list_scroll(&self) -> f32 {
-        self.view_data().scroll
     }
 }

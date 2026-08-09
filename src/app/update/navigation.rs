@@ -11,11 +11,6 @@ impl MusicPlayer {
         self.nav_history_pos + 1 < self.nav_history.len()
     }
 
-    /// Snapshot the current view data by cloning the active history slot.
-    pub(super) fn snapshot_current(&self) -> ViewData {
-        self.view_data().clone()
-    }
-
     /// Sync the global `search_query` from the active `Search` view's stored
     /// query. Used whenever the active view is replaced (navigate / restore)
     /// so the always-visible search bar reflects the view being shown.
@@ -40,11 +35,18 @@ impl MusicPlayer {
         *self.view_data_mut() = data.clone();
         self.sync_search_query();
         self.sync_search_scope();
+        self.sync_downloads_view();
 
         iced::widget::operation::scroll_to::<Message>(
             TRACK_LIST_ID,
             iced::widget::operation::AbsoluteOffset { x: 0.0, y },
         )
+    }
+
+    pub(super) fn sync_downloads_view(&mut self) {
+        if matches!(self.view_data().kind, ViewKind::Downloads) {
+            self.view_data_mut().tracks = self.download_registry.clone_tracks();
+        }
     }
 
     /// Replace the current view, recording the destination as a *new* history
@@ -79,6 +81,7 @@ impl MusicPlayer {
         self.push_new_view(data);
         self.sync_search_query();
         self.sync_search_scope();
+        self.sync_downloads_view();
 
         let view = self.view_data().clone();
         self.seed_view_thumbnails(&view);
@@ -109,8 +112,6 @@ impl MusicPlayer {
         }
     }
 
-    /// Find the history slot awaiting the given request id. Returns its index,
-    /// or `None` if the slot was truncated away by navigation (stale result).
     pub(super) fn slot_for_request(&self, rid: u64) -> Option<usize> {
         self.nav_history.iter().position(|v| v.request_id == rid)
     }
