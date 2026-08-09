@@ -246,11 +246,5 @@ fn sidebar_nav_item<'a>(
 
 /// Build the `Downloads` view data from the current download registry.
 fn downloads_view_data(player: &MusicPlayer) -> ViewData {
-    let tracks = player
-        .download_registry
-        .all_tracks()
-        .into_iter()
-        .cloned()
-        .collect();
-    ViewData::new_downloads(tracks)
+    ViewData::new_downloads(player.download_registry.clone_tracks())
 }

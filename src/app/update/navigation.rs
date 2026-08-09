@@ -80,6 +80,8 @@ impl MusicPlayer {
         self.sync_search_query();
         self.sync_search_scope();
 
+        let view = self.view_data().clone();
+        self.seed_view_thumbnails(&view);
         self.save_session();
     }
 
@@ -117,10 +119,8 @@ impl MusicPlayer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::message::BackendResult;
-    use crate::app::ViewKind;
+    use crate::app::{message::BackendResult, ViewKind};
     use crate::data::config;
-    use crate::types::{Track, TrackSource};
     use crate::youtube::SearchScope;
 
     fn player() -> MusicPlayer {

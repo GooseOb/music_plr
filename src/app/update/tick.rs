@@ -1,6 +1,6 @@
 use super::{
-    error, format_duration, mpris, mpsc, spawn_thumbnail_download, spawn_thumbnail_download_thread,
-    BackendResult, MprisCommand, MprisUpdate, MusicPlayer,
+    error, format_duration, mpris, mpsc, spawn_thumbnail_download, BackendResult, MprisCommand,
+    MprisUpdate, MusicPlayer, ViewData,
 };
 use crate::app::ViewKind;
 use tracing::debug;
@@ -21,7 +21,9 @@ impl MusicPlayer {
             self.process_mpris_command(cmd);
         }
 
-        self.update_thumbnail_cache();
+        // Reconcile currently visible thumbnails: queue any missing ones for
+        // download and flush the queue to a background thread.
+        self.update_thumbnails();
 
         let s = self.audio.get_state();
         // Detect audio state changes for MPRIS update throttling.
@@ -69,69 +71,36 @@ impl MusicPlayer {
         }
     }
 
-    fn update_thumbnail_cache(&mut self) {
-        // Sync downloaded tracks from the registry into the Downloads view so
-        // the list stays fresh when new downloads complete. Guarded by the
-        // registry version so we only re-clone the track list when it actually
-        // changed, not on every 250ms tick.
-        if matches!(self.view_data().kind, ViewKind::Downloads)
-            && self.view_data().tracks.len() != self.download_registry.len()
+    /// Seed a view's thumbnail ids into the index so the next tick drains any
+    /// missing ones. Called wherever a view becomes active (navigation,
+    /// results installed) — the tick only drains, it never re-scans visibility.
+    pub(crate) fn seed_view_thumbnails(&mut self, view: &ViewData) {
+        for track in &view.tracks {
+            if track.source == crate::types::TrackSource::YouTube {
+                self.thumbnail_index.ensure(&track.id, &track.thumbnail);
+            }
+        }
+        if let ViewKind::Search {
+            tab:
+                crate::youtube::SearchTab::Artists(cards)
+                | crate::youtube::SearchTab::Albums(cards)
+                | crate::youtube::SearchTab::Playlists(cards),
+            ..
+        } = &view.kind
         {
-            let ids: std::collections::HashSet<String> = self
-                .download_registry
-                .all_tracks()
-                .iter()
-                .map(|t| t.id.clone())
-                .collect();
-            let changed = self.view_data().tracks.iter().map(|t| &t.id).ne(ids.iter());
-            if changed {
-                self.view_data_mut().tracks = self
-                    .download_registry
-                    .all_tracks()
-                    .into_iter()
-                    .cloned()
-                    .collect();
+            for card in cards {
+                self.thumbnail_index.ensure(&card.id, &card.thumbnail);
             }
         }
+    }
 
-        // Populate the thumbnail-exists set incrementally: only check the
-        // filesystem for ids not yet in `thumbnail_cache`, which holds the ids
-        // whose thumbnail file exists.
-        let mut to_check: Vec<String> = Vec::new();
-        for track in self.view_tracks() {
-            if !self.thumbnail_cache.contains(&track.id) {
-                to_check.push(track.id.clone());
-            }
-        }
-        if let Some(current) = self.queue.current() {
-            if !self.thumbnail_cache.contains(&current.id) {
-                to_check.push(current.id.clone());
-            }
-        }
-        for id in to_check {
-            if crate::data::thumbnails::thumbnail_path(&id).exists() {
-                self.thumbnail_cache.insert(id);
-            }
-        }
-
-        // Also track non-track card thumbnails (artist/album/playlist browse
-        // ids) on the Search view so they flip to "downloaded" once present.
-        let ids: Vec<String> = match &self.view_data().kind {
-            ViewKind::Search {
-                tab:
-                    crate::youtube::SearchTab::Artists(cards)
-                    | crate::youtube::SearchTab::Albums(cards)
-                    | crate::youtube::SearchTab::Playlists(cards),
-                ..
-            } => cards.iter().map(|c| c.id.clone()).collect(),
-            _ => Vec::new(),
-        };
-        for id in ids {
-            if !self.thumbnail_cache.contains(&id)
-                && crate::data::thumbnails::thumbnail_path(&id).exists()
-            {
-                self.thumbnail_cache.insert(id.clone());
-            }
+    fn update_thumbnails(&mut self) {
+        // Flush queued thumbnail downloads. Ids are seeded into the index at the
+        // points they become visible (search/browse/radio results, download
+        // completion, navigation, queue advance) — the tick only drains, it
+        // does not re-scan visibility.
+        if let Some(entries) = self.thumbnail_index.drain_pending() {
+            spawn_thumbnail_download(entries, self.result_tx.clone());
         }
     }
 
@@ -167,24 +136,15 @@ impl MusicPlayer {
     }
 
     /// Handle a fresh `SearchResults`: install the tab into the requesting
-    /// nav slot, flip exhausted/loading flags, and kick off thumbnail downloads.
-    /// Stale results (slot truncated away by navigation) are ignored.
+    /// nav slot, flip exhausted/loading flags. Stale results (slot truncated
+    /// away by navigation) are ignored. Thumbnail downloads are driven lazily
+    /// by the tick over currently visible ids, so none are kicked off here.
     fn process_search_results(
         &mut self,
         rid: u64,
         tracks: Vec<crate::types::Track>,
         tab: crate::youtube::SearchTab,
     ) {
-        // Card thumbnail entries come from the result tab itself.
-        let mut entries: Vec<(String, String)> = match &tab {
-            crate::youtube::SearchTab::Artists(cards)
-            | crate::youtube::SearchTab::Albums(cards)
-            | crate::youtube::SearchTab::Playlists(cards) => cards
-                .iter()
-                .map(|c| (c.id.clone(), c.thumbnail.clone()))
-                .collect(),
-            _ => Vec::new(),
-        };
         // Apply to the slot that requested this search.
         if let Some(idx) = self.slot_for_request(rid) {
             if let ViewKind::Search {
@@ -206,14 +166,7 @@ impl MusicPlayer {
                 self.nav_history[idx].request_id = 0;
             }
             self.save_session();
-            entries.extend(
-                self.nav_history[idx]
-                    .tracks
-                    .iter()
-                    .filter(|t| t.source == crate::types::TrackSource::YouTube)
-                    .map(|t| (t.id.clone(), t.thumbnail.clone())),
-            );
-            spawn_thumbnail_download(entries, self.result_tx.clone());
+            self.seed_view_thumbnails(&self.nav_history[idx].clone());
             self.clear_notification();
         }
     }
@@ -238,8 +191,7 @@ impl MusicPlayer {
                     self.nav_history[idx].set_exhausted(exhausted);
                     self.nav_history[idx].request_id = 0;
                     self.save_session();
-                    let tracks = self.nav_history[idx].tracks.clone();
-                    spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
+                    self.seed_view_thumbnails(&self.nav_history[idx].clone());
                     self.clear_notification();
                 }
             }
@@ -251,8 +203,7 @@ impl MusicPlayer {
                     self.nav_history[idx].selection.clear();
                     self.nav_history[idx].request_id = 0;
                     self.save_session();
-                    let tracks = self.nav_history[idx].tracks.clone();
-                    spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
+                    self.seed_view_thumbnails(&self.nav_history[idx].clone());
                     self.clear_notification();
                 }
             }
@@ -267,16 +218,18 @@ impl MusicPlayer {
                     self.nav_history[idx].loading = false;
                     self.nav_history[idx].request_id = 0;
                     self.save_session();
-                    let tracks = self.nav_history[idx].tracks.clone();
-                    spawn_thumbnail_download_thread(&tracks, self.result_tx.clone());
+                    self.seed_view_thumbnails(&self.nav_history[idx].clone());
                 }
             }
             BackendResult::DownloadComplete(track, path) => {
                 let mut track = track;
                 track.download_path = Some(path.clone());
-                self.download_registry.register(track);
+                self.download_registry.register(track.clone());
                 self.notify(format!("Download complete! Saved to {path}"));
-                self.thumbnail_cache.clear();
+                self.thumbnail_index.mark_downloaded(&track.id);
+                if matches!(self.view_data().kind, ViewKind::Downloads) {
+                    self.view_data_mut().tracks.push(track);
+                }
             }
             BackendResult::DownloadError(msg) => {
                 error!("Download error: {}", msg);
@@ -292,8 +245,10 @@ impl MusicPlayer {
                 self.clear_notification();
                 self.notify_error(msg);
             }
-            BackendResult::ThumbnailsDownloaded => {
-                self.thumbnail_cache.clear();
+            BackendResult::ThumbnailsDownloaded(ids) => {
+                for id in &ids {
+                    self.thumbnail_index.mark_downloaded(id);
+                }
             }
         }
     }

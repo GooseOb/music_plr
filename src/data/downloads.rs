@@ -35,11 +35,12 @@ impl DownloadRegistry {
         self.tracks.get(url).and_then(|t| t.download_path.clone())
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.tracks.len()
     }
 
-    pub fn all_tracks(&self) -> Vec<&Track> {
-        self.tracks.values().collect()
+    pub fn clone_tracks(&self) -> Vec<Track> {
+        self.tracks.values().cloned().collect()
     }
 }

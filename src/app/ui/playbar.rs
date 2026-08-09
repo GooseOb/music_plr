@@ -22,8 +22,9 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     let artist = track.map_or("", |t| t.artist.as_str());
 
     let track_thumb: Element<'a, Message, AppTheme> = if let Some(t) = track {
-        let thumb_exists = player.thumbnail_cache.contains(&t.id);
-        thumbnail(t, p, theme::PLAYBAR_THUMBNAIL_SIZE, thumb_exists)
+        let thumb = player.thumbnail_index.get(&t.id);
+
+        thumbnail(p, theme::PLAYBAR_THUMBNAIL_SIZE, thumb)
     } else {
         icons::icon(icons::MUSIC_ICON, p.fg_muted, theme::PLAYBAR_THUMBNAIL_SIZE).into()
     };

@@ -16,7 +16,7 @@ pub enum BackendResult {
     DownloadComplete(Track, String),
     DownloadError(String),
     SearchError(String),
-    ThumbnailsDownloaded,
+    ThumbnailsDownloaded(Vec<String>),
 }
 
 #[derive(Debug, Clone)]

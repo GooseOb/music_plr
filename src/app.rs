@@ -66,7 +66,7 @@ pub struct MusicPlayer {
 
     pub notification: Option<String>,
 
-    pub thumbnail_cache: std::collections::HashSet<String>,
+    pub thumbnail_index: crate::data::thumbnails::ThumbnailIndex,
     pub playlists: PlaylistStore,
     pub playlist_create_name: String,
     /// Active playlist picker, if open. Holds the resolved target indices and
@@ -155,7 +155,7 @@ impl MusicPlayer {
             playlists: PlaylistStore::load(),
             playlist_create_name: String::new(),
             show_queue: false,
-            thumbnail_cache: std::collections::HashSet::new(),
+            thumbnail_index: crate::data::thumbnails::ThumbnailIndex::load(),
             picker: None,
             show_delete_confirm: false,
             delete_confirm_index: None,

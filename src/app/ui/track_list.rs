@@ -22,27 +22,16 @@ use super::{
     theme, Message, MusicPlayer,
 };
 
-pub fn thumbnail<'a>(
-    track: &'a Track,
-    p: &'a Palette,
-    size: f32,
-    exists: bool,
-) -> Element<'a, Message, AppTheme> {
-    thumbnail_by_id(&track.id, p, size, exists)
-}
-
 /// Render a thumbnail image if it exists on disk, otherwise a music-note
-/// placeholder. `id` names the cache file (video id for tracks, browse id
-/// for artist/album/playlist cards); `exists` comes from the thumbnail cache.
-pub fn thumbnail_by_id<'a>(
-    id: &'a str,
+/// placeholder. `thumb` is the resolved path from the thumbnail index
+/// (`Some`) or `None` when not yet downloaded.
+pub fn thumbnail<'a>(
     p: &'a Palette,
     size: f32,
-    exists: bool,
+    thumb: Option<&'a std::path::PathBuf>,
 ) -> Element<'a, Message, AppTheme> {
-    if exists {
-        let thumb_path = crate::data::thumbnails::thumbnail_path(id);
-        image(image::Handle::from_path(thumb_path))
+    if let Some(path) = thumb {
+        image(image::Handle::from_path(path))
             .width(size)
             .height(size)
             .border_radius(size / 4.0)
@@ -221,7 +210,7 @@ pub(super) fn track_row_layout<'a>(
     player: &'a MusicPlayer,
 ) -> Row<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let thumb_exists = player.thumbnail_cache.contains(&track.id);
+    let thumb = player.thumbnail_index.get(&track.id);
     let is_downloaded = player.download_registry.contains(&track.url);
     let is_cached = player.stream_cache.index_contains(&track.id);
 
@@ -235,7 +224,7 @@ pub(super) fn track_row_layout<'a>(
 
     inner_row_layout(
         leading,
-        Some(thumbnail(track, p, theme::THUMBNAIL_SIZE, thumb_exists)),
+        Some(thumbnail(p, theme::THUMBNAIL_SIZE, thumb)),
         &track.title,
         Some(&track.artist),
         Some(

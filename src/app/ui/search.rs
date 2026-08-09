@@ -211,13 +211,13 @@ fn card_row<'a>(
     on_press: Message,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let thumb_exists = player.thumbnail_cache.contains(id);
+    let thumb = player.thumbnail_index.get(id);
     let leading = text((index + 1).to_string())
         .size(theme::TEXT_SIZE_SM)
         .style(fg_secondary())
         .width(theme::TRACK_LEADING_WIDTH)
         .center();
-    let thumb = track_list::thumbnail_by_id(id, p, theme::THUMBNAIL_SIZE, thumb_exists);
+    let thumb = track_list::thumbnail(p, theme::THUMBNAIL_SIZE, thumb);
     let inner = track_list::inner_row_layout(
         leading.into(),
         Some(thumb),
