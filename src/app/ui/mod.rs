@@ -19,7 +19,7 @@ mod sidebar;
 mod styles;
 mod track_list;
 
-pub use queue::QUEUE_LIST_ID;
+pub use queue::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID};
 pub use track_list::TRACK_LIST_ID;
 
 use track_list::view_track_list;
@@ -48,7 +48,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .height(Length::Fill)
         .push(main);
 
-    if player.picker.is_some() {
+    if player.playlist_picker.is_some() {
         stack = stack.push(overlays::view_playlist_picker(player));
     } else if player.show_delete_confirm {
         stack = stack.push(overlays::view_delete_confirm());

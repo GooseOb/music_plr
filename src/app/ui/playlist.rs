@@ -4,7 +4,12 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{app::ViewKind, icons, theme::AppTheme, types::Track};
+use crate::{
+    app::{interaction::TrackListKind, ViewKind},
+    icons,
+    theme::AppTheme,
+    types::Track,
+};
 
 use super::{
     styles::{button_style_danger, fg_secondary},
@@ -78,11 +83,11 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
                 .height(Length::Fill)
                 .into()
         } else {
-            view_track_list(tracks, player, false, 0)
+            view_track_list(tracks, player, TrackListKind::Active, 0)
         }
     } else if let Some(idx) = player.view_data().selected_playlist_id() {
         if let Some(pl) = player.playlists.playlists.get(idx) {
-            view_track_list(&pl.tracks, player, false, 0)
+            view_track_list(&pl.tracks, player, TrackListKind::Active, 0)
         } else {
             Container::new(Row::new())
                 .width(Length::Fill)

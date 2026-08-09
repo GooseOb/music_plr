@@ -1,10 +1,19 @@
-use super::{MusicPlayer, Track};
+use super::{MusicPlayer, Track, TrackListKind, TrackPos};
 use std::path::PathBuf;
 use tracing::debug;
 
 impl MusicPlayer {
-    pub fn handle_play_track(&mut self, index: usize, is_queue: bool) {
-        if is_queue {
+    /// `Recent` appends via [`Self::play_recent_track`] rather than
+    /// replacing the queue.
+    pub fn handle_play_track(&mut self, pos: TrackPos) {
+        let TrackPos { index, list } = pos;
+        if list == TrackListKind::Recent {
+            if let Some(track) = self.get_track_at(pos) {
+                self.play_recent_track(track);
+            }
+            return;
+        }
+        if list == TrackListKind::Queue {
             // Skip to the selected queue entry: discard all tracks before it
             // (including the current one), keeping the clicked track and
             // everything after it.
@@ -25,7 +34,7 @@ impl MusicPlayer {
             }
             return;
         }
-        if let Some(track) = self.get_track_at(index, false) {
+        if let Some(track) = self.get_track_at(TrackPos::new(index, TrackListKind::Active)) {
             if let Some(old) = self.queue.current().cloned() {
                 if old.url != track.url {
                     self.queue

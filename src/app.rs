@@ -22,9 +22,9 @@ mod ui;
 mod update;
 mod view_data;
 
-pub use interaction::{ContextMenuState, DragState, DragTargetList};
+pub use interaction::{ContextMenuState, DragState, TrackListKind, TrackPos};
 pub use message::{BackendResult, Message};
-pub use view_data::{ViewData, ViewKind};
+pub use view_data::{RequestIdGenerator, ViewData, ViewKind};
 
 #[allow(clippy::struct_excessive_bools)]
 pub struct MusicPlayer {
@@ -35,10 +35,7 @@ pub struct MusicPlayer {
     /// truth for which view is active and its data (see [`Self::view_data`]).
     pub nav_history: Vec<ViewData>,
     pub nav_history_pos: usize,
-    /// Source of monotonic request ids stamped onto the view slot that issues
-    /// an in-flight search/radio/browse, so results can be correlated back to
-    /// it regardless of which view is active when they arrive.
-    pub next_request_id: u64,
+    pub request_ids: RequestIdGenerator,
     /// The search-bar text. Kept on `MusicPlayer` because the search bar is
     /// always visible regardless of which view is active.
     pub search_query: String,
@@ -69,13 +66,7 @@ pub struct MusicPlayer {
     pub thumbnail_index: crate::data::thumbnails::ThumbnailIndex,
     pub playlists: PlaylistStore,
     pub playlist_create_name: String,
-    /// Active playlist picker, if open. Holds the resolved target indices and
-    /// whether they refer to queue positions (`is_queue`) rather than
-    /// track-list positions. The `Option` encodes the "picker open ⟺ has
-    /// target data" invariant: indices are selection-aware (all selected
-    /// indices when the right-clicked track is part of the selection,
-    /// otherwise just that one track), used by `AddToPlaylist`.
-    pub picker: Option<PlaylistPicker>,
+    pub playlist_picker: Option<PlaylistPicker>,
     pub show_delete_confirm: bool,
     pub delete_confirm_index: Option<usize>,
 
@@ -84,7 +75,7 @@ pub struct MusicPlayer {
     pub pending_cache_id: Option<String>,
 
     pub clipboard: Vec<Track>,
-    pub last_click_index: Option<usize>,
+    pub last_click: Option<TrackPos>,
     pub last_click_time: Instant,
 
     pub result_tx: mpsc::Sender<BackendResult>,
@@ -110,7 +101,7 @@ pub struct MusicPlayer {
 
 pub struct PlaylistPicker {
     pub indices: Vec<usize>,
-    pub is_queue: bool,
+    pub list: TrackListKind,
 }
 
 impl Default for MusicPlayer {
@@ -151,12 +142,12 @@ impl MusicPlayer {
             playlist_create_name: String::new(),
             show_queue: false,
             thumbnail_index: crate::data::thumbnails::ThumbnailIndex::load(),
-            picker: None,
+            playlist_picker: None,
             show_delete_confirm: false,
             delete_confirm_index: None,
             nav_history: vec![ViewData::default()],
             nav_history_pos: 0,
-            next_request_id: 1,
+            request_ids: RequestIdGenerator::default(),
             result_tx,
             result_rx,
             mpris_cmd_tx,
@@ -177,7 +168,7 @@ impl MusicPlayer {
             elapsed_text: String::new(),
             total_text: String::new(),
             clipboard: Vec::new(),
-            last_click_index: None,
+            last_click: None,
             last_click_time: std::time::Instant::now(),
         };
 
@@ -339,23 +330,23 @@ impl MusicPlayer {
                 self.handle_delete_search_history(index);
                 Task::none()
             }
-            Message::TrackPressed { index, is_queue } => {
-                self.handle_track_pressed(index, is_queue);
+            Message::TrackPressed(pos) => {
+                self.handle_track_pressed(pos);
                 Task::none()
             }
-            Message::TrackHoverStart { index, is_queue } => {
-                self.drag.hovered_track = Some((index, is_queue));
+            Message::TrackHoverStart(pos) => {
+                self.drag.hovered_track = Some(pos);
                 Task::none()
             }
-            Message::TrackRightClicked { index, list } => {
-                self.show_context_menu(index, list);
+            Message::TrackRightClicked(pos) => {
+                self.show_context_menu(pos);
                 Task::none()
             }
-            Message::PlayTrackAtIndex { index, is_queue } => {
-                if !is_queue {
+            Message::PlayTrackAt(pos) => {
+                if pos.list == TrackListKind::Active {
                     self.drag.hovered_track = None;
                 }
-                self.handle_play_track(index, is_queue);
+                self.handle_play_track(pos);
                 Task::none()
             }
             Message::TogglePlayPause => {
@@ -391,7 +382,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::RenamePlaylist(name) => {
-                self.handle_rename_playlist(name);
+                self.handle_rename_playlist(&name);
                 Task::none()
             }
             Message::AddLocalMusic => {
@@ -411,21 +402,21 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::AddToPlaylist(playlist_idx) => {
-                if let Some(picker) = self.picker.take() {
-                    self.handle_add_to_playlist(playlist_idx, &picker.indices, picker.is_queue);
+                if let Some(picker) = self.playlist_picker.take() {
+                    self.handle_add_to_playlist(playlist_idx, &picker.indices, picker.list);
                 }
                 Task::none()
             }
             Message::TogglePicker(indices) => {
-                let is_queue = self
+                let list = self
                     .context_menu
                     .as_ref()
-                    .is_some_and(|m| m.list.is_queue());
-                self.handle_toggle_picker(indices, is_queue);
+                    .map_or(TrackListKind::Active, |m| m.pos.list);
+                self.handle_toggle_picker(indices, list);
                 Task::none()
             }
             Message::ClosePicker => {
-                self.picker = None;
+                self.playlist_picker = None;
                 Task::none()
             }
             Message::ShowDeleteConfirm(index) => {
@@ -457,31 +448,15 @@ impl MusicPlayer {
                 self.save_session();
                 Task::none()
             }
-            Message::PlayRecentTrack(index) => {
-                if index < self.queue.recently_played.len() {
-                    if let Some(track) = self.queue.recently_played.get(index) {
-                        let track = track.clone();
-                        self.play_recent_track(track);
-                    }
-                }
-                Task::none()
-            }
             Message::NavigateTo(data) => {
                 self.handle_navigate_to(data);
                 Task::none()
             }
             Message::NavigateBack => self.handle_navigate_back(),
             Message::NavigateForward => self.handle_navigate_forward(),
-            Message::ContextMenuPlayTrack(index) => {
-                let menu = self.context_menu.take();
-                self.drag.pressed_track = None;
-                if let Some(menu) = menu {
-                    if menu.list == crate::app::interaction::TrackListKind::Recent {
-                        self.play_recent_track(menu.track);
-                    } else {
-                        self.handle_play_track(index, menu.list.is_queue());
-                    }
-                }
+            Message::ContextMenuPlayTrack(pos) => {
+                self.context_menu = None;
+                self.handle_play_track(pos);
                 Task::none()
             }
             Message::ContextMenuStartSongRadio => {
@@ -497,7 +472,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuDownloadOrDelete(indices) => {
-                let list = self.context_menu.as_ref().map(|m| m.list);
+                let list = self.context_menu.as_ref().map(|m| m.pos.list);
                 self.drag.pressed_track = None;
                 // Resolved per-index inside the handler (it reports per-track
                 // download state), so only the list kind is needed here.

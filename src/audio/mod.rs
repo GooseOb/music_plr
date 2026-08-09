@@ -175,10 +175,6 @@ impl AudioPlayer {
                                 cache_path
                             );
 
-                            // The file is already on disk (a streamed cache file or a
-                            // local import), so decode it directly — no ffmpeg
-                            // subprocess needed. `None` means the format couldn't be
-                            // probed (corrupt/incomplete file).
                             match Self::start_source(&cache_path, None, duration, &state_clone) {
                                 Some(active) => output = Some(active),
                                 None => {

@@ -4,7 +4,7 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::app::ViewKind;
+use crate::app::{interaction::TrackListKind, ViewKind};
 use crate::{icons, theme::AppTheme, youtube::SearchScope};
 
 use super::{
@@ -103,7 +103,7 @@ fn view_search_track_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme>
     if results.is_empty() {
         children.push(track_list::empty_state("No tracks found"));
     } else {
-        children.push(view_track_list(results, player, false, 0));
+        children.push(view_track_list(results, player, TrackListKind::Active, 0));
 
         if !exhausted {
             let btn = Button::new(text("Load More").color(Color::WHITE))
@@ -250,7 +250,7 @@ pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme
     let track_list = if loading && tracks.is_empty() {
         loading_placeholder("Loading...")
     } else {
-        view_track_list(tracks, player, false, 0)
+        view_track_list(tracks, player, TrackListKind::Active, 0)
     };
 
     Column::with_children(vec![header.into(), track_list])
@@ -270,7 +270,7 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
     let track_list = if loading && tracks.is_empty() {
         loading_placeholder("Generating radio...")
     } else {
-        view_track_list(tracks, player, false, 0)
+        view_track_list(tracks, player, TrackListKind::Active, 0)
     };
 
     Column::with_children(vec![header.into(), track_list])

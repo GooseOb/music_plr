@@ -1,6 +1,4 @@
-use crate::app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID};
-
-use super::{DragTargetList, Message, MusicPlayer, Task, Track, DOUBLE_CLICK_MS};
+use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, DOUBLE_CLICK_MS};
 
 impl MusicPlayer {
     fn cursor_in_sidebar(&self) -> bool {
@@ -30,14 +28,14 @@ impl MusicPlayer {
     }
 
     pub fn handle_left_release(&mut self) {
-        let Some((track_idx, is_queue)) = self.drag.pressed_track else {
+        let Some(pressed) = self.drag.pressed_track else {
             self.cleanup_drag_state();
             return;
         };
         if self.drag.drag_active {
-            self.handle_drag_drop(is_queue);
+            self.handle_drag_drop(pressed.list);
         } else {
-            self.toggle_selection(track_idx, is_queue);
+            self.toggle_selection(pressed);
         }
 
         if self.show_search_history && !self.is_cursor_in_search_area() {
@@ -67,22 +65,19 @@ impl MusicPlayer {
             return Task::none();
         }
 
-        let is_source_queue = self.drag.pressed_track.is_some_and(|(_, q)| q);
+        let Some(source) = self.drag.pressed_track.map(|p| p.list) else {
+            return Task::none();
+        };
 
         // Check if cursor is over the queue list (for cross-list copy to queue).
         if self.show_queue {
             if let Some(q) = self.bounds.queue {
                 if q.bounds.contains(self.drag.cursor_pos) {
-                    self.drag.drag_target_list = Some(DragTargetList::Queue);
-                    let drop_idx = self.compute_drop_idx(q.bounds, q.translation_y, true, 1);
+                    let target = TrackListKind::Queue;
+                    self.drag.drag_target_list = Some(target);
+                    let drop_idx = self.compute_drop_idx(q.bounds, q.translation_y, target);
                     self.drag.drag_drop_target = Some(drop_idx);
-                    let track_count = self.queue.tracks.len().saturating_sub(1);
-                    return self.handle_drag_autoscroll(
-                        q.bounds,
-                        q.translation_y,
-                        true,
-                        track_count,
-                    );
+                    return self.handle_drag_autoscroll(q.bounds, q.translation_y, target);
                 }
             }
         }
@@ -94,16 +89,16 @@ impl MusicPlayer {
             let ls = self.view_data().scroll;
             let lb = t.bounds;
             if lb.contains(self.drag.cursor_pos) {
-                self.drag.drag_target_list = Some(DragTargetList::TrackList);
-                let is_queue_target = false;
-                let drop_idx = self.compute_drop_idx(lb, ls, is_queue_target, 0);
+                let target = TrackListKind::Active;
+                self.drag.drag_target_list = Some(target);
+                let drop_idx = self.compute_drop_idx(lb, ls, target);
                 self.drag.drag_drop_target = Some(drop_idx);
 
                 // For same-list drags, prevent dropping onto a selected item
                 // that would shift it (reorder guard). Skip this check for
                 // cross-list copies where every drop position is valid.
-                if is_source_queue == is_queue_target {
-                    let sel = self.selection(is_queue_target).to_vec();
+                if source == target {
+                    let sel = self.selection(target).to_vec();
                     if let (Some(min), Some(max)) =
                         (sel.iter().copied().min(), sel.iter().copied().max())
                     {
@@ -115,49 +110,46 @@ impl MusicPlayer {
                     }
                 }
 
-                let track_count = self.current_track_count(false);
-                return self.handle_drag_autoscroll(lb, ls, is_queue_target, track_count);
+                return self.handle_drag_autoscroll(lb, ls, target);
             }
         }
 
         Task::none()
     }
 
-    /// Compute the drop index (in list-relative terms, i.e. excluding the
-    /// "now playing" offset for the queue) given the list bounds, scroll,
-    /// whether it's the queue list, and the drag offset (index of the first
-    /// item in the visible list).
+    /// Track count minus rows drawn outside the scrollable (the queue's
+    /// now-playing header).
+    fn visible_row_count(&self, list: TrackListKind) -> usize {
+        self.track_count(list) - list.first_index().min(self.track_count(list))
+    }
+
+    /// Returns an index in `list`'s own space, with the queue's now-playing
+    /// offset folded back in.
     fn compute_drop_idx(
         &self,
         list_bounds: iced::Rectangle,
         list_scroll: f32,
-        is_queue: bool,
-        drag_offset: usize,
+        list: TrackListKind,
     ) -> usize {
         let y_offset = self.drag.cursor_pos.y - list_bounds.y;
         let row_pos = ((y_offset + list_scroll) / crate::theme::ROW_HEIGHT).max(0.0);
         let row_idx = row_pos as usize;
-        let track_count = if is_queue {
-            self.queue.tracks.len().saturating_sub(1)
-        } else {
-            self.current_track_count(false)
-        };
-        let drop_idx = if row_idx < track_count && row_pos.fract() >= 0.5 {
+        let row_count = self.visible_row_count(list);
+        let drop_idx = if row_idx < row_count && row_pos.fract() >= 0.5 {
             row_idx + 1
         } else {
             row_idx
         };
-        let drop_idx = drop_idx.min(track_count);
-        drop_idx + drag_offset
+        drop_idx.min(row_count) + list.first_index()
     }
 
     fn handle_drag_autoscroll(
         &self,
         list_bounds: iced::Rectangle,
         current_scroll: f32,
-        is_queue: bool,
-        track_count: usize,
+        list: TrackListKind,
     ) -> Task<Message> {
+        let track_count = self.visible_row_count(list);
         let cursor = self.drag.cursor_pos;
         let y_offset = cursor.y - list_bounds.y;
         let list_height = list_bounds.height;
@@ -189,14 +181,8 @@ impl MusicPlayer {
             return Task::none();
         }
 
-        let list_id = if is_queue {
-            QUEUE_LIST_ID
-        } else {
-            TRACK_LIST_ID
-        };
-
         iced::widget::operation::scroll_by::<Message>(
-            list_id,
+            list.scrollable_id(),
             iced::widget::operation::AbsoluteOffset {
                 x: 0.0,
                 y: scroll_amount,
@@ -204,18 +190,19 @@ impl MusicPlayer {
         )
     }
 
-    pub fn handle_drag_drop(&mut self, is_queue: bool) {
-        let Some((track_idx, _)) = self.drag.pressed_track else {
+    pub fn handle_drag_drop(&mut self, source: TrackListKind) {
+        let Some(pressed) = self.drag.pressed_track else {
             return;
         };
+        let track_idx = pressed.index;
 
         let was_in_selection = {
-            let sel = self.selection(is_queue);
+            let sel = self.selection(source);
             !sel.is_empty() && sel.contains(&track_idx)
         };
 
         let indices: Vec<usize> = if was_in_selection {
-            self.selection(is_queue).to_vec()
+            self.selection(source).to_vec()
         } else {
             vec![track_idx]
         };
@@ -225,7 +212,7 @@ impl MusicPlayer {
                 let tracks: Vec<Track> = indices
                     .iter()
                     .rev()
-                    .filter_map(|&i| self.get_track_at(i, is_queue))
+                    .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
                     .collect();
                 let count = tracks.len();
                 if count > 0 {
@@ -242,38 +229,21 @@ impl MusicPlayer {
         };
 
         // Determine if this is a cross-list copy or a same-list reorder.
-        let target = self.drag.drag_target_list;
-        let source_is_queue = is_queue;
-
-        match target {
-            Some(DragTargetList::Queue) if !source_is_queue => {
-                self.copy_to_queue(&indices, drop_idx);
+        match self.drag.drag_target_list {
+            Some(target) if target == source => {
+                self.handle_same_list_reorder(drop_idx, &indices, source);
             }
-            Some(DragTargetList::TrackList) if source_is_queue => {
-                self.copy_from_queue(&indices, drop_idx);
-            }
-            Some(_) if Self::same_list_kind_as(target, source_is_queue) => {
-                self.handle_same_list_reorder(drop_idx, &indices, source_is_queue);
-            }
+            Some(TrackListKind::Queue) => self.copy_to_queue(&indices, drop_idx),
+            Some(TrackListKind::Active) => self.copy_from_queue(&indices, drop_idx),
             _ => {}
         }
     }
 
-    pub(crate) const fn same_list_kind_as(target: Option<DragTargetList>, is_queue: bool) -> bool {
-        match target {
-            Some(DragTargetList::Queue) => is_queue,
-            Some(DragTargetList::TrackList) => !is_queue,
-            None => false,
-        }
-    }
-
-    /// Insert tracks from the current (non-queue) track list into the queue
-    /// at the given drop index. `indices` are positions in the source list.
     fn copy_to_queue(&mut self, indices: &[usize], drop_idx: usize) {
         let clamped = drop_idx.min(self.queue.tracks.len());
         let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&i| self.get_track_at(i, false))
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, TrackListKind::Active)))
             .collect();
         let inserted = tracks.len();
         for (j, track) in tracks.into_iter().enumerate() {
@@ -318,47 +288,53 @@ impl MusicPlayer {
         &mut self,
         drop_idx: usize,
         indices: &[usize],
-        source_is_queue: bool,
+        source: TrackListKind,
     ) {
         let min_idx = *indices.iter().min().unwrap();
         let max_idx = *indices.iter().max().unwrap();
         let is_valid_drop = drop_idx > max_idx || drop_idx < min_idx;
+        if drop_idx > self.track_count(source) || !is_valid_drop {
+            return;
+        }
 
-        if source_is_queue {
-            let count = self.queue.tracks.len();
-            if drop_idx <= count && is_valid_drop {
+        match source {
+            TrackListKind::Queue => {
                 let selection = self.queue_selected_indices.clone();
-                let new_positions = self.handle_reorder_queue(drop_idx, indices, &selection);
-                self.queue_selected_indices = new_positions;
+                self.queue_selected_indices =
+                    self.handle_reorder_queue(drop_idx, indices, &selection);
                 self.save_session();
             }
-        } else {
-            let count = self.current_track_count(false);
-            if drop_idx <= count && is_valid_drop {
+            TrackListKind::Active => {
                 let selection = self.view_data_mut().selection.clone();
-                let new_positions =
+                self.view_data_mut().selection =
                     self.handle_reorder_tracks_selected(drop_idx, indices, &selection);
-                self.view_data_mut().selection = new_positions;
             }
+            TrackListKind::Recent => {}
         }
     }
 
-    pub fn handle_track_pressed(&mut self, index: usize, is_queue: bool) {
+    pub fn handle_track_pressed(&mut self, pos: TrackPos) {
         let now = std::time::Instant::now();
-        let is_double = self.last_click_index == Some(index)
+        // Comparing the full position, not just the index, keeps a click in
+        // one list from completing a double-click begun in another.
+        let is_double = self.last_click == Some(pos)
             && now.duration_since(self.last_click_time).as_millis() < DOUBLE_CLICK_MS;
 
-        self.last_click_index = Some(index);
+        self.last_click = Some(pos);
         self.last_click_time = now;
-        self.drag.pressed_track = Some((index, is_queue));
-        self.drag.drag_origin = Some(self.drag.cursor_pos);
+        // Read-only lists neither select nor drag, so they never arm the
+        // press state that `CursorMoved` promotes into a drag.
+        if pos.list.is_interactive() {
+            self.drag.pressed_track = Some(pos);
+            self.drag.drag_origin = Some(self.drag.cursor_pos);
+        }
         self.drag.drag_active = false;
 
         if is_double {
             self.drag.pressed_track = None;
             self.drag.drag_origin = None;
-            self.handle_play_track(index, is_queue);
-            self.toggle_selection(index, is_queue);
+            self.handle_play_track(pos);
+            self.toggle_selection(pos);
         }
     }
 }

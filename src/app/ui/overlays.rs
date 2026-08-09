@@ -5,6 +5,7 @@ use iced::{
 };
 
 use crate::{
+    app::interaction::TrackListKind,
     icons,
     theme::{AppTheme, Palette},
 };
@@ -33,7 +34,7 @@ pub(super) fn view_context_menu<'a>(
                 "Play",
                 icons::PLAY_ICON,
                 p,
-                Message::ContextMenuPlayTrack(menu.track_index),
+                Message::ContextMenuPlayTrack(menu.pos),
             )
             .width(Length::Fill)
             .into(),
@@ -93,7 +94,7 @@ pub(super) fn view_context_menu<'a>(
             );
         }
 
-        if menu.list == crate::app::interaction::TrackListKind::Queue {
+        if menu.pos.list == TrackListKind::Queue {
             v.push(
                 menu_item(
                     "Remove from Queue",
@@ -104,7 +105,7 @@ pub(super) fn view_context_menu<'a>(
                 .width(Length::Fill)
                 .into(),
             );
-        } else if menu.in_playlist && menu.list != crate::app::interaction::TrackListKind::Recent {
+        } else if menu.in_playlist && menu.pos.list != TrackListKind::Recent {
             v.push(
                 menu_item(
                     "Remove from Playlist",

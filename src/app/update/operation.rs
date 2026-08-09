@@ -10,7 +10,7 @@
 //! `Message::ListBoundsCaptured` carrying the geometry of every list we care
 //! about, replacing the old `on_scroll` plumbing.
 
-use crate::app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID};
+use crate::app::ui::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, TRACK_LIST_ID};
 use crate::app::Message;
 use iced::widget::Id;
 use iced::Rectangle;
@@ -46,7 +46,7 @@ impl CaptureBounds {
         };
         if id == &SIDEBAR_LIST_ID {
             self.sidebar = Some(geo);
-        } else if id == &QUEUE_LIST_ID {
+        } else if id == &QUEUE_LIST_ID || id == &QUEUE_RECENT_LIST_ID {
             self.queue = Some(geo);
         } else if id == &TRACK_LIST_ID {
             self.track = Some(geo);
@@ -71,6 +71,6 @@ impl Operation<Message> for CaptureBounds {
     }
 
     fn finish(&self) -> Outcome<Message> {
-        Outcome::Some(Message::ListBoundsCaptured(self.clone()))
+        Outcome::Some(Message::ListBoundsCaptured(*self))
     }
 }

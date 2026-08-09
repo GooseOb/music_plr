@@ -22,10 +22,7 @@ impl MusicPlayer {
         let mut new_view = ViewData::new_search(query.clone(), scope);
         new_view.loading = true;
         self.push_new_view(new_view);
-        // Stamp the new slot with a request id so results correlate back to it
-        // even if the user navigates elsewhere before they arrive.
-        let rid = self.next_request_id;
-        self.next_request_id += 1;
+        let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
         self.sync_search_scope();
         self.show_search_history = false;
@@ -124,8 +121,7 @@ impl MusicPlayer {
     pub fn start_song_radio(&mut self, song_name: String) {
         let label = format!("Radio: {song_name}");
         self.push_new_view(ViewData::new_radio(ViewKind::SongRadio(label.clone())));
-        let rid = self.next_request_id;
-        self.next_request_id += 1;
+        let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
         self.notify(format!("Generating radio for song: {song_name}..."));
 
@@ -138,8 +134,7 @@ impl MusicPlayer {
     pub fn start_artist_radio(&mut self, artist_name: String) {
         let label = format!("Radio: {artist_name}");
         self.push_new_view(ViewData::new_radio(ViewKind::ArtistRadio(label.clone())));
-        let rid = self.next_request_id;
-        self.next_request_id += 1;
+        let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
         self.notify(format!("Generating radio for artist: {artist_name}..."));
 
@@ -203,8 +198,7 @@ impl MusicPlayer {
             loading: true,
             ..Default::default()
         });
-        let rid = self.next_request_id;
-        self.next_request_id += 1;
+        let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
         self.notify(format!("Opening: {label}..."));
         let tx = self.result_tx.clone();

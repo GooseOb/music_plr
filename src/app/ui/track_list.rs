@@ -10,13 +10,13 @@ use iced::{
 pub const TRACK_LIST_ID: Id = Id::new("track_list");
 
 use crate::{
+    app::interaction::{TrackListKind, TrackPos},
     icons,
     theme::{AppTheme, Palette},
     types::Track,
 };
 
 use super::{
-    queue::QUEUE_LIST_ID,
     shared_components::play_pause_button,
     styles::{button_style_primary, fg_secondary},
     theme, Message, MusicPlayer,
@@ -54,14 +54,14 @@ fn drop_indicator() -> Rule<'static, AppTheme> {
 pub(super) fn view_track_list<'a>(
     tracks: &'a [Track],
     player: &'a MusicPlayer,
-    is_queue: bool,
+    list: TrackListKind,
     index_offset: usize,
 ) -> Element<'a, Message, AppTheme> {
     if tracks.is_empty() {
         return empty_state("No tracks found");
     }
 
-    let target_matches = MusicPlayer::same_list_kind_as(player.drag.drag_target_list, is_queue);
+    let target_matches = player.drag.drag_target_list == Some(list);
 
     let mut items: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(tracks.len());
     for (i, track) in tracks.iter().enumerate() {
@@ -73,7 +73,7 @@ pub(super) fn view_track_list<'a>(
                 }
             }
         }
-        items.push(view_track_row(track, adjusted, player, is_queue));
+        items.push(view_track_row(track, TrackPos::new(adjusted, list), player));
     }
 
     if player.drag.drag_active && target_matches {
@@ -86,11 +86,7 @@ pub(super) fn view_track_list<'a>(
 
     Container::new(
         scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
-            .id(if is_queue {
-                QUEUE_LIST_ID
-            } else {
-                TRACK_LIST_ID
-            })
+            .id(list.scrollable_id())
             .width(Length::Fill)
             .height(Length::Fill),
     )
@@ -100,13 +96,12 @@ pub(super) fn view_track_list<'a>(
 }
 
 pub(super) fn leading_control<'a>(
-    position: (usize, bool),
+    pos: TrackPos,
     track: &'a Track,
     player: &'a MusicPlayer,
-    message: Message,
 ) -> Element<'a, Message, AppTheme> {
     let is_current = player.queue.current().is_some_and(|t| t.url == track.url);
-    let is_hovered = player.drag.hovered_track == Some(position);
+    let is_hovered = player.drag.hovered_track == Some(pos);
 
     if is_current {
         play_pause_button(player.is_playing)
@@ -121,10 +116,10 @@ pub(super) fn leading_control<'a>(
         ))
         .padding(theme::SPACING_2XS)
         .style(button_style_primary())
-        .on_press(message)
+        .on_press(Message::PlayTrackAt(pos))
         .into()
     } else {
-        text((position.0 + 1).to_string())
+        text((pos.index + 1).to_string())
             .size(theme::TEXT_SIZE_SM)
             .style(fg_secondary())
             .width(theme::TRACK_LEADING_WIDTH)
@@ -135,13 +130,12 @@ pub(super) fn leading_control<'a>(
 
 pub(super) fn view_track_row<'a>(
     track: &'a Track,
-    index: usize,
+    pos: TrackPos,
     player: &'a MusicPlayer,
-    is_queue: bool,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let is_selected = player.selection(is_queue).contains(&index);
-    let is_hovered = player.drag.hovered_track == Some((index, is_queue));
+    let is_selected = player.selection(pos.list).contains(&pos.index);
+    let is_hovered = player.drag.hovered_track == Some(pos);
     let is_current = player.queue.current().is_some_and(|t| t.url == track.url);
 
     let row_bg = if is_current {
@@ -162,26 +156,14 @@ pub(super) fn view_track_row<'a>(
         }
     };
 
-    let leading = leading_control(
-        (index, is_queue),
-        track,
-        player,
-        Message::PlayTrackAtIndex { index, is_queue },
-    );
+    let leading = leading_control(pos, track, player);
 
     let inner = track_row_layout(leading, track, player);
 
     let track_area = MouseArea::new(inner)
-        .on_press(Message::TrackPressed { index, is_queue })
-        .on_right_press(Message::TrackRightClicked {
-            index,
-            list: if is_queue {
-                crate::app::interaction::TrackListKind::Queue
-            } else {
-                crate::app::interaction::TrackListKind::Active
-            },
-        })
-        .on_move(move |_| Message::TrackHoverStart { index, is_queue });
+        .on_press(Message::TrackPressed(pos))
+        .on_right_press(Message::TrackRightClicked(pos))
+        .on_move(move |_| Message::TrackHoverStart(pos));
 
     track_row(track_area, row_bg).into()
 }

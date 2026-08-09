@@ -17,7 +17,7 @@ impl MusicPlayer {
         if index < self.playlists.playlists.len()
             && self.view_data_mut().selected_playlist_id() != Some(index)
         {
-            self.picker = None;
+            self.playlist_picker = None;
             self.clear_selection();
             self.cleanup_drag_state();
             self.drag.hovered_track = None;
@@ -29,8 +29,7 @@ impl MusicPlayer {
         }
     }
 
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn handle_rename_playlist(&mut self, new_name: String) {
+    pub fn handle_rename_playlist(&mut self, new_name: &str) {
         if let Some(idx) = self.view_data_mut().selected_playlist_id() {
             if !new_name.trim().is_empty() {
                 self.playlists.playlists[idx].name = new_name.trim().to_string();
@@ -103,7 +102,7 @@ impl MusicPlayer {
         &mut self,
         playlist_idx: usize,
         indices: &[usize],
-        is_queue: bool,
+        list: super::TrackListKind,
     ) {
         if playlist_idx >= self.playlists.playlists.len() {
             return;
@@ -111,13 +110,13 @@ impl MusicPlayer {
 
         let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&i| self.get_track_at(i, is_queue))
+            .filter_map(|&i| self.get_track_at(super::TrackPos::new(i, list)))
             .collect();
         let count = tracks.len();
         if count > 0 {
             self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
         }
-        self.picker = None;
+        self.playlist_picker = None;
         let name = self.playlists.playlists[playlist_idx].name.clone();
         self.notify_tracks("Added", count, &format!("to {name}"));
     }
@@ -164,7 +163,9 @@ impl MusicPlayer {
         self.clipboard.clear();
         let selection: Vec<usize> = self.view_data_mut().selection.clone();
         for &i in &selection {
-            if let Some(track) = self.get_track_at(i, false) {
+            if let Some(track) =
+                self.get_track_at(super::TrackPos::new(i, super::TrackListKind::Active))
+            {
                 self.clipboard.push(track.clone());
             }
         }

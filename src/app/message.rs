@@ -2,7 +2,7 @@
 
 use super::ViewData;
 use crate::{
-    app::update::operation::CaptureBounds,
+    app::{interaction::TrackPos, update::operation::CaptureBounds},
     types::{QueueTab, Track},
 };
 use iced::Point;
@@ -43,22 +43,10 @@ pub enum Message {
     OpenPlaylist(String, String),
     DeleteSearchHistory(usize),
 
-    TrackPressed {
-        index: usize,
-        is_queue: bool,
-    },
-    TrackHoverStart {
-        index: usize,
-        is_queue: bool,
-    },
-    TrackRightClicked {
-        index: usize,
-        list: crate::app::interaction::TrackListKind,
-    },
-    PlayTrackAtIndex {
-        index: usize,
-        is_queue: bool,
-    },
+    TrackPressed(TrackPos),
+    TrackHoverStart(TrackPos),
+    TrackRightClicked(TrackPos),
+    PlayTrackAt(TrackPos),
     TogglePlayPause,
     NextTrack,
     PreviousTrack,
@@ -79,13 +67,12 @@ pub enum Message {
 
     ToggleQueue,
     SwitchQueueTab(QueueTab),
-    PlayRecentTrack(usize),
 
     NavigateTo(ViewData),
     NavigateBack,
     NavigateForward,
 
-    ContextMenuPlayTrack(usize),
+    ContextMenuPlayTrack(TrackPos),
     ContextMenuStartSongRadio,
     ContextMenuStartArtistRadio,
     ContextMenuDownloadOrDelete(Vec<usize>),

@@ -1,5 +1,5 @@
 use super::{BackendResult, ContextMenuState, MusicPlayer, Track, TrackSource};
-use crate::app::interaction::TrackListKind;
+use crate::app::interaction::{TrackListKind, TrackPos};
 use crate::{
     app::{PlaylistPicker, ViewKind},
     util::plural_suffix,
@@ -15,7 +15,7 @@ impl MusicPlayer {
         let mut to_remove = Vec::new();
 
         for &idx in indices {
-            let track = self.track_at(list, idx);
+            let track = self.get_track_at(TrackPos::new(idx, list));
             if let Some(track) = track {
                 if self.download_registry.contains(&track.url) {
                     to_remove.push(track);
@@ -53,7 +53,7 @@ impl MusicPlayer {
             ));
         }
         // Drop a now-stale selection if any operated-on index was selected.
-        let sel = self.selection(list.is_queue());
+        let sel = self.selection(list);
         if indices.iter().any(|&i| sel.contains(&i)) {
             self.clear_selection();
         }
@@ -76,24 +76,21 @@ impl MusicPlayer {
         });
     }
 
-    pub fn handle_toggle_picker(&mut self, indices: Vec<usize>, is_queue: bool) {
-        self.picker = if self.picker.is_some() {
+    pub fn handle_toggle_picker(&mut self, indices: Vec<usize>, list: TrackListKind) {
+        self.playlist_picker = if self.playlist_picker.is_some() {
             None
         } else {
-            Some(PlaylistPicker { indices, is_queue })
+            Some(PlaylistPicker { indices, list })
         }
     }
 
-    pub fn show_context_menu(&mut self, index: usize, list: TrackListKind) {
-        let Some(track) = self.track_at(list, index) else {
+    pub fn show_context_menu(&mut self, pos: TrackPos) {
+        let Some(track) = self.get_track_at(pos) else {
             return;
         };
+        let TrackPos { index, list } = pos;
 
-        let sel = if list == TrackListKind::Recent {
-            &[][..]
-        } else {
-            self.selection(list.is_queue())
-        };
+        let sel = self.selection(list);
         let target_indices = if sel.contains(&index) {
             sel.to_vec()
         } else {
@@ -101,24 +98,13 @@ impl MusicPlayer {
         };
 
         self.context_menu = Some(ContextMenuState {
-            track_index: index,
+            pos,
             target_indices,
             position: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
             is_youtube: track.source == TrackSource::YouTube,
             is_downloaded: self.download_registry.contains(&track.url),
             in_playlist: matches!(self.view_data_mut().kind, ViewKind::Playlist { .. }),
-            list,
             track,
         });
-    }
-
-    /// Resolve the track a context-menu op targets from whichever list it
-    /// lives in.
-    fn track_at(&self, list: TrackListKind, index: usize) -> Option<Track> {
-        match list {
-            TrackListKind::Queue => self.get_track_at(index, true),
-            TrackListKind::Active => self.get_track_at(index, false),
-            TrackListKind::Recent => self.queue.recently_played.get(index).cloned(),
-        }
     }
 }

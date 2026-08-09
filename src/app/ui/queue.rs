@@ -5,6 +5,7 @@ use iced::{
 };
 
 use crate::{
+    app::interaction::{TrackListKind, TrackPos},
     icons,
     theme::{self, AppTheme},
     types::QueueTab,
@@ -135,7 +136,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .padding(theme::SPACING_MD)
         .into()
     } else {
-        view_track_list(upcoming, player, true, offset)
+        view_track_list(upcoming, player, TrackListKind::Queue, offset)
     };
 
     Column::with_children(vec![
@@ -192,31 +193,20 @@ fn view_recently_played_row<'a>(
     player: &'a MusicPlayer,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let row_bg = if player.drag.hovered_track == Some((index, true)) {
+    let pos = TrackPos::new(index, TrackListKind::Recent);
+    let row_bg = if player.drag.hovered_track == Some(pos) {
         p.bg_hover
     } else {
         p.bg
     };
 
-    let leading = super::track_list::leading_control(
-        (index, true),
-        track,
-        player,
-        Message::PlayRecentTrack(index),
-    );
+    let leading = super::track_list::leading_control(pos, track, player);
 
     let inner = track_row_layout(leading, track, player);
 
     let track_area = MouseArea::new(inner)
-        .on_press(Message::PlayRecentTrack(index))
-        .on_right_press(Message::TrackRightClicked {
-            index,
-            list: crate::app::interaction::TrackListKind::Recent,
-        })
-        .on_move(move |_| Message::TrackHoverStart {
-            index,
-            is_queue: true,
-        });
+        .on_right_press(Message::TrackRightClicked(pos))
+        .on_move(move |_| Message::TrackHoverStart(pos));
 
     track_row(track_area, row_bg).into()
 }

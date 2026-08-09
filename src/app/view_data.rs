@@ -1,6 +1,16 @@
 use crate::types::Track;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Default)]
+pub struct RequestIdGenerator(u64);
+
+impl RequestIdGenerator {
+    pub fn next(&mut self) -> u64 {
+        self.0 += 1;
+        self.0
+    }
+}
+
 /// All per-view state, stored in one flat struct. The `kind` field is the
 /// only variant-specific part; everything else is shared view chrome that is
 /// identical regardless of which view is active. Serialized directly into

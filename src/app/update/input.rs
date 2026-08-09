@@ -1,4 +1,4 @@
-use super::{Message, MusicPlayer, Task, ViewData};
+use super::{Message, MusicPlayer, Task, TrackListKind, TrackPos, ViewData};
 
 impl MusicPlayer {
     pub fn search_input_geometry(&self) -> (f32, f32) {
@@ -81,52 +81,42 @@ impl MusicPlayer {
             }
             iced::keyboard::Key::Named(Named::Tab) => self.toggle_keyboard_list(),
             iced::keyboard::Key::Named(Named::ArrowUp) => {
-                let is_queue = self.is_queue_hovered();
-                let count = self.list_size(is_queue);
-                if count == 0 {
+                let list = self.hovered_list();
+                if self.track_count(list) == 0 {
                     Task::none()
                 } else {
-                    let first_idx = self.list_first_index(is_queue);
-
-                    if let Some((idx, _)) = self.drag.hovered_track {
-                        let new_idx = idx.saturating_sub(1);
+                    let first_idx = list.first_index();
+                    if let Some(hovered) = self.drag.hovered_track {
+                        let new_idx = hovered.index.saturating_sub(1);
                         if new_idx >= first_idx {
-                            self.drag.hovered_track = Some((new_idx, is_queue));
+                            self.drag.hovered_track = Some(TrackPos::new(new_idx, list));
                         }
                     } else {
-                        self.drag.hovered_track = Some((first_idx, is_queue));
+                        self.drag.hovered_track = Some(TrackPos::new(first_idx, list));
                     }
                     self.scroll_hovered_track_into_view()
                 }
             }
             iced::keyboard::Key::Named(Named::ArrowDown) => {
-                let is_queue = self.is_queue_hovered();
-                let count = self.list_size(is_queue);
+                let list = self.hovered_list();
+                let count = self.track_count(list);
                 if count == 0 {
                     Task::none()
                 } else {
-                    if let Some((idx, _)) = self.drag.hovered_track {
-                        let new_idx = idx + 1;
+                    if let Some(hovered) = self.drag.hovered_track {
+                        let new_idx = hovered.index + 1;
                         if new_idx < count {
-                            self.drag.hovered_track = Some((new_idx, is_queue));
+                            self.drag.hovered_track = Some(TrackPos::new(new_idx, list));
                         }
                     } else {
-                        self.drag.hovered_track = Some((self.list_first_index(is_queue), is_queue));
+                        self.drag.hovered_track = Some(TrackPos::new(list.first_index(), list));
                     }
                     self.scroll_hovered_track_into_view()
                 }
             }
             iced::keyboard::Key::Named(Named::Enter) => {
-                if let Some((index, is_queue)) = self.drag.hovered_track {
-                    if is_queue
-                        && matches!(self.queue.queue_tab, crate::types::QueueTab::RecentlyPlayed)
-                    {
-                        if let Some(track) = self.queue.recently_played.get(index).cloned() {
-                            self.play_recent_track(track);
-                        }
-                    } else {
-                        self.handle_play_track(index, is_queue);
-                    }
+                if let Some(hovered) = self.drag.hovered_track {
+                    self.handle_play_track(hovered);
                 }
                 Task::none()
             }
@@ -152,23 +142,26 @@ impl MusicPlayer {
             return Task::none();
         }
 
-        let target_is_queue = !self.is_queue_hovered();
-        if self.list_size(target_is_queue) == 0 {
+        let target = if self.hovered_list().in_queue_panel() {
+            TrackListKind::Active
+        } else {
+            self.queue.queue_tab.into()
+        };
+        if self.track_count(target) == 0 {
             return Task::none();
         }
-        let first_idx = self.list_first_index(target_is_queue);
-        self.drag.hovered_track = Some((first_idx, target_is_queue));
+        self.drag.hovered_track = Some(TrackPos::new(target.first_index(), target));
         self.scroll_hovered_track_into_view()
     }
 
     /// Scroll the hovered track into view if it's outside the visible
     /// viewport of the current scrollable list. Returns a `scroll_to` task.
     pub(super) fn scroll_hovered_track_into_view(&self) -> Task<Message> {
-        let Some((index, is_queue)) = self.drag.hovered_track else {
+        let Some(TrackPos { index, list }) = self.drag.hovered_track else {
             return Task::none();
         };
 
-        let (bounds, scroll_offset) = if is_queue {
+        let (bounds, scroll_offset) = if list.in_queue_panel() {
             (
                 self.bounds.queue.map(|g| g.bounds),
                 self.bounds.queue.map_or(0.0, |g| g.translation_y),
@@ -181,38 +174,23 @@ impl MusicPlayer {
             return Task::none();
         };
 
-        // For the queue tab (Up Next), the visible list starts after the
-        // "now playing" track (offset 1), so the visual position of track
-        // `index` is `(index - 1) * ROW_HEIGHT`.
-        let visual_index =
-            if is_queue && matches!(self.queue.queue_tab, crate::types::QueueTab::Queue) {
-                index.saturating_sub(1)
-            } else {
-                index
-            };
-
+        // The queue's now-playing track renders in its own header, so the
+        // scrollable's rows are shifted down by `first_index`.
+        let visual_index = index - list.first_index().min(index);
         let row_y = visual_index as f32 * crate::theme::ROW_HEIGHT;
         let row_bottom = row_y + crate::theme::ROW_HEIGHT;
 
         if row_y < scroll_offset {
             // Item is above the viewport — scroll up to reveal it.
             iced::widget::operation::scroll_to::<Message>(
-                if is_queue {
-                    crate::app::ui::QUEUE_LIST_ID
-                } else {
-                    crate::app::ui::TRACK_LIST_ID
-                },
+                list.scrollable_id(),
                 iced::widget::operation::AbsoluteOffset { x: 0.0, y: row_y },
             )
         } else if row_bottom > scroll_offset + bounds.height {
             // Item is below the viewport — scroll down to reveal it.
             let target = (row_bottom - bounds.height).max(0.0);
             iced::widget::operation::scroll_to::<Message>(
-                if is_queue {
-                    crate::app::ui::QUEUE_LIST_ID
-                } else {
-                    crate::app::ui::TRACK_LIST_ID
-                },
+                list.scrollable_id(),
                 iced::widget::operation::AbsoluteOffset { x: 0.0, y: target },
             )
         } else {
@@ -220,24 +198,9 @@ impl MusicPlayer {
         }
     }
 
-    fn is_queue_hovered(&self) -> bool {
+    fn hovered_list(&self) -> TrackListKind {
         self.drag
             .hovered_track
-            .is_some_and(|(_, is_queue)| is_queue)
-    }
-
-    fn list_size(&self, is_queue: bool) -> usize {
-        if is_queue {
-            match self.queue.queue_tab {
-                crate::types::QueueTab::Queue => self.queue.tracks.len(),
-                crate::types::QueueTab::RecentlyPlayed => self.queue.recently_played.len(),
-            }
-        } else {
-            self.current_track_count(false)
-        }
-    }
-
-    fn list_first_index(&self, is_queue: bool) -> usize {
-        usize::from(is_queue && matches!(self.queue.queue_tab, crate::types::QueueTab::Queue))
+            .map_or(TrackListKind::Active, |h| h.list)
     }
 }

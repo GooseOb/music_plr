@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::mpsc, time::Duration};
 use tracing::{error, info, warn};
 use zbus::{connection, interface, zvariant};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum MprisCommand {
     TogglePlayPause,
     NextTrack,

@@ -131,6 +131,20 @@ mod tests {
     }
 
     #[test]
+    fn stamped_ids_resolve_to_their_own_slot() {
+        let mut p = player();
+        let first = p.request_ids.next();
+        p.view_data_mut().request_id = first;
+
+        p.handle_navigate_to(ViewData::new_playlist(Some(1), "Other".into(), None));
+        let second = p.request_ids.next();
+        p.view_data_mut().request_id = second;
+
+        assert_ne!(p.slot_for_request(first), p.slot_for_request(second));
+        assert_eq!(p.slot_for_request(second), Some(p.nav_history_pos));
+    }
+
+    #[test]
     fn navigate_back_restores_outgoing_view() {
         let mut p = player();
         // Default view is Search. Navigate to a Playlist as the outgoing view.
@@ -169,12 +183,10 @@ mod tests {
     #[test]
     fn search_results_land_in_requesting_slot_not_active() {
         let mut p = player();
-        // Issue a search (pushes a Search slot). `run_search` stamps the slot
-        // with a request id before spawning the bg thread; replicate that here
-        // (the test can't use the threaded `run_search`) to exercise the
-        // request-id targeting in `process_result`.
+        // Replicates `run_search`'s slot stamping; the threaded version can't
+        // run here.
         p.handle_navigate_to(ViewData::new_search("song".into(), SearchScope::Songs));
-        let rid = 7;
+        let rid = p.request_ids.next();
         p.view_data_mut().request_id = rid;
 
         // Navigate away to a different view before results arrive.

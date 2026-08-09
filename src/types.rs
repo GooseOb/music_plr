@@ -23,7 +23,7 @@ pub struct Track {
     pub download_path: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum QueueTab {
     #[default]
     Queue,
@@ -35,9 +35,7 @@ use std::collections::VecDeque;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlayQueue {
     pub tracks: Vec<Track>,
-    /// Tracks that have been played, most recent first. Deduped by url.
     pub recently_played: VecDeque<Track>,
-    /// Which tab is currently shown in the queue panel.
     pub queue_tab: QueueTab,
 }
 

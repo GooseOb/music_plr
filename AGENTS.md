@@ -28,14 +28,14 @@ changed; the user decides when and how it lands. This applies to `git commit` as
 that implicitly commits (`git merge`, `git rebase`, `git stash`, `git checkout` over local edits).
 Never `push`, amend, or rewrite history unprompted.
 
-When a commit *is* requested: one logical change per commit, imperative subject under ~72 chars,
+When a commit _is_ requested: one logical change per commit, imperative subject under ~72 chars,
 and a body explaining **why** when it isn't obvious from the diff.
 
 Run `cargo fmt && cargo clippy && cargo test` before handing work back, committed or not.
 
 ## Conventions
 
-- Comments describe the code's *current* state, not what a change did or undid. Comment hygiene: keep them short; never restate what the code obviously does, never narrate history ("now does X instead of Y", "replaces the old field"), and don't repeat the same explanatory comment in every caller of a shared pattern — say it once at the canonical routine (e.g. `util::remove_at`/`reorder_tracks`).
+- Only non-obvious code needs a comment. Comments describe the code's _current_ state, not what your change did or undid.
 - **Single source of truth**: `MusicPlayer` (`app.rs`) holds all state; `view()` is pure over `&MusicPlayer` — no `Rc<RefCell<Backend>>`, no sync methods. `MusicPlayer` is NOT `Clone` (channels).
 - **Async**: `mpsc` channels for cross-thread results (backend, MPRIS); `Task`/`Subscription` for timer tick + raw events; shared state via `&mut self`.
 - `notify()` / `notify_error()` for user-facing errors; `notify_tracks(verb, n, suffix)` for pluralized counts.
@@ -49,7 +49,7 @@ src/
 ├── app.rs             # MusicPlayer (all state) + subscription + update() dispatch
 ├── app/view_data.rs   # ViewData / ViewKind / NavEntry (per-view state)
 ├── app/message.rs     # Message + BackendResult
-├── app/interaction.rs # DragState, DragTargetList, ContextMenuState
+├── app/interaction.rs # TrackListKind, TrackPos, DragState, ContextMenuState
 ├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, track_list)
 ├── app/update/        # Handlers (mod, actions, drag, input, navigation, playback, playlists, search, selection, session, tick)
 ├── audio/mod.rs       # AudioPlayer: rodio sink + yt-dlp process management
@@ -77,9 +77,11 @@ src/
   in one `view_data: ViewData` field — a flat struct whose `kind: ViewKind` enum carries only what
   differs per view (search `exhausted`, radio label, selected playlist). No separate `View`/`RadioKind`
   enum or per-view fields exist.
-- **`ContextMenuState`**: `track_index`, `target_indices` (selection-aware), `list: TrackListKind` (Queue/Active/Recent), flags `is_youtube`/`is_downloaded`/`in_playlist`. Menu ops apply to all selected if the right-clicked track is selected, else just it; "Play"/radio target only the right-clicked track. `TrackListKind::Recent` marks tracks in the Recently Played list (sourced from `recently_played`, queue/playlist-specific items suppressed).
-- **`DragState`** (`app/interaction.rs`): cursor/track/hover/drop-target/origin/active flags + `drag_target_list`/`sidebar_hover_playlist`; cleaned via `DragState::cleanup()`. Dragging a selected track moves all selected.
-- **Selection / list access** (`app/update/selection.rs`): `selection(_mut)`, `toggle_selection`, `clear_selection`, `view_tracks`, `get_track_at`, `current_track_count` — all keyed by an `is_queue` flag choosing queue vs. active view.
+- **`TrackListKind`** (`app/interaction.rs`): `Queue` / `Active` / `Recent` — the single carrier for "which track list?" across messages, `DragState`, selection, and scroll targeting. Helpers: `scrollable_id()` (each list has its own, so scroll ops can't hit the wrong widget), `first_index()` (1 for Queue, whose now-playing row renders outside the scrollable), `is_interactive()` (false for read-only `Recent`), `in_queue_panel()` (Queue+Recent share a geometry slot). Pass this instead of a bool.
+- **`TrackPos`** (`app/interaction.rs`): `{ index, list }` — an index is only meaningful against its list, so they travel together. Carried by `TrackPressed`/`TrackHoverStart`/`TrackRightClicked`/`PlayTrackAtIndex`/`ContextMenuPlayTrack`, `DragState`'s `pressed_track`/`hovered_track`, `last_click`, and the `get_track_at`/`toggle_selection` accessors. Pass this instead of a loose `(usize, TrackListKind)` pair.
+- **`ContextMenuState`**: `pos: TrackPos`, `target_indices` (selection-aware, indexes `pos.list`), flags `is_youtube`/`is_downloaded`/`in_playlist`. Menu ops apply to all selected if the right-clicked track is selected, else just it; "Play"/radio target only the right-clicked track. `Recent` tracks come from `recently_played` (queue/playlist-specific items suppressed).
+- **`DragState`** (`app/interaction.rs`): cursor/origin/active flags, `pressed_track`/`hovered_track` as `Option<TrackPos>`, `drag_target_list: Option<TrackListKind>`, `sidebar_hover_playlist`; cleaned via `DragState::cleanup()`. Same-list drag reorders (`target == source`), cross-list copies; dragging a selected track moves all selected.
+- **Selection / list access** (`app/update/selection.rs`): `selection`, `toggle_selection`, `clear_selection`, `view_tracks`, `get_track_at`, `track_count` — all keyed by a `TrackListKind`. `Recent` has no selection: `selection` returns `&[]` and mutations are no-ops.
 - **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailsDownloaded` (clears `thumbnail_cache`). 250ms tick drains → `process_result`.
 - **MPRIS**: D-Bus thread → `MprisCommand` → `process_mpris_command` (tick); `MprisUpdate` flows main → thread.
 - **Nav history**: full `ViewData` in `NavEntry.data` (no separate `view`/`snapshot`); capped at 20. `push_nav_entry()` snapshots live `view_data`.

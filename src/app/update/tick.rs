@@ -95,16 +95,11 @@ impl MusicPlayer {
     }
 
     fn update_thumbnails(&mut self) {
-        // Flush queued thumbnail downloads. Ids are seeded into the index at the
-        // points they become visible (search/browse/radio results, download
-        // completion, navigation, queue advance) — the tick only drains, it
-        // does not re-scan visibility.
         if let Some(entries) = self.thumbnail_index.drain_pending() {
             spawn_thumbnail_download(entries, self.result_tx.clone());
         }
     }
 
-    #[allow(clippy::needless_pass_by_value)]
     pub fn process_mpris_command(&mut self, cmd: MprisCommand) {
         match cmd {
             MprisCommand::TogglePlayPause => self.toggle_play_pause(),

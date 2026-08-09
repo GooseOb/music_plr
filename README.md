@@ -88,7 +88,7 @@ src/
 ├── app/
 │   ├── view_data.rs           # ViewData / ViewKind / NavEntry — per-view state
 │   ├── message.rs             # Message + BackendResult
-│   ├── interaction.rs         # DragState, DragTargetList, ContextMenuState
+│   ├── interaction.rs         # TrackListKind, TrackPos, DragState, ContextMenuState
 │   ├── ui/                    # Pure functional view() over &MusicPlayer
 │   └── update/                # Handlers: playback, search, playlists, drag,
 │                              #   selection, navigation, input, session, tick
