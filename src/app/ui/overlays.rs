@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{text, Button, Column, Container, MouseArea, Row},
+    widget::{column, row, text, Button, Column, Container, MouseArea, Row},
     Element, Length,
 };
 
@@ -36,7 +36,6 @@ pub(super) fn view_context_menu<'a>(
                 p,
                 Message::ContextMenuPlayTrack(menu.pos),
             )
-            .width(Length::Fill)
             .into(),
         );
 
@@ -48,7 +47,6 @@ pub(super) fn view_context_menu<'a>(
                     p,
                     Message::ContextMenuStartSongRadio,
                 )
-                .width(Length::Fill)
                 .into(),
             );
             v.push(
@@ -58,7 +56,6 @@ pub(super) fn view_context_menu<'a>(
                     p,
                     Message::ContextMenuStartArtistRadio,
                 )
-                .width(Length::Fill)
                 .into(),
             );
         }
@@ -72,7 +69,6 @@ pub(super) fn view_context_menu<'a>(
                 p,
                 Message::TogglePicker(target_indices.clone()),
             )
-            .width(Length::Fill)
             .into(),
         );
 
@@ -89,7 +85,6 @@ pub(super) fn view_context_menu<'a>(
                     p,
                     Message::ContextMenuDownloadOrDelete(target_indices.clone()),
                 )
-                .width(Length::Fill)
                 .into(),
             );
         }
@@ -102,7 +97,6 @@ pub(super) fn view_context_menu<'a>(
                     p,
                     Message::ContextMenuRemoveFromQueue(target_indices.clone()),
                 )
-                .width(Length::Fill)
                 .into(),
             );
         } else if menu.in_playlist && menu.pos.list != TrackListKind::Recent {
@@ -113,7 +107,6 @@ pub(super) fn view_context_menu<'a>(
                     p,
                     Message::ContextMenuRemoveFromPlaylist(target_indices.clone()),
                 )
-                .width(Length::Fill)
                 .into(),
             );
         }
@@ -129,19 +122,14 @@ pub(super) fn view_context_menu<'a>(
     .width(theme::CONTEXT_MENU_WIDTH)
     .style(bg_popup());
 
-    let row = Row::with_children(vec![
-        Container::new(Row::new()).width(pos_x).into(),
-        menu_content.into(),
+    let overlay = Container::new(column![
+        Container::new(Column::new()).height(pos_y),
+        row![Container::new(Row::new()).width(pos_x), menu_content]
     ])
-    .spacing(0);
+    .width(Length::Fill)
+    .height(Length::Fill);
 
-    let col = Column::with_children(vec![
-        Container::new(Column::new()).height(pos_y).into(),
-        row.into(),
-    ])
-    .spacing(0);
-
-    Container::new(MouseArea::new(col).on_press(Message::CloseContextMenu))
+    Container::new(MouseArea::new(overlay).on_press(Message::CloseContextMenu))
         .width(Length::Fill)
         .height(Length::Fill)
         .style(bg_transparent())
