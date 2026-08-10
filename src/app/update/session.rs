@@ -26,6 +26,7 @@ impl MusicPlayer {
             queue: self.queue.clone(),
             show_queue: self.show_queue,
             volume: self.volume,
+            repeat: self.repeat,
         };
         state.save();
         self.session_dirty = false;
@@ -36,6 +37,7 @@ impl MusicPlayer {
         self.queue = state.queue;
         self.show_queue = state.show_queue;
         self.volume = state.volume;
+        self.repeat = state.repeat;
         self.audio.set_volume(state.volume);
 
         let _ = self.restore_nav_entry(&state.data);

@@ -10,6 +10,7 @@ pub struct SessionState {
     pub queue: PlayQueue,
     pub show_queue: bool,
     pub volume: f32,
+    pub repeat: bool,
 }
 
 impl Default for SessionState {
@@ -19,6 +20,7 @@ impl Default for SessionState {
             queue: PlayQueue::new(),
             show_queue: false,
             volume: 0.8,
+            repeat: false,
         }
     }
 }
@@ -54,6 +56,7 @@ mod tests {
             queue: PlayQueue::default(),
             show_queue: true,
             volume: 0.5,
+            repeat: true,
         };
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();
@@ -63,6 +66,7 @@ mod tests {
         ));
         assert!(restored.show_queue);
         assert!((restored.volume - 0.5).abs() < f32::EPSILON);
+        assert!(restored.repeat);
         if let ViewKind::ArtistRadio(label) = &restored.data.kind {
             assert_eq!(label, "Test Radio");
             assert_eq!(restored.data.selection, vec![2]);

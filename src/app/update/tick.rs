@@ -49,10 +49,15 @@ impl MusicPlayer {
         }
 
         if s.stream_finished && !s.is_playing && !self.track_loading {
-            // Don't busy-loop if there is nothing left to advance to (e.g. a
-            // corrupt cached file that emptied without a next track); clear
-            // the finished flag so we don't repeatedly call `next_track`.
-            if self.queue.current().is_some() {
+            // When repeat is on, restart the current track instead of
+            // advancing the queue so the same song loops until toggled off.
+            if self.repeat {
+                if let Some(track) = self.queue.current() {
+                    let track = track.clone();
+                    self.play_track_internal(&track);
+                }
+                self.audio.clear_stream_finished();
+            } else if self.queue.current().is_some() {
                 self.next_track();
             } else {
                 self.audio.clear_stream_finished();

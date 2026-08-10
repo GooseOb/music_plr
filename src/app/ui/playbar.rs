@@ -104,6 +104,21 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     .width(theme::QUEUE_BTN_WIDTH)
     .height(theme::QUEUE_BTN_WIDTH);
 
+    let repeat_btn = Button::new(icons::icon(
+        icons::REPEAT_ICON,
+        if player.repeat {
+            Color::BLACK
+        } else {
+            p.fg_secondary
+        },
+        theme::ICON_SIZE_MD,
+    ))
+    .padding(theme::SPACING_XS)
+    .style(button_style_queue(player.repeat))
+    .on_press(Message::ToggleRepeat)
+    .width(theme::QUEUE_BTN_WIDTH)
+    .height(theme::QUEUE_BTN_WIDTH);
+
     Container::new(
         Row::with_children(vec![
             Container::new(track_thumb)
@@ -120,6 +135,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
             Container::new(total_text).into(),
             icons::icon(icons::VOLUME_ICON, p.fg_secondary, theme::ICON_SIZE_SM).into(),
             volume_slider.into(),
+            repeat_btn.into(),
             queue_btn.into(),
         ])
         .spacing(theme::SPACING_MD)

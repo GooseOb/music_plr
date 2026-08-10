@@ -50,6 +50,7 @@ pub struct MusicPlayer {
 
     pub queue: PlayQueue,
     pub show_queue: bool,
+    pub repeat: bool,
 
     pub is_playing: bool,
     pub volume: f32,
@@ -141,6 +142,7 @@ impl MusicPlayer {
             playlists: PlaylistStore::load(),
             playlist_create_name: String::new(),
             show_queue: false,
+            repeat: false,
             thumbnail_index: crate::data::thumbnails::ThumbnailIndex::load(),
             playlist_picker: None,
             show_delete_confirm: false,
@@ -439,6 +441,11 @@ impl MusicPlayer {
             }
             Message::ToggleQueue => {
                 self.show_queue = !self.show_queue;
+                self.save_session();
+                Task::none()
+            }
+            Message::ToggleRepeat => {
+                self.repeat = !self.repeat;
                 self.save_session();
                 Task::none()
             }

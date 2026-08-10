@@ -67,6 +67,7 @@ pub enum Message {
 
     ToggleQueue,
     SwitchQueueTab(QueueTab),
+    ToggleRepeat,
 
     NavigateTo(ViewData),
     NavigateBack,
