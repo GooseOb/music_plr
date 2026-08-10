@@ -268,3 +268,19 @@ pub fn button_style_delete() -> impl Fn(&AppTheme, button::Status) -> button::St
         }
     }
 }
+
+pub fn button_style_album() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
+    |theme, status| {
+        let p = &theme.palette;
+        let fg = match status {
+            button::Status::Hovered | button::Status::Pressed => p.fg,
+            _ => p.fg_secondary,
+        };
+        button::Style {
+            background: Some(Color::TRANSPARENT.into()),
+            text_color: fg,
+            // border: border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
+}

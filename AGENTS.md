@@ -35,7 +35,7 @@ Run `cargo fmt && cargo clippy && cargo test` before handing work back, committe
 
 ## Conventions
 
-- Only non-obvious code needs a comment. Comments describe the code's _current_ state, not what your change did or undid.
+- No comments in code, unless logic is really non-obvious. Comments describe _current_ state, not what's changed.
 - **Single source of truth**: `MusicPlayer` (`app.rs`) holds all state; `view()` is pure over `&MusicPlayer` — no `Rc<RefCell<Backend>>`, no sync methods. `MusicPlayer` is NOT `Clone` (channels).
 - **Async**: `mpsc` channels for cross-thread results (backend, MPRIS); `Task`/`Subscription` for timer tick + raw events; shared state via `&mut self`.
 - `notify()` / `notify_error()` for user-facing errors; `notify_tracks(verb, n, suffix)` for pluralized counts.

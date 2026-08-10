@@ -7,7 +7,13 @@ pub enum TrackSource {
     Local,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrackAlbum {
+    pub name: String,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Track {
     pub id: String,
     pub title: String,
@@ -21,6 +27,8 @@ pub struct Track {
     /// been downloaded. `None` for streamed/cached-only or local tracks.
     #[serde(default)]
     pub download_path: Option<String>,
+    #[serde(default)]
+    pub album: Option<TrackAlbum>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -104,6 +112,7 @@ impl From<crate::youtube::YouTubeVideo> for Track {
             source: TrackSource::YouTube,
             thumbnail: v.thumbnail,
             download_path: None,
+            album: v.album,
         }
     }
 }
@@ -122,6 +131,7 @@ mod tests {
             source: TrackSource::YouTube,
             thumbnail: String::new(),
             download_path: None,
+            album: None,
         }
     }
 
@@ -138,6 +148,7 @@ mod tests {
                 source: TrackSource::YouTube,
                 thumbnail: String::new(),
                 download_path: None,
+                album: None,
             },
             Track {
                 id: "2".into(),
@@ -148,6 +159,7 @@ mod tests {
                 source: TrackSource::YouTube,
                 thumbnail: String::new(),
                 download_path: None,
+                album: None,
             },
             Track {
                 id: "3".into(),
@@ -158,6 +170,7 @@ mod tests {
                 source: TrackSource::YouTube,
                 thumbnail: String::new(),
                 download_path: None,
+                album: None,
             },
         ];
         assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));

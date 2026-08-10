@@ -57,6 +57,14 @@ def result_to_item(r, rt):
         artists = r.get("artists", [])
         artist = artists[0].get("name", "") if artists else ""
         duration = r.get("duration_seconds", 0) or 0
+        album = r.get("album") or {}
+        album_name = album.get("name", "") or ""
+        album_id = album.get("id", "") or ""
+        album_obj = (
+            {"name": album_name, "id": album_id}
+            if album_name and album_id
+            else None
+        )
         return {
             "kind": "track",
             "resultType": rt,
@@ -67,6 +75,7 @@ def result_to_item(r, rt):
             "duration": duration,
             "thumbnail": thumb,
             "channel": artist,
+            "album": album_obj,
         }
     if rt == "artist":
         bid = r.get("browseId", "")
@@ -122,7 +131,7 @@ def result_to_item(r, rt):
     return None
 
 
-def _track_from_album_entry(e):
+def _track_from_album_entry(e, album=None):
     vid = e.get("videoId") or ""
     if not vid:
         return None
@@ -140,6 +149,7 @@ def _track_from_album_entry(e):
         "channel": e.get("artists", [{}])[0].get("name", "")
         if e.get("artists")
         else (e.get("artist", "") or ""),
+        "album": album,
     }
 
 
@@ -165,8 +175,11 @@ def browse(browse_id, limit=50, kind=None):
     out = []
     if kind == "album" or (kind is None and browse_id.startswith("MPRE")):
         album = yt.get_album(browse_id)
+        album_name = album.get("title", "") or ""
+        album_id = album.get("albumId") or album.get("browseId", "") or browse_id
+        album_obj = {"name": album_name, "id": album_id}
         for e in album.get("tracks", []):
-            t = _track_from_album_entry(e)
+            t = _track_from_album_entry(e, album_obj)
             if t:
                 out.append(t)
             if len(out) >= limit:

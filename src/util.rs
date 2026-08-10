@@ -242,6 +242,7 @@ mod tests {
                 source: TrackSource::YouTube,
                 thumbnail: String::new(),
                 download_path: None,
+                album: None,
             })
             .collect()
     }

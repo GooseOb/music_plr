@@ -61,6 +61,7 @@ pub struct YouTubeVideo {
     pub duration: f64,
     pub channel: String,
     pub thumbnail: String,
+    pub album: Option<crate::types::TrackAlbum>,
 }
 
 /// A non-track search result (artist/album/playlist) available for
@@ -190,6 +191,7 @@ pub fn browse(browse_id: &str, kind: &str) -> Result<Vec<YouTubeVideo>> {
             duration: f64::from(r.duration),
             channel: r.channel,
             thumbnail: r.thumbnail,
+            album: r.album,
         })
         .collect())
 }
@@ -258,6 +260,7 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
                         duration: f64::from(r.duration),
                         channel: r.channel,
                         thumbnail: r.thumbnail,
+                        album: r.album,
                     }));
                 }
             }
@@ -285,6 +288,8 @@ struct YtMusicResult {
     channel: String,
     #[serde(default)]
     thumbnail: String,
+    #[serde(default)]
+    album: Option<crate::types::TrackAlbum>,
 }
 
 fn search_ytdlp(query: &str, offset: usize, page_size: usize) -> Result<Vec<YouTubeVideo>> {
@@ -360,6 +365,7 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
                 duration: 0.0,
                 channel: String::new(),
                 thumbnail: format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg"),
+                album: None,
             });
         }
     }

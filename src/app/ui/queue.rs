@@ -157,7 +157,7 @@ fn view_now_playing_row<'a>(
     track: &'a crate::types::Track,
     player: &'a MusicPlayer,
 ) -> Element<'a, Message, AppTheme> {
-    let inner = track_row_layout(Row::new().into(), track, player);
+    let inner = track_row_layout(Row::new().into(), track, player, false);
 
     Container::new(inner)
         .width(Length::Fill)
@@ -196,7 +196,7 @@ fn view_recently_played_row<'a>(
 
     let leading = super::track_list::leading_control(pos, track, player);
 
-    let inner = track_row_layout(leading, track, player);
+    let inner = track_row_layout(leading, track, player, false);
 
     let track_area = MouseArea::new(inner)
         .on_right_press(Message::TrackRightClicked(pos))

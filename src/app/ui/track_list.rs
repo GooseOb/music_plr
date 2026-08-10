@@ -18,7 +18,7 @@ use crate::{
 
 use super::{
     shared_components::play_pause_button,
-    styles::{button_style_primary, fg_secondary},
+    styles::{button_style_album, button_style_primary, fg_secondary},
     theme, Message, MusicPlayer,
 };
 
@@ -61,6 +61,9 @@ pub(super) fn view_track_list<'a>(
         return empty_state("No tracks found");
     }
 
+    let show_album = list == TrackListKind::Active
+        && !matches!(player.view_data().kind, crate::app::ViewKind::Album { .. });
+
     let target_matches = player.drag.drag_target_list == Some(list);
 
     let mut items: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(tracks.len());
@@ -73,7 +76,12 @@ pub(super) fn view_track_list<'a>(
                 }
             }
         }
-        items.push(view_track_row(track, TrackPos::new(adjusted, list), player));
+        items.push(view_track_row(
+            track,
+            TrackPos::new(adjusted, list),
+            player,
+            show_album,
+        ));
     }
 
     if player.drag.drag_active && target_matches {
@@ -132,6 +140,7 @@ pub(super) fn view_track_row<'a>(
     track: &'a Track,
     pos: TrackPos,
     player: &'a MusicPlayer,
+    show_album: bool,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let is_selected = player.selection(pos.list).contains(&pos.index);
@@ -158,7 +167,7 @@ pub(super) fn view_track_row<'a>(
 
     let leading = leading_control(pos, track, player);
 
-    let inner = track_row_layout(leading, track, player);
+    let inner = track_row_layout(leading, track, player, show_album);
 
     let track_area = MouseArea::new(inner)
         .on_press(Message::TrackPressed(pos))
@@ -214,19 +223,45 @@ pub(super) fn track_row_layout<'a>(
     leading: Element<'a, Message, AppTheme>,
     track: &'a Track,
     player: &'a MusicPlayer,
+    show_album: bool,
 ) -> Row<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let thumb = player.thumbnail_index.get(&track.id);
     let is_downloaded = player.download_registry.contains(&track.url);
     let is_cached = player.stream_cache.index_contains(&track.id);
 
-    let status_icon: Element<'a, Message, AppTheme> = if is_downloaded {
-        icons::icon(icons::DOWNLOAD_ICON, p.accent, theme::ICON_SIZE_MD).into()
+    let mut trailing_children = Vec::with_capacity(2);
+
+    if show_album {
+        if let Some(album) = &track.album {
+            let album_button: Element<'a, Message, AppTheme> = Container::new(
+                Button::new(text(album.name.clone()).size(theme::TEXT_SIZE_SM))
+                    .style(button_style_album())
+                    .on_press(Message::OpenAlbum(album.id.clone(), album.name.clone())),
+            )
+            .width(Length::FillPortion(2))
+            .into();
+            trailing_children.push(album_button);
+        }
+    }
+
+    if is_downloaded {
+        trailing_children
+            .push(icons::icon(icons::DOWNLOAD_ICON, p.accent, theme::ICON_SIZE_MD).into());
     } else if is_cached {
-        icons::icon(icons::CACHE_ICON, p.accent, theme::ICON_SIZE_MD).into()
-    } else {
-        Container::new(text("")).into()
-    };
+        trailing_children
+            .push(icons::icon(icons::CACHE_ICON, p.accent, theme::ICON_SIZE_MD).into());
+    }
+
+    trailing_children.push(
+        Container::new(
+            text(crate::util::format_duration(track.duration))
+                .size(theme::TEXT_SIZE_SM)
+                .style(fg_secondary()),
+        )
+        .padding([0.0, theme::SPACING_2XL])
+        .into(),
+    );
 
     inner_row_layout(
         leading,
@@ -234,18 +269,9 @@ pub(super) fn track_row_layout<'a>(
         &track.title,
         Some(&track.artist),
         Some(
-            Row::with_children(vec![
-                status_icon,
-                Container::new(
-                    text(crate::util::format_duration(track.duration))
-                        .size(theme::TEXT_SIZE_SM)
-                        .style(fg_secondary()),
-                )
-                .padding([0.0, theme::SPACING_2XL])
+            Row::with_children(trailing_children)
+                .align_y(alignment::Vertical::Center)
                 .into(),
-            ])
-            .align_y(alignment::Vertical::Center)
-            .into(),
         ),
     )
 }

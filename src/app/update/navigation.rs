@@ -204,6 +204,7 @@ mod tests {
             source: crate::types::TrackSource::YouTube,
             thumbnail: String::new(),
             download_path: None,
+            album: None,
         };
         p.process_result(BackendResult::SearchResults(
             rid,

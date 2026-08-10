@@ -75,6 +75,7 @@ impl MusicPlayer {
                     source: TrackSource::Local,
                     thumbnail: String::new(),
                     download_path: None,
+                    album: None,
                 });
             }
         }
