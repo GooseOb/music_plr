@@ -192,7 +192,7 @@ impl widget::text_input::Catalog for AppTheme {
                 icon: p.fg_muted,
                 placeholder: p.fg_muted,
                 value: p.fg,
-                selection: p.bg_selected,
+                selection: p.bg_current,
             }
         })
     }

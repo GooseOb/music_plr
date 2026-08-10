@@ -397,7 +397,7 @@ impl MusicPlayer {
                         .iter()
                         .map(|p| p.to_string_lossy().to_string())
                         .collect();
-                    self.handle_add_local_music(paths);
+                    self.handle_add_local_music(&paths);
                 }
                 Task::none()
             }

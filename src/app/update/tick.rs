@@ -130,10 +130,23 @@ impl MusicPlayer {
         }
     }
 
-    /// Handle a fresh `SearchResults`: install the tab into the requesting
-    /// nav slot, flip exhausted/loading flags. Stale results (slot truncated
-    /// away by navigation) are ignored. Thumbnail downloads are driven lazily
-    /// by the tick over currently visible ids, so none are kicked off here.
+    fn install_results(&mut self, idx: usize, tracks: Vec<crate::types::Track>) {
+        let slot = &mut self.nav_history[idx];
+        slot.tracks = tracks;
+        slot.loading = false;
+        slot.selection.clear();
+        slot.request_id = 0;
+        self.save_session();
+        self.seed_view_thumbnails(&self.nav_history[idx].clone());
+        self.clear_notification();
+    }
+
+    fn finalize_view(&mut self, idx: usize) {
+        self.save_session();
+        self.seed_view_thumbnails(&self.nav_history[idx].clone());
+        self.clear_notification();
+    }
+
     fn process_search_results(
         &mut self,
         rid: u64,
@@ -155,14 +168,8 @@ impl MusicPlayer {
                 };
                 *exhausted = count < crate::theme::SEARCH_PAGE_SIZE;
                 *kind_tab = tab;
-                self.nav_history[idx].tracks = tracks;
-                self.nav_history[idx].loading = false;
-                self.nav_history[idx].selection.clear();
-                self.nav_history[idx].request_id = 0;
+                self.install_results(idx, tracks);
             }
-            self.save_session();
-            self.seed_view_thumbnails(&self.nav_history[idx].clone());
-            self.clear_notification();
         }
     }
 
@@ -185,21 +192,13 @@ impl MusicPlayer {
                     self.nav_history[idx].loading = false;
                     self.nav_history[idx].set_exhausted(exhausted);
                     self.nav_history[idx].request_id = 0;
-                    self.save_session();
-                    self.seed_view_thumbnails(&self.nav_history[idx].clone());
-                    self.clear_notification();
+                    self.finalize_view(idx);
                 }
             }
             BackendResult::BrowseResults(rid, tracks) => {
                 // Apply to the slot that issued the browse, matched by request id
                 if let Some(idx) = self.slot_for_request(rid) {
-                    self.nav_history[idx].tracks = tracks;
-                    self.nav_history[idx].loading = false;
-                    self.nav_history[idx].selection.clear();
-                    self.nav_history[idx].request_id = 0;
-                    self.save_session();
-                    self.seed_view_thumbnails(&self.nav_history[idx].clone());
-                    self.clear_notification();
+                    self.install_results(idx, tracks);
                 }
             }
             BackendResult::RadioResults(rid, label, tracks) => {
@@ -209,11 +208,7 @@ impl MusicPlayer {
                         _ => ViewKind::SongRadio(label),
                     };
                     self.nav_history[idx].kind = kind;
-                    self.nav_history[idx].tracks = tracks;
-                    self.nav_history[idx].loading = false;
-                    self.nav_history[idx].request_id = 0;
-                    self.save_session();
-                    self.seed_view_thumbnails(&self.nav_history[idx].clone());
+                    self.install_results(idx, tracks);
                 }
             }
             BackendResult::DownloadComplete(track, path) => {

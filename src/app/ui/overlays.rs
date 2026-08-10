@@ -11,9 +11,9 @@ use crate::{
 };
 
 use super::{
-    button,
     styles::{
-        bg_overlay, bg_popup, bg_secondary, bg_transparent, button_style_danger, fg_secondary,
+        bg_overlay, bg_popup, bg_secondary, bg_transparent, button_style_danger,
+        button_style_popup_item, fg_secondary,
     },
     theme, ContextMenuState, Message, MusicPlayer,
 };
@@ -167,18 +167,7 @@ fn menu_item<'a>(
         )
         .width(Length::Fill)
         .padding(0)
-        .style(move |_, status| {
-            let bg = match status {
-                button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-                _ => p.bg_secondary,
-            };
-            button::Style {
-                background: Some(bg.into()),
-                text_color: p.fg,
-                border: iced::border::rounded(theme::RADIUS_SM),
-                ..Default::default()
-            }
-        })
+        .style(button_style_popup_item())
         .on_press(on_press),
     )
     .width(Length::Fill)
@@ -202,19 +191,7 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
             )
             .width(Length::Fill)
             .padding(0)
-            .style(|t: &AppTheme, status| {
-                let p = &t.palette;
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-                    _ => p.bg_secondary,
-                };
-                button::Style {
-                    background: Some(bg.into()),
-                    text_color: p.fg,
-                    border: iced::border::rounded(theme::RADIUS_SM),
-                    ..Default::default()
-                }
-            })
+            .style(button_style_popup_item())
             .on_press(Message::AddToPlaylist(i))
             .into()
         })

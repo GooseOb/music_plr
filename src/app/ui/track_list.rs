@@ -148,7 +148,7 @@ pub(super) fn view_track_row<'a>(
         }
     } else {
         if is_selected {
-            p.bg_selected
+            p.bg_current
         } else if is_hovered {
             p.bg_hover
         } else {

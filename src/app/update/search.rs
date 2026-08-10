@@ -32,30 +32,28 @@ impl MusicPlayer {
             .push(query.clone(), self.config.max_search_history_stored);
 
         let tx = self.result_tx.clone();
-        Self::spawn_search_thread(query, scope, tx, move |tracks, tab| {
-            BackendResult::SearchResults(rid, tracks, tab)
-        });
+        Self::spawn_backend_thread(
+            move || crate::youtube::search(&query, scope, 0).map(|(tracks, _)| tracks),
+            move |tracks| BackendResult::SearchResults(rid, tracks, SearchTab::from_scope(scope)),
+            tx,
+        );
     }
 
-    /// Spawn a search that returns `(Vec<Track>, SearchTab)`, then wrap it in a
-    /// `BackendResult` for the result channel.
-    fn spawn_search_thread<F>(
-        query: String,
-        scope: crate::youtube::SearchScope,
-        tx: mpsc::Sender<BackendResult>,
-        make_result: F,
-    ) where
-        F: FnOnce(Vec<Track>, SearchTab) -> BackendResult + Send + 'static,
+    /// Spawn a background thread that runs `run` (or returns an error), maps
+    /// the resulting `Track`s into a `BackendResult`, and sends it on `tx`.
+    /// All search/radio/browse callers share this one thread body.
+    fn spawn_backend_thread<R, M>(run: R, make_result: M, tx: mpsc::Sender<BackendResult>)
+    where
+        R: FnOnce() -> anyhow::Result<Vec<Track>> + Send + 'static,
+        M: FnOnce(Vec<Track>) -> BackendResult + Send + 'static,
     {
-        thread::spawn(move || {
-            let (tracks, tab) = match crate::youtube::search(&query, scope, 0) {
-                Ok(parts) => parts,
-                Err(e) => {
-                    let _ = tx.send(BackendResult::SearchError(e.to_string()));
-                    return;
-                }
-            };
-            let _ = tx.send(make_result(tracks, tab));
+        thread::spawn(move || match run() {
+            Ok(tracks) => {
+                let _ = tx.send(make_result(tracks));
+            }
+            Err(e) => {
+                let _ = tx.send(BackendResult::SearchError(e.to_string()));
+            }
         });
     }
 
@@ -126,9 +124,11 @@ impl MusicPlayer {
         self.notify(format!("Generating radio for song: {song_name}..."));
 
         let tx = self.result_tx.clone();
-        Self::spawn_youtube_thread(song_name, tx, crate::youtube::radio_song, move |tracks| {
-            BackendResult::RadioResults(rid, label.clone(), tracks)
-        });
+        Self::spawn_backend_thread(
+            move || crate::youtube::radio_song(&song_name),
+            move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
+            tx,
+        );
     }
 
     pub fn start_artist_radio(&mut self, artist_name: String) {
@@ -139,11 +139,10 @@ impl MusicPlayer {
         self.notify(format!("Generating radio for artist: {artist_name}..."));
 
         let tx = self.result_tx.clone();
-        Self::spawn_youtube_thread(
-            artist_name,
-            tx,
-            crate::youtube::radio_artist,
+        Self::spawn_backend_thread(
+            move || crate::youtube::radio_artist(&artist_name),
             move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
+            tx,
         );
     }
 
@@ -202,37 +201,13 @@ impl MusicPlayer {
         self.view_data_mut().request_id = rid;
         self.notify(format!("Opening: {label}..."));
         let tx = self.result_tx.clone();
-        thread::spawn(move || {
-            let tracks = match crate::youtube::browse(&browse_id, kind_str) {
-                Ok(videos) => videos.into_iter().map(Track::from).collect(),
-                Err(e) => {
-                    let _ = tx.send(BackendResult::SearchError(e.to_string()));
-                    return;
-                }
-            };
-            let _ = tx.send(BackendResult::BrowseResults(rid, tracks));
-        });
-    }
-
-    /// Spawn a background thread that calls a `YouTube` search/radio function,
-    /// converts the results to `Track`s, and sends a `BackendResult` via the
-    /// provided channel. All four search/radio methods share this pattern.
-    fn spawn_youtube_thread<F, R>(
-        query: String,
-        tx: mpsc::Sender<BackendResult>,
-        search_fn: F,
-        make_result: R,
-    ) where
-        F: FnOnce(&str) -> anyhow::Result<Vec<Track>> + Send + 'static,
-        R: FnOnce(Vec<Track>) -> BackendResult + Send + 'static,
-    {
-        thread::spawn(move || match search_fn(&query) {
-            Ok(tracks) => {
-                let _ = tx.send(make_result(tracks));
-            }
-            Err(e) => {
-                let _ = tx.send(BackendResult::SearchError(e.to_string()));
-            }
-        });
+        Self::spawn_backend_thread(
+            move || {
+                crate::youtube::browse(&browse_id, kind_str)
+                    .map(|videos| videos.into_iter().map(Track::from).collect())
+            },
+            move |tracks| BackendResult::BrowseResults(rid, tracks),
+            tx,
+        );
     }
 }

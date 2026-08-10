@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{button, rule, text, Button, Column, Container, Id, MouseArea, Row},
+    widget::{rule, text, Button, Column, Container, Id, MouseArea, Row},
     Element, Length,
 };
 
@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{
-    styles::{bg_secondary, fg_secondary},
+    styles::{bg_secondary, button_style_panel_item, fg_secondary},
     track_list::{
         empty_state, scrollable_list, section_header, track_row, track_row_layout, view_track_list,
     },
@@ -76,7 +76,6 @@ fn queue_tab<'a>(
 
     let icon_color = if active { p.accent } else { p.fg_muted };
     let text_color = if active { p.fg } else { p.fg_secondary };
-    let bg_color = if active { p.bg_current } else { p.bg_secondary };
 
     Button::new(
         Row::with_children(vec![
@@ -90,12 +89,7 @@ fn queue_tab<'a>(
     )
     .width(Length::Fill)
     .padding(0)
-    .style(move |_, _| button::Style {
-        background: Some(bg_color.into()),
-        text_color,
-        border: iced::border::rounded(0),
-        ..Default::default()
-    })
+    .style(button_style_panel_item(active, text_color))
     .on_press(on)
     .into()
 }

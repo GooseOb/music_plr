@@ -85,7 +85,7 @@ pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme
     };
 
     if player.view_data().loading {
-        loading_placeholder("Searching...")
+        track_list::empty_state("Searching...")
     } else if tab.is_track_tab() {
         view_search_track_tab(player)
     } else {
@@ -127,51 +127,30 @@ fn view_search_card_tab<'a>(
     player: &'a MusicPlayer,
     tab: &'a crate::youtube::SearchTab,
 ) -> Element<'a, Message, AppTheme> {
-    let cards: Vec<Element<'_, Message, AppTheme>> = match tab {
-        crate::youtube::SearchTab::Artists(items) => items
-            .iter()
-            .enumerate()
-            .map(|(i, c)| {
-                card_row(
-                    player,
-                    i,
-                    &c.id,
-                    &c.title,
-                    &c.subtitle,
-                    Message::OpenArtist(c.id.clone(), c.title.clone()),
-                )
-            })
-            .collect(),
-        crate::youtube::SearchTab::Albums(items) => items
-            .iter()
-            .enumerate()
-            .map(|(i, c)| {
-                card_row(
-                    player,
-                    i,
-                    &c.id,
-                    &c.title,
-                    &c.subtitle,
-                    Message::OpenAlbum(c.id.clone(), c.title.clone()),
-                )
-            })
-            .collect(),
-        crate::youtube::SearchTab::Playlists(items) => items
-            .iter()
-            .enumerate()
-            .map(|(i, c)| {
-                card_row(
-                    player,
-                    i,
-                    &c.id,
-                    &c.title,
-                    &c.subtitle,
-                    Message::OpenPlaylist(c.id.clone(), c.title.clone()),
-                )
-            })
-            .collect(),
-        _ => Vec::new(),
+    // Each card tab shares the same row shape; only the drill-down message
+    // differs, so pull out the slice and its click constructor once.
+    type CardClick = fn(String, String) -> Message;
+    let (items, open): (&[crate::youtube::CardData], CardClick) = match tab {
+        crate::youtube::SearchTab::Artists(items) => (items, Message::OpenArtist),
+        crate::youtube::SearchTab::Albums(items) => (items, Message::OpenAlbum),
+        crate::youtube::SearchTab::Playlists(items) => (items, Message::OpenPlaylist),
+        _ => (&[], |_, _| Message::Noop),
     };
+
+    let cards: Vec<Element<'_, Message, AppTheme>> = items
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            card_row(
+                player,
+                i,
+                &c.id,
+                &c.title,
+                &c.subtitle,
+                open(c.id.clone(), c.title.clone()),
+            )
+        })
+        .collect();
 
     if cards.is_empty() {
         if player.view_data().loading {
@@ -248,7 +227,7 @@ pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme
         .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
     let track_list = if loading && tracks.is_empty() {
-        loading_placeholder("Loading...")
+        track_list::empty_state("Loading...")
     } else {
         view_track_list(tracks, player, TrackListKind::Active, 0)
     };
@@ -268,7 +247,7 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
         .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
     let track_list = if loading && tracks.is_empty() {
-        loading_placeholder("Generating radio...")
+        track_list::empty_state("Generating radio...")
     } else {
         view_track_list(tracks, player, TrackListKind::Active, 0)
     };
@@ -277,14 +256,6 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill)
-        .into()
-}
-
-fn loading_placeholder(msg: &str) -> Element<'_, Message, AppTheme> {
-    Container::new(text(msg).style(fg_secondary()).center())
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .padding(theme::SPACING_XL)
         .into()
 }
 

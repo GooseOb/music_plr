@@ -106,16 +106,14 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             let is_interacting = is_active || is_dragged_over;
 
             let bg_color = if is_dragged_over {
-                p.bg_selected
+                p.bg_current
             } else if is_active {
                 p.bg_current.scale_alpha(0.7)
             } else {
                 p.bg_secondary
             };
 
-            let bg_hover = if is_dragged_over {
-                p.bg_selected
-            } else if is_active {
+            let bg_hover = if is_active || is_dragged_over {
                 p.bg_current
             } else {
                 p.bg_hover
@@ -217,24 +215,9 @@ fn sidebar_nav_item<'a>(
         icons::icon(icon_name, icon_color, theme::ICON_SIZE_MD).into(),
         text(name).color(text_color).into(),
     ]))
-    .style(move |_, status| {
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-            _ => {
-                if is_active {
-                    p.bg_current
-                } else {
-                    p.bg_secondary
-                }
-            }
-        };
-        button::Style {
-            background: Some(bg.into()),
-            text_color,
-            border: iced::border::rounded(theme::RADIUS_MD),
-            ..Default::default()
-        }
-    })
+    .style(super::styles::button_style_panel_item(
+        is_active, text_color,
+    ))
     .on_press(Message::NavigateTo(target))
     .into()
 }

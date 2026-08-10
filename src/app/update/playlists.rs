@@ -60,10 +60,9 @@ impl MusicPlayer {
         self.delete_confirm_index = None;
     }
 
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn handle_add_local_music(&mut self, paths: Vec<String>) {
+    pub fn handle_add_local_music(&mut self, paths: &[String]) {
         let mut new_tracks = Vec::new();
-        for path_str in &paths {
+        for path_str in paths {
             let path = Path::new(path_str);
             if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
                 let duration = crate::util::try_probe_duration(path_str).unwrap_or(0);
@@ -202,29 +201,16 @@ impl MusicPlayer {
                 }
             }
         } else if let ViewKind::Downloads = &self.view_data_mut().kind {
-            let mut sorted: Vec<usize> = indices.clone();
-            sorted.sort_unstable();
-            sorted.dedup();
-            let mut removed = 0;
-            let mut removed_urls: Vec<String> = Vec::new();
-            {
-                let tracks = &mut self.view_data_mut().tracks;
-                for &i in sorted.iter().rev() {
-                    if i < tracks.len() {
-                        let track = tracks.remove(i);
-                        removed_urls.push(track.url);
-                        removed += 1;
-                    }
-                }
-            }
+            let tracks = &mut self.view_data_mut().tracks;
+            let removed_urls: Vec<String> = indices
+                .iter()
+                .filter_map(|&i| tracks.get(i).map(|t| t.url.clone()))
+                .collect();
+            let removed = crate::util::remove_at(tracks, &indices);
+            self.notify_tracks("Removed", removed, "from downloads");
             for url in removed_urls {
                 self.download_registry.remove(&url);
             }
-            self.notify(format!(
-                "Removed {} download{}",
-                removed,
-                crate::util::plural_suffix(removed)
-            ));
         }
         self.clear_selection();
     }

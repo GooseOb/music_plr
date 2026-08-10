@@ -141,8 +141,6 @@ pub fn button_style_nav(
     }
 }
 
-/// A list-item button that highlights on hover and uses `accent` for active
-/// items. Used by sidebar playlists, search history, and playlist picker.
 pub fn button_style_list_item(
     active: bool,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
@@ -184,10 +182,6 @@ pub fn button_style_result_card() -> impl Fn(&AppTheme, button::Status) -> butto
     }
 }
 
-/// A button with no text color / border emphasis — used for icon-only
-/// action buttons (e.g. delete in search history).
-/// Scope-tab button (Songs / Videos / Artists / ...). `selected` tabs are
-/// highlighted with the primary accent; unselected tabs are subtle.
 pub fn button_style_scope(
     selected: bool,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
@@ -214,6 +208,47 @@ pub fn button_style_scope(
             background: Some(bg.into()),
             text_color,
             border: border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
+}
+
+pub fn button_style_popup_item() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
+    move |theme, status| {
+        let p = &theme.palette;
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
+            _ => p.bg_secondary,
+        };
+        button::Style {
+            background: Some(bg.into()),
+            text_color: p.fg,
+            border: border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
+}
+
+pub fn button_style_panel_item(
+    active: bool,
+    text_color: Color,
+) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
+    move |theme, status| {
+        let p = &theme.palette;
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
+            _ => {
+                if active {
+                    p.bg_current
+                } else {
+                    p.bg_secondary
+                }
+            }
+        };
+        button::Style {
+            background: Some(bg.into()),
+            text_color,
+            border: border::rounded(theme::RADIUS_MD),
             ..Default::default()
         }
     }

@@ -2,7 +2,7 @@ use crate::theme::{self, AppTheme};
 
 use iced::{
     alignment,
-    widget::{self, button, Column, Container, Row, Stack},
+    widget::{self, Column, Container, Row, Stack},
     Element, Length,
 };
 
