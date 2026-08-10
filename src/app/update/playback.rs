@@ -139,19 +139,19 @@ impl MusicPlayer {
     }
 
     pub fn toggle_play_pause(&mut self) {
-        if self.queue.current().is_some() {
+        if let Some(track) = self.queue.current().cloned() {
             if self.is_playing {
                 self.audio.pause();
-            } else {
+            } else if self.audio.has_output() {
                 self.audio.resume();
+            } else {
+                self.play_track_internal(&track);
             }
         }
         self.mpris_dirty = true;
     }
 
     pub fn next_track(&mut self) {
-        // Record the current track as recently played, then advance the queue
-        // so that Previous can restore it via recently_played.
         if let Some(old) = self.queue.current().cloned() {
             self.queue
                 .record_played(&old, self.config.max_recently_played);
@@ -167,10 +167,6 @@ impl MusicPlayer {
         }
     }
 
-    /// "Previous" navigates the recently-played history.  If a track was
-    /// recently played it is popped from the history and restored to the
-    /// front of the queue (becomes the new current track).  When history is
-    /// empty there is nothing to go back to.
     pub fn previous_track(&mut self) {
         if self.queue.restore_previous() {
             self.track_loading = true;

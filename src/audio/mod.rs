@@ -24,18 +24,15 @@ pub struct AudioPlayer {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct PlayerState {
     pub is_playing: bool,
     pub duration: f32,
     pub progress: f32,
     pub volume: f32,
     pub stream_finished: bool,
-    /// Set once yt-dlp has finished writing the cache file to disk. Distinct
-    /// from `stream_finished`, which is only true after the track has *played*
-    /// to the end — `cache_ready` fires as soon as the download completes, so
-    /// the cache can be registered independently of whether the user listened
-    /// to the whole track.
     pub cache_ready: bool,
+    pub has_output: bool,
 }
 
 enum PlayerCommand {
@@ -71,6 +68,7 @@ impl AudioPlayer {
             volume: initial_volume,
             stream_finished: false,
             cache_ready: false,
+            has_output: false,
         }));
 
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
@@ -119,6 +117,7 @@ impl AudioPlayer {
                     if let Ok(mut st) = state_clone.lock() {
                         st.stream_finished = false;
                         st.cache_ready = false;
+                        st.has_output = false;
                     }
                 };
             }
@@ -328,6 +327,7 @@ impl AudioPlayer {
             st.progress = 0.0;
             st.stream_finished = false;
             st.cache_ready = false;
+            st.has_output = true;
         }
         Some((stream, sink))
     }
@@ -376,6 +376,10 @@ impl AudioPlayer {
         self.state
             .lock()
             .map_or_else(|e| e.into_inner().clone(), |st| st.clone())
+    }
+
+    pub fn has_output(&self) -> bool {
+        self.state.lock().is_ok_and(|st| st.has_output)
     }
 }
 
