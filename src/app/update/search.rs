@@ -1,6 +1,5 @@
 use super::{mpsc, thread, BackendResult, MusicPlayer, Track, ViewData};
 use crate::app::ViewKind;
-use crate::youtube::SearchTab;
 
 impl MusicPlayer {
     pub fn handle_search_execute(&mut self) {
@@ -33,19 +32,19 @@ impl MusicPlayer {
 
         let tx = self.result_tx.clone();
         Self::spawn_backend_thread(
-            move || crate::youtube::search(&query, scope, 0).map(|(tracks, _)| tracks),
-            move |tracks| BackendResult::SearchResults(rid, tracks, SearchTab::from_scope(scope)),
+            move || crate::youtube::search(&query, scope, 0),
+            move |(tracks, tab)| BackendResult::SearchResults(rid, tracks, tab),
             tx,
         );
     }
 
     /// Spawn a background thread that runs `run` (or returns an error), maps
-    /// the resulting `Track`s into a `BackendResult`, and sends it on `tx`.
+    /// the result into a `BackendResult`, and sends it on `tx`.
     /// All search/radio/browse callers share this one thread body.
-    fn spawn_backend_thread<R, M>(run: R, make_result: M, tx: mpsc::Sender<BackendResult>)
+    fn spawn_backend_thread<T, R, M>(run: R, make_result: M, tx: mpsc::Sender<BackendResult>)
     where
-        R: FnOnce() -> anyhow::Result<Vec<Track>> + Send + 'static,
-        M: FnOnce(Vec<Track>) -> BackendResult + Send + 'static,
+        R: FnOnce() -> anyhow::Result<T> + Send + 'static,
+        M: FnOnce(T) -> BackendResult + Send + 'static,
     {
         thread::spawn(move || match run() {
             Ok(tracks) => {
