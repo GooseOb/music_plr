@@ -9,6 +9,7 @@ use iced::{
 use super::{ContextMenuState, Message, MusicPlayer};
 
 mod content;
+mod lyrics;
 mod overlays;
 mod playbar;
 mod playlist;

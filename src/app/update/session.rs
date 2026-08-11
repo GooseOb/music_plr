@@ -27,6 +27,7 @@ impl MusicPlayer {
             show_queue: self.show_queue,
             volume: self.volume,
             repeat: self.repeat,
+            lyrics_provider: self.lyrics_client.selected(),
         };
         state.save();
         self.session_dirty = false;
@@ -44,6 +45,7 @@ impl MusicPlayer {
 
         self.nav_history = vec![self.view_data().clone()];
         self.nav_history_pos = 0;
+        self.lyrics_client = crate::lyrics::LyricsClient::new(state.lyrics_provider);
     }
 
     pub fn resume_playback(&mut self) {

@@ -4,9 +4,10 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{app::ui::shared_components::play_pause_button, icons, theme::AppTheme};
+use crate::{icons, theme::AppTheme};
 
 use super::{
+    shared_components::play_pause_button,
     styles::{bg_tertiary, button_style_queue, fg_secondary},
     theme,
     track_list::thumbnail,
@@ -119,6 +120,21 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     .width(theme::QUEUE_BTN_WIDTH)
     .height(theme::QUEUE_BTN_WIDTH);
 
+    let lyrics_btn = Button::new(icons::icon(
+        icons::LYRICS_ICON,
+        if player.lyrics.is_some() {
+            Color::BLACK
+        } else {
+            p.fg_secondary
+        },
+        theme::ICON_SIZE_MD,
+    ))
+    .padding(theme::SPACING_XS)
+    .style(button_style_queue(player.lyrics.is_some()))
+    .on_press(Message::ShowLyrics)
+    .width(theme::QUEUE_BTN_WIDTH)
+    .height(theme::QUEUE_BTN_WIDTH);
+
     Container::new(
         Row::with_children(vec![
             Container::new(track_thumb)
@@ -137,6 +153,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
             volume_slider.into(),
             repeat_btn.into(),
             queue_btn.into(),
+            lyrics_btn.into(),
         ])
         .spacing(theme::SPACING_MD)
         .align_y(alignment::Vertical::Center)

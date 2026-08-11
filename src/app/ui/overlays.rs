@@ -210,6 +210,10 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
     )
 }
 
+pub fn mouse_noop_area(content: Element<'_, Message, AppTheme>) -> Element<'_, Message, AppTheme> {
+    MouseArea::new(content).on_press(Message::Noop).into()
+}
+
 fn view_dialog(
     dialog: Container<'_, Message, AppTheme>,
     close_msg: Message,
@@ -218,7 +222,7 @@ fn view_dialog(
 
     Container::new(
         MouseArea::new(
-            Container::new(MouseArea::new(dialog).on_press(Message::Noop))
+            Container::new(mouse_noop_area(dialog.into()))
                 .width(Length::Fill)
                 .height(Length::Fill)
                 .center(Length::Fill),

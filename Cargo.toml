@@ -23,7 +23,7 @@ symphonia = { version = "0.5", features = ["all"] }
 confy = "0.6"
 directories = "6"
 anyhow = "1"
-ureq = "3"
+ureq = { version = "3", features = ["json"] }
 rfd = "0.15"
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 tracing = "0.1"

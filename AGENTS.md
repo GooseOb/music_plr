@@ -6,7 +6,8 @@ YouTube-search music player with local playback and MPRIS, built with iced.
 
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`)
 - **Audio**: rodio + symphonia (native decode, no ffmpeg); **pipeline**: yt-dlp (stream/download)
-- **MPRIS**: zbus 4 (D-Bus, tokio); **Config**: confy + directories; **HTTP**: ureq 3; **Dialogs**: rfd 0.15
+- **MPRIS**: zbus 4 (D-Bus, tokio); **Config**: confy + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15
+- **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default; on-disk cache in `data/lyrics_cache.rs`
 - **Logging**: tracing + tracing-subscriber
 
 ## Prerequisites
@@ -56,13 +57,14 @@ src/
 ├── audio/growing.rs   # GrowingMediaSource (MediaSource over a still-growing file)
 ├── audio/symphonia_source.rs # SymphoniaStreamingSource (rodio Source + Iterator)
 ├── data/mod.rs        # JsonStore trait + config_path()/cache_path()
-├── data/              # cache, config, downloads, playlists, search_history, session, thumbnails
+├── data/              # cache, config, downloads, playlists, search_history, session, thumbnails, lyrics_cache
 ├── theme/mod.rs       # Palette + AppTheme
 ├── theme/layout.rs    # Spacing / size / geometry constants (re-exported from theme)
 ├── theme/catalog.rs   # widget::*::Catalog impls for AppTheme
-├── youtube.rs         # Search (yt-dlp primary, ytmusicapi fallback) + download
+├── youtube.rs         # Search (ytmusicapi primary, yt-dlp fallback) + download
 ├── mpris.rs           # MPRIS D-Bus (MediaPlayer2 + Player)
 ├── types.rs           # Track, TrackSource, PlayQueue
+├── lyrics.rs          # LyricsProvider enum + LyricsClient (provider registry)
 ├── icons.rs           # SVG embedding via include_bytes! + icon()
 └── util.rs            # format_duration, fuzzy_match, remove_at, reorder_tracks
 ```
@@ -73,8 +75,8 @@ src/
   channels, `DragState`, context menu, `nav_history`, clipboard, last-click timing, `download_registry`,
   `stream_cache`, `thumbnail_cache` (ID→exists bool, filled in tick), `picker`
   (`Option<PlaylistPicker>` carrying the resolved target indices — all selected indices if the
-  right-clicked track is selected, else just it). **All per-view state** lives
-  in one `view_data: ViewData` field — a flat struct whose `kind: ViewKind` enum carries only what
+  right-clicked track is selected, else just it), `lyrics`/`lyrics_track_id`/`lyrics_loading`
+  (lyrics view result, cached LRCLib payload keyed to the current track, in-flight guard). **All per-view state** lives
   differs per view (search `exhausted`, radio label, selected playlist). No separate `View`/`RadioKind`
   enum or per-view fields exist.
 - **`TrackListKind`** (`app/interaction.rs`): `Queue` / `Active` / `Recent` — the single carrier for "which track list?" across messages, `DragState`, selection, and scroll targeting. Helpers: `scrollable_id()` (each list has its own, so scroll ops can't hit the wrong widget), `first_index()` (1 for Queue, whose now-playing row renders outside the scrollable), `is_interactive()` (false for read-only `Recent`), `in_queue_panel()` (Queue+Recent share a geometry slot). Pass this instead of a bool.
@@ -82,7 +84,7 @@ src/
 - **`ContextMenuState`**: `pos: TrackPos`, `target_indices` (selection-aware, indexes `pos.list`), flags `is_youtube`/`is_downloaded`/`in_playlist`. Menu ops apply to all selected if the right-clicked track is selected, else just it; "Play"/radio target only the right-clicked track. `Recent` tracks come from `recently_played` (queue/playlist-specific items suppressed).
 - **`DragState`** (`app/interaction.rs`): cursor/origin/active flags, `pressed_track`/`hovered_track` as `Option<TrackPos>`, `drag_target_list: Option<TrackListKind>`, `sidebar_hover_playlist`; cleaned via `DragState::cleanup()`. Same-list drag reorders (`target == source`), cross-list copies; dragging a selected track moves all selected.
 - **Selection / list access** (`app/update/selection.rs`): `selection`, `toggle_selection`, `clear_selection`, `view_tracks`, `get_track_at`, `track_count` — all keyed by a `TrackListKind`. `Recent` has no selection: `selection` returns `&[]` and mutations are no-ops.
-- **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailsDownloaded` (clears `thumbnail_cache`). 250ms tick drains → `process_result`.
+- **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailsDownloaded` (clears `thumbnail_cache`), `LyricsFetched(Option<Lyrics>, String)` (sets `lyrics`, caches to `lyrics_cache.json`, auto-cleared on track change). 250ms tick drains → `process_result`.
 - **MPRIS**: D-Bus thread → `MprisCommand` → `process_mpris_command` (tick); `MprisUpdate` flows main → thread.
 - **Nav history**: full `ViewData` in `NavEntry.data` (no separate `view`/`snapshot`); capped at 20. `push_nav_entry()` snapshots live `view_data`.
 
@@ -124,7 +126,7 @@ src/
 - `search()`: scoped search via `ytmusicapi` (`youtube_search.py`); `scope` (`SearchScope`: Songs/Videos/Artists/Albums/Playlists, default Songs) maps to ytmusicapi `filter=` for all scopes. First page from `ytmusicapi`; pagination (`search_more`) falls back to `yt-dlp --flat-playlist` (tracks only). Returns `(Vec<Track>, SearchTab)` where `SearchTab` carries the concrete card lists (Artists/Albums/Playlists) or marks a track tab (Songs/Videos). `browse()` drills into an artist/album/playlist via ytmusicapi `get_artist`/`get_album`/`get_playlist`. `SEARCH_PAGE_SIZE = 10`.
 - `radio_song()`/`radio_artist()`: query-modified search; `download()`/`download_audio()` use `yt-dlp --extract-audio` → MP3.
 - `theme/`: `Palette` + `AppTheme` (`mod.rs`), constants (`layout.rs`, re-exported so `crate::theme::SPACING_SM` still resolves), `Catalog` impls (`catalog.rs`). `SEARCH_PAGE_SIZE` referenced by `youtube.rs` + `app/update/tick.rs`.
-- `ViewKind` (`app/view_data.rs`) selects the active view in `ui/content.rs`, `drag.rs`, `navigation.rs`, `playback.rs`.
+- `ViewKind` (`app/view_data.rs`) selects the active view in `ui/content.rs`, `drag.rs`, `navigation.rs`, `playback.rs`; variants include `Search`, `SongRadio`, `ArtistRadio`, `Artist`, `Album`, `PlaylistView`, `Playlist`, `Downloads`, `Lyrics` (synced/plain lyrics for the current track).
 - `util.rs`: `format_duration`, `fuzzy_match`, `plural_suffix`, `try_probe_duration`, plus the two index-manipulation routines `remove_at` and `reorder_tracks` (generic, unit-tested in one place).
 
 ## Maintenance

@@ -11,6 +11,7 @@ pub struct SessionState {
     pub show_queue: bool,
     pub volume: f32,
     pub repeat: bool,
+    pub lyrics_provider: crate::lyrics::LyricsProvider,
 }
 
 impl Default for SessionState {
@@ -21,6 +22,7 @@ impl Default for SessionState {
             show_queue: false,
             volume: 0.8,
             repeat: false,
+            lyrics_provider: crate::lyrics::LyricsProvider::default(),
         }
     }
 }
@@ -40,6 +42,7 @@ mod tests {
         assert!(state.queue.tracks.is_empty());
         assert!(!state.show_queue);
         assert!((state.volume - 0.8).abs() < f32::EPSILON);
+        assert_eq!(state.lyrics_provider, crate::lyrics::LyricsProvider::LrcLib);
     }
 
     #[test]
@@ -57,6 +60,7 @@ mod tests {
             show_queue: true,
             volume: 0.5,
             repeat: true,
+            lyrics_provider: crate::lyrics::LyricsProvider::LrcLib,
         };
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();
@@ -67,6 +71,10 @@ mod tests {
         assert!(restored.show_queue);
         assert!((restored.volume - 0.5).abs() < f32::EPSILON);
         assert!(restored.repeat);
+        assert_eq!(
+            restored.lyrics_provider,
+            crate::lyrics::LyricsProvider::LrcLib
+        );
         if let ViewKind::ArtistRadio(label) = &restored.data.kind {
             assert_eq!(label, "Test Radio");
             assert_eq!(restored.data.selection, vec![2]);

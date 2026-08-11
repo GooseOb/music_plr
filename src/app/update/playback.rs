@@ -76,6 +76,9 @@ impl MusicPlayer {
     pub fn play_track_internal(&mut self, track: &Track) {
         self.track_loading = true;
         let id = track.id.clone();
+        // The active track changed: drop any cached lyrics so the overlay
+        // re-fetches for the new track when reopened.
+        self.clear_lyrics_for_track_change();
 
         // Prefer a downloaded file on disk over streaming.
         if let Some(dl_path) = self.download_registry.path_for(&track.url) {
@@ -192,5 +195,15 @@ impl MusicPlayer {
         self.audio
             .seek(std::time::Duration::from_secs_f32(frac * self.duration));
         self.mpris_dirty = true;
+    }
+
+    /// Seek to an absolute playback position in seconds (used by clicking a
+    /// synced lyrics line).
+    pub fn seek_to_seconds(&mut self, secs: f32) {
+        if self.duration <= 0.0 {
+            return;
+        }
+        let frac = (secs / self.duration).clamp(0.0, 1.0);
+        self.seek(frac);
     }
 }

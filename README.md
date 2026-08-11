@@ -17,6 +17,7 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 - **Navigation History** — Back/forward navigation restoring view, results, selection, and scroll
 - **Context Menu** — Right-click menu with Play, Radio, Playlist, Download, and Remove actions; selection-aware
 - **Session Restore** — Reopens with your last view, queue, and volume
+- **Lyrics** — Free, no-API-key lyrics via [LRCLib](https://lrclib.net), behind a pluggable provider interface so more sources can be added later. The playbar Lyrics button opens a dedicated view with synced (timed) lines that seek playback when clicked, falling back to plain text or a "not found" state. Lyrics are cached on disk per track.
 - **Dark Theme** — Dark color scheme with accent green highlights
 
 ## Building
@@ -27,6 +28,7 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 - **yt-dlp** — for YouTube audio streaming and downloads
 - **Python 3** with `ytmusicapi` — for YouTube Music search (optional, falls back to yt-dlp)
 - **D-Bus** session bus (Linux) — for MPRIS
+- **Network access** — lyrics are fetched live from [LRCLib](https://lrclib.net) (no API key)
 
 > ffmpeg is **not** required. Audio is decoded natively via symphonia.
 
@@ -78,6 +80,7 @@ Config is stored at `~/.config/music_plr/config.toml` (managed by [confy](https:
 | `~/.config/music_plr/session.json` | Last view, queue, and volume |
 | `~/.cache/music_plr/youtube/` | Streamed audio cache (LRU-evicted) |
 | `~/.cache/music_plr/thumbnails/` | Downloaded track thumbnails |
+| `~/.cache/music_plr/lyrics_cache.json` | Fetched lyrics, keyed by track id |
 
 ## Architecture
 
@@ -112,6 +115,7 @@ src/
 ├── youtube.rs                 # Search (ytmusicapi → yt-dlp fallback) + download
 ├── mpris.rs                   # MPRIS D-Bus interface (MediaPlayer2 + Player)
 ├── types.rs                   # Track, TrackSource, PlayQueue, QueueTab
+├── lyrics.rs                  # LyricsProvider enum + LyricsClient + LRCLib fetch
 ├── icons.rs                   # Compile-time SVG icon embedding
 └── util.rs                    # format_duration, fuzzy_match, remove_at, reorder_tracks
 ```

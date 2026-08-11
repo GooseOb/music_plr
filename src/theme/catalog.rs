@@ -205,3 +205,25 @@ impl widget::text_input::Catalog for AppTheme {
         class(self, status)
     }
 }
+
+impl widget::text_editor::Catalog for AppTheme {
+    type Class<'a> = widget::text_editor::StyleFn<'a, AppTheme>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        Box::new(|theme, _status| widget::text_editor::Style {
+            background: iced::Background::Color(theme.palette.bg_tertiary),
+            border: iced::Border::default(),
+            placeholder: theme.palette.fg_muted,
+            value: theme.palette.fg,
+            selection: theme.palette.accent.scale_alpha(0.4),
+        })
+    }
+
+    fn style(
+        &self,
+        class: &Self::Class<'_>,
+        status: widget::text_editor::Status,
+    ) -> widget::text_editor::Style {
+        class(self, status)
+    }
+}

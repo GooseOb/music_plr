@@ -26,6 +26,27 @@ pub use interaction::{ContextMenuState, DragState, TrackListKind, TrackPos};
 pub use message::{BackendResult, Message};
 pub use view_data::{RequestIdGenerator, ViewData, ViewKind};
 
+#[derive(Debug, Clone)]
+pub struct LyricsState {
+    pub lyrics: Option<crate::lyrics::Lyrics>,
+    pub track_id: Option<String>,
+    pub loading: bool,
+    pub select_mode: bool,
+    pub editor: Option<iced::widget::text_editor::Content>,
+}
+
+impl LyricsState {
+    fn new() -> Self {
+        Self {
+            lyrics: None,
+            track_id: None,
+            loading: false,
+            select_mode: false,
+            editor: Some(iced::widget::text_editor::Content::with_text("")),
+        }
+    }
+}
+
 #[allow(clippy::struct_excessive_bools)]
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
@@ -51,6 +72,8 @@ pub struct MusicPlayer {
     pub queue: PlayQueue,
     pub show_queue: bool,
     pub repeat: bool,
+    pub lyrics_client: crate::lyrics::LyricsClient,
+    pub lyrics: Option<LyricsState>,
 
     pub is_playing: bool,
     pub volume: f32,
@@ -126,6 +149,10 @@ impl MusicPlayer {
             search_history: SearchHistory::load(),
             stream_cache: StreamCache::new(config.cache_max_size_mb),
             pending_cache_id: None,
+            lyrics_client: crate::lyrics::LyricsClient::new(
+                crate::lyrics::LyricsProvider::default(),
+            ),
+            lyrics: None,
             config,
             search_query: String::new(),
             search_scope: crate::youtube::SearchScope::Songs,
@@ -287,6 +314,16 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::KeyPressed { key, modifiers } => self.handle_key_press(&key, modifiers),
+            Message::LyricsEditorAction(action) => {
+                if let Some(state) = &mut self.lyrics {
+                    if let Some(editor) = &mut state.editor {
+                        if !matches!(action, iced::widget::text_editor::Action::Edit(_)) {
+                            editor.perform(action);
+                        }
+                    }
+                }
+                Task::none()
+            }
             Message::SearchInputChanged(query) => {
                 self.search_query = query;
                 self.update_search_history();
@@ -380,6 +417,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::SelectPlaylist(index) => {
+                self.lyrics = None;
                 self.handle_select_playlist(index);
                 Task::none()
             }
@@ -449,6 +487,24 @@ impl MusicPlayer {
                 self.save_session();
                 Task::none()
             }
+            Message::ShowLyrics => {
+                self.handle_show_lyrics();
+                Task::none()
+            }
+            Message::ToggleLyricsSelectMode => {
+                if let Some(state) = &mut self.lyrics {
+                    state.select_mode = !state.select_mode;
+                }
+                Task::none()
+            }
+            Message::LyricsLineClicked(secs) => {
+                self.seek_to_seconds(secs);
+                Task::none()
+            }
+            Message::SelectLyricsProvider(id) => {
+                self.handle_select_lyrics_provider(id);
+                Task::none()
+            }
             Message::SwitchQueueTab(tab) => {
                 self.queue.queue_tab = tab;
                 self.drag.hovered_track = None;
@@ -456,10 +512,18 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::NavigateTo(data) => {
+                self.lyrics = None;
                 self.handle_navigate_to(data);
                 Task::none()
             }
-            Message::NavigateBack => self.handle_navigate_back(),
+            Message::NavigateBack => {
+                if self.lyrics.is_some() {
+                    self.lyrics = None;
+                    Task::none()
+                } else {
+                    self.handle_navigate_back()
+                }
+            }
             Message::NavigateForward => self.handle_navigate_forward(),
             Message::ContextMenuPlayTrack(pos) => {
                 self.context_menu = None;

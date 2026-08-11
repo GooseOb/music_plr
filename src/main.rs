@@ -8,6 +8,7 @@ mod app;
 mod audio;
 mod data;
 mod icons;
+mod lyrics;
 mod mpris;
 mod theme;
 mod types;

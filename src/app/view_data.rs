@@ -39,7 +39,7 @@ pub struct ViewData {
 /// The kind of view currently active. Carries everything that differs between
 /// views: the search `exhausted` flag, the radio label, and the selected
 /// playlist identity.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ViewKind {
     Search {
         exhausted: bool,

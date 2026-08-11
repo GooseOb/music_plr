@@ -3,6 +3,7 @@
 use super::ViewData;
 use crate::{
     app::{interaction::TrackPos, update::operation::CaptureBounds},
+    lyrics::Lyrics,
     types::{QueueTab, Track},
 };
 use iced::Point;
@@ -17,6 +18,7 @@ pub enum BackendResult {
     DownloadError(String),
     SearchError(String),
     ThumbnailsDownloaded(Vec<String>),
+    LyricsFetched(Option<Lyrics>, String),
 }
 
 #[derive(Debug, Clone)]
@@ -68,6 +70,11 @@ pub enum Message {
     ToggleQueue,
     SwitchQueueTab(QueueTab),
     ToggleRepeat,
+    ShowLyrics,
+    ToggleLyricsSelectMode,
+    LyricsLineClicked(f32),
+    SelectLyricsProvider(crate::lyrics::LyricsProvider),
+    LyricsEditorAction(iced::widget::text_editor::Action),
 
     NavigateTo(ViewData),
     NavigateBack,

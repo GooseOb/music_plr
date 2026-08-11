@@ -3,28 +3,27 @@ use iced::{
     Length,
 };
 
-use crate::theme::AppTheme;
+use crate::{app::ViewKind, theme::AppTheme};
 
-use super::{playlist, search, theme, Element, Message, MusicPlayer};
-use crate::app::ViewKind;
+use super::{lyrics, playlist, search, theme, Element, Message, MusicPlayer};
 
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let search_bar = search::view_search_bar(player);
 
-    let content: Element<'a, Message, AppTheme> = match &player.view_data().kind {
-        ViewKind::Search { .. } => search::view_search(player),
-        ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_) => search::view_search_radio(player),
-        ViewKind::Artist { .. } | ViewKind::Album { .. } | ViewKind::PlaylistView { .. } => {
-            search::view_browse(player)
+    let inner: Element<'a, Message, AppTheme> = if player.lyrics.is_some() {
+        lyrics::view_lyrics(player)
+    } else {
+        match &player.view_data().kind {
+            ViewKind::Search { .. } => search::view_search(player),
+            ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_) => search::view_search_radio(player),
+            ViewKind::Artist { .. } | ViewKind::Album { .. } | ViewKind::PlaylistView { .. } => {
+                search::view_browse(player)
+            }
+            ViewKind::Playlist { .. } | ViewKind::Downloads => playlist::view_playlist(player),
         }
-        ViewKind::Playlist { .. } | ViewKind::Downloads => playlist::view_playlist(player),
     };
 
-    let inner = Container::new(content)
-        .width(Length::Fill)
-        .height(Length::Fill);
-
-    let base = Column::with_children(vec![search_bar, inner.into()])
+    let base = Column::with_children(vec![search_bar, inner])
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill);

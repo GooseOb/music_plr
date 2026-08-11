@@ -3,6 +3,7 @@ use super::{
     MprisUpdate, MusicPlayer, ViewData,
 };
 use crate::app::ViewKind;
+use crate::data::JsonStore;
 use tracing::debug;
 
 impl MusicPlayer {
@@ -67,6 +68,10 @@ impl MusicPlayer {
         self.update_mpris_if_dirty();
         self.update_progress_text();
         self.flush_session();
+
+        if self.lyrics.is_some() {
+            self.ensure_lyrics_for_current();
+        }
     }
 
     fn update_mpris_if_dirty(&mut self) {
@@ -244,6 +249,28 @@ impl MusicPlayer {
                 for id in &ids {
                     self.thumbnail_index.mark_downloaded(id);
                 }
+            }
+            BackendResult::LyricsFetched(lyrics, track_id) => {
+                if track_id.is_empty() {
+                    return;
+                }
+                let Some(state) = &mut self.lyrics else {
+                    return;
+                };
+                if state.track_id.as_deref() != Some(track_id.as_str()) {
+                    return;
+                }
+                let id_for_cache = track_id.clone();
+                state.loading = false;
+                state.lyrics = lyrics;
+                state.track_id = Some(track_id);
+                if let Some(lyrics) = &state.lyrics {
+                    let mut cache = crate::data::lyrics_cache::LyricsCache::load();
+                    cache.insert(&id_for_cache, lyrics);
+                } else {
+                    self.notify("No lyrics found for this track.".to_string());
+                }
+                self.sync_lyrics_editor();
             }
         }
     }

@@ -11,6 +11,7 @@ use std::path::PathBuf;
 pub mod cache;
 pub mod config;
 pub mod downloads;
+pub mod lyrics_cache;
 pub mod playlists;
 pub mod search_history;
 pub mod session;

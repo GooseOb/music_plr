@@ -40,6 +40,7 @@ pub const TEXT_SIZE_XS: u32 = 12;
 pub const TEXT_SIZE_SM: u32 = 13;
 pub const TEXT_SIZE_MD: u32 = 15;
 pub const TEXT_SIZE_LG: u32 = 18;
+pub const TEXT_SIZE_XL: u32 = 22;
 
 pub const BUTTON_HEIGHT: f32 = 28.0;
 pub const QUEUE_BTN_WIDTH: f32 = 36.0;

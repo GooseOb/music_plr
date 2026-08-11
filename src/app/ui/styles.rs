@@ -235,24 +235,20 @@ pub fn button_style_panel_item(
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
     move |theme, status| {
         let p = &theme.palette;
-        let bg = match status {
+        let background = match status {
             button::Status::Hovered | button::Status::Pressed => {
-                if active {
-                    p.bg_current
-                } else {
-                    p.bg_hover
-                }
+                Some((if active { p.bg_current } else { p.bg_hover }).into())
             }
             _ => {
                 if active {
-                    p.bg_current.scale_alpha(0.7)
+                    Some(p.bg_current.scale_alpha(0.7).into())
                 } else {
-                    p.bg_secondary
+                    None
                 }
             }
         };
         button::Style {
-            background: Some(bg.into()),
+            background,
             text_color,
             border: border::rounded(theme::RADIUS_MD),
             ..Default::default()
@@ -285,7 +281,6 @@ pub fn button_style_album() -> impl Fn(&AppTheme, button::Status) -> button::Sty
         button::Style {
             background: Some(Color::TRANSPARENT.into()),
             text_color: fg,
-            // border: border::rounded(theme::RADIUS_SM),
             ..Default::default()
         }
     }
