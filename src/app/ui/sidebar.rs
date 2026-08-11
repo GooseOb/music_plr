@@ -18,21 +18,16 @@ fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             .padding([theme::SPACING_XS, theme::SPACING_XL])
             .into();
     }
-    Container::new(Row::new())
-        .width(Length::Fill)
-        .height(0.0)
-        .into()
+    Row::new().into()
 }
 
 fn sidebar_button(row: Row<'_, Message, AppTheme>) -> Button<'_, Message, AppTheme> {
     Button::new(
         row.spacing(theme::SPACING_MD)
-            .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .align_y(alignment::Vertical::Center)
-            .width(Length::Fill),
+            .align_y(alignment::Vertical::Center),
     )
     .width(Length::Fill)
-    .padding(0)
+    .padding([theme::SPACING_SM, theme::SPACING_MD])
 }
 
 #[allow(clippy::too_many_lines)]
@@ -53,7 +48,6 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         )
         .padding(theme::SPACING_XS)
         .style(button_style_nav(can_back))
-        .width(Length::Fill)
         .height(theme::BUTTON_HEIGHT)
         .on_press_maybe(if can_back {
             Some(Message::NavigateBack)
@@ -71,7 +65,6 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         )
         .padding(theme::SPACING_XS)
         .style(button_style_nav(can_forward))
-        .width(Length::Fill)
         .height(theme::BUTTON_HEIGHT)
         .on_press_maybe(if can_forward {
             Some(Message::NavigateForward)
@@ -82,8 +75,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     ])
     .spacing(theme::SPACING_XS)
     .align_y(alignment::Vertical::Center)
-    .padding([theme::SPACING_MD, theme::SPACING_XL])
-    .width(Length::Fill);
+    .padding([theme::SPACING_MD, theme::SPACING_XL]);
 
     let nav_items: Vec<Element<'_, Message, AppTheme>> = vec![
         sidebar_nav_item(
@@ -150,7 +142,6 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
                 .on_input(Message::NewPlaylistNameChanged)
                 .padding([theme::SPACING_SM, theme::SPACING_SM]),
         )
-        .width(Length::Fill)
         .into(),
         Button::new(icons::icon(
             icons::ADD_ICON,
@@ -173,15 +164,10 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             .spacing(theme::SPACING_XS)
             .into(),
         widget::rule::horizontal(1).into(),
-        scrollable(
-            Column::with_children(playlist_items)
-                .spacing(theme::SPACING_XS)
-                .width(Length::Fill),
-        )
-        .id(iced::widget::Id::new("sidebar_playlist_list"))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into(),
+        scrollable(Column::with_children(playlist_items).spacing(theme::SPACING_XS))
+            .id(iced::widget::Id::new("sidebar_playlist_list"))
+            .height(Length::Fill)
+            .into(),
         view_notification(player),
         widget::rule::horizontal(1).into(),
         create_row.into(),
@@ -191,7 +177,6 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
 
     Container::new(sidebar_content)
         .width(theme::SIDEBAR_WIDTH)
-        .height(Length::Fill)
         .style(bg_secondary())
         .into()
 }

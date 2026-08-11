@@ -4,8 +4,12 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::app::{interaction::TrackListKind, ViewKind};
-use crate::{icons, theme::AppTheme, youtube::SearchScope};
+use crate::{
+    app::{interaction::TrackListKind, ViewKind},
+    icons,
+    theme::AppTheme,
+    youtube::SearchScope,
+};
 
 use super::{
     styles::{
@@ -153,24 +157,14 @@ fn view_search_card_tab<'a>(
         .collect();
 
     if cards.is_empty() {
-        if player.view_data().loading {
-            return Container::new(
-                text("Searching...")
-                    .color(player.app_theme.palette.fg_secondary)
-                    .center(),
-            )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .padding(theme::SPACING_XL)
-            .into();
-        }
-        return track_list::empty_state("No results found");
+        return track_list::empty_state(if player.view_data().loading {
+            "Searching..."
+        } else {
+            "No results found"
+        });
     }
 
-    scrollable(Column::with_children(cards))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    scrollable(Column::with_children(cards)).into()
 }
 
 /// A single drill-down card row rendered in the same style as a track row:
@@ -232,10 +226,7 @@ pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme
         view_track_list(tracks, player, TrackListKind::Active, 0)
     };
 
-    Column::with_children([header.into(), track_list])
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    Column::with_children([header.into(), track_list]).into()
 }
 
 pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
@@ -252,11 +243,7 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
         view_track_list(tracks, player, TrackListKind::Active, 0)
     };
 
-    Column::with_children([header.into(), track_list])
-        .spacing(0)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    Column::with_children([header.into(), track_list]).into()
 }
 
 pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
@@ -285,8 +272,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                         ])
                         .spacing(theme::SPACING_SM)
                         .padding([theme::SPACING_XS, theme::SPACING_MD])
-                        .align_y(alignment::Vertical::Center)
-                        .width(Length::Fill),
+                        .align_y(alignment::Vertical::Center),
                     )
                     .width(Length::Fill)
                     .padding(0)
@@ -307,7 +293,6 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
                 ])
                 .align_y(alignment::Vertical::Center),
             )
-            .width(Length::Fill)
             .style(bg_secondary())
             .into()
         })
@@ -319,11 +304,9 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
 
     let content = scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
         .id(iced::widget::Id::new("search_history_list"))
-        .width(Length::Fill)
         .height(dropdown_height);
 
     Container::new(content)
-        .width(Length::Fill)
         .height(dropdown_height)
         .style(bg_secondary())
         .into()

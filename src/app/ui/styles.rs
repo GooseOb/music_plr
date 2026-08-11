@@ -27,13 +27,6 @@ pub fn bg_overlay() -> impl Fn(&AppTheme) -> container::Style + 'static {
     }
 }
 
-pub fn bg_transparent() -> impl Fn(&AppTheme) -> container::Style + 'static {
-    |_| container::Style {
-        background: None,
-        ..Default::default()
-    }
-}
-
 pub fn bg_popup() -> impl Fn(&AppTheme) -> container::Style + 'static {
     move |theme| container::Style {
         background: Some(theme.palette.bg_secondary.into()),

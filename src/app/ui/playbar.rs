@@ -159,7 +159,6 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         .align_y(alignment::Vertical::Center)
         .padding([theme::SPACING_LG, theme::SPACING_XL]),
     )
-    .width(Length::Fill)
     .style(bg_tertiary())
     .into()
 }

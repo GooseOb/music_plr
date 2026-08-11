@@ -187,8 +187,7 @@ fn view_synced<'a>(
     scrollable(
         Column::with_children(lines)
             .spacing(theme::SPACING_SM)
-            .padding(theme::SPACING_LG)
-            .width(Length::Fill),
+            .padding(theme::SPACING_LG),
     )
     .into()
 }

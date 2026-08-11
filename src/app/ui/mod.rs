@@ -1,9 +1,8 @@
 use crate::theme::{self, AppTheme};
 
 use iced::{
-    alignment,
-    widget::{self, Column, Container, Row, Stack},
-    Element, Length,
+    widget::{self, Column, Row, Stack},
+    Element,
 };
 
 use super::{ContextMenuState, Message, MusicPlayer};
@@ -26,24 +25,20 @@ pub use track_list::TRACK_LIST_ID;
 use track_list::view_track_list;
 
 pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let main_content = content::view_main_content(player);
-    let sidebar = sidebar::view_sidebar(player);
-    let queue = if player.show_queue {
-        queue::view_queue_panel(player)
-    } else {
-        Container::new(Row::new()).width(0.0).into()
+    let mut body = vec![
+        sidebar::view_sidebar(player),
+        content::view_main_content(player),
+    ];
+    if player.show_queue {
+        body.push(queue::view_queue_panel(player))
     };
 
-    let body = Row::with_children([sidebar, main_content, queue])
-        .height(Length::Fill)
-        .align_y(alignment::Vertical::Top);
+    let layout = Column::with_children([
+        Row::with_children(body).into(),
+        playbar::view_playbar(player),
+    ]);
 
-    let layout = Column::with_children([body.into(), playbar::view_playbar(player)]).spacing(0);
-
-    let mut stack = Stack::new()
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .push(layout);
+    let mut stack = Stack::new().push(layout);
 
     if player.playlist_picker.is_some() {
         stack = stack.push(overlays::view_playlist_picker(player));

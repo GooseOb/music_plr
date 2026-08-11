@@ -1,7 +1,4 @@
-use iced::{
-    widget::{Column, Container, Row, Stack},
-    Length,
-};
+use iced::widget::{Column, Container, Row, Stack};
 
 use crate::{app::ViewKind, theme::AppTheme};
 
@@ -23,15 +20,9 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
         }
     };
 
-    let base = Column::with_children([search_bar, inner])
-        .spacing(0)
-        .width(Length::Fill)
-        .height(Length::Fill);
+    let base = Column::with_children([search_bar, inner]);
 
-    let mut stack = Stack::new()
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .push(base);
+    let mut stack = Stack::new().push(base);
 
     if player.show_search_history {
         let (input_x, input_width) = player.search_input_geometry();
@@ -45,14 +36,8 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
                 Container::new(Row::new()).width(input_x).into(),
                 dropdown.into(),
             ])
-            .spacing(0)
-            .width(Length::Fill)
-            .height(Length::Fill)
             .into(),
-        ])
-        .spacing(0)
-        .width(Length::Fill)
-        .height(Length::Fill);
+        ]);
 
         stack = stack.push(positioned);
     }

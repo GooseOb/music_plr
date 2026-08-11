@@ -12,8 +12,8 @@ use crate::{
 
 use super::{
     styles::{
-        bg_overlay, bg_popup, bg_secondary, bg_transparent, button_style_danger,
-        button_style_popup_item, fg_secondary,
+        bg_overlay, bg_popup, bg_secondary, button_style_danger, button_style_popup_item,
+        fg_secondary,
     },
     theme, ContextMenuState, Message, MusicPlayer,
 };
@@ -120,14 +120,10 @@ pub(super) fn view_context_menu<'a>(
     let overlay = Container::new(column![
         Container::new(Column::new()).height(pos_y),
         row![Container::new(Row::new()).width(pos_x), menu_content]
-    ])
-    .width(Length::Fill)
-    .height(Length::Fill);
+    ]);
 
-    Container::new(MouseArea::new(overlay).on_press(Message::CloseContextMenu))
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(bg_transparent())
+    MouseArea::new(overlay)
+        .on_press(Message::CloseContextMenu)
         .into()
 }
 
@@ -205,7 +201,9 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
     )
 }
 
-pub fn mouse_noop_area(content: Element<'_, Message, AppTheme>) -> Element<'_, Message, AppTheme> {
+pub fn no_click_propagation(
+    content: Element<'_, Message, AppTheme>,
+) -> Element<'_, Message, AppTheme> {
     MouseArea::new(content).on_press(Message::Noop).into()
 }
 
@@ -213,21 +211,11 @@ fn view_dialog(
     dialog: Container<'_, Message, AppTheme>,
     close_msg: Message,
 ) -> Element<'_, Message, AppTheme> {
-    let dialog = Container::new(dialog).style(bg_popup());
+    let dialog = no_click_propagation(Container::new(dialog).style(bg_popup()).into());
 
-    Container::new(
-        MouseArea::new(
-            Container::new(mouse_noop_area(dialog.into()))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center(Length::Fill),
-        )
-        .on_press(close_msg),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(bg_overlay())
-    .into()
+    Container::new(MouseArea::new(Container::new(dialog).center(Length::Fill)).on_press(close_msg))
+        .style(bg_overlay())
+        .into()
 }
 
 pub(super) fn view_delete_confirm() -> Element<'static, Message, AppTheme> {

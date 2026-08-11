@@ -5,7 +5,7 @@ use iced::{
 };
 
 use crate::{
-    app::{interaction::TrackListKind, ViewKind},
+    app::{interaction::TrackListKind, ui::track_list::empty_state, ViewKind},
     icons,
     theme::AppTheme,
     types::Track,
@@ -69,36 +69,26 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
             Row::new().into()
         }
     } else {
-        Container::new(text("Select a playlist from the sidebar").style(fg_secondary()))
-            .padding(theme::SPACING_XL)
-            .into()
+        empty_state("Select a playlist from the sidebar")
     };
 
     let track_list = if is_downloads {
         let tracks: &[Track] = &player.view_data().tracks;
         if tracks.is_empty() {
-            Container::new(text("No downloaded tracks").style(fg_secondary()))
-                .padding(theme::SPACING_XL)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
+            empty_state("No downloaded tracks")
         } else {
             view_track_list(tracks, player, TrackListKind::Active, 0)
         }
-    } else if let Some(idx) = player.view_data().selected_playlist_id() {
-        if let Some(pl) = player.playlists.playlists.get(idx) {
+    } else {
+        let playlist = player
+            .view_data()
+            .selected_playlist_id()
+            .and_then(|idx| player.playlists.playlists.get(idx));
+        if let Some(pl) = playlist {
             view_track_list(&pl.tracks, player, TrackListKind::Active, 0)
         } else {
-            Container::new(Row::new())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
+            unreachable!("No playlist selected, but not in downloads view")
         }
-    } else {
-        Container::new(Row::new())
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
     };
 
     Column::with_children([
@@ -106,7 +96,5 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
         track_list,
     ])
     .spacing(0)
-    .width(Length::Fill)
-    .height(Length::Fill)
     .into()
 }

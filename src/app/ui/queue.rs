@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{rule, text, Button, Column, Container, Id, MouseArea, Row},
+    widget::{rule, scrollable, text, Button, Column, Container, Id, MouseArea, Row},
     Element, Length,
 };
 
@@ -13,9 +13,7 @@ use crate::{
 
 use super::{
     styles::{bg_secondary, button_style_panel_item, fg_secondary},
-    track_list::{
-        empty_state, scrollable_list, section_header, track_row, track_row_layout, view_track_list,
-    },
+    track_list::{empty_state, section_header, track_row, track_row_layout, view_track_list},
     Message, MusicPlayer,
 };
 
@@ -34,45 +32,27 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
         QueueTab::RecentlyPlayed => view_recently_played_tab(player),
     };
 
-    Container::new(
-        Column::with_children([tab_bar.into(), body])
-            .spacing(0)
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .width(queue_width)
-    .height(Length::Fill)
-    .style(bg_secondary())
-    .into()
+    Container::new(Column::with_children([tab_bar.into(), body]))
+        .width(queue_width)
+        .style(bg_secondary())
+        .into()
 }
 
 fn view_queue_tabs(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let queue_item = queue_tab(
-        player,
-        "Queue",
-        player.queue.queue_tab == QueueTab::Queue,
-        Message::SwitchQueueTab(QueueTab::Queue),
-    );
-    let recent_item = queue_tab(
-        player,
-        "Recently played",
-        player.queue.queue_tab == QueueTab::RecentlyPlayed,
-        Message::SwitchQueueTab(QueueTab::RecentlyPlayed),
-    );
-
-    Row::with_children([queue_item, recent_item])
-        .spacing(0)
-        .width(Length::Fill)
-        .into()
+    Row::with_children([
+        queue_tab(player, "Queue", QueueTab::Queue),
+        queue_tab(player, "Recently played", QueueTab::RecentlyPlayed),
+    ])
+    .into()
 }
 
 fn queue_tab<'a>(
     player: &'a MusicPlayer,
     label: &'a str,
-    active: bool,
-    on: Message,
+    queue_tab: QueueTab,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
+    let active = player.queue.queue_tab == queue_tab;
 
     let icon_color = if active { p.accent } else { p.fg_muted };
     let text_color = if active { p.fg } else { p.fg_secondary };
@@ -87,10 +67,9 @@ fn queue_tab<'a>(
         .align_y(alignment::Vertical::Center)
         .width(Length::Fill),
     )
-    .width(Length::Fill)
     .padding(0)
     .style(button_style_panel_item(active, text_color))
-    .on_press(on)
+    .on_press(Message::SwitchQueueTab(queue_tab))
     .into()
 }
 
@@ -159,10 +138,7 @@ fn view_now_playing_row<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let inner = track_row_layout(Row::new().into(), track, player, false);
 
-    Container::new(inner)
-        .width(Length::Fill)
-        .height(theme::ROW_HEIGHT)
-        .into()
+    Container::new(inner).height(theme::ROW_HEIGHT).into()
 }
 
 fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
@@ -178,7 +154,9 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
         .map(|(i, track)| view_recently_played_row(track, i, player))
         .collect();
 
-    scrollable_list(QUEUE_RECENT_LIST_ID, items)
+    scrollable(Column::with_children(items))
+        .id(QUEUE_RECENT_LIST_ID)
+        .into()
 }
 
 fn view_recently_played_row<'a>(

@@ -92,15 +92,9 @@ pub(super) fn view_track_list<'a>(
         }
     }
 
-    Container::new(
-        scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
-            .id(list.scrollable_id())
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+    scrollable(Column::with_children(items))
+        .id(list.scrollable_id())
+        .into()
 }
 
 pub(super) fn leading_control<'a>(
@@ -282,7 +276,6 @@ pub(super) fn track_row<'a>(
     bg: Color,
 ) -> Container<'a, Message, AppTheme> {
     Container::new(content)
-        .width(Length::Fill)
         .height(theme::ROW_HEIGHT)
         .style(move |_: &AppTheme| container::Style {
             background: Some(bg.into()),
@@ -290,29 +283,10 @@ pub(super) fn track_row<'a>(
         })
 }
 
-/// An empty-state message centered in the available space.
 pub(super) fn empty_state(msg: &str) -> Element<'_, Message, AppTheme> {
     Container::new(text(msg).style(fg_secondary()).center())
-        .width(Length::Fill)
-        .height(Length::Fill)
         .padding(theme::SPACING_XL)
         .into()
-}
-
-/// A scrollable column of pre-built elements with a stable id.
-pub(super) fn scrollable_list(
-    id: Id,
-    items: Vec<Element<Message, AppTheme>>,
-) -> Element<Message, AppTheme> {
-    Container::new(
-        scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
-            .id(id)
-            .width(Length::Fill)
-            .height(Length::Fill),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
 }
 
 /// A centered section header (e.g. "NOW PLAYING", "UP NEXT").
@@ -327,6 +301,5 @@ pub(super) fn section_header<'a>(
             .width(Length::Fill)
             .center(),
     )
-    .width(Length::Fill)
     .padding([theme::SPACING_SM, theme::SPACING_MD])
 }
