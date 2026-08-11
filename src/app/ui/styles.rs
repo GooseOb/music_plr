@@ -236,10 +236,16 @@ pub fn button_style_panel_item(
     move |theme, status| {
         let p = &theme.palette;
         let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-            _ => {
+            button::Status::Hovered | button::Status::Pressed => {
                 if active {
                     p.bg_current
+                } else {
+                    p.bg_hover
+                }
+            }
+            _ => {
+                if active {
+                    p.bg_current.scale_alpha(0.7)
                 } else {
                     p.bg_secondary
                 }
