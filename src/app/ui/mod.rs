@@ -34,20 +34,16 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         Container::new(Row::new()).width(0.0).into()
     };
 
-    let body = Row::with_children(vec![sidebar, main_content, queue])
+    let body = Row::with_children([sidebar, main_content, queue])
         .height(Length::Fill)
         .align_y(alignment::Vertical::Top);
 
-    let layout = Column::with_children(vec![body.into(), playbar::view_playbar(player)]).spacing(0);
-
-    let main = Container::new(layout)
-        .width(Length::Fill)
-        .height(Length::Fill);
+    let layout = Column::with_children([body.into(), playbar::view_playbar(player)]).spacing(0);
 
     let mut stack = Stack::new()
         .width(Length::Fill)
         .height(Length::Fill)
-        .push(main);
+        .push(layout);
 
     if player.playlist_picker.is_some() {
         stack = stack.push(overlays::view_playlist_picker(player));

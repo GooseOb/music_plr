@@ -43,15 +43,11 @@ pub(super) fn view_lyrics<'a>(player: &'a MusicPlayer) -> Element<'a, Message, A
         }
     };
 
-    Column::with_children(vec![
-        Container::new(body)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into(),
+    Column::with_children([
+        Container::new(body).height(Length::Fill).into(),
         view_bottom_controls(player, is_select_mode).into(),
     ])
     .spacing(theme::SPACING_MD)
-    .padding(theme::SPACING_LG)
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
@@ -86,7 +82,8 @@ fn view_bottom_controls(player: &MusicPlayer, is_select_mode: bool) -> Row<'_, M
 
     let provider_row = view_provider_selector(player);
 
-    Row::with_children(vec![select_toggle.into(), provider_row])
+    Row::with_children([select_toggle.into(), provider_row])
+        .padding(theme::SPACING_SM)
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)
         .width(Length::Fill)

@@ -35,7 +35,7 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
     };
 
     Container::new(
-        Column::with_children(vec![tab_bar.into(), body])
+        Column::with_children([tab_bar.into(), body])
             .spacing(0)
             .width(Length::Fill)
             .height(Length::Fill),
@@ -60,7 +60,7 @@ fn view_queue_tabs(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         Message::SwitchQueueTab(QueueTab::RecentlyPlayed),
     );
 
-    Row::with_children(vec![queue_item, recent_item])
+    Row::with_children([queue_item, recent_item])
         .spacing(0)
         .width(Length::Fill)
         .into()
@@ -78,7 +78,7 @@ fn queue_tab<'a>(
     let text_color = if active { p.fg } else { p.fg_secondary };
 
     Button::new(
-        Row::with_children(vec![
+        Row::with_children([
             icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_SM).into(),
             text(label).color(text_color).into(),
         ])
@@ -133,7 +133,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         view_track_list(upcoming, player, TrackListKind::Queue, offset)
     };
 
-    Column::with_children(vec![
+    Column::with_children([
         now_playing_header.into(),
         now_playing_row,
         rule::horizontal(1)

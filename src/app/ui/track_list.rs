@@ -197,7 +197,7 @@ pub(super) fn inner_row_layout<'a>(
     }
     let title_el = text(title).size(theme::TEXT_SIZE_MD).width(Length::Fill);
     children.push(match subtitle {
-        Some(sub) => Column::with_children(vec![
+        Some(sub) => Column::with_children([
             title_el.into(),
             text(sub)
                 .size(theme::TEXT_SIZE_SM)

@@ -22,7 +22,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
     let is_downloads = matches!(player.view_data().kind, ViewKind::Downloads);
 
     let header: Element<'a, Message, AppTheme> = if is_downloads {
-        Row::with_children(vec![
+        Row::with_children([
             icons::icon(icons::DOWNLOAD_ICON, p.fg_muted, theme::ICON_SIZE_MD).into(),
             text("Downloaded tracks").style(fg_secondary()).into(),
         ])
@@ -32,14 +32,14 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
         .into()
     } else if let Some(idx) = player.view_data().selected_playlist_id() {
         if let Some(pl) = player.playlists.playlists.get(idx) {
-            Row::with_children(vec![
+            Row::with_children([
                 text_input(&pl.name, player.view_data().playlist_name())
                     .on_input(Message::RenamePlaylist)
                     .padding([theme::SPACING_SM, theme::SPACING_MD])
                     .width(Length::Fill)
                     .into(),
                 Button::new(
-                    Row::with_children(vec![
+                    Row::with_children([
                         icons::icon(icons::FOLDER_ICON, Color::WHITE, theme::ICON_SIZE_SM).into(),
                         text("Add local")
                             .align_y(alignment::Vertical::Center)
@@ -101,7 +101,7 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
             .into()
     };
 
-    Column::with_children(vec![
+    Column::with_children([
         Container::new(header).width(Length::Fill).into(),
         track_list,
     ])

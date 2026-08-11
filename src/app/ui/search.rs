@@ -62,12 +62,12 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
         .spacing(theme::SPACING_XS)
         .wrap();
 
-    let controls = Row::with_children(vec![input, search_btn])
+    let controls = Row::with_children([input, search_btn])
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center);
 
     Container::new(
-        Column::with_children(vec![controls.into(), scope_row.into()])
+        Column::with_children([controls.into(), scope_row.into()])
             .spacing(theme::SPACING_SM)
             .padding([theme::SPACING_LG, theme::SPACING_XL]),
     )
@@ -232,7 +232,7 @@ pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme
         view_track_list(tracks, player, TrackListKind::Active, 0)
     };
 
-    Column::with_children(vec![header.into(), track_list])
+    Column::with_children([header.into(), track_list])
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -252,7 +252,7 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
         view_track_list(tracks, player, TrackListKind::Active, 0)
     };
 
-    Column::with_children(vec![header.into(), track_list])
+    Column::with_children([header.into(), track_list])
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill)
@@ -277,9 +277,9 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
         .enumerate()
         .map(|(i, q)| {
             Container::new(
-                Row::with_children(vec![
+                Row::with_children([
                     Button::new(
-                        Row::with_children(vec![
+                        Row::with_children([
                             icons::icon(icons::SEARCH_ICON, p.fg_muted, theme::ICON_SIZE_SM).into(),
                             text(q).size(theme::TEXT_SIZE_SM).into(),
                         ])

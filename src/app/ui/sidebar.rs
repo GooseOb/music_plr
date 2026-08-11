@@ -42,7 +42,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     let can_back = player.can_navigate_back();
     let can_forward = player.can_navigate_forward();
 
-    let nav_buttons = Row::with_children(vec![
+    let nav_buttons = Row::with_children([
         Button::new(
             Container::new(icons::icon(
                 icons::BACK_ICON,
@@ -122,7 +122,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             let icon_color = if is_interacting { p.accent } else { p.fg_muted };
             let text_color = if is_interacting { p.fg } else { p.fg_secondary };
 
-            sidebar_button(Row::with_children(vec![
+            sidebar_button(Row::with_children([
                 icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_MD).into(),
                 text(&pl.name).color(text_color).into(),
                 iced::widget::right(text(pl.tracks.len()).color(p.fg_secondary)).into(),
@@ -144,7 +144,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         })
         .collect();
 
-    let create_row = Row::with_children(vec![
+    let create_row = Row::with_children([
         Container::new(
             text_input("New playlist name", &player.playlist_create_name)
                 .on_input(Message::NewPlaylistNameChanged)
@@ -166,7 +166,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .spacing(theme::SPACING_SM)
     .padding([theme::SPACING_SM, theme::SPACING_MD]);
 
-    let sidebar_content = Column::with_children(vec![
+    let sidebar_content = Column::with_children([
         nav_buttons.into(),
         widget::rule::horizontal(1).into(),
         Column::with_children(nav_items)
@@ -211,7 +211,7 @@ fn sidebar_nav_item<'a>(
         _ => icons::MUSIC_ICON,
     };
 
-    sidebar_button(Row::with_children(vec![
+    sidebar_button(Row::with_children([
         icons::icon(icon_name, icon_color, theme::ICON_SIZE_MD).into(),
         text(name).color(text_color).into(),
     ]))

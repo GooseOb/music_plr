@@ -23,21 +23,16 @@ pub(super) fn view_context_menu<'a>(
     menu: &'a ContextMenuState,
     p: &'a Palette,
 ) -> Element<'a, Message, AppTheme> {
-    let pos_x = menu.position.0;
-    let pos_y = menu.position.1;
+    let (pos_x, pos_y) = menu.position;
 
     let items: Vec<Element<'_, Message, AppTheme>> = {
-        let mut v: Vec<Element<'_, Message, AppTheme>> = vec![];
-
-        v.push(
-            menu_item(
-                "Play",
-                icons::PLAY_ICON,
-                p,
-                Message::ContextMenuPlayTrack(menu.pos),
-            )
-            .into(),
-        );
+        let mut v: Vec<Element<'_, Message, AppTheme>> = vec![menu_item(
+            "Play",
+            icons::PLAY_ICON,
+            p,
+            Message::ContextMenuPlayTrack(menu.pos),
+        )
+        .into()];
 
         if menu.is_youtube {
             v.push(
@@ -144,7 +139,7 @@ fn menu_item<'a>(
 ) -> Container<'a, Message, AppTheme> {
     Container::new(
         Button::new(
-            Row::with_children(vec![
+            Row::with_children([
                 icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
                 text(label).into(),
             ])
@@ -171,7 +166,7 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
         .enumerate()
         .map(|(i, pl)| {
             Button::new(
-                Row::with_children(vec![text(&pl.name).into()])
+                Row::with_children([text(&pl.name).into()])
                     .spacing(theme::SPACING_SM)
                     .padding([theme::SPACING_SM, theme::SPACING_MD])
                     .align_y(alignment::Vertical::Center)
@@ -193,7 +188,7 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
 
     view_dialog(
         Container::new(
-            Column::with_children(vec![
+            Column::with_children([
                 text("Add to Playlist").size(theme::TEXT_SIZE_LG).into(),
                 Column::with_children(items)
                     .spacing(theme::SPACING_XS)
@@ -247,12 +242,12 @@ pub(super) fn view_delete_confirm() -> Element<'static, Message, AppTheme> {
 
     view_dialog(
         Container::new(
-            Column::with_children(vec![
+            Column::with_children([
                 text("Delete playlist?").size(theme::TEXT_SIZE_LG).into(),
                 text("Tracks will not be deleted.")
                     .style(fg_secondary())
                     .into(),
-                Row::with_children(vec![cancel_btn.into(), delete_btn.into()])
+                Row::with_children([cancel_btn.into(), delete_btn.into()])
                     .spacing(theme::SPACING_XL)
                     .align_y(alignment::Vertical::Center)
                     .into(),

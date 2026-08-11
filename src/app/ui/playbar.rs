@@ -30,7 +30,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         icons::icon(icons::MUSIC_ICON, p.fg_muted, theme::PLAYBAR_THUMBNAIL_SIZE).into()
     };
 
-    let track_info = Column::with_children(vec![
+    let track_info = Column::with_children([
         text(title).into(),
         text(artist)
             .size(theme::TEXT_SIZE_SM)
@@ -52,7 +52,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         .center();
 
     let controls = Container::new(
-        Row::with_children(vec![
+        Row::with_children([
             Button::new(icons::icon(
                 icons::SKIP_BACK_ICON,
                 p.fg,
@@ -84,7 +84,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         .step(0.01f32);
 
     let controls_and_progress =
-        Column::with_children(vec![controls.into(), progress.into()]).spacing(theme::SPACING_XS);
+        Column::with_children([controls.into(), progress.into()]).spacing(theme::SPACING_XS);
 
     let volume_slider = slider(0.0..=1.0, player.volume, Message::SetVolume)
         .width(theme::VOLUME_SLIDER_WIDTH)
@@ -136,7 +136,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     .height(theme::QUEUE_BTN_WIDTH);
 
     Container::new(
-        Row::with_children(vec![
+        Row::with_children([
             Container::new(track_thumb)
                 .width(theme::PLAYBAR_THUMBNAIL_SIZE)
                 .height(theme::PLAYBAR_THUMBNAIL_SIZE)

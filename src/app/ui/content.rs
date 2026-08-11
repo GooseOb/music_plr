@@ -23,7 +23,7 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
         }
     };
 
-    let base = Column::with_children(vec![search_bar, inner])
+    let base = Column::with_children([search_bar, inner])
         .spacing(0)
         .width(Length::Fill)
         .height(Length::Fill);
@@ -37,11 +37,11 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
         let (input_x, input_width) = player.search_input_geometry();
         let dropdown = Container::new(search::view_search_history(player)).width(input_width);
 
-        let positioned = Column::with_children(vec![
+        let positioned = Column::with_children([
             Container::new(Row::new())
                 .height(theme::SEARCH_BAR_HEIGHT)
                 .into(),
-            Row::with_children(vec![
+            Row::with_children([
                 Container::new(Row::new()).width(input_x).into(),
                 dropdown.into(),
             ])
