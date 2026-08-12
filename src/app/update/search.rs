@@ -2,15 +2,9 @@ use super::{mpsc, thread, BackendResult, MusicPlayer, Track, ViewData};
 use crate::app::ViewKind;
 
 impl MusicPlayer {
-    pub fn handle_search_execute(&mut self) {
-        if self.search_query.is_empty() {
-            return;
-        }
-        self.run_search(self.search_query.clone(), self.search_scope);
-    }
-
-    /// Run a fresh search for `query` at `scope`, replacing the Search view.
-    pub fn run_search(&mut self, query: String, scope: crate::youtube::SearchScope) {
+    pub fn run_search(&mut self) {
+        let query = self.search_query.clone();
+        let scope = self.search_scope;
         if query.is_empty() {
             return;
         }
@@ -94,7 +88,7 @@ impl MusicPlayer {
         if index < self.last_filtered_history.len() {
             self.search_query = self.last_filtered_history[index].clone();
             self.show_search_history = false;
-            self.handle_search_execute();
+            self.run_search();
         }
     }
 

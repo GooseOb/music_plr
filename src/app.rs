@@ -291,9 +291,10 @@ impl MusicPlayer {
                 // list doesn't overflow).
                 let capture = iced_runtime::task::widget(update::operation::CaptureBounds::new());
                 if self.drag.drag_active {
-                    return iced::Task::batch([capture, self.handle_drag_update()]);
+                    iced::Task::batch([capture, self.handle_drag_update()])
+                } else {
+                    capture
                 }
-                capture
             }
             Message::LeftButtonReleased => {
                 self.handle_left_release();
@@ -323,16 +324,14 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::SearchExecute => {
-                self.handle_search_execute();
+                self.run_search();
                 Task::none()
             }
             Message::SearchScopeChanged(scope) => {
                 if scope != self.search_scope {
                     self.search_scope = scope;
-                    // Re-run the current query under the new scope (only if
-                    // there is one; otherwise just remember the preference).
                     if !self.search_query.is_empty() {
-                        self.run_search(self.search_query.clone(), scope);
+                        self.run_search();
                     }
                 }
                 Task::none()
