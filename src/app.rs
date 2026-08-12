@@ -330,9 +330,7 @@ impl MusicPlayer {
             Message::SearchScopeChanged(scope) => {
                 if scope != self.search_scope {
                     self.search_scope = scope;
-                    if !self.search_query.is_empty() {
-                        self.run_search();
-                    }
+                    self.run_search();
                 }
                 Task::none()
             }

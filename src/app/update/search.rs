@@ -3,11 +3,11 @@ use crate::app::ViewKind;
 
 impl MusicPlayer {
     pub fn run_search(&mut self) {
-        let query = self.search_query.clone();
-        let scope = self.search_scope;
-        if query.is_empty() {
+        if self.search_query.is_empty() {
             return;
         }
+        let query = self.search_query.clone();
+        let scope = self.search_scope;
 
         // Switch to Search view. `new_search()` returns an empty, non-loading
         // state for the active scope; flip `loading` on and clear the dropdown.
