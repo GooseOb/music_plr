@@ -56,7 +56,6 @@ impl MusicPlayer {
                 *selected_playlist = selected_playlist.map(|sp| sp - 1);
             }
         }
-        self.show_delete_confirm = false;
         self.delete_confirm_index = None;
     }
 

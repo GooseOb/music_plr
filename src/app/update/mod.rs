@@ -1,6 +1,6 @@
 use super::{
-    error, format_duration, mpris, mpsc, warn, BackendResult, ContextMenuState, Message,
-    MprisCommand, MprisUpdate, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData,
+    error, mpris, mpsc, warn, BackendResult, ContextMenuState, Message, MprisCommand, MprisUpdate,
+    MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData,
 };
 pub use crate::types::TrackSource;
 use std::thread;

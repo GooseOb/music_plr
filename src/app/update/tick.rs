@@ -1,6 +1,6 @@
 use super::{
-    error, format_duration, mpris, mpsc, spawn_thumbnail_download, BackendResult, MprisCommand,
-    MprisUpdate, MusicPlayer, ViewData,
+    error, mpris, mpsc, spawn_thumbnail_download, BackendResult, MprisCommand, MprisUpdate,
+    MusicPlayer, ViewData,
 };
 use crate::app::ViewKind;
 use crate::data::JsonStore;
@@ -66,7 +66,6 @@ impl MusicPlayer {
         }
 
         self.update_mpris_if_dirty();
-        self.update_progress_text();
         self.flush_session();
 
         if self.lyrics.is_some() {
@@ -181,13 +180,6 @@ impl MusicPlayer {
                 self.install_results(idx, tracks);
             }
         }
-    }
-
-    pub fn update_progress_text(&mut self) {
-        let elapsed = (self.progress * self.duration) as u32;
-        self.elapsed_text = format_duration(elapsed);
-        let total = self.duration as u32;
-        self.total_text = format_duration(total);
     }
 
     pub fn process_result(&mut self, result: BackendResult) {

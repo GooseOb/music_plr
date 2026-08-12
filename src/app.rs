@@ -7,7 +7,6 @@ use crate::{
     mpris::{self, MprisCommand, MprisUpdate},
     theme::{AppTheme, Palette},
     types::{PlayQueue, Track},
-    util::format_duration,
 };
 use iced::{Subscription, Task};
 use std::{
@@ -80,8 +79,6 @@ pub struct MusicPlayer {
     pub progress: f32,
     pub duration: f32,
     pub track_loading: bool,
-    pub elapsed_text: String,
-    pub total_text: String,
 
     pub download_registry: DownloadRegistry,
 
@@ -91,7 +88,6 @@ pub struct MusicPlayer {
     pub playlists: PlaylistStore,
     pub playlist_create_name: String,
     pub playlist_picker: Option<PlaylistPicker>,
-    pub show_delete_confirm: bool,
     pub delete_confirm_index: Option<usize>,
 
     pub search_history: SearchHistory,
@@ -172,7 +168,6 @@ impl MusicPlayer {
             repeat: false,
             thumbnail_index: crate::data::thumbnails::ThumbnailIndex::load(),
             playlist_picker: None,
-            show_delete_confirm: false,
             delete_confirm_index: None,
             nav_history: vec![ViewData::default()],
             nav_history_pos: 0,
@@ -194,8 +189,6 @@ impl MusicPlayer {
             app_theme: AppTheme::new(Palette::dark()),
             bounds: crate::app::update::operation::CaptureBounds::default(),
             window_width: 1280.0,
-            elapsed_text: String::new(),
-            total_text: String::new(),
             clipboard: Vec::new(),
             last_click: None,
             last_click_time: std::time::Instant::now(),
@@ -204,7 +197,6 @@ impl MusicPlayer {
         player.init_mpris();
         player.restore_session();
         player.resume_playback();
-        player.update_progress_text();
         player
     }
 
@@ -461,19 +453,16 @@ impl MusicPlayer {
             }
             Message::ShowDeleteConfirm(index) => {
                 self.delete_confirm_index = Some(index);
-                self.show_delete_confirm = true;
                 Task::none()
             }
             Message::ConfirmDeletePlaylist => {
                 if let Some(idx) = self.delete_confirm_index {
                     self.handle_delete_playlist(idx);
                 }
-                self.show_delete_confirm = false;
                 self.delete_confirm_index = None;
                 Task::none()
             }
             Message::HideDeleteConfirm => {
-                self.show_delete_confirm = false;
                 self.delete_confirm_index = None;
                 Task::none()
             }

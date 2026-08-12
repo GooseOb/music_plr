@@ -4,7 +4,7 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{icons, theme::AppTheme};
+use crate::{icons, theme::AppTheme, util::format_duration};
 
 use super::{
     shared_components::play_pause_button,
@@ -13,6 +13,15 @@ use super::{
     track_list::thumbnail,
     Message, MusicPlayer,
 };
+
+fn time_text(time: u32) -> Element<'static, Message, AppTheme> {
+    text(format_duration(time))
+        .size(theme::TEXT_SIZE_XS)
+        .style(fg_secondary())
+        .width(theme::TIME_TEXT_WIDTH)
+        .center()
+        .into()
+}
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
@@ -39,17 +48,8 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     ])
     .spacing(2);
 
-    let elapsed_text = text(player.elapsed_text.clone())
-        .size(theme::TEXT_SIZE_XS)
-        .style(fg_secondary())
-        .width(theme::TIME_TEXT_WIDTH)
-        .center();
-
-    let total_text = text(player.total_text.clone())
-        .size(theme::TEXT_SIZE_XS)
-        .style(fg_secondary())
-        .width(theme::TIME_TEXT_WIDTH)
-        .center();
+    let elapsed_text = time_text((player.progress * player.duration) as u32);
+    let total_text = time_text(player.duration as u32);
 
     let controls = Container::new(
         Row::with_children([
