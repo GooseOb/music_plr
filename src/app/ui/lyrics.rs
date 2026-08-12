@@ -1,13 +1,13 @@
 use iced::{
     alignment,
-    widget::{button, scrollable, text, text_editor::Binding, Button, Column, Container, Row},
+    widget::{scrollable, text, text_editor::Binding, Button, Column, Container, Row},
     Color, Element, Length,
 };
 
-use crate::theme::AppTheme;
+use crate::{lyrics::LyricsProvider, theme::AppTheme};
 
 use super::{
-    styles::{button_style_panel_item, fg_secondary},
+    styles::{button_style_panel_item, button_style_scope, fg_secondary},
     theme,
     track_list::empty_state,
     Message, MusicPlayer,
@@ -48,8 +48,6 @@ pub(super) fn view_lyrics<'a>(player: &'a MusicPlayer) -> Element<'a, Message, A
         view_bottom_controls(player, is_select_mode).into(),
     ])
     .spacing(theme::SPACING_MD)
-    .width(Length::Fill)
-    .height(Length::Fill)
     .into()
 }
 
@@ -58,35 +56,15 @@ fn view_bottom_controls(player: &MusicPlayer, is_select_mode: bool) -> Row<'_, M
         text(if is_select_mode { "Deselect" } else { "Select" }).size(theme::TEXT_SIZE_SM),
     )
     .padding([theme::SPACING_XS, theme::SPACING_MD])
-    .style(move |theme: &AppTheme, _| {
-        let p = &theme.palette;
-        button::Style {
-            background: Some(
-                if is_select_mode {
-                    p.accent
-                } else {
-                    p.bg_secondary
-                }
-                .into(),
-            ),
-            text_color: if is_select_mode {
-                Color::BLACK
-            } else {
-                p.fg_secondary
-            },
-            border: iced::border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    })
+    .style(button_style_scope(is_select_mode))
     .on_press(Message::ToggleLyricsSelectMode);
 
-    let provider_row = view_provider_selector(player);
+    let provider_row = view_provider_selector(player.lyrics_client.selected());
 
     Row::with_children([select_toggle.into(), provider_row])
         .padding(theme::SPACING_SM)
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)
-        .width(Length::Fill)
 }
 
 fn view_select_editor(
@@ -110,49 +88,29 @@ fn view_select_editor(
         .style(|theme: &AppTheme, _| {
             let p = &theme.palette;
             iced::widget::text_editor::Style {
-                background: iced::Background::Color(Color::TRANSPARENT),
+                background: Color::TRANSPARENT.into(),
                 border: iced::Border::default(),
                 placeholder: Color::TRANSPARENT,
                 value: p.fg_secondary,
                 selection: p.accent.scale_alpha(0.4),
             }
         })
-        .height(Length::Fill)
         .into()
 }
 
-fn view_provider_selector<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
-    let selected = player.lyrics_client.selected();
-    let chips: Vec<Element<'a, Message, AppTheme>> = crate::lyrics::LyricsProvider::all()
-        .iter()
-        .map(|provider| {
-            let is_active = *provider == selected;
-            let fg = if is_active { p.accent } else { p.fg_secondary };
-            Button::new(text(provider.name()).size(theme::TEXT_SIZE_SM).color(fg))
-                .padding([theme::SPACING_XS, theme::SPACING_MD])
-                .style(move |_, _| button::Style {
-                    background: Some(
-                        if is_active {
-                            p.bg_current
-                        } else {
-                            p.bg_secondary
-                        }
-                        .into(),
-                    ),
-                    text_color: fg,
-                    border: iced::border::rounded(theme::RADIUS_SM),
-                    ..Default::default()
-                })
-                .on_press(Message::SelectLyricsProvider(*provider))
-                .into()
-        })
-        .collect();
+fn view_provider_selector<'a>(selected_provider: LyricsProvider) -> Element<'a, Message, AppTheme> {
+    let chips = crate::lyrics::LyricsProvider::all().iter().map(|provider| {
+        let is_active = *provider == selected_provider;
+        Button::new(text(provider.name()).size(theme::TEXT_SIZE_SM))
+            .padding([theme::SPACING_XS, theme::SPACING_MD])
+            .style(button_style_scope(is_active))
+            .on_press(Message::SelectLyricsProvider(*provider))
+            .into()
+    });
 
     Row::with_children(chips)
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)
-        .width(Length::Fill)
         .into()
 }
 
@@ -164,25 +122,18 @@ fn view_synced<'a>(
     let position = player.progress * player.duration;
     let active = lyrics.active_index(position);
 
-    let lines: Vec<Element<'a, Message, AppTheme>> = lyrics
-        .timed
-        .iter()
-        .enumerate()
-        .map(|(i, (secs, line))| {
-            let is_active = active == Some(i);
-            let fg = if is_active { p.fg } else { p.fg_secondary };
+    let lines = lyrics.timed.iter().enumerate().map(|(i, (secs, line))| {
+        let is_active = active == Some(i);
+        let fg = if is_active { p.fg } else { p.fg_secondary };
 
-            let centered =
-                Container::new(text(line).size(theme::TEXT_SIZE_XL)).center(Length::Fill);
+        let centered = Container::new(text(line).size(theme::TEXT_SIZE_XL)).center(Length::Fill);
 
-            Button::new(centered)
-                .width(Length::Fill)
-                .padding([theme::SPACING_SM, theme::SPACING_LG])
-                .style(button_style_panel_item(is_active, fg))
-                .on_press(Message::LyricsLineClicked(*secs))
-                .into()
-        })
-        .collect();
+        Button::new(centered)
+            .padding([theme::SPACING_SM, theme::SPACING_LG])
+            .style(button_style_panel_item(is_active, fg))
+            .on_press(Message::LyricsLineClicked(*secs))
+            .into()
+    });
 
     scrollable(
         Column::with_children(lines)

@@ -42,25 +42,14 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
     .into();
 
     // Scope selector: a segmented row of tabs under the search input.
-    let scope_tabs: Vec<Element<'_, Message, AppTheme>> = SearchScope::all()
-        .iter()
-        .map(|&scope| {
-            let selected = player.search_scope == scope;
-            Button::new(
-                text(scope.label())
-                    .size(theme::TEXT_SIZE_SM)
-                    .color(if selected {
-                        Color::WHITE
-                    } else {
-                        player.app_theme.palette.fg_secondary
-                    }),
-            )
+    let scope_tabs = SearchScope::all().iter().map(|&scope| {
+        let selected = player.search_scope == scope;
+        Button::new(text(scope.label()).size(theme::TEXT_SIZE_SM))
             .padding([theme::SPACING_XS, theme::SPACING_SM])
             .style(button_style_scope(selected))
             .on_press(Message::SearchScopeChanged(scope))
             .into()
-        })
-        .collect();
+    });
 
     let scope_row = Row::with_children(scope_tabs)
         .spacing(theme::SPACING_XS)
@@ -141,28 +130,24 @@ fn view_search_card_tab<'a>(
         _ => (&[], |_, _| Message::Noop),
     };
 
-    let cards: Vec<Element<'_, Message, AppTheme>> = items
-        .iter()
-        .enumerate()
-        .map(|(i, c)| {
-            card_row(
-                player,
-                i,
-                &c.id,
-                &c.title,
-                &c.subtitle,
-                open(c.id.clone(), c.title.clone()),
-            )
-        })
-        .collect();
-
-    if cards.is_empty() {
+    if items.is_empty() {
         return track_list::empty_state(if player.view_data().loading {
             "Searching..."
         } else {
             "No results found"
         });
     }
+
+    let cards = items.iter().enumerate().map(|(i, c)| {
+        card_row(
+            player,
+            i,
+            &c.id,
+            &c.title,
+            &c.subtitle,
+            open(c.id.clone(), c.title.clone()),
+        )
+    });
 
     scrollable(Column::with_children(cards)).into()
 }
@@ -258,7 +243,7 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
             .into();
     }
 
-    let items: Vec<Element<'a, Message, AppTheme>> = player
+    let items = player
         .last_filtered_history
         .iter()
         .enumerate()
@@ -295,14 +280,13 @@ pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Me
             )
             .style(bg_secondary())
             .into()
-        })
-        .collect();
+        });
 
     let dropdown_height = (player.last_filtered_history.len() as f32
         * theme::SEARCH_HISTORY_ITEM_HEIGHT)
         .min(theme::SEARCH_DROPDOWN_MAX_HEIGHT);
 
-    let content = scrollable(Column::with_children(items).spacing(0).width(Length::Fill))
+    let content = scrollable(Column::with_children(items))
         .id(iced::widget::Id::new("search_history_list"))
         .height(dropdown_height);
 

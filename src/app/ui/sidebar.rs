@@ -86,7 +86,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         sidebar_nav_item("Downloads", downloads_view_data(player), player),
     ];
 
-    let playlist_items: Vec<Element<'_, Message, AppTheme>> = player
+    let playlist_items = player
         .playlists
         .playlists
         .iter()
@@ -133,8 +133,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             })
             .on_press(Message::SelectPlaylist(i))
             .into()
-        })
-        .collect();
+        });
 
     let create_row = Row::with_children([
         Container::new(

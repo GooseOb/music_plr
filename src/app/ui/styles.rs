@@ -196,7 +196,11 @@ pub fn button_style_scope(
                 }
             }
         };
-        let text_color = if selected { p.fg } else { p.fg_secondary };
+        let text_color = if selected {
+            Color::BLACK
+        } else {
+            p.fg_secondary
+        };
         button::Style {
             background: Some(bg.into()),
             text_color,
@@ -272,7 +276,7 @@ pub fn button_style_album() -> impl Fn(&AppTheme, button::Status) -> button::Sty
             _ => p.fg_secondary,
         };
         button::Style {
-            background: Some(Color::TRANSPARENT.into()),
+            background: None,
             text_color: fg,
             ..Default::default()
         }

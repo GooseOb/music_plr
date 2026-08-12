@@ -148,11 +148,10 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
         return empty_state("No recently played tracks");
     }
 
-    let items: Vec<Element<'_, Message, AppTheme>> = tracks
+    let items = tracks
         .iter()
         .enumerate()
-        .map(|(i, track)| view_recently_played_row(track, i, player))
-        .collect();
+        .map(|(i, track)| view_recently_played_row(track, i, player));
 
     scrollable(Column::with_children(items))
         .id(QUEUE_RECENT_LIST_ID)
