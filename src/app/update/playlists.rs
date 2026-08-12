@@ -1,6 +1,6 @@
 use super::{MusicPlayer, Track, TrackSource, ViewData};
 use crate::{app::ViewKind, data::JsonStore};
-use std::path::Path;
+use std::path::PathBuf;
 
 impl MusicPlayer {
     pub fn handle_create_playlist(&mut self) {
@@ -59,18 +59,19 @@ impl MusicPlayer {
         self.delete_confirm_index = None;
     }
 
-    pub fn handle_add_local_music(&mut self, paths: &[String]) {
+    pub fn handle_add_local_music(&mut self, paths: &[PathBuf]) {
         let mut new_tracks = Vec::new();
-        for path_str in paths {
-            let path = Path::new(path_str);
+
+        for path in paths {
+            let path_str = path.to_string_lossy().to_string();
             if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
-                let duration = crate::util::try_probe_duration(path_str).unwrap_or(0);
+                let duration = crate::util::try_probe_duration(&path_str).unwrap_or(0);
                 new_tracks.push(Track {
                     id: filename.to_string(),
                     title: filename.to_string(),
                     artist: "Unknown Artist".to_string(),
                     duration,
-                    url: path_str.clone(),
+                    url: path_str,
                     source: TrackSource::Local,
                     thumbnail: String::new(),
                     download_path: None,

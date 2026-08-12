@@ -231,7 +231,7 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
     Column::with_children([header.into(), track_list]).into()
 }
 
-pub(super) fn view_search_history<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
+pub(super) fn view_search_history(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.app_theme.palette;
 
     if player.last_filtered_history.is_empty() {

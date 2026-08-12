@@ -30,8 +30,8 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         content::view_main_content(player),
     ];
     if player.show_queue {
-        body.push(queue::view_queue_panel(player))
-    };
+        body.push(queue::view_queue_panel(player));
+    }
 
     let layout = Column::with_children([
         Row::with_children(body).into(),

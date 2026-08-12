@@ -425,11 +425,7 @@ impl MusicPlayer {
                     )
                     .pick_files();
                 if let Some(files) = files {
-                    let paths: Vec<String> = files
-                        .iter()
-                        .map(|p| p.to_string_lossy().to_string())
-                        .collect();
-                    self.handle_add_local_music(&paths);
+                    self.handle_add_local_music(&files);
                 }
                 Task::none()
             }

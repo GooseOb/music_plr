@@ -153,7 +153,7 @@ fn menu_item<'a>(
     .style(bg_secondary())
 }
 
-pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
+pub(super) fn view_playlist_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let items = player
         .playlists
         .playlists
