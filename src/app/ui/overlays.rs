@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{column, row, text, Button, Column, Container, MouseArea, Row},
+    widget::{column, row, text, Button, Column, Container, MouseArea, Row, Space},
     Element, Length,
 };
 
@@ -118,9 +118,11 @@ pub(super) fn view_context_menu<'a>(
     .style(bg_popup());
 
     let overlay = Container::new(column![
-        Container::new(Column::new()).height(pos_y),
-        row![Container::new(Row::new()).width(pos_x), menu_content]
-    ]);
+        Space::new().height(pos_y),
+        row![Space::new().width(pos_x), menu_content]
+    ])
+    .width(Length::Fill)
+    .height(Length::Fill);
 
     MouseArea::new(overlay)
         .on_press(Message::CloseContextMenu)
@@ -144,37 +146,31 @@ fn menu_item<'a>(
             .align_y(alignment::Vertical::Center)
             .width(Length::Fill),
         )
-        .width(Length::Fill)
         .padding(0)
         .style(button_style_popup_item())
         .on_press(on_press),
     )
-    .width(Length::Fill)
     .style(bg_secondary())
 }
 
 pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let playlists: Vec<&crate::data::playlists::Playlist> =
-        player.playlists.playlists.iter().collect();
-
-    let items: Vec<Element<'a, Message, AppTheme>> = playlists
+    let items = player
+        .playlists
+        .playlists
         .iter()
         .enumerate()
         .map(|(i, pl)| {
             Button::new(
                 Row::with_children([text(&pl.name).into()])
                     .spacing(theme::SPACING_SM)
-                    .padding([theme::SPACING_SM, theme::SPACING_MD])
                     .align_y(alignment::Vertical::Center)
                     .width(Length::Fill),
             )
-            .width(Length::Fill)
-            .padding(0)
+            .padding([theme::SPACING_SM, theme::SPACING_MD])
             .style(button_style_popup_item())
             .on_press(Message::AddToPlaylist(i))
             .into()
-        })
-        .collect();
+        });
 
     let cancel_btn = Button::new(
         Container::new(text("Cancel").size(theme::TEXT_SIZE_SM)).center_x(Length::Fill),
@@ -183,20 +179,19 @@ pub(super) fn view_playlist_picker<'a>(player: &'a MusicPlayer) -> Element<'a, M
     .on_press(Message::ClosePicker);
 
     view_dialog(
-        Container::new(
-            Column::with_children([
-                text("Add to Playlist").size(theme::TEXT_SIZE_LG).into(),
-                Column::with_children(items)
-                    .spacing(theme::SPACING_XS)
-                    .width(Length::Fill)
-                    .into(),
-                cancel_btn.into(),
-            ])
-            .align_x(alignment::Horizontal::Center)
-            .spacing(theme::SPACING_SM)
-            .width(theme::DIALOG_WIDTH)
-            .padding(theme::SPACING_MD),
-        ),
+        Column::with_children([
+            text("Add to Playlist").size(theme::TEXT_SIZE_LG).into(),
+            Column::with_children(items)
+                .spacing(theme::SPACING_XS)
+                .width(Length::Fill)
+                .into(),
+            cancel_btn.into(),
+        ])
+        .align_x(alignment::Horizontal::Center)
+        .spacing(theme::SPACING_SM)
+        .width(theme::DIALOG_WIDTH)
+        .padding(theme::SPACING_MD)
+        .into(),
         Message::ClosePicker,
     )
 }
@@ -208,7 +203,7 @@ pub fn no_click_propagation(
 }
 
 fn view_dialog(
-    dialog: Container<'_, Message, AppTheme>,
+    dialog: Element<'_, Message, AppTheme>,
     close_msg: Message,
 ) -> Element<'_, Message, AppTheme> {
     let dialog = no_click_propagation(Container::new(dialog).style(bg_popup()).into());
@@ -229,22 +224,21 @@ pub(super) fn view_delete_confirm() -> Element<'static, Message, AppTheme> {
         .on_press(Message::ConfirmDeletePlaylist);
 
     view_dialog(
-        Container::new(
-            Column::with_children([
-                text("Delete playlist?").size(theme::TEXT_SIZE_LG).into(),
-                text("Tracks will not be deleted.")
-                    .style(fg_secondary())
-                    .into(),
-                Row::with_children([cancel_btn.into(), delete_btn.into()])
-                    .spacing(theme::SPACING_XL)
-                    .align_y(alignment::Vertical::Center)
-                    .into(),
-            ])
-            .width(theme::DIALOG_WIDTH)
-            .align_x(alignment::Horizontal::Center)
-            .spacing(theme::SPACING_LG)
-            .padding(theme::SPACING_XL),
-        ),
+        Column::with_children([
+            text("Delete playlist?").size(theme::TEXT_SIZE_LG).into(),
+            text("Tracks will not be deleted.")
+                .style(fg_secondary())
+                .into(),
+            Row::with_children([cancel_btn.into(), delete_btn.into()])
+                .spacing(theme::SPACING_XL)
+                .align_y(alignment::Vertical::Center)
+                .into(),
+        ])
+        .width(theme::DIALOG_WIDTH)
+        .align_x(alignment::Horizontal::Center)
+        .spacing(theme::SPACING_LG)
+        .padding(theme::SPACING_XL)
+        .into(),
         Message::HideDeleteConfirm,
     )
 }
