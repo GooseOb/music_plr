@@ -11,6 +11,7 @@ pub struct SessionState {
     pub show_queue: bool,
     pub volume: f32,
     pub repeat: bool,
+    pub library_expanded: bool,
     pub lyrics_provider: crate::lyrics::LyricsProvider,
 }
 
@@ -22,6 +23,7 @@ impl Default for SessionState {
             show_queue: false,
             volume: 0.8,
             repeat: false,
+            library_expanded: true,
             lyrics_provider: crate::lyrics::LyricsProvider::default(),
         }
     }
@@ -60,6 +62,7 @@ mod tests {
             show_queue: true,
             volume: 0.5,
             repeat: true,
+            library_expanded: false,
             lyrics_provider: crate::lyrics::LyricsProvider::LrcLib,
         };
         let json = serde_json::to_string(&state).unwrap();
@@ -71,6 +74,7 @@ mod tests {
         assert!(restored.show_queue);
         assert!((restored.volume - 0.5).abs() < f32::EPSILON);
         assert!(restored.repeat);
+        assert!(!restored.library_expanded);
         assert_eq!(
             restored.lyrics_provider,
             crate::lyrics::LyricsProvider::LrcLib

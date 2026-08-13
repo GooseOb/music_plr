@@ -27,6 +27,7 @@ impl MusicPlayer {
             show_queue: self.show_queue,
             volume: self.volume,
             repeat: self.repeat,
+            library_expanded: self.library_expanded,
             lyrics_provider: self.lyrics_client.selected(),
         };
         state.save();
@@ -40,6 +41,7 @@ impl MusicPlayer {
         self.volume = state.volume;
         self.repeat = state.repeat;
         self.audio.set_volume(state.volume);
+        self.library_expanded = state.library_expanded;
 
         let _ = self.restore_nav_entry(&state.data);
 

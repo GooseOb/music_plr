@@ -5,16 +5,18 @@ use iced::{
 };
 
 use crate::{
-    app::{interaction::TrackListKind, ViewKind},
+    app::{interaction::TrackListKind, ui::styles::button_style_result_card, ViewKind},
+    data::library::LibraryKind,
     icons,
     theme::AppTheme,
-    youtube::SearchScope,
+    youtube::{SearchScope, SearchTab},
 };
 
 use super::{
+    shared_components::toggle_bookmark_button,
     styles::{
         bg_secondary, button_style_delete, button_style_list_item, button_style_primary,
-        button_style_result_card, button_style_scope, fg_secondary,
+        button_style_scope, fg_secondary,
     },
     theme, track_list, view_track_list, Message, MusicPlayer,
 };
@@ -118,16 +120,16 @@ fn view_search_track_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme>
 /// An Artists/Albums/Playlists tab: the concrete card list, filling the page.
 fn view_search_card_tab<'a>(
     player: &'a MusicPlayer,
-    tab: &'a crate::youtube::SearchTab,
+    tab: &'a SearchTab,
 ) -> Element<'a, Message, AppTheme> {
     // Each card tab shares the same row shape; only the drill-down message
     // differs, so pull out the slice and its click constructor once.
     type CardClick = fn(String, String) -> Message;
-    let (items, open): (&[crate::youtube::CardData], CardClick) = match tab {
-        crate::youtube::SearchTab::Artists(items) => (items, Message::OpenArtist),
-        crate::youtube::SearchTab::Albums(items) => (items, Message::OpenAlbum),
-        crate::youtube::SearchTab::Playlists(items) => (items, Message::OpenPlaylist),
-        _ => (&[], |_, _| Message::Noop),
+    let (items, open, kind): (&[crate::youtube::CardData], CardClick, LibraryKind) = match tab {
+        SearchTab::Artists(items) => (items, Message::OpenArtist, LibraryKind::Artist),
+        SearchTab::Albums(items) => (items, Message::OpenAlbum, LibraryKind::Album),
+        SearchTab::Playlists(items) => (items, Message::OpenPlaylist, LibraryKind::Playlist),
+        _ => (&[], |_, _| Message::Noop, LibraryKind::Artist), // unreachable, but needed for type inference
     };
 
     if items.is_empty() {
@@ -139,6 +141,12 @@ fn view_search_card_tab<'a>(
     }
 
     let cards = items.iter().enumerate().map(|(i, c)| {
+        let item = crate::data::library::LibraryItem {
+            kind,
+            id: c.id.clone(),
+            title: c.title.clone(),
+            thumbnail: c.thumbnail.clone(),
+        };
         card_row(
             player,
             i,
@@ -146,6 +154,7 @@ fn view_search_card_tab<'a>(
             &c.title,
             &c.subtitle,
             open(c.id.clone(), c.title.clone()),
+            item,
         )
     });
 
@@ -155,6 +164,7 @@ fn view_search_card_tab<'a>(
 /// A single drill-down card row rendered in the same style as a track row:
 /// a leading index number, the item's thumbnail (or a placeholder), and the
 /// title/subtitle. Clickable to drill down into the artist/album/playlist.
+/// A trailing bookmark button toggles library membership.
 fn card_row<'a>(
     player: &'a MusicPlayer,
     index: usize,
@@ -162,6 +172,7 @@ fn card_row<'a>(
     title: &'a str,
     subtitle: &'a str,
     on_press: Message,
+    item: crate::data::library::LibraryItem,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let thumb = player.thumbnail_index.get(id);
@@ -171,6 +182,10 @@ fn card_row<'a>(
         .width(theme::TRACK_LEADING_WIDTH)
         .center();
     let thumb = track_list::thumbnail(p, theme::THUMBNAIL_SIZE, thumb);
+    let saved = player.library.contains(item.kind, &item.id);
+    let toggle =
+        Container::new(toggle_bookmark_button(p, saved).on_press(Message::ToggleLibrarySave(item)))
+            .padding([0.0, theme::SPACING_MD]);
     let inner = track_list::inner_row_layout(
         leading.into(),
         Some(thumb),
@@ -180,17 +195,13 @@ fn card_row<'a>(
         } else {
             Some(subtitle)
         },
-        None,
+        Some(toggle.into()),
     );
-    track_list::track_row(
-        Button::new(inner)
-            .width(Length::Fill)
-            .padding(0)
-            .style(button_style_result_card())
-            .on_press(on_press),
-        p.bg,
-    )
-    .into()
+    let drill = Button::new(inner)
+        .style(button_style_result_card())
+        .padding(0)
+        .on_press(on_press);
+    track_list::track_row(Row::with_children([drill.into()]), p.bg).into()
 }
 
 pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
@@ -200,10 +211,19 @@ pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme
     let label: &str = match &player.view_data().kind {
         ViewKind::Artist { name, .. } => name,
         ViewKind::Album { title, .. } | ViewKind::PlaylistView { title, .. } => title,
-        _ => "",
+        _ => unreachable!("view_browse should only be called for Artist, Album, or Playlist views"),
     };
-    let header = Container::new(text(label).width(Length::Fill).center())
-        .padding([theme::SPACING_SM, theme::SPACING_XL]);
+    let header = Row::with_children([
+        text(label)
+            .size(theme::TEXT_SIZE_LG)
+            .width(Length::Fill)
+            .center()
+            .into(),
+        view_library_button(player),
+    ])
+    .align_y(alignment::Vertical::Center)
+    .spacing(theme::SPACING_SM)
+    .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
     let track_list = if loading && tracks.is_empty() {
         track_list::empty_state("Loading...")
@@ -212,6 +232,17 @@ pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme
     };
 
     Column::with_children([header.into(), track_list]).into()
+}
+
+fn view_library_button(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let p = &player.app_theme.palette;
+    let item = player
+        .current_library_item()
+        .expect("view_library_button should only be called when a library item is present");
+    let saved = player.library.contains(item.kind, &item.id);
+    toggle_bookmark_button(p, saved)
+        .on_press(Message::ToggleLibrarySave(item))
+        .into()
 }
 
 pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {

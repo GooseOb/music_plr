@@ -57,7 +57,7 @@ src/
 ├── audio/growing.rs   # GrowingMediaSource (MediaSource over a still-growing file)
 ├── audio/symphonia_source.rs # SymphoniaStreamingSource (rodio Source + Iterator)
 ├── data/mod.rs        # JsonStore trait + config_path()/cache_path()
-├── data/              # cache, config, downloads, playlists, search_history, session, thumbnails, lyrics_cache
+├── data/              # cache, config, downloads, playlists, library, search_history, session, thumbnails, lyrics_cache
 ├── theme/mod.rs       # Palette + AppTheme
 ├── theme/layout.rs    # Spacing / size / geometry constants (re-exported from theme)
 ├── theme/catalog.rs   # widget::*::Catalog impls for AppTheme

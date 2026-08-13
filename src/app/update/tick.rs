@@ -145,9 +145,7 @@ impl MusicPlayer {
         slot.loading = false;
         slot.selection.clear();
         slot.request_id = 0;
-        self.save_session();
-        self.seed_view_thumbnails(&self.nav_history[idx].clone());
-        self.clear_notification();
+        self.finalize_view(idx);
     }
 
     fn finalize_view(&mut self, idx: usize) {

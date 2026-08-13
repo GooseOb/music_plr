@@ -90,6 +90,9 @@ pub struct MusicPlayer {
     pub playlist_picker: Option<PlaylistPicker>,
     pub delete_confirm_index: Option<usize>,
 
+    pub library: crate::data::library::LibraryStore,
+    pub library_expanded: bool,
+
     pub search_history: SearchHistory,
     pub stream_cache: StreamCache,
     pub pending_cache_id: Option<String>,
@@ -169,6 +172,8 @@ impl MusicPlayer {
             thumbnail_index: crate::data::thumbnails::ThumbnailIndex::load(),
             playlist_picker: None,
             delete_confirm_index: None,
+            library: crate::data::library::LibraryStore::load(),
+            library_expanded: false,
             nav_history: vec![ViewData::default()],
             nav_history_pos: 0,
             request_ids: RequestIdGenerator::default(),
@@ -197,6 +202,11 @@ impl MusicPlayer {
         player.init_mpris();
         player.restore_session();
         player.resume_playback();
+        for item in &player.library.items {
+            if !item.thumbnail.is_empty() {
+                player.thumbnail_index.ensure(&item.id, &item.thumbnail);
+            }
+        }
         player
     }
 
@@ -344,6 +354,22 @@ impl MusicPlayer {
             }
             Message::OpenPlaylist(playlist_id, title) => {
                 self.handle_open_playlist(playlist_id, &title);
+                Task::none()
+            }
+            Message::ToggleLibrarySave(item) => {
+                let saved = self.toggle_library_save(item);
+                self.notify(
+                    if saved {
+                        "Saved to library"
+                    } else {
+                        "Removed from library"
+                    }
+                    .to_string(),
+                );
+                Task::none()
+            }
+            Message::ToggleLibraryExpanded => {
+                self.library_expanded = !self.library_expanded;
                 Task::none()
             }
             Message::SearchLoadMore => {

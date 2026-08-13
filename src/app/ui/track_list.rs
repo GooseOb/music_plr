@@ -283,7 +283,7 @@ pub(super) fn track_row<'a>(
         })
 }
 
-pub(super) fn empty_state(msg: &str) -> Element<'_, Message, AppTheme> {
+pub(super) fn empty_state<'a>(msg: impl text::IntoFragment<'a>) -> Element<'a, Message, AppTheme> {
     Container::new(text(msg).style(fg_secondary()).center())
         .padding(theme::SPACING_XL)
         .into()

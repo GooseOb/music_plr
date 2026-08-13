@@ -3,6 +3,7 @@ use iced::{widget::svg, Color};
 
 pub const ADD_ICON: &[u8] = include_bytes!("../icons/add.svg");
 pub const BACK_ICON: &[u8] = include_bytes!("../icons/back.svg");
+pub const BOOKMARK_ICON: &[u8] = include_bytes!("../icons/bookmark.svg");
 pub const CACHE_ICON: &[u8] = include_bytes!("../icons/cache.svg");
 pub const DELETE_ICON: &[u8] = include_bytes!("../icons/delete.svg");
 pub const DOWNLOAD_ICON: &[u8] = include_bytes!("../icons/download.svg");

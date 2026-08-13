@@ -9,6 +9,7 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 - **Streaming + Caching** — Streams audio via yt-dlp with fully native decoding (symphonia, **no ffmpeg**), caching to disk for instant replay
 - **Downloads** — Download tracks to MP3 via yt-dlp, with a Downloads view and on-row indicators
 - **Playlists** — Create, rename, delete, and organize playlists
+- **Library** — Save albums, artists, and playlists to a persistent Library; toggle save from the card or the view header, and browse saved items from a list in the sidebar
 - **Radio** — Song radio and artist radio based on search results
 - **MPRIS** — Full D-Bus MPRIS interface for media key integration
 - **Queue** — Queue panel with Up Next and Recently Played tabs
@@ -75,6 +76,7 @@ Config is stored at `~/.config/music_plr/config.toml` (managed by [confy](https:
 | Path | Contents |
 |------|----------|
 | `~/.config/music_plr/playlists.json` | Playlists and their tracks |
+| `~/.config/music_plr/library.json` | Saved albums, artists, and playlists |
 | `~/.config/music_plr/downloads.json` | Registry of downloaded tracks |
 | `~/.config/music_plr/search_history.json` | Past search queries |
 | `~/.config/music_plr/session.json` | Last view, queue, and volume |
@@ -105,6 +107,7 @@ src/
 │   ├── config.rs              # confy config model
 │   ├── downloads.rs           # DownloadRegistry
 │   ├── playlists.rs           # PlaylistStore
+│   ├── library.rs            # LibraryStore: saved albums/artists/playlists
 │   ├── search_history.rs      # SearchHistory
 │   ├── session.rs             # SessionState for restore
 │   └── thumbnails.rs          # Thumbnail download cache

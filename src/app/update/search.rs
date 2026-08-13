@@ -1,5 +1,6 @@
 use super::{mpsc, thread, BackendResult, MusicPlayer, Track, ViewData};
 use crate::app::ViewKind;
+use crate::data::library::{LibraryItem, LibraryKind};
 
 impl MusicPlayer {
     pub fn run_search(&mut self) {
@@ -202,5 +203,39 @@ impl MusicPlayer {
             move |tracks| BackendResult::BrowseResults(rid, tracks),
             tx,
         );
+    }
+
+    pub fn current_library_item(&self) -> Option<LibraryItem> {
+        match &self.view_data().kind {
+            ViewKind::Artist { browse_id, name } => Some(LibraryItem {
+                kind: LibraryKind::Artist,
+                id: browse_id.clone(),
+                title: name.clone(),
+                thumbnail: String::new(),
+            }),
+            ViewKind::Album { browse_id, title } => Some(LibraryItem {
+                kind: LibraryKind::Album,
+                id: browse_id.clone(),
+                title: title.clone(),
+                thumbnail: String::new(),
+            }),
+            ViewKind::PlaylistView { playlist_id, title } => Some(LibraryItem {
+                kind: LibraryKind::Playlist,
+                id: playlist_id.clone(),
+                title: title.clone(),
+                thumbnail: String::new(),
+            }),
+            _ => None,
+        }
+    }
+
+    pub fn toggle_library_save(&mut self, item: LibraryItem) -> bool {
+        if self.library.contains(item.kind, &item.id) {
+            self.library.remove(item.kind, &item.id);
+            false
+        } else {
+            self.library.add(item);
+            true
+        }
     }
 }

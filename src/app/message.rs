@@ -43,6 +43,8 @@ pub enum Message {
     OpenArtist(String, String),
     OpenAlbum(String, String),
     OpenPlaylist(String, String),
+    ToggleLibrarySave(crate::data::library::LibraryItem),
+    ToggleLibraryExpanded,
     DeleteSearchHistory(usize),
 
     TrackPressed(TrackPos),

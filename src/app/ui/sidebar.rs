@@ -4,12 +4,95 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{app::ViewData, app::ViewKind, icons, theme::AppTheme};
+use crate::{
+    app::{ViewData, ViewKind},
+    data::library::LibraryItem,
+    icons,
+    theme::AppTheme,
+};
 
 use super::{
-    styles::{bg_secondary, button_style_nav, button_style_primary},
+    shared_components::toggle_bookmark_button,
+    styles::{
+        bg_secondary, button_style_list_item, button_style_nav, button_style_panel_item,
+        button_style_primary, fg_secondary,
+    },
     theme, widget, Message, MusicPlayer,
 };
+
+fn playlist_row<'a>(
+    player: &'a MusicPlayer,
+    index: usize,
+    name: &'a str,
+    track_count: usize,
+    active: bool,
+    dragged_over: bool,
+) -> Element<'a, Message, AppTheme> {
+    let p = &player.app_theme.palette;
+    let interacting = active || dragged_over;
+    let bg_color = if dragged_over {
+        p.bg_current
+    } else if active {
+        p.bg_current.scale_alpha(0.7)
+    } else {
+        p.bg_secondary
+    };
+    let bg_hover = if interacting {
+        p.bg_current
+    } else {
+        p.bg_hover
+    };
+    let icon_color = if interacting { p.accent } else { p.fg_muted };
+    let text_color = if interacting { p.fg } else { p.fg_secondary };
+
+    sidebar_button(Row::with_children([
+        icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_MD).into(),
+        text(name).color(text_color).into(),
+        iced::widget::right(text(track_count).style(fg_secondary())).into(),
+    ]))
+    .style(move |_, status| {
+        let bg = match status {
+            button::Status::Hovered | button::Status::Pressed => bg_hover,
+            _ => bg_color,
+        };
+        button::Style {
+            background: Some(bg.into()),
+            text_color,
+            border: iced::border::rounded(theme::RADIUS_MD),
+            ..Default::default()
+        }
+    })
+    .on_press(Message::SelectPlaylist(index))
+    .into()
+}
+
+fn library_row<'a>(
+    player: &'a MusicPlayer,
+    item: &'a LibraryItem,
+) -> Element<'a, Message, AppTheme> {
+    let p = &player.app_theme.palette;
+    let is_active = matches!(
+        &player.view_data().kind,
+        ViewKind::Artist { browse_id, .. }
+            | ViewKind::Album { browse_id, .. }
+            | ViewKind::PlaylistView { playlist_id: browse_id, .. }
+        if browse_id == &item.id
+    );
+    let text_color = if is_active { p.fg } else { p.fg_secondary };
+    let thumb = player.thumbnail_index.get(&item.id);
+    let thumb = super::track_list::thumbnail(p, theme::THUMBNAIL_SIZE, thumb);
+    let toggle_btn =
+        toggle_bookmark_button(p, true).on_press(Message::ToggleLibrarySave(item.clone()));
+
+    sidebar_button(Row::with_children([
+        thumb,
+        text(&item.title).color(text_color).into(),
+        iced::widget::right(toggle_btn).into(),
+    ]))
+    .style(button_style_list_item(is_active))
+    .on_press(item.open_message())
+    .into()
+}
 
 fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     if let Some(msg) = &player.notification {
@@ -30,6 +113,33 @@ fn sidebar_button(row: Row<'_, Message, AppTheme>) -> Button<'_, Message, AppThe
     .padding([theme::SPACING_SM, theme::SPACING_MD])
 }
 
+fn library_collapsed<'a>(msg: impl text::IntoFragment<'a>) -> Element<'a, Message, AppTheme> {
+    Container::new(text(msg).style(fg_secondary()).size(theme::TEXT_SIZE_SM))
+        .padding([theme::SPACING_XS, theme::SPACING_MD])
+        .into()
+}
+
+fn nav_icon_button(
+    can: bool,
+    icon: &'static [u8],
+    p: &crate::theme::Palette,
+    on_press: Message,
+) -> Element<'static, Message, AppTheme> {
+    Button::new(
+        Container::new(icons::icon(
+            icon,
+            if can { p.fg } else { p.fg_muted },
+            theme::ICON_SIZE_MD,
+        ))
+        .center(Length::Fill),
+    )
+    .padding(theme::SPACING_XS)
+    .style(button_style_nav(can))
+    .height(theme::BUTTON_HEIGHT)
+    .on_press_maybe(if can { Some(on_press) } else { None })
+    .into()
+}
+
 #[allow(clippy::too_many_lines)]
 pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.app_theme.palette;
@@ -38,40 +148,13 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     let can_forward = player.can_navigate_forward();
 
     let nav_buttons = Row::with_children([
-        Button::new(
-            Container::new(icons::icon(
-                icons::BACK_ICON,
-                if can_back { p.fg } else { p.fg_muted },
-                theme::ICON_SIZE_MD,
-            ))
-            .center(Length::Fill),
-        )
-        .padding(theme::SPACING_XS)
-        .style(button_style_nav(can_back))
-        .height(theme::BUTTON_HEIGHT)
-        .on_press_maybe(if can_back {
-            Some(Message::NavigateBack)
-        } else {
-            None
-        })
-        .into(),
-        Button::new(
-            Container::new(icons::icon(
-                icons::FORWARD_ICON,
-                if can_forward { p.fg } else { p.fg_muted },
-                theme::ICON_SIZE_MD,
-            ))
-            .center(Length::Fill),
-        )
-        .padding(theme::SPACING_XS)
-        .style(button_style_nav(can_forward))
-        .height(theme::BUTTON_HEIGHT)
-        .on_press_maybe(if can_forward {
-            Some(Message::NavigateForward)
-        } else {
-            None
-        })
-        .into(),
+        nav_icon_button(can_back, icons::BACK_ICON, p, Message::NavigateBack),
+        nav_icon_button(
+            can_forward,
+            icons::FORWARD_ICON,
+            p,
+            Message::NavigateForward,
+        ),
     ])
     .spacing(theme::SPACING_XS)
     .align_y(alignment::Vertical::Center)
@@ -95,45 +178,55 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             let is_active = matches!(player.view_data().kind, ViewKind::Playlist { .. })
                 && player.view_data().selected_playlist_id() == Some(i);
             let is_dragged_over = player.drag.sidebar_hover_playlist == Some(i);
-            let is_interacting = is_active || is_dragged_over;
-
-            let bg_color = if is_dragged_over {
-                p.bg_current
-            } else if is_active {
-                p.bg_current.scale_alpha(0.7)
-            } else {
-                p.bg_secondary
-            };
-
-            let bg_hover = if is_active || is_dragged_over {
-                p.bg_current
-            } else {
-                p.bg_hover
-            };
-
-            let icon_color = if is_interacting { p.accent } else { p.fg_muted };
-            let text_color = if is_interacting { p.fg } else { p.fg_secondary };
-
-            sidebar_button(Row::with_children([
-                icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_MD).into(),
-                text(&pl.name).color(text_color).into(),
-                iced::widget::right(text(pl.tracks.len()).color(p.fg_secondary)).into(),
-            ]))
-            .style(move |_, status| {
-                let bg = match status {
-                    button::Status::Hovered | button::Status::Pressed => bg_hover,
-                    _ => bg_color,
-                };
-                button::Style {
-                    background: Some(bg.into()),
-                    text_color,
-                    border: iced::border::rounded(theme::RADIUS_MD),
-                    ..Default::default()
-                }
-            })
-            .on_press(Message::SelectPlaylist(i))
-            .into()
+            playlist_row(
+                player,
+                i,
+                &pl.name,
+                pl.tracks.len(),
+                is_active,
+                is_dragged_over,
+            )
         });
+
+    let library_items = player
+        .library
+        .items
+        .iter()
+        .map(|item| library_row(player, item));
+
+    let library_section: Element<'_, Message, AppTheme> = if player.library.items.is_empty() {
+        library_collapsed("Nothing saved yet")
+    } else if player.library_expanded {
+        scrollable(Column::with_children(library_items).spacing(theme::SPACING_XS))
+            .id(iced::widget::Id::new("sidebar_library_list"))
+            .height(Length::Fill)
+            .into()
+    } else {
+        library_collapsed(format!("{} saved", player.library.items.len()))
+    };
+
+    let library_header = Button::new(
+        Row::with_children([
+            icons::icon(icons::BOOKMARK_ICON, p.fg_muted, theme::ICON_SIZE_MD).into(),
+            text("Library").style(fg_secondary()).into(),
+            iced::widget::right(
+                text(if player.library_expanded {
+                    "▾"
+                } else {
+                    "▸"
+                })
+                .color(p.fg_muted),
+            )
+            .into(),
+        ])
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center),
+    )
+    .width(Length::Fill)
+    .padding([theme::SPACING_SM, theme::SPACING_MD])
+    .style(button_style_list_item(false))
+    .on_press(Message::ToggleLibraryExpanded)
+    .into();
 
     let create_row = Row::with_children([
         Container::new(
@@ -165,8 +258,11 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         widget::rule::horizontal(1).into(),
         scrollable(Column::with_children(playlist_items).spacing(theme::SPACING_XS))
             .id(iced::widget::Id::new("sidebar_playlist_list"))
-            .height(Length::Fill)
+            .height(Length::FillPortion(2))
             .into(),
+        widget::rule::horizontal(1).into(),
+        library_header,
+        library_section,
         view_notification(player),
         widget::rule::horizontal(1).into(),
         create_row.into(),
@@ -199,9 +295,7 @@ fn sidebar_nav_item<'a>(
         icons::icon(icon_name, icon_color, theme::ICON_SIZE_MD).into(),
         text(name).color(text_color).into(),
     ]))
-    .style(super::styles::button_style_panel_item(
-        is_active, text_color,
-    ))
+    .style(button_style_panel_item(is_active, text_color))
     .on_press(Message::NavigateTo(target))
     .into()
 }
