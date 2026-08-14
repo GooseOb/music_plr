@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "iced": {
+      "source": "GooseOb/iced-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "a6ac08db7ae4a1777e61e0350e4f5ece0418c1a04c91e2637b852b09a5954586"
+    }
+  }
+}
