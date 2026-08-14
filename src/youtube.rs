@@ -300,11 +300,10 @@ fn search_ytdlp(query: &str, offset: usize, page_size: usize) -> Result<Vec<YouT
     Ok(videos)
 }
 
-pub fn search_more(query: &str, scope: SearchScope, offset: usize) -> Result<Vec<Track>> {
+pub fn search_more(query: &str, offset: usize) -> Result<Vec<Track>> {
     // Pagination only works through yt-dlp, which yields playable tracks.
     // (Scoped non-All searches get their first page from ytmusicapi; further
     // pages fall back to general track results — acceptable for "Load More".)
-    let _ = scope;
     let videos = search_ytdlp(query, offset, crate::theme::SEARCH_PAGE_SIZE)?;
     Ok(videos.into_iter().map(Track::from).collect())
 }

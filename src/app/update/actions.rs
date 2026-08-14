@@ -63,12 +63,11 @@ impl MusicPlayer {
     fn spawn_download_thread(&self, track: Track) {
         let download_dir = self.config.download_dir.clone();
         let tx = self.result_tx.clone();
-        let track_clone = track.clone();
         std::thread::spawn(move || {
             let result = crate::youtube::download(&track.url, &download_dir);
             match result {
                 Ok(path) => {
-                    let _ = tx.send(BackendResult::DownloadComplete(track_clone, path));
+                    let _ = tx.send(BackendResult::DownloadComplete(track, path));
                 }
                 Err(e) => {
                     let _ = tx.send(BackendResult::DownloadError(e.to_string()));

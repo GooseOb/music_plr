@@ -69,12 +69,11 @@ impl MusicPlayer {
         self.view_data_mut().loading = true;
 
         let query = self.search_query.clone();
-        let scope = self.search_scope;
         let offset = count;
         let tx = self.result_tx.clone();
 
         thread::spawn(move || {
-            let tracks = match crate::youtube::search_more(&query, scope, offset) {
+            let tracks = match crate::youtube::search_more(&query, offset) {
                 Ok(tracks) => tracks,
                 Err(e) => {
                     let _ = tx.send(BackendResult::SearchError(e.to_string()));
