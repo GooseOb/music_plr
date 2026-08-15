@@ -2,7 +2,7 @@ use iced::widget::{Column, Container, Row, Stack};
 
 use crate::{app::ViewKind, theme::AppTheme};
 
-use super::{lyrics, playlist, search, theme, Element, Message, MusicPlayer};
+use super::{lyrics, playlist, search, settings, theme, Element, Message, MusicPlayer};
 
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let search_bar = search::view_search_bar(player);
@@ -17,6 +17,7 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
                 search::view_browse(player)
             }
             ViewKind::Playlist { .. } | ViewKind::Downloads => playlist::view_playlist(player),
+            ViewKind::Settings => settings::view_settings(player),
         }
     };
 

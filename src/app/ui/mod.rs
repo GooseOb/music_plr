@@ -14,6 +14,7 @@ mod playbar;
 mod playlist;
 mod queue;
 mod search;
+mod settings;
 mod shared_components;
 mod sidebar;
 mod styles;

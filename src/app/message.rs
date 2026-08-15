@@ -82,6 +82,13 @@ pub enum Message {
     NavigateBack,
     NavigateForward,
 
+    SettingsDownloadDirChanged(String),
+    SettingsMaxHistoryVisibleChanged(String),
+    SettingsMaxHistoryStoredChanged(String),
+    SettingsCacheMaxSizeChanged(String),
+    SettingsMaxRecentlyPlayedChanged(String),
+    SettingsResetDefaults,
+
     ContextMenuPlayTrack(TrackPos),
     ContextMenuStartSongRadio,
     ContextMenuStartArtistRadio,

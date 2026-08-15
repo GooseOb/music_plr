@@ -167,6 +167,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             player,
         ),
         sidebar_nav_item("Downloads", downloads_view_data(player), player),
+        sidebar_nav_item("Settings", ViewData::new_settings(), player),
     ];
 
     let playlist_items = player
@@ -288,6 +289,7 @@ fn sidebar_nav_item<'a>(
     let icon_name: &[u8] = match target.kind {
         ViewKind::Search { .. } => icons::SEARCH_ICON,
         ViewKind::Downloads => icons::DOWNLOAD_ICON,
+        ViewKind::Settings => icons::SETTINGS_ICON,
         _ => icons::MUSIC_ICON,
     };
 

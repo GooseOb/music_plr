@@ -129,7 +129,7 @@ pub struct PlaylistPicker {
 
 impl Default for MusicPlayer {
     fn default() -> Self {
-        let config = config::load_config();
+        let config = config::Config::load();
         Self::new_with(config)
     }
 }
@@ -144,7 +144,7 @@ impl MusicPlayer {
         let (mpris_cmd_tx, mpris_cmd_rx) = mpsc::channel();
 
         let mut player = Self {
-            audio: AudioPlayer::new(config.volume),
+            audio: AudioPlayer::new(0.8),
             search_history: SearchHistory::load(),
             stream_cache: StreamCache::new(config.cache_max_size_mb),
             pending_cache_id: None,
@@ -530,6 +530,30 @@ impl MusicPlayer {
                 }
             }
             Message::NavigateForward => self.handle_navigate_forward(),
+            Message::SettingsDownloadDirChanged(dir) => {
+                self.handle_settings_download_dir(&dir);
+                Task::none()
+            }
+            Message::SettingsMaxHistoryVisibleChanged(v) => {
+                self.handle_settings_max_history_visible(&v);
+                Task::none()
+            }
+            Message::SettingsMaxHistoryStoredChanged(v) => {
+                self.handle_settings_max_history_stored(&v);
+                Task::none()
+            }
+            Message::SettingsCacheMaxSizeChanged(v) => {
+                self.handle_settings_cache_max_size(&v);
+                Task::none()
+            }
+            Message::SettingsMaxRecentlyPlayedChanged(v) => {
+                self.handle_settings_max_recently_played(&v);
+                Task::none()
+            }
+            Message::SettingsResetDefaults => {
+                self.handle_settings_reset_defaults();
+                Task::none()
+            }
             Message::ContextMenuPlayTrack(pos) => {
                 self.context_menu = None;
                 self.handle_play_track(pos);

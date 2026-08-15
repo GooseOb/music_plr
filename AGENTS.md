@@ -6,7 +6,7 @@ YouTube-search music player with local playback and MPRIS, built with iced.
 
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`)
 - **Audio**: rodio + symphonia (native decode, no ffmpeg); **pipeline**: yt-dlp (stream/download)
-- **MPRIS**: zbus 4 (D-Bus, tokio); **Config**: confy + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15
+- **MPRIS**: zbus 4 (D-Bus, tokio); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15
 - **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default; on-disk cache in `data/lyrics_cache.rs`
 - **Logging**: tracing + tracing-subscriber
 
@@ -126,7 +126,7 @@ src/
 - `search()`: scoped search via `ytmusicapi` (`youtube_search.py`); `scope` (`SearchScope`: Songs/Videos/Artists/Albums/Playlists, default Songs) maps to ytmusicapi `filter=` for all scopes. First page from `ytmusicapi`; pagination (`search_more`) falls back to `yt-dlp --flat-playlist` (tracks only). Returns `(Vec<Track>, SearchTab)` where `SearchTab` carries the concrete card lists (Artists/Albums/Playlists) or marks a track tab (Songs/Videos). `browse()` drills into an artist/album/playlist via ytmusicapi `get_artist`/`get_album`/`get_playlist`. `SEARCH_PAGE_SIZE = 10`.
 - `radio_song()`/`radio_artist()`: query-modified search; `download()`/`download_audio()` use `yt-dlp --extract-audio` → MP3.
 - `theme/`: `Palette` + `AppTheme` (`mod.rs`), constants (`layout.rs`, re-exported so `crate::theme::SPACING_SM` still resolves), `Catalog` impls (`catalog.rs`). `SEARCH_PAGE_SIZE` referenced by `youtube.rs` + `app/update/tick.rs`.
-- `ViewKind` (`app/view_data.rs`) selects the active view in `ui/content.rs`, `drag.rs`, `navigation.rs`, `playback.rs`; variants include `Search`, `SongRadio`, `ArtistRadio`, `Artist`, `Album`, `PlaylistView`, `Playlist`, `Downloads`, `Lyrics` (synced/plain lyrics for the current track).
+- `ViewKind` (`app/view_data.rs`) selects the active view in `ui/content.rs`, `drag.rs`, `navigation.rs`, `playback.rs`; variants include `Search`, `SongRadio`, `ArtistRadio`, `Artist`, `Album`, `PlaylistView`, `Playlist`, `Downloads`, `Settings`, `Lyrics` (synced/plain lyrics for the current track).
 - `util.rs`: `format_duration`, `fuzzy_match`, `plural_suffix`, `try_probe_duration`, plus the two index-manipulation routines `remove_at` and `reorder_tracks` (generic, unit-tested in one place).
 
 ## Maintenance
@@ -140,7 +140,7 @@ does not — check it whenever any of the following change:
 - **Keyboard shortcuts** — handled in `app/update/input.rs`. Never document a binding without
   confirming a handler exists; a stale <kbd>Ctrl</kbd>+<kbd>F</kbd> row survived there for a while.
 - **Config fields** — must match `data/config.rs` exactly, including defaults. The file is
-  `config.toml` (confy), not JSON.
+  `config.json` (JsonStore).
 - **On-disk paths** — the `FILE` consts in `data/*.rs` and the dirs in `data/mod.rs`.
-- **External tool requirements** — e.g. ffmpeg was dropped, but the README still listed it.
+- **External tool requirements** — keep the Prerequisites list accurate (yt-dlp, Python 3 + ytmusicapi, D-Bus session bus); ffmpeg is intentionally not required (decoding is native via symphonia).
 - **Features / audio pipeline** — keep the pipeline summary consistent with the one above.

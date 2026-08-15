@@ -129,7 +129,7 @@ mod tests {
         // so it is safe to construct headlessly in tests. The nav history is
         // reset to a deterministic Playlist view so the navigation tests
         // don't depend on on-disk session state.
-        let mut p = MusicPlayer::new_with(config::load_config());
+        let mut p = MusicPlayer::new_with(config::Config::default());
         p.nav_history = vec![ViewData::new_playlist(None, String::new(), None)];
         p.nav_history_pos = 0;
         p

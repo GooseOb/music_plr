@@ -15,6 +15,7 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 - **Queue** — Queue panel with Up Next and Recently Played tabs
 - **Drag & Drop** — Drag tracks between views, into the queue, and onto sidebar playlists
 - **Search History** — Fuzzy-searchable search history with persistent storage and inline delete
+- **Settings** — In-app settings view to edit `config.json` values (download directory, stream cache size, and history/recently-played limits) live, with a reset-to-defaults action
 - **Navigation History** — Back/forward navigation restoring view, results, selection, and scroll
 - **Context Menu** — Right-click menu with Play, Radio, Playlist, Download, and Remove actions; selection-aware
 - **Session Restore** — Reopens with your last view, queue, and volume
@@ -60,12 +61,11 @@ dialogs are dismissed by clicking outside them.
 
 ## Configuration
 
-Config is stored at `~/.config/music_plr/config.toml` (managed by [confy](https://docs.rs/confy)):
+Config is stored as JSON at `~/.config/music_plr/config.json` and is also editable live from the in-app **Settings** view (sidebar → Settings):
 
 | Field | Description | Default |
 |-------|-------------|---------|
 | `download_dir` | Directory for downloaded files | `~/Music/music_plr` |
-| `volume` | Initial playback volume | `0.8` |
 | `cache_max_size_mb` | Max stream cache size, in MB | `1024` |
 | `max_search_history_stored` | Max search history entries kept on disk | `100` |
 | `max_search_history_visible` | Max entries shown in the dropdown | `10` |
@@ -75,6 +75,7 @@ Config is stored at `~/.config/music_plr/config.toml` (managed by [confy](https:
 
 | Path | Contents |
 |------|----------|
+| `~/.config/music_plr/config.json` | App config (download dir, cache size, history limits) |
 | `~/.config/music_plr/playlists.json` | Playlists and their tracks |
 | `~/.config/music_plr/library.json` | Saved albums, artists, and playlists |
 | `~/.config/music_plr/downloads.json` | Registry of downloaded tracks |
@@ -104,7 +105,7 @@ src/
 ├── data/
 │   ├── mod.rs                 # JsonStore trait + config_path()/cache_path()
 │   ├── cache.rs               # StreamCache: LRU file cache with eviction
-│   ├── config.rs              # confy config model
+│   ├── config.rs              # config model (JsonStore)
 │   ├── downloads.rs           # DownloadRegistry
 │   ├── playlists.rs           # PlaylistStore
 │   ├── library.rs            # LibraryStore: saved albums/artists/playlists

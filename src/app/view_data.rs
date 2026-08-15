@@ -65,6 +65,7 @@ pub enum ViewKind {
         playlist_name: String,
     },
     Downloads,
+    Settings,
 }
 
 impl Default for ViewKind {
@@ -125,7 +126,8 @@ impl ViewData {
                     playlist_name: d,
                 },
             ) => a == b && c == d,
-            (ViewKind::Downloads, ViewKind::Downloads) => true,
+            (ViewKind::Downloads, ViewKind::Downloads)
+            | (ViewKind::Settings, ViewKind::Settings) => true,
             _ => false,
         }
     }
@@ -233,6 +235,14 @@ impl ViewData {
         Self {
             kind: ViewKind::Downloads,
             tracks,
+            ..Default::default()
+        }
+    }
+
+    /// Create a `Settings` view.
+    pub fn new_settings() -> Self {
+        Self {
+            kind: ViewKind::Settings,
             ..Default::default()
         }
     }

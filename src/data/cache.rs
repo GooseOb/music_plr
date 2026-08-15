@@ -67,6 +67,12 @@ impl StreamCache {
         self.cache_dir.join(format!("{id}.cache"))
     }
 
+    /// Update the cache size cap (used by the Settings view). Eviction itself
+    /// is deferred to the next `insert`, so this only changes the threshold.
+    pub fn set_max_size_mb(&mut self, mb: u64) {
+        self.max_size_bytes = mb * 1024 * 1024;
+    }
+
     pub fn contains(&self, id: &str) -> bool {
         self.index.entries.contains_key(id) && self.path_for(id).exists()
     }
