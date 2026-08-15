@@ -15,10 +15,18 @@ pub(super) struct SymphoniaStreamingSource {
     current_frame_offset: usize,
     expected_duration: f32,
     track_id: u32,
+    /// Linear sample-scaling gain (1.0 = unchanged). Applied per-sample so
+    /// volume normalization composes with the sink's master volume and the
+    /// source stays seekable (unlike wrapping it in rodio's `Amplify`).
+    gain: f32,
 }
 
 impl SymphoniaStreamingSource {
-    pub(super) fn new(source: GrowingMediaSource, expected_duration: f32) -> Result<Self, String> {
+    pub(super) fn new(
+        source: GrowingMediaSource,
+        expected_duration: f32,
+        gain: f32,
+    ) -> Result<Self, String> {
         use symphonia::core::{
             codecs::{DecoderOptions, CODEC_TYPE_NULL},
             formats::FormatOptions,
@@ -88,6 +96,7 @@ impl SymphoniaStreamingSource {
             current_frame_offset: 0,
             expected_duration,
             track_id,
+            gain,
         })
     }
 
@@ -144,7 +153,10 @@ impl Iterator for SymphoniaStreamingSource {
         }
         let sample = self.buffer.samples()[self.current_frame_offset];
         self.current_frame_offset += 1;
-        Some(sample)
+        // Apply the volume-normalization gain (clamped to i16 range).
+        let scaled =
+            (f32::from(sample) * self.gain).clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16;
+        Some(scaled)
     }
 }
 

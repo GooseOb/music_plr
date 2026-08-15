@@ -80,41 +80,96 @@ impl MusicPlayer {
         // re-fetches for the new track when reopened.
         self.clear_lyrics_for_track_change();
 
+        // Look up any cached normalization gain (1.0 when disabled or unknown).
+        let gain = self.normalization_gain_for(track);
+
+        // The file to analyze for loudness: complete for downloaded/local/
+        // cached tracks, still downloading for a fresh stream.
+        let mut analysis_path: Option<PathBuf> = None;
+        let mut streaming = false;
+
         // Prefer a downloaded file on disk over streaming.
         if let Some(dl_path) = self.download_registry.path_for(&track.url) {
             let path = PathBuf::from(&dl_path);
             if path.exists() {
                 debug!("Playing downloaded file: {}", path.display());
-                let duration = track.duration as f32;
-                self.audio.play_cached(path, duration);
+                self.audio
+                    .play_cached(path.clone(), track.duration as f32, gain);
                 self.pending_cache_id = None;
-                return;
+                analysis_path = Some(path);
             }
         }
 
-        // YouTube tracks go through the stream/cache pipeline (yt-dlp writes
-        // raw AAC-in-M4A straight to the cache file). Local files are played
-        // directly from disk (the `PlayCached` path handles any
-        // symphonia-decodable format uniformly), so they never hit yt-dlp.
-        if track.source == crate::types::TrackSource::YouTube && self.stream_cache.contains(&id) {
-            let path = self.stream_cache.path_for(&id);
-            debug!("Playing from cache: {}", path.display());
-            let duration = track.duration as f32;
-            self.audio.play_cached(path, duration);
-            self.pending_cache_id = None;
-        } else if track.source == crate::types::TrackSource::Local {
-            let path = PathBuf::from(&track.url);
-            debug!("Playing local file: {}", path.display());
-            let duration = track.duration as f32;
-            self.audio.play_cached(path, duration);
-            self.pending_cache_id = None;
-        } else {
-            self.pending_cache_id = Some(id.clone());
-            let cache_path = self.stream_cache.path_for(&id);
-            let duration = track.duration as f32;
-            self.audio
-                .play_stream_cache(&track.url, duration, cache_path);
+        if analysis_path.is_none() {
+            // YouTube tracks go through the stream/cache pipeline (yt-dlp
+            // writes raw AAC-in-M4A straight to the cache file). Local files
+            // are played directly from disk (the `PlayCached` path handles any
+            // symphonia-decodable format uniformly), so they never hit yt-dlp.
+            if track.source == crate::types::TrackSource::YouTube && self.stream_cache.contains(&id)
+            {
+                let path = self.stream_cache.path_for(&id);
+                debug!("Playing from cache: {}", path.display());
+                self.audio
+                    .play_cached(path.clone(), track.duration as f32, gain);
+                self.pending_cache_id = None;
+                analysis_path = Some(path);
+            } else if track.source == crate::types::TrackSource::Local {
+                let path = PathBuf::from(&track.url);
+                debug!("Playing local file: {}", path.display());
+                self.audio
+                    .play_cached(path.clone(), track.duration as f32, gain);
+                self.pending_cache_id = None;
+                analysis_path = Some(path);
+            } else {
+                self.pending_cache_id = Some(id.clone());
+                let cache_path = self.stream_cache.path_for(&id);
+                debug!("Streaming: {}", cache_path.display());
+                self.audio.play_stream_cache(
+                    &track.url,
+                    track.duration as f32,
+                    cache_path.clone(),
+                    gain,
+                );
+                streaming = true;
+                analysis_path = Some(cache_path);
+            }
         }
+
+        // Kick off background loudness analysis so subsequent plays are
+        // normalized. A streaming track's cache is incomplete until it
+        // finishes downloading, so defer analysis to the tick loop.
+        if self.config.volume_normalization && !self.normalization_cache.contains_key(&id) {
+            if streaming {
+                self.pending_normalization_id = Some(id);
+            } else if let Some(path) = analysis_path {
+                self.request_normalization_analysis(&id, path);
+            }
+        }
+    }
+
+    /// Normalization gain for `track`: the cached value when normalization is
+    /// enabled and known, otherwise 1.0 (no change).
+    fn normalization_gain_for(&self, track: &Track) -> f32 {
+        if self.config.volume_normalization {
+            self.normalization_cache
+                .get(&track.id)
+                .copied()
+                .unwrap_or(1.0)
+        } else {
+            1.0
+        }
+    }
+
+    /// Decode `path` in the background to compute its normalization gain and
+    /// report it back via the result channel for caching.
+    pub(super) fn request_normalization_analysis(&self, track_id: &str, path: PathBuf) {
+        let tx = self.result_tx.clone();
+        let id = track_id.to_string();
+        std::thread::spawn(move || {
+            if let Some(gain) = crate::audio::compute_normalization_gain(&path) {
+                let _ = tx.send(crate::app::BackendResult::NormalizationComputed(id, gain));
+            }
+        });
     }
 
     pub fn handle_reorder_queue(

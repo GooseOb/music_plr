@@ -96,6 +96,12 @@ pub struct MusicPlayer {
     pub search_history: SearchHistory,
     pub stream_cache: StreamCache,
     pub pending_cache_id: Option<String>,
+    /// Per-track volume-normalization gains, computed in the background and
+    /// kept in memory (not persisted) so subsequent plays are normalized.
+    pub normalization_cache: std::collections::HashMap<String, f32>,
+    /// Track id whose normalization gain should be analyzed once its stream
+    /// cache finishes downloading.
+    pub pending_normalization_id: Option<String>,
 
     pub clipboard: Vec<Track>,
     pub last_click: Option<TrackPos>,
@@ -148,6 +154,8 @@ impl MusicPlayer {
             search_history: SearchHistory::load(),
             stream_cache: StreamCache::new(config.cache_max_size_mb),
             pending_cache_id: None,
+            normalization_cache: std::collections::HashMap::new(),
+            pending_normalization_id: None,
             lyrics_client: crate::lyrics::LyricsClient::new(
                 crate::lyrics::LyricsProvider::default(),
             ),
@@ -548,6 +556,10 @@ impl MusicPlayer {
             }
             Message::SettingsMaxRecentlyPlayedChanged(v) => {
                 self.handle_settings_max_recently_played(&v);
+                Task::none()
+            }
+            Message::SettingsVolumeNormalizationToggled(enabled) => {
+                self.handle_settings_volume_normalization(enabled);
                 Task::none()
             }
             Message::SettingsResetDefaults => {

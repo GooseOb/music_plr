@@ -1,5 +1,5 @@
 use iced::{
-    widget::{scrollable, text, text_input, Button, Column, Container},
+    widget::{checkbox, scrollable, text, text_input, Button, Column, Container},
     Element,
 };
 
@@ -37,6 +37,15 @@ fn text_input_row<'a>(
 pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let cfg = &player.config;
 
+    let normalize = Container::new(
+        checkbox(cfg.volume_normalization)
+            .label("Normalize volume across tracks")
+            .on_toggle(Message::SettingsVolumeNormalizationToggled)
+            .spacing(theme::SPACING_MD),
+    )
+    .padding([theme::SPACING_MD, theme::SPACING_XL])
+    .into();
+
     let download_dir = text_input_row(
         "Download directory",
         &cfg.download_dir,
@@ -73,6 +82,8 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
     );
 
     let content = Column::with_children([
+        section_header(player, "Playback"),
+        normalize,
         section_header(player, "Storage"),
         download_dir,
         cache_size,

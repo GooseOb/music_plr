@@ -46,6 +46,13 @@ impl MusicPlayer {
                     debug!("Registered cached track: {}", pending);
                 }
                 self.pending_cache_id = None;
+                // The cache file is now complete: analyze it for volume
+                // normalization if a fresh stream was awaiting this.
+                if self.pending_normalization_id.as_deref() == Some(pending.as_str()) {
+                    let path = self.stream_cache.path_for(&pending);
+                    self.request_normalization_analysis(&pending, path);
+                    self.pending_normalization_id = None;
+                }
             }
         }
 
@@ -239,6 +246,9 @@ impl MusicPlayer {
                 for id in &ids {
                     self.thumbnail_index.mark_downloaded(id);
                 }
+            }
+            BackendResult::NormalizationComputed(id, gain) => {
+                self.normalization_cache.insert(id, gain);
             }
             BackendResult::LyricsFetched(lyrics, track_id) => {
                 if track_id.is_empty() {

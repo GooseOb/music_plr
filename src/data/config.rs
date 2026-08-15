@@ -9,6 +9,7 @@ pub struct Config {
     pub max_search_history_stored: usize,
     pub cache_max_size_mb: u64,
     pub max_recently_played: usize,
+    pub volume_normalization: bool,
 }
 
 impl Default for Config {
@@ -19,6 +20,7 @@ impl Default for Config {
             max_search_history_stored: 100,
             cache_max_size_mb: 1024,
             max_recently_played: 50,
+            volume_normalization: false,
         }
     }
 }

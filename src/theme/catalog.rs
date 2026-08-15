@@ -206,6 +206,25 @@ impl widget::text_input::Catalog for AppTheme {
     }
 }
 
+impl widget::checkbox::Catalog for AppTheme {
+    type Class<'a> = widget::checkbox::StyleFn<'a, AppTheme>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        let inner = <iced::Theme as widget::checkbox::Catalog>::default();
+        Box::new(move |theme: &AppTheme, status| {
+            widget::checkbox::Catalog::style(&theme.inner, &inner, status)
+        })
+    }
+
+    fn style(
+        &self,
+        class: &Self::Class<'_>,
+        status: widget::checkbox::Status,
+    ) -> widget::checkbox::Style {
+        class(self, status)
+    }
+}
+
 impl widget::text_editor::Catalog for AppTheme {
     type Class<'a> = widget::text_editor::StyleFn<'a, AppTheme>;
 

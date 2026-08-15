@@ -54,8 +54,9 @@ src/
 ├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, track_list)
 ├── app/update/        # Handlers (mod, actions, drag, input, navigation, playback, playlists, search, selection, session, tick)
 ├── audio/mod.rs       # AudioPlayer: rodio sink + yt-dlp process management
-├── audio/growing.rs   # GrowingMediaSource (MediaSource over a still-growing file)
-├── audio/symphonia_source.rs # SymphoniaStreamingSource (rodio Source + Iterator)
+├── audio/growing.rs   # GrowingMediaSource (the still-growing file reader)
+├── audio/symphonia_source.rs # SymphoniaStreamingSource (rodio Source + Iterator); applies the normalization gain
+├── audio/normalization.rs # compute_normalization_gain: RMS-based loudness analysis via symphonia
 ├── data/mod.rs        # JsonStore trait + config_path()/cache_path()
 ├── data/              # cache, config, downloads, playlists, library, search_history, session, thumbnails, lyrics_cache
 ├── theme/mod.rs       # Palette + AppTheme
@@ -84,7 +85,7 @@ src/
 - **`ContextMenuState`**: `pos: TrackPos`, `target_indices` (selection-aware, indexes `pos.list`), flags `is_youtube`/`is_downloaded`/`in_playlist`. Menu ops apply to all selected if the right-clicked track is selected, else just it; "Play"/radio target only the right-clicked track. `Recent` tracks come from `recently_played` (queue/playlist-specific items suppressed).
 - **`DragState`** (`app/interaction.rs`): cursor/origin/active flags, `pressed_track`/`hovered_track` as `Option<TrackPos>`, `drag_target_list: Option<TrackListKind>`, `sidebar_hover_playlist`; cleaned via `DragState::cleanup()`. Same-list drag reorders (`target == source`), cross-list copies; dragging a selected track moves all selected.
 - **Selection / list access** (`app/update/selection.rs`): `selection`, `toggle_selection`, `clear_selection`, `view_tracks`, `get_track_at`, `track_count` — all keyed by a `TrackListKind`. `Recent` has no selection: `selection` returns `&[]` and mutations are no-ops.
-- **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailsDownloaded` (clears `thumbnail_cache`), `LyricsFetched(Option<Lyrics>, String)` (sets `lyrics`, caches to `lyrics_cache.json`, auto-cleared on track change). 250ms tick drains → `process_result`.
+- **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailsDownloaded` (clears `thumbnail_cache`), `LyricsFetched(Option<Lyrics>, String)` (sets `lyrics`, caches to `lyrics_cache.json`, auto-cleared on track change), `NormalizationComputed(String, f32)` (caches a per-track gain in memory; read on subsequent plays). 250ms tick drains → `process_result`.
 - **MPRIS**: D-Bus thread → `MprisCommand` → `process_mpris_command` (tick); `MprisUpdate` flows main → thread.
 - **Nav history**: full `ViewData` in `NavEntry.data` (no separate `view`/`snapshot`); capped at 20. `push_nav_entry()` snapshots live `view_data`.
 
@@ -120,6 +121,7 @@ src/
 - **Decoding** goes through a custom `SymphoniaStreamingSource` (rodio `Source` + `Iterator<Item=i16>`) wrapping a non-seekable `GrowingMediaSource`. The non-seekable source makes symphonia demux _sequentially_ (no init seek), so it can probe and play a still-growing file without the `SeekError` panic that `rodio::Decoder::new` hits (it hardcodes `byte_len() = None`). The reader blocks at EOF while `writer_alive`, so playback starts within a few KB and runs seamlessly to the end.
 - **Cached/downloaded/local playback** (`PlayCached`) uses the same `SymphoniaStreamingSource` with `writer_alive = None` (complete, seekable file with real `byte_len`), so seeking works on replay. `rodio::Decoder::new` is intentionally avoided for both paths.
 - **Stream completion**: detected when yt-dlp exits AND the copy thread finishes (`writer_alive` false) → `cache_ready` flips, tick loop calls `stream_cache.insert(id)` to register the cache. Track end → sink empties → `stream_finished` → auto-advance (no subprocess exit polling needed).
+- **Volume normalization** (optional, `config.volume_normalization`): each track's loudness gain is computed once via `compute_normalization_gain` (a full symphonia decode → RMS/peak → linear gain, cached in memory keyed by track id). The gain is applied per-sample inside `SymphoniaStreamingSource` (not rodio's `Amplify`, which would break seeking) so it composes with the sink's master `set_volume`. The first play of a track uses gain 1.0; a background thread (`request_normalization_analysis`) fills the cache so subsequent plays are normalized. Fresh streams analyze once `cache_ready` (tick loop), downloaded/local/cached files immediately.
 
 ## YouTube & Key Files
 

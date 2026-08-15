@@ -15,7 +15,8 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 - **Queue** — Queue panel with Up Next and Recently Played tabs
 - **Drag & Drop** — Drag tracks between views, into the queue, and onto sidebar playlists
 - **Search History** — Fuzzy-searchable search history with persistent storage and inline delete
-- **Settings** — In-app settings view to edit `config.json` values (download directory, stream cache size, and history/recently-played limits) live, with a reset-to-defaults action
+- **Settings** — In-app settings view to edit `config.json` values (download directory, stream cache size, history/recently-played limits, and a volume-normalization toggle) live, with a reset-to-defaults action
+- **Volume Normalization** — Optional per-track loudness normalization (RMS-based, computed once via native symphonia decoding and cached) so tracks play at a consistent volume; toggle it from Settings
 - **Navigation History** — Back/forward navigation restoring view, results, selection, and scroll
 - **Context Menu** — Right-click menu with Play, Radio, Playlist, Download, and Remove actions; selection-aware
 - **Session Restore** — Reopens with your last view, queue, and volume
@@ -70,6 +71,7 @@ Config is stored as JSON at `~/.config/music_plr/config.json` and is also editab
 | `max_search_history_stored` | Max search history entries kept on disk | `100` |
 | `max_search_history_visible` | Max entries shown in the dropdown | `10` |
 | `max_recently_played` | Max tracks kept in Recently Played | `50` |
+| `volume_normalization` | Scale each track to a consistent loudness | `false` |
 
 ### Data locations
 
@@ -84,6 +86,8 @@ Config is stored as JSON at `~/.config/music_plr/config.json` and is also editab
 | `~/.cache/music_plr/youtube/` | Streamed audio cache (LRU-evicted) |
 | `~/.cache/music_plr/thumbnails/` | Downloaded track thumbnails |
 | `~/.cache/music_plr/lyrics_cache.json` | Fetched lyrics, keyed by track id |
+
+> Volume-normalization gains are computed in memory each session (not written to disk) and applied on a track's second play onward.
 
 ## Architecture
 
@@ -101,7 +105,8 @@ src/
 ├── audio/
 │   ├── mod.rs                 # AudioPlayer: rodio sink + yt-dlp process management
 │   ├── growing.rs             # MediaSource over a still-downloading cache file
-│   └── symphonia_source.rs    # Streaming symphonia decoder (rodio Source)
+│   ├── symphonia_source.rs    # Streaming symphonia decoder (rodio Source)
+│   └── normalization.rs       # Per-track loudness analysis (symphonia decode)
 ├── data/
 │   ├── mod.rs                 # JsonStore trait + config_path()/cache_path()
 │   ├── cache.rs               # StreamCache: LRU file cache with eviction

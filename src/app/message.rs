@@ -19,6 +19,8 @@ pub enum BackendResult {
     SearchError(String),
     ThumbnailsDownloaded(Vec<String>),
     LyricsFetched(Option<Lyrics>, String),
+    /// A per-track volume-normalization gain computed in the background.
+    NormalizationComputed(String, f32),
 }
 
 #[derive(Debug, Clone)]
@@ -87,6 +89,7 @@ pub enum Message {
     SettingsMaxHistoryStoredChanged(String),
     SettingsCacheMaxSizeChanged(String),
     SettingsMaxRecentlyPlayedChanged(String),
+    SettingsVolumeNormalizationToggled(bool),
     SettingsResetDefaults,
 
     ContextMenuPlayTrack(TrackPos),

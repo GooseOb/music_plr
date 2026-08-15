@@ -46,4 +46,9 @@ impl MusicPlayer {
             .set_max_size_mb(self.config.cache_max_size_mb);
         self.config.save();
     }
+
+    pub fn handle_settings_volume_normalization(&mut self, enabled: bool) {
+        self.config.volume_normalization = enabled;
+        self.config.save();
+    }
 }

@@ -13,7 +13,10 @@ use std::{
 use tracing::{debug, warn};
 
 mod growing;
+mod normalization;
 mod symphonia_source;
+
+pub use normalization::compute_normalization_gain;
 
 use growing::GrowingMediaSource;
 use symphonia_source::SymphoniaStreamingSource;
@@ -40,10 +43,12 @@ enum PlayerCommand {
         url: String,
         duration: f32,
         cache_path: PathBuf,
+        gain: f32,
     },
     PlayCached {
         cache_path: PathBuf,
         duration: f32,
+        gain: f32,
     },
     Pause,
     Resume,
@@ -93,6 +98,10 @@ impl AudioPlayer {
             let mut stream_url: Option<String> = None;
             let mut expected_duration: f32 = 0.0;
             let mut stream_active: bool = false;
+            // The normalization gain for the currently-streaming track, set
+            // when `StreamAndCache` arrives and read by the progressive-decode
+            // block below (which runs outside that match arm's scope).
+            let mut pending_gain: f32 = 1.0;
 
             /// Kill yt-dlp, stop playback, and reset pipeline state.
             /// Deliberately leaves cache files alone — those are owned by
@@ -129,6 +138,7 @@ impl AudioPlayer {
                             url,
                             duration,
                             cache_path,
+                            gain,
                         } => {
                             if let Some(ref current) = stream_url {
                                 if current == &url {
@@ -161,11 +171,13 @@ impl AudioPlayer {
                             stream_url = Some(url);
                             expected_duration = duration;
                             stream_active = true;
+                            pending_gain = gain;
                         }
 
                         PlayerCommand::PlayCached {
                             cache_path,
                             duration,
+                            gain,
                         } => {
                             reset_pipeline!();
 
@@ -174,7 +186,13 @@ impl AudioPlayer {
                                 cache_path
                             );
 
-                            match Self::start_source(&cache_path, None, duration, &state_clone) {
+                            match Self::start_source(
+                                &cache_path,
+                                None,
+                                duration,
+                                &state_clone,
+                                gain,
+                            ) {
                                 Some(active) => output = Some(active),
                                 None => {
                                     warn!("Failed to play cached file {:?}", cache_path);
@@ -282,6 +300,7 @@ impl AudioPlayer {
                                 writer_alive.clone(),
                                 expected_duration,
                                 &state_clone,
+                                pending_gain,
                             );
                         }
                     }
@@ -310,11 +329,15 @@ impl AudioPlayer {
         writer_alive: Option<Arc<AtomicBool>>,
         duration: f32,
         state: &Arc<Mutex<PlayerState>>,
+        gain: f32,
     ) -> Option<(rodio::OutputStream, rodio::Sink)> {
         let file = std::fs::File::open(path).ok()?;
-        let source =
-            SymphoniaStreamingSource::new(GrowingMediaSource { file, writer_alive }, duration)
-                .ok()?;
+        let source = SymphoniaStreamingSource::new(
+            GrowingMediaSource { file, writer_alive },
+            duration,
+            gain,
+        )
+        .ok()?;
         let (stream, handle) = rodio::OutputStream::try_default().ok()?;
         let sink = rodio::Sink::try_new(&handle).ok()?;
         let vol = state.lock().map_or(1.0, |st| st.volume);
@@ -332,18 +355,20 @@ impl AudioPlayer {
         Some((stream, sink))
     }
 
-    pub fn play_stream_cache(&self, url: &str, duration: f32, cache_path: PathBuf) {
+    pub fn play_stream_cache(&self, url: &str, duration: f32, cache_path: PathBuf, gain: f32) {
         let _ = self.cmd_tx.send(PlayerCommand::StreamAndCache {
             url: url.to_string(),
             duration,
             cache_path,
+            gain,
         });
     }
 
-    pub fn play_cached(&self, cache_path: PathBuf, duration: f32) {
+    pub fn play_cached(&self, cache_path: PathBuf, duration: f32, gain: f32) {
         let _ = self.cmd_tx.send(PlayerCommand::PlayCached {
             cache_path,
             duration,
+            gain,
         });
     }
 
