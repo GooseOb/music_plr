@@ -1,4 +1,4 @@
-use super::JsonStore;
+use super::{JsonStore, StoreLocation};
 #[cfg(test)]
 use crate::app::ViewKind;
 use crate::{app::ViewData, types::PlayQueue};
@@ -31,6 +31,7 @@ impl Default for SessionState {
 
 impl JsonStore for SessionState {
     const FILE: &'static str = "session.json";
+    const LOCATION: StoreLocation = StoreLocation::Cache;
 }
 
 #[cfg(test)]

@@ -1,9 +1,12 @@
 //! Persistence layer: every on-disk store the app owns.
 //!
-//! All stores share the same shape — read a JSON file out of the platform
-//! config/cache directory, mutate it in memory, write it back — so the
-//! read/write halves live in [`JsonStore`] and the path construction lives in
-//! [`config_path`] / [`cache_path`].
+//! All stores share the same shape — read a JSON file out of a platform base
+//! directory, mutate it in memory, write it back — so the read/write halves
+//! live in [`JsonStore`] and the path construction lives in [`config_path`] /
+//! [`data_path`] / [`cache_path`]. Each store declares which base directory it
+//! belongs in via [`JsonStore::LOCATION`]: user *settings* go in the config
+//! dir, persistent user *data* in the data dir, and regenerable *caches* in
+//! the cache dir.
 
 use serde::{de::DeserializeOwned, Serialize};
 use std::path::PathBuf;
@@ -36,22 +39,47 @@ pub fn cache_path(sub: &str) -> PathBuf {
     project_dirs().map_or_else(|| PathBuf::from(sub), |d| d.cache_dir().join(sub))
 }
 
-/// A store persisted as a single pretty-printed JSON file under the config
-/// directory.
+/// Absolute path to `file` inside the data directory, or a bare relative path
+/// when the platform directories are unavailable.
+pub fn data_path(file: &str) -> PathBuf {
+    project_dirs().map_or_else(|| PathBuf::from(file), |d| d.data_local_dir().join(file))
+}
+
+/// Which XDG base directory a [`JsonStore`] lives in.
+pub enum StoreLocation {
+    /// User-specific *settings* (`~/.config/music_plr`).
+    Config,
+    /// Persistent user *data* (`~/.local/share/music_plr`).
+    Data,
+    /// Regenerable *cache* (`~/.cache/music_plr`).
+    Cache,
+}
+
+/// A store persisted as a single pretty-printed JSON file.
 ///
-/// Implementors only declare [`FILE`](JsonStore::FILE); `load` and `save` are
-/// provided. Every failure mode is non-fatal by design: a missing, corrupt, or
+/// Implementors declare [`FILE`](JsonStore::FILE) and, if they are not plain
+/// settings, [`LOCATION`](JsonStore::LOCATION); `load` and `save` are provided.
+/// Every failure mode is non-fatal by design: a missing, corrupt, or
 /// unwritable file degrades to `Default::default()` rather than taking the app
 /// down, since none of this data is critical to playback.
 ///
 /// Under `cfg(test)` `save` is a no-op so unit tests never touch the real
-/// user config directory.
+/// user directories.
 pub trait JsonStore: Serialize + DeserializeOwned + Default {
-    /// File name (not path) within the config directory.
+    /// File name (not path) within the chosen base directory.
     const FILE: &'static str;
 
+    /// Which base directory the store is persisted under. Defaults to
+    /// [`StoreLocation::Config`]; persistent user data overrides to `Data` and
+    /// regenerable caches to `Cache`.
+    const LOCATION: StoreLocation = StoreLocation::Config;
+
     fn path() -> PathBuf {
-        config_path(Self::FILE)
+        match Self::LOCATION {
+            StoreLocation::Config => config_path(Self::FILE),
+            StoreLocation::Data => data_path(Self::FILE),
+            StoreLocation::Cache => cache_path(Self::FILE),
+        }
     }
 
     fn load() -> Self {

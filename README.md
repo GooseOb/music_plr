@@ -75,14 +75,18 @@ Config is stored as JSON at `~/.config/music_plr/config.json` and is also editab
 
 ### Data locations
 
+Stores follow the XDG base-directory layout: **settings** in the config dir,
+**persistent user data** in the data dir (`~/.local/share/music_plr`), and
+**regenerable caches** in the cache dir.
+
 | Path | Contents |
 |------|----------|
-| `~/.config/music_plr/config.json` | App config (download dir, cache size, history limits) |
-| `~/.config/music_plr/playlists.json` | Playlists and their tracks |
-| `~/.config/music_plr/library.json` | Saved albums, artists, and playlists |
-| `~/.config/music_plr/downloads.json` | Registry of downloaded tracks |
-| `~/.config/music_plr/search_history.json` | Past search queries |
-| `~/.config/music_plr/session.json` | Last view, queue, and volume |
+| `~/.config/music_plr/config.json` | App config (download dir, cache size, history limits, normalization toggle) |
+| `~/.local/share/music_plr/playlists.json` | Playlists and their tracks |
+| `~/.local/share/music_plr/library.json` | Saved albums, artists, and playlists |
+| `~/.local/share/music_plr/downloads.json` | Registry of downloaded tracks |
+| `~/.local/share/music_plr/search_history.json` | Past search queries |
+| `~/.cache/music_plr/session.json` | Last view, queue, and volume (restored session) |
 | `~/.cache/music_plr/youtube/` | Streamed audio cache (LRU-evicted) |
 | `~/.cache/music_plr/thumbnails/` | Downloaded track thumbnails |
 | `~/.cache/music_plr/lyrics_cache.json` | Fetched lyrics, keyed by track id |

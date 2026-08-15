@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::JsonStore;
+use super::{JsonStore, StoreLocation};
 use crate::types::Track;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -11,6 +11,7 @@ pub struct DownloadRegistry {
 
 impl JsonStore for DownloadRegistry {
     const FILE: &'static str = "downloads.json";
+    const LOCATION: StoreLocation = StoreLocation::Data;
 }
 
 impl DownloadRegistry {

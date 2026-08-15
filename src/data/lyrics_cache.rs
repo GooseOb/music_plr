@@ -4,7 +4,7 @@ use crate::lyrics::Lyrics;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use super::JsonStore;
+use super::{JsonStore, StoreLocation};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CachedLyrics {
@@ -31,6 +31,7 @@ pub struct LyricsCache {
 
 impl JsonStore for LyricsCache {
     const FILE: &'static str = "lyrics_cache.json";
+    const LOCATION: StoreLocation = StoreLocation::Cache;
 }
 
 impl LyricsCache {

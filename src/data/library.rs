@@ -1,6 +1,6 @@
 use crate::app::Message;
 
-use super::JsonStore;
+use super::{JsonStore, StoreLocation};
 use serde::{Deserialize, Serialize};
 
 /// What kind of thing a [`LibraryItem`] represents. Distinguishes the three
@@ -40,6 +40,7 @@ pub struct LibraryStore {
 
 impl JsonStore for LibraryStore {
     const FILE: &'static str = "library.json";
+    const LOCATION: StoreLocation = StoreLocation::Data;
 }
 
 impl LibraryStore {

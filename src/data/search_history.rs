@@ -1,4 +1,4 @@
-use super::JsonStore;
+use super::{JsonStore, StoreLocation};
 use serde::{Deserialize, Serialize};
 
 /// User data: the persisted list of past search queries.
@@ -10,6 +10,7 @@ pub struct SearchHistory {
 
 impl JsonStore for SearchHistory {
     const FILE: &'static str = "search_history.json";
+    const LOCATION: StoreLocation = StoreLocation::Data;
 }
 
 impl SearchHistory {

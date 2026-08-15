@@ -1,4 +1,4 @@
-use super::JsonStore;
+use super::{JsonStore, StoreLocation};
 use crate::types::Track;
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +15,7 @@ pub struct PlaylistStore {
 
 impl JsonStore for PlaylistStore {
     const FILE: &'static str = "playlists.json";
+    const LOCATION: StoreLocation = StoreLocation::Data;
 }
 
 impl PlaylistStore {
