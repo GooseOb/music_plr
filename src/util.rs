@@ -1,8 +1,8 @@
-pub fn format_duration(secs: u32) -> String {
+pub fn format_duration(secs: u32) -> std::borrow::Cow<'static, str> {
     if secs > 0 {
-        format!("{}:{:02}", secs / 60, secs % 60)
+        format!("{}:{:02}", secs / 60, secs % 60).into()
     } else {
-        "--:--".to_string()
+        "--:--".into()
     }
 }
 
@@ -161,17 +161,17 @@ mod tests {
 
     #[test]
     fn format_duration_seconds() {
-        assert_eq!(format_duration(0), "--:--");
-        assert_eq!(format_duration(30), "0:30");
-        assert_eq!(format_duration(59), "0:59");
+        assert_eq!(format_duration(0).as_ref(), "--:--");
+        assert_eq!(format_duration(30).as_ref(), "0:30");
+        assert_eq!(format_duration(59).as_ref(), "0:59");
     }
 
     #[test]
     fn format_duration_minutes() {
-        assert_eq!(format_duration(60), "1:00");
-        assert_eq!(format_duration(90), "1:30");
-        assert_eq!(format_duration(369), "6:09");
-        assert_eq!(format_duration(3600), "60:00");
+        assert_eq!(format_duration(60).as_ref(), "1:00");
+        assert_eq!(format_duration(90).as_ref(), "1:30");
+        assert_eq!(format_duration(369).as_ref(), "6:09");
+        assert_eq!(format_duration(3600).as_ref(), "60:00");
     }
 
     #[test]

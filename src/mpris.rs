@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::mpsc, time::Duration};
+use std::{borrow::Cow, collections::HashMap, sync::mpsc, time::Duration};
 use tracing::{error, info, warn};
 use zbus::{connection, interface, zvariant};
 
@@ -16,7 +16,7 @@ pub enum MprisCommand {
 
 #[derive(Debug, Clone)]
 pub struct MprisUpdate {
-    pub playback_status: String,
+    pub playback_status: Cow<'static, str>,
     pub title: String,
     pub artist: String,
     pub duration_secs: f32,
@@ -26,7 +26,7 @@ pub struct MprisUpdate {
 }
 
 struct MprisData {
-    playback_status: String,
+    playback_status: Cow<'static, str>,
     title: String,
     artist: String,
     duration_us: i64,
@@ -107,7 +107,7 @@ impl PlayerInterface {
 
     #[zbus(property)]
     fn playback_status(&self) -> String {
-        self.data.lock().unwrap().playback_status.clone()
+        self.data.lock().unwrap().playback_status.to_string()
     }
 
     #[zbus(property)]

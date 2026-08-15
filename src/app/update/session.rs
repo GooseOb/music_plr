@@ -61,13 +61,13 @@ impl MusicPlayer {
         }
     }
 
-    pub fn notify(&mut self, msg: String) {
-        self.notification = Some(msg);
+    pub fn notify(&mut self, msg: impl Into<std::borrow::Cow<'static, str>>) {
+        self.notification = Some(msg.into());
     }
 
     pub fn notify_error(&mut self, msg: String) {
         warn!("Backend error: {}", msg);
-        self.notification = Some(msg);
+        self.notification = Some(msg.into());
     }
 
     pub fn notify_tracks(&mut self, verb: &str, n: usize, suffix: &str) {

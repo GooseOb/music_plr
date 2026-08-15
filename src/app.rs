@@ -82,7 +82,7 @@ pub struct MusicPlayer {
 
     pub download_registry: DownloadRegistry,
 
-    pub notification: Option<String>,
+    pub notification: Option<std::borrow::Cow<'static, str>>,
 
     pub thumbnail_index: crate::data::thumbnails::ThumbnailIndex,
     pub playlists: PlaylistStore,
@@ -358,14 +358,11 @@ impl MusicPlayer {
             }
             Message::ToggleLibrarySave(item) => {
                 let saved = self.toggle_library_save(item);
-                self.notify(
-                    if saved {
-                        "Saved to library"
-                    } else {
-                        "Removed from library"
-                    }
-                    .to_string(),
-                );
+                self.notify(if saved {
+                    "Saved to library"
+                } else {
+                    "Removed from library"
+                });
                 Task::none()
             }
             Message::ToggleLibraryExpanded => {

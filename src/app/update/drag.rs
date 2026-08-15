@@ -259,7 +259,7 @@ impl MusicPlayer {
     fn copy_from_queue(&mut self, indices: &[usize], drop_idx: usize) {
         let Some(sp) = self.view_data_mut().selected_playlist_id() else {
             if !self.view_data_mut().is_search_like() {
-                self.notify("Select a playlist to drop tracks into".into());
+                self.notify("Select a playlist to drop tracks into");
             }
             return;
         };

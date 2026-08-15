@@ -250,15 +250,14 @@ impl MusicPlayer {
                 if state.track_id.as_deref() != Some(track_id.as_str()) {
                     return;
                 }
-                let id_for_cache = track_id.clone();
                 state.loading = false;
                 state.lyrics = lyrics;
                 state.track_id = Some(track_id);
                 if let Some(lyrics) = &state.lyrics {
                     let mut cache = crate::data::lyrics_cache::LyricsCache::load();
-                    cache.insert(&id_for_cache, lyrics);
+                    cache.insert(state.track_id.as_ref().unwrap(), lyrics);
                 } else {
-                    self.notify("No lyrics found for this track.".to_string());
+                    self.notify("No lyrics found for this track.");
                 }
                 self.sync_lyrics_editor();
             }

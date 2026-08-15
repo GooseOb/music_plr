@@ -96,7 +96,7 @@ fn library_row<'a>(
 
 fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     if let Some(msg) = &player.notification {
-        return Container::new(text(msg).center())
+        return Container::new(text(msg.as_ref()).center())
             .width(Length::Fill)
             .padding([theme::SPACING_XS, theme::SPACING_XL])
             .into();
