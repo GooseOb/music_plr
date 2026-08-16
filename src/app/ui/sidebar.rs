@@ -6,7 +6,7 @@ use iced::{
 
 use crate::{
     app::{
-        interaction::{HoverTarget, Pressed},
+        interaction::{DropTarget, HoverTarget, Pressed},
         ViewData, ViewKind,
     },
     data::library::LibraryItem,
@@ -205,7 +205,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             let is_active = matches!(player.view_data().kind, ViewKind::Playlist { .. })
                 && player.view_data().selected_playlist_id() == Some(i);
             let is_dragged_over =
-                !player.drag.is_pressed_card() && player.drag.hovered_sidebar_playlist() == Some(i);
+                matches!(player.drag.drop_target, Some(DropTarget::PlaylistAdd(j)) if j == i);
             let row = playlist_row(
                 player,
                 i,

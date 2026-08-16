@@ -4,30 +4,13 @@ use super::{
     DOUBLE_CLICK_MS,
 };
 use crate::{
-    app::interaction::{DropTarget, HoverTarget, Pressed},
+    app::interaction::{DropTarget, Pressed},
     app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID},
     data::library::{LibraryItem, LibraryKind},
 };
 use iced::widget::Id;
 
 impl MusicPlayer {
-    fn sidebar_playlist_at_cursor(&self) -> Option<usize> {
-        let sidebar = self.bounds.sidebar.as_ref()?;
-        if !sidebar.bounds.contains(self.drag.cursor_pos) {
-            return None;
-        }
-        let cursor_y = self.drag.cursor_pos.y + sidebar.translation_y;
-        let mut best: Option<(f32, usize)> = None;
-        for (i, row) in sidebar.rows.iter().enumerate() {
-            let d = (cursor_y - (row.y + row.height / 2.0)).abs();
-            if best.is_none_or(|(bd, _)| d < bd) {
-                best = Some((d, i));
-            }
-        }
-        best.map(|(_, idx)| idx)
-            .filter(|&idx| idx < self.playlists.playlists.len())
-    }
-
     pub fn handle_left_release(&mut self) {
         let Some(pressed) = self.drag.pressed.take() else {
             self.drag.cleanup();
@@ -67,9 +50,6 @@ impl MusicPlayer {
     }
 
     pub fn handle_drag_update(&mut self) -> Task<Message> {
-        if matches!(self.drag.hovered, Some(HoverTarget::SidebarPlaylist(_))) {
-            self.drag.hovered = None;
-        }
         self.drag.drop_target = None;
 
         let Some(pressed) = &self.drag.pressed else {
@@ -82,18 +62,9 @@ impl MusicPlayer {
             Pressed::Card(_) => {
                 self.drag.drop_target = self.card_drop_target(containing.as_ref());
             }
-            Pressed::Track(pos) => match self.resolve_track_drop(*pos, containing.as_ref()) {
-                Some(target) => self.drag.drop_target = Some(target),
-                None => {
-                    if let Some((id, _)) = containing.as_ref() {
-                        if *id == SIDEBAR_LIST_ID {
-                            if let Some(idx) = self.sidebar_playlist_at_cursor() {
-                                self.drag.hovered = Some(HoverTarget::SidebarPlaylist(idx));
-                            }
-                        }
-                    }
-                }
-            },
+            Pressed::Track(pos) => {
+                self.drag.drop_target = self.resolve_track_drop(*pos, containing.as_ref());
+            }
         }
 
         let Some((target_id, geo)) = containing else {
@@ -108,11 +79,23 @@ impl MusicPlayer {
         source: TrackPos,
         containing: Option<&(Id, &ListGeometry)>,
     ) -> Option<DropTarget> {
-        let (id, _geo) = containing?;
+        let (id, geo) = containing?;
         let list = if *id == QUEUE_LIST_ID {
             TrackListKind::Queue
         } else if *id == TRACK_LIST_ID {
             TrackListKind::Active
+        } else if *id == SIDEBAR_LIST_ID {
+            let count = self.playlists.playlists.len();
+            let cursor_y = self.drag.cursor_pos.y + geo.translation_y;
+            let mut best: Option<(f32, usize)> = None;
+            for (i, row) in geo.rows.iter().enumerate() {
+                let d = (cursor_y - (row.y + row.height / 2.0)).abs();
+                if best.is_none_or(|(bd, _)| d < bd) {
+                    best = Some((d, i));
+                }
+            }
+            let idx = best.map(|(_, idx)| idx).filter(|&idx| idx < count)?;
+            return Some(DropTarget::PlaylistAdd(idx));
         } else {
             return None;
         };
@@ -201,11 +184,13 @@ impl MusicPlayer {
     /// Screen-space rectangle of the single drop indicator, derived from
     /// captured row geometry (rather than an injected row, so the list layout
     /// is never perturbed). `None` when there is no active drop target or it
-    /// falls outside the visible viewport. A drag targets at most one list at
-    /// a time: a card drag targets a sidebar list (`DropTarget::Playlist` /
-    /// `DropTarget::Library`), while a track drag targets the queue/active list
-    /// (`DropTarget::Track`), so
-    /// there is never more than one indicator.
+    /// falls outside the visible viewport. A drag targets at most one list at a
+    /// time. A card drag targets a sidebar list (`DropTarget::Playlist` /
+    /// `DropTarget::Library`) and a track drag targets the queue/active list
+    /// (`DropTarget::Track`); both draw their insertion line here. A track
+    /// dropped on the playlist list (`DropTarget::PlaylistAdd`) instead
+    /// highlights the target playlist row and therefore returns no line. There
+    /// is never more than one indicator.
     pub fn drop_indicator_rect(&self) -> Option<iced::Rectangle> {
         // Resolve to the targeted geometry and the 0-based insertion index
         // within its captured rows.
@@ -220,7 +205,10 @@ impl MusicPlayer {
                 };
                 (geo, pos.index.saturating_sub(pos.list.first_index()))
             }
-            None => return None,
+            // A track dropped on the playlist list highlights the target row
+            // (handled in the sidebar view) rather than drawing an insertion
+            // line, so it produces no indicator rect.
+            Some(DropTarget::PlaylistAdd(_)) | None => return None,
         };
 
         let rows = &geo.rows;
@@ -262,9 +250,10 @@ impl MusicPlayer {
             vec![track_idx]
         };
 
-        // Dropped on the playlist sidebar: add to that playlist (prepend). No
-        // insertion bar — the row highlight already shows the target.
-        if let Some(playlist_idx) = self.sidebar_playlist_at_cursor() {
+        // Dropped on the playlist sidebar: add to that playlist (prepend). The
+        // target was resolved during the drag into `drop_target` and is shown
+        // by the row highlight, so there is no separate insertion bar.
+        if let Some(DropTarget::PlaylistAdd(playlist_idx)) = self.drag.drop_target {
             let tracks: Vec<Track> = indices
                 .iter()
                 .rev()
@@ -421,7 +410,7 @@ impl MusicPlayer {
                     self.notify(format!("Saved \"{title}\" to library"));
                 }
             }
-            DropTarget::Track(_) => {}
+            DropTarget::Track(_) | DropTarget::PlaylistAdd(_) => {}
         }
     }
 

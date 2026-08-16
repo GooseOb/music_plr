@@ -86,12 +86,10 @@ pub struct ContextMenuState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DropTarget {
-    /// A track-list drop: reorder within a list or copy across lists.
     Track(TrackPos),
-    /// A drop onto the playlist list in the sidebar (insertion index).
     Playlist(usize),
-    /// A drop onto the library in the sidebar (insertion index).
     Library(usize),
+    PlaylistAdd(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,7 +97,6 @@ pub enum HoverTarget {
     Track(TrackPos),
     Card(LibraryItem),
     LibraryCard(LibraryItem),
-    SidebarPlaylist(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,14 +157,6 @@ impl DragState {
     /// Whether the given library card is the hovered one.
     pub fn is_hovered_library_card(&self, item: &LibraryItem) -> bool {
         matches!(self.hovered, Some(HoverTarget::LibraryCard(ref c)) if c == item)
-    }
-
-    /// The hovered sidebar playlist, if used as a card-drag drop indicator.
-    pub fn hovered_sidebar_playlist(&self) -> Option<usize> {
-        match self.hovered {
-            Some(HoverTarget::SidebarPlaylist(i)) => Some(i),
-            _ => None,
-        }
     }
 
     /// Whether a card (vs track) drag is active.
