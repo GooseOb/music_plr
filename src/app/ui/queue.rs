@@ -5,7 +5,7 @@ use iced::{
 };
 
 use crate::{
-    app::interaction::{TrackListKind, TrackPos},
+    app::interaction::{row_id, TrackListKind, TrackPos},
     icons,
     theme::{self, AppTheme},
     types::QueueTab,
@@ -165,7 +165,7 @@ fn view_recently_played_row<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let pos = TrackPos::new(index, TrackListKind::Recent);
-    let row_bg = if player.drag.hovered_track == Some(pos) {
+    let row_bg = if player.drag.hovered_track() == Some(pos) {
         p.bg_hover
     } else {
         p.bg
@@ -179,5 +179,10 @@ fn view_recently_played_row<'a>(
         .on_right_press(Message::TrackRightClicked(pos))
         .on_move(move |_| Message::TrackHoverStart(pos));
 
-    track_row(track_area, row_bg).into()
+    track_row(
+        track_area,
+        row_bg,
+        Some(row_id(TrackListKind::Recent, index)),
+    )
+    .into()
 }

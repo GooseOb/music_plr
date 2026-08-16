@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{button, scrollable, text, text_input, Button, Column, Container, Row},
+    widget::{button, scrollable, text, text_input, Button, Column, Container, MouseArea, Row},
     Color, Element, Length,
 };
 
@@ -69,6 +69,7 @@ fn playlist_row<'a>(
 fn library_row<'a>(
     player: &'a MusicPlayer,
     item: &'a LibraryItem,
+    index: usize,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let is_active = matches!(
@@ -80,17 +81,39 @@ fn library_row<'a>(
     );
     let text_color = if is_active { p.fg } else { p.fg_secondary };
     let thumb = player.thumbnail_index.get(&item.id);
-    let thumb = super::track_list::thumbnail(p, theme::THUMBNAIL_SIZE, thumb);
-    let toggle_btn =
-        toggle_bookmark_button(p, true).on_press(Message::ToggleLibrarySave(item.clone()));
+    let thumb = super::track_list::thumbnail(p, theme::ICON_SIZE_LG + 4.0, thumb);
+    let is_hovered = player.drag.is_hovered_library_card(item);
+    let hover_item = item.clone();
+    let row = Row::with_children([thumb, text(&item.title).color(text_color).into()])
+        .spacing(theme::SPACING_MD)
+        .align_y(alignment::Vertical::Center)
+        .width(Length::Fill);
+    let toggle_btn = toggle_bookmark_button(p, true)
+        .padding(theme::SPACING_XS)
+        .on_press(Message::ToggleLibrarySave(item.clone()));
 
-    sidebar_button(Row::with_children([
-        thumb,
-        text(&item.title).color(text_color).into(),
-        iced::widget::right(toggle_btn).into(),
-    ]))
-    .style(button_style_list_item(is_active))
-    .on_press(item.open_message())
+    let bg = if is_active {
+        p.bg_current.scale_alpha(0.7)
+    } else if is_hovered {
+        p.bg_hover
+    } else {
+        p.bg_secondary
+    };
+    MouseArea::new(
+        Container::new(
+            Row::with_children([row.into(), toggle_btn.into()])
+                .spacing(theme::SPACING_MD)
+                .align_y(alignment::Vertical::Center),
+        )
+        .id(iced::widget::Id::from(format!("library:{index}")))
+        .padding([theme::SPACING_SM, theme::SPACING_MD])
+        .style(move |_| iced::widget::container::Style {
+            background: Some(bg.into()),
+            ..Default::default()
+        }),
+    )
+    .on_press(Message::CardPressed(item.clone()))
+    .on_move(move |_| Message::LibraryCardHoverStart(hover_item.clone()))
     .into()
 }
 
@@ -170,7 +193,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         sidebar_nav_item("Settings", ViewData::new_settings(), player),
     ];
 
-    let playlist_items = player
+    let playlist_items: Vec<Element<'_, Message, AppTheme>> = player
         .playlists
         .playlists
         .iter()
@@ -178,22 +201,30 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .map(|(i, pl)| {
             let is_active = matches!(player.view_data().kind, ViewKind::Playlist { .. })
                 && player.view_data().selected_playlist_id() == Some(i);
-            let is_dragged_over = player.drag.sidebar_hover_playlist == Some(i);
-            playlist_row(
+            let is_dragged_over =
+                !player.drag.is_pressed_card() && player.drag.hovered_sidebar_playlist() == Some(i);
+            let row = playlist_row(
                 player,
                 i,
                 &pl.name,
                 pl.tracks.len(),
                 is_active,
                 is_dragged_over,
-            )
-        });
+            );
+            iced::widget::Container::new(row)
+                .width(Length::Fill)
+                .id(iced::widget::Id::from(format!("sidebar_pl:{i}")))
+                .into()
+        })
+        .collect();
 
-    let library_items = player
+    let library_items: Vec<Element<'_, Message, AppTheme>> = player
         .library
         .items
         .iter()
-        .map(|item| library_row(player, item));
+        .enumerate()
+        .map(|(i, item)| library_row(player, item, i))
+        .collect();
 
     let library_section: Element<'_, Message, AppTheme> = if player.library.items.is_empty() {
         library_collapsed("Nothing saved yet")

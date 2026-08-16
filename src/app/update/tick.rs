@@ -208,6 +208,18 @@ impl MusicPlayer {
                     self.install_results(idx, tracks);
                 }
             }
+            BackendResult::CardPlaylistReady(idx, name, tracks) => {
+                // A dragged card turned into a playlist; the browse result
+                // fills it. The playlist view reads tracks from the store, so
+                // they appear as soon as we insert them.
+                if idx < self.playlists.playlists.len() {
+                    let count = tracks.len();
+                    if count > 0 {
+                        self.playlists.insert_tracks_at(idx, &tracks, usize::MAX);
+                    }
+                    self.notify_tracks("Added", count, &format!("to {name}"));
+                }
+            }
             BackendResult::RadioResults(rid, label, tracks) => {
                 if let Some(idx) = self.slot_for_request(rid) {
                     let kind = match self.nav_history[idx].kind {

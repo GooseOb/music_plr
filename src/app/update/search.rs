@@ -20,7 +20,7 @@ impl MusicPlayer {
         self.view_data_mut().request_id = rid;
         self.sync_search_scope();
         self.show_search_history = false;
-        self.drag.hovered_track = None;
+        self.drag.clear_hovered_track();
 
         self.search_history
             .push(query.clone(), self.config.max_search_history_stored);
@@ -36,8 +36,11 @@ impl MusicPlayer {
     /// Spawn a background thread that runs `run` (or returns an error), maps
     /// the result into a `BackendResult`, and sends it on `tx`.
     /// All search/radio/browse callers share this one thread body.
-    fn spawn_backend_thread<T, R, M>(run: R, make_result: M, tx: mpsc::Sender<BackendResult>)
-    where
+    pub(super) fn spawn_backend_thread<T, R, M>(
+        run: R,
+        make_result: M,
+        tx: mpsc::Sender<BackendResult>,
+    ) where
         R: FnOnce() -> anyhow::Result<T> + Send + 'static,
         M: FnOnce(T) -> BackendResult + Send + 'static,
     {

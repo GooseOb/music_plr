@@ -74,7 +74,6 @@ impl MusicPlayer {
             *query = live_query;
         }
         self.cleanup_drag_state();
-        self.drag.hovered_track = None;
 
         // Push the destination as a fresh slot; the outgoing view stays at the
         // previous position.

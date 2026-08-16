@@ -1,5 +1,3 @@
-use crate::app::Message;
-
 use super::{JsonStore, StoreLocation};
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +11,8 @@ pub enum LibraryKind {
 }
 
 /// A single saved library entry. Mirrors the fields of a `CardData` plus the
-/// kind, so a saved item can be re-opened via the same `Open*` messages.
+/// kind, so a saved item can be dragged (onto the playlist list or library)
+/// or opened via the card-press mechanism.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LibraryItem {
     pub kind: LibraryKind,
@@ -21,16 +20,6 @@ pub struct LibraryItem {
     pub id: String,
     pub title: String,
     pub thumbnail: String,
-}
-
-impl LibraryItem {
-    pub fn open_message(&self) -> Message {
-        match self.kind {
-            LibraryKind::Album => Message::OpenAlbum(self.id.clone(), self.title.clone()),
-            LibraryKind::Artist => Message::OpenArtist(self.id.clone(), self.title.clone()),
-            LibraryKind::Playlist => Message::OpenPlaylist(self.id.clone(), self.title.clone()),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -68,6 +57,28 @@ impl LibraryStore {
             self.save_to_disk();
         }
         removed
+    }
+
+    /// Insert an item at `pos` (clamped), skipping it if an identical kind+id
+    /// already exists. Persists to disk.
+    pub fn insert(&mut self, item: LibraryItem, pos: usize) {
+        if self.contains(item.kind, &item.id) {
+            return;
+        }
+        let pos = pos.min(self.items.len());
+        self.items.insert(pos, item);
+        self.save_to_disk();
+    }
+
+    /// Move the item at `from` to `to` (clamped), persisting the result.
+    pub fn move_item(&mut self, from: usize, to: usize) {
+        if from >= self.items.len() {
+            return;
+        }
+        let item = self.items.remove(from);
+        let to = to.min(self.items.len());
+        self.items.insert(to, item);
+        self.save_to_disk();
     }
 
     fn save_to_disk(&self) {
@@ -112,5 +123,27 @@ mod tests {
         assert!(s.remove(LibraryKind::Album, "x"));
         assert!(!s.remove(LibraryKind::Album, "x"));
         assert_eq!(s.items.len(), 1);
+    }
+
+    #[test]
+    fn insert_and_move_items() {
+        let mut s = LibraryStore::default();
+        s.add(item(LibraryKind::Artist, "a"));
+        s.add(item(LibraryKind::Album, "b"));
+        s.add(item(LibraryKind::Playlist, "c"));
+
+        // Insert at an explicit position.
+        s.insert(item(LibraryKind::Artist, "d"), 1);
+        assert_eq!(s.items.len(), 4);
+        assert_eq!(s.items[1].id, "d");
+
+        // Duplicate insert is a no-op.
+        s.insert(item(LibraryKind::Artist, "a"), 0);
+        assert_eq!(s.items.len(), 4);
+
+        // Move the last item up to position 1.
+        s.move_item(3, 1);
+        assert_eq!(s.items.len(), 4);
+        assert_eq!(s.items[1].id, "c");
     }
 }

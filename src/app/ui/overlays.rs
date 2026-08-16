@@ -1,7 +1,7 @@
 use iced::{
     alignment,
-    widget::{column, row, text, Button, Column, Container, MouseArea, Row, Space},
-    Element, Length,
+    widget::{column, container, row, text, Button, Column, Container, MouseArea, Row, Space},
+    Element, Length, Rectangle,
 };
 
 use crate::{
@@ -17,6 +17,28 @@ use super::{
     },
     theme, ContextMenuState, Message, MusicPlayer,
 };
+
+/// A drop-indicator line drawn on top of the UI at the given screen-space
+/// rectangle (computed from captured row geometry), so it never perturbs the
+/// list layout it marks.
+pub(super) fn view_drop_indicator(rect: Rectangle, p: &Palette) -> Element<'_, Message, AppTheme> {
+    column![
+        Space::new().height(rect.y),
+        row![
+            Space::new().width(rect.x),
+            Container::new(
+                Space::new()
+                    .width(rect.width)
+                    .height(crate::theme::DROP_LINE_HEIGHT),
+            )
+            .style(move |_: &AppTheme| container::Style {
+                background: Some(p.accent.into()),
+                ..Default::default()
+            })
+        ]
+    ]
+    .into()
+}
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn view_context_menu<'a>(

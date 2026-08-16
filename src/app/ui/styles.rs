@@ -159,22 +159,6 @@ pub fn button_style_list_item(
     }
 }
 
-pub fn button_style_result_card() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    move |theme, status| {
-        let p = &theme.palette;
-        let bg_color = match status {
-            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-            _ => p.bg,
-        };
-        button::Style {
-            background: Some(bg_color.into()),
-            text_color: p.fg,
-            border: border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    }
-}
-
 pub fn button_style_scope(
     selected: bool,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {

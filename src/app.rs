@@ -21,7 +21,7 @@ mod ui;
 mod update;
 mod view_data;
 
-pub use interaction::{ContextMenuState, DragState, TrackListKind, TrackPos};
+pub use interaction::{ContextMenuState, DragState, HoverTarget, TrackListKind, TrackPos};
 pub use message::{BackendResult, Message};
 pub use view_data::{RequestIdGenerator, ViewData, ViewKind};
 
@@ -291,7 +291,7 @@ impl MusicPlayer {
             }
             Message::CursorMoved(pos) => {
                 self.drag.cursor_pos = pos;
-                if self.drag.pressed_track.is_some()
+                if self.drag.is_pressing()
                     && self.drag.drag_origin.is_some()
                     && !self.drag.drag_active
                 {
@@ -300,6 +300,10 @@ impl MusicPlayer {
                         let dy = (pos.y - origin.y).abs();
                         if dx > crate::theme::DRAG_THRESHOLD || dy > crate::theme::DRAG_THRESHOLD {
                             self.drag.drag_active = true;
+                            // Reveal the library so it can receive drops.
+                            if self.drag.is_pressed_card() {
+                                self.library_expanded = true;
+                            }
                         }
                     }
                 }
@@ -319,8 +323,9 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ListBoundsCaptured(bounds) => {
+                let scroll = bounds.track.as_ref().map_or(0.0, |b| b.translation_y);
                 self.bounds = bounds;
-                self.view_data_mut().scroll = bounds.track.map_or(0.0, |b| b.translation_y);
+                self.view_data_mut().scroll = scroll;
 
                 Task::none()
             }
@@ -352,16 +357,8 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Message::OpenArtist(browse_id, title) => {
-                self.handle_open_artist(browse_id, &title);
-                Task::none()
-            }
             Message::OpenAlbum(browse_id, title) => {
                 self.handle_open_album(browse_id, &title);
-                Task::none()
-            }
-            Message::OpenPlaylist(playlist_id, title) => {
-                self.handle_open_playlist(playlist_id, &title);
                 Task::none()
             }
             Message::ToggleLibrarySave(item) => {
@@ -393,8 +390,20 @@ impl MusicPlayer {
                 self.handle_track_pressed(pos);
                 Task::none()
             }
+            Message::CardPressed(item) => {
+                self.handle_card_pressed(item);
+                Task::none()
+            }
+            Message::CardHoverStart(item) => {
+                self.drag.set_hovered(HoverTarget::Card(item));
+                Task::none()
+            }
+            Message::LibraryCardHoverStart(item) => {
+                self.drag.set_hovered(HoverTarget::LibraryCard(item));
+                Task::none()
+            }
             Message::TrackHoverStart(pos) => {
-                self.drag.hovered_track = Some(pos);
+                self.drag.set_hovered_track(pos);
                 Task::none()
             }
             Message::TrackRightClicked(pos) => {
@@ -403,7 +412,7 @@ impl MusicPlayer {
             }
             Message::PlayTrackAt(pos) => {
                 if pos.list == TrackListKind::Active {
-                    self.drag.hovered_track = None;
+                    self.drag.clear_hovered_track();
                 }
                 self.handle_play_track(pos);
                 Task::none()
@@ -520,7 +529,7 @@ impl MusicPlayer {
             }
             Message::SwitchQueueTab(tab) => {
                 self.queue.queue_tab = tab;
-                self.drag.hovered_track = None;
+                self.drag.clear_hovered_track();
                 self.save_session();
                 Task::none()
             }
@@ -585,7 +594,7 @@ impl MusicPlayer {
             }
             Message::ContextMenuDownloadOrDelete(indices) => {
                 let list = self.context_menu.as_ref().map(|m| m.pos.list);
-                self.drag.pressed_track = None;
+                self.drag.pressed = None;
                 // Resolved per-index inside the handler (it reports per-track
                 // download state), so only the list kind is needed here.
                 if let Some(list) = list {

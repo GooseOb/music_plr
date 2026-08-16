@@ -1,15 +1,15 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, text_input, Button, Column, Container, Row},
+    widget::{scrollable, text, text_input, Button, Column, Container, MouseArea, Row},
     Color, Element, Length,
 };
 
 use crate::{
-    app::{interaction::TrackListKind, ui::styles::button_style_result_card, ViewKind},
+    app::{interaction::TrackListKind, ViewKind},
     data::library::LibraryKind,
     icons,
     theme::AppTheme,
-    youtube::{SearchScope, SearchTab},
+    youtube::{CardData, SearchScope, SearchTab},
 };
 
 use super::{
@@ -124,12 +124,11 @@ fn view_search_card_tab<'a>(
 ) -> Element<'a, Message, AppTheme> {
     // Each card tab shares the same row shape; only the drill-down message
     // differs, so pull out the slice and its click constructor once.
-    type CardClick = fn(String, String) -> Message;
-    let (items, open, kind): (&[crate::youtube::CardData], CardClick, LibraryKind) = match tab {
-        SearchTab::Artists(items) => (items, Message::OpenArtist, LibraryKind::Artist),
-        SearchTab::Albums(items) => (items, Message::OpenAlbum, LibraryKind::Album),
-        SearchTab::Playlists(items) => (items, Message::OpenPlaylist, LibraryKind::Playlist),
-        _ => (&[], |_, _| Message::Noop, LibraryKind::Artist), // unreachable, but needed for type inference
+    let (items, kind): (&[CardData], LibraryKind) = match tab {
+        SearchTab::Artists(items) => (items, LibraryKind::Artist),
+        SearchTab::Albums(items) => (items, LibraryKind::Album),
+        SearchTab::Playlists(items) => (items, LibraryKind::Playlist),
+        _ => (&[], LibraryKind::Artist), // unreachable, but needed for type inference
     };
 
     if items.is_empty() {
@@ -147,32 +146,23 @@ fn view_search_card_tab<'a>(
             title: c.title.clone(),
             thumbnail: c.thumbnail.clone(),
         };
-        card_row(
-            player,
-            i,
-            &c.id,
-            &c.title,
-            &c.subtitle,
-            open(c.id.clone(), c.title.clone()),
-            item,
-        )
+        card_row(player, i, &c.id, &c.title, &c.subtitle, &item)
     });
 
     scrollable(Column::with_children(cards)).into()
 }
 
-/// A single drill-down card row rendered in the same style as a track row:
-/// a leading index number, the item's thumbnail (or a placeholder), and the
-/// title/subtitle. Clickable to drill down into the artist/album/playlist.
-/// A trailing bookmark button toggles library membership.
+/// A single drill-down card row. The main area is a `MouseArea` so the
+/// card can be dragged (onto the playlist list to become a local playlist, or
+/// onto the library to save/reorder); a plain click drills down into it. The
+/// trailing bookmark button toggles library membership.
 fn card_row<'a>(
     player: &'a MusicPlayer,
     index: usize,
     id: &'a str,
     title: &'a str,
     subtitle: &'a str,
-    on_press: Message,
-    item: crate::data::library::LibraryItem,
+    item: &crate::data::library::LibraryItem,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let thumb = player.thumbnail_index.get(id);
@@ -183,10 +173,11 @@ fn card_row<'a>(
         .center();
     let thumb = track_list::thumbnail(p, theme::THUMBNAIL_SIZE, thumb);
     let saved = player.library.contains(item.kind, &item.id);
-    let toggle =
-        Container::new(toggle_bookmark_button(p, saved).on_press(Message::ToggleLibrarySave(item)))
-            .padding([0.0, theme::SPACING_MD]);
-    let inner = track_list::inner_row_layout(
+    let toggle = Container::new(
+        toggle_bookmark_button(p, saved).on_press(Message::ToggleLibrarySave(item.clone())),
+    )
+    .padding([0.0, theme::SPACING_MD]);
+    let main = track_list::inner_row_layout(
         leading.into(),
         Some(thumb),
         title,
@@ -195,13 +186,20 @@ fn card_row<'a>(
         } else {
             Some(subtitle)
         },
-        Some(toggle.into()),
-    );
-    let drill = Button::new(inner)
-        .style(button_style_result_card())
-        .padding(0)
-        .on_press(on_press);
-    track_list::track_row(Row::with_children([drill.into()]), p.bg).into()
+        None,
+    )
+    .width(Length::Fill);
+    let is_hovered = player.drag.is_hovered_card(item);
+    let hover_item = item.clone();
+    let main = MouseArea::new(main)
+        .on_press(Message::CardPressed(item.clone()))
+        .on_move(move |_| Message::CardHoverStart(hover_item.clone()));
+    track_list::track_row(
+        Row::with_children([main.into(), toggle.into()]),
+        if is_hovered { p.bg_hover } else { p.bg },
+        None,
+    )
+    .into()
 }
 
 pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {

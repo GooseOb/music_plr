@@ -1,5 +1,6 @@
 //! Mouse, drag, and context-menu interaction state.
 
+use crate::data::library::LibraryItem;
 use crate::types::{QueueTab, Track};
 use iced::{widget::Id, Point};
 
@@ -35,6 +36,19 @@ impl TrackListKind {
     }
 }
 
+/// Stable `Id` for a track-list row `Container`, used to capture its measured
+/// geometry via the bounds `Operation`. The tag distinguishes lists so ids
+/// never collide across the tree. Cards (artists/albums/playlists) are not
+/// track-list rows and intentionally carry no geometry-capturing id.
+pub fn row_id(list: TrackListKind, index: usize) -> Id {
+    let tag = match list {
+        TrackListKind::Queue => "queue",
+        TrackListKind::Active => "active",
+        TrackListKind::Recent => "recent",
+    };
+    Id::from(format!("row:{tag}:{index}"))
+}
+
 impl From<QueueTab> for TrackListKind {
     fn from(tab: QueueTab) -> Self {
         match tab {
@@ -68,27 +82,143 @@ pub struct ContextMenuState {
     pub target_indices: Vec<usize>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropTarget {
+    /// A track-list drop: reorder within a list or copy across lists.
+    Track(TrackPos),
+    /// A drop onto the playlist list in the sidebar (insertion index).
+    Playlist(usize),
+    /// A drop onto the library in the sidebar (insertion index).
+    Library(usize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HoverTarget {
+    Track(TrackPos),
+    Card(LibraryItem),
+    LibraryCard(LibraryItem),
+    SidebarPlaylist(usize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pressed {
+    Track(TrackPos),
+    Card(LibraryItem),
+}
+
+impl Default for Pressed {
+    fn default() -> Self {
+        // Only ever used as the placeholder `Option::take` swaps in; never
+        // observed as a real drag press.
+        Pressed::Track(TrackPos::new(0, TrackListKind::Active))
+    }
+}
+
 /// Mouse and drag interaction state
 #[derive(Debug, Clone, Default)]
 pub struct DragState {
     pub cursor_pos: Point,
-    pub pressed_track: Option<TrackPos>,
-    pub hovered_track: Option<TrackPos>,
+    pub pressed: Option<Pressed>,
     pub drag_origin: Option<Point>,
     pub drag_active: bool,
-    pub drag_drop_target: Option<usize>,
-    pub drag_target_list: Option<TrackListKind>,
-    pub sidebar_hover_playlist: Option<usize>,
+    /// The resolved drop target for the active drag, or `None`. A drag targets
+    /// at most one list, so the track-list target (`Track`) and the two
+    /// sidebar-collection targets (`Playlist`/`Library`) share one enum field
+    /// rather than two parallel `Option`s.
+    pub drop_target: Option<DropTarget>,
+    pub hovered: Option<HoverTarget>,
 }
 
 impl DragState {
-    pub(crate) const fn cleanup(&mut self) {
+    pub(crate) fn cleanup(&mut self) {
         self.drag_active = false;
         self.drag_origin = None;
-        self.pressed_track = None;
-        self.drag_drop_target = None;
-        self.drag_target_list = None;
-        self.sidebar_hover_playlist = None;
+        self.pressed = None;
+        self.drop_target = None;
+        self.hovered = None;
+    }
+
+    /// The hovered track, if any — also the keyboard-navigation focus.
+    pub fn hovered_track(&self) -> Option<TrackPos> {
+        match self.hovered {
+            Some(HoverTarget::Track(pos)) => Some(pos),
+            _ => None,
+        }
+    }
+
+    /// Set the hovered track (keyboard-navigation focus).
+    pub fn set_hovered_track(&mut self, pos: TrackPos) {
+        self.hovered = Some(HoverTarget::Track(pos));
+    }
+
+    /// Clear a hovered track without disturbing an unrelated card hover.
+    pub fn clear_hovered_track(&mut self) {
+        if matches!(self.hovered, Some(HoverTarget::Track(_))) {
+            self.hovered = None;
+        }
+    }
+
+    /// Whether the given search card is the hovered one.
+    pub fn is_hovered_card(&self, item: &LibraryItem) -> bool {
+        matches!(self.hovered, Some(HoverTarget::Card(ref c)) if c == item)
+    }
+
+    /// Whether the given library card is the hovered one.
+    pub fn is_hovered_library_card(&self, item: &LibraryItem) -> bool {
+        matches!(self.hovered, Some(HoverTarget::LibraryCard(ref c)) if c == item)
+    }
+
+    /// The hovered sidebar playlist, if used as a card-drag drop indicator.
+    pub fn hovered_sidebar_playlist(&self) -> Option<usize> {
+        match self.hovered {
+            Some(HoverTarget::SidebarPlaylist(i)) => Some(i),
+            _ => None,
+        }
+    }
+
+    /// Replace the current hover with `target`.
+    pub fn set_hovered(&mut self, target: HoverTarget) {
+        self.hovered = Some(target);
+    }
+
+    /// The pressed track being dragged, if any.
+    pub fn pressed_track(&self) -> Option<TrackPos> {
+        match self.pressed {
+            Some(Pressed::Track(pos)) => Some(pos),
+            _ => None,
+        }
+    }
+
+    /// Arm a track drag from `pos`.
+    pub fn set_pressed_track(&mut self, pos: TrackPos) {
+        self.pressed = Some(Pressed::Track(pos));
+    }
+
+    /// Arm a card drag from `item`.
+    pub fn set_pressed_card(&mut self, item: LibraryItem) {
+        self.pressed = Some(Pressed::Card(item));
+    }
+
+    /// Whether a card (vs track) drag is active.
+    pub fn is_pressed_card(&self) -> bool {
+        matches!(self.pressed, Some(Pressed::Card(_)))
+    }
+
+    /// Whether any drag (track or card) is currently armed.
+    pub fn is_pressing(&self) -> bool {
+        self.pressed.is_some()
+    }
+
+    /// Take the pressed card out, clearing the press. Returns `None` (and
+    /// leaves the press untouched) if what's pressed isn't a card.
+    pub fn take_pressed_card(&mut self) -> Option<LibraryItem> {
+        match self.pressed.take() {
+            Some(Pressed::Card(item)) => Some(item),
+            other => {
+                self.pressed = other;
+                None
+            }
+        }
     }
 }
 

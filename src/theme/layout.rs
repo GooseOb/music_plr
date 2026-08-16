@@ -5,7 +5,6 @@
 
 pub const SIDEBAR_WIDTH: f32 = 300.0;
 pub const SEARCH_PAGE_SIZE: usize = 10;
-pub const SIDEBAR_ITEM_HEIGHT: f32 = SPACING_XS + ICON_SIZE_MD + 2.0 * SPACING_SM;
 pub const ROW_HEIGHT: f32 = 48.0;
 pub const THUMBNAIL_SIZE: f32 = 36.0;
 pub const QUEUE_MIN_WIDTH: f32 = 240.0;

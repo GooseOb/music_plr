@@ -29,6 +29,41 @@ impl PlaylistStore {
         }
     }
 
+    /// Produce a playlist name unique within the store by appending
+    /// " (n)" when `base` is already taken.
+    fn unique_name(&self, base: &str) -> String {
+        let base = base.trim();
+        let base = if base.is_empty() { "Playlist" } else { base };
+        if !self.playlists.iter().any(|p| p.name == base) {
+            return base.to_string();
+        }
+        let mut n = 2;
+        loop {
+            let candidate = format!("{base} ({n})");
+            if !self.playlists.iter().any(|p| p.name == candidate) {
+                return candidate;
+            }
+            n += 1;
+        }
+    }
+
+    /// Create a playlist with a unique name at `pos` (clamped), returning its
+    /// final index. Unlike [`Self::create`], this always creates (renaming on
+    /// collision) so a dragged card reliably becomes a new playlist.
+    pub fn create_at(&mut self, name: &str, pos: usize) -> usize {
+        let name = self.unique_name(name);
+        let pos = pos.min(self.playlists.len());
+        self.playlists.insert(
+            pos,
+            Playlist {
+                name: name.clone(),
+                tracks: Vec::new(),
+            },
+        );
+        self.save();
+        pos
+    }
+
     pub fn delete(&mut self, index: usize) {
         if index < self.playlists.len() {
             self.playlists.remove(index);
@@ -217,5 +252,24 @@ mod tests {
         let mut store = make_store(&["a"]);
         store.remove_tracks_at(99, &[0]);
         assert_eq!(store.playlists[0].tracks.len(), 1);
+    }
+
+    #[test]
+    fn create_at_inserts_at_position_with_unique_name() {
+        let mut store = PlaylistStore::default();
+        store.create("Mix");
+        // Duplicate base name is de-duplicated; inserted at the front.
+        let idx = store.create_at("Mix", 0);
+        assert_eq!(store.playlists.len(), 2);
+        assert_eq!(store.playlists[idx].name, "Mix (2)");
+        assert_eq!(idx, 0);
+        // A third "Mix" appended at the end gets the next suffix.
+        let idx2 = store.create_at("Mix", store.playlists.len());
+        assert_eq!(store.playlists[idx2].name, "Mix (3)");
+        assert_eq!(idx2, store.playlists.len() - 1);
+        // Explicit position is honored.
+        let idx3 = store.create_at("Top", 1);
+        assert_eq!(idx3, 1);
+        assert_eq!(store.playlists[idx3].name, "Top");
     }
 }

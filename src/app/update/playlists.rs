@@ -20,7 +20,6 @@ impl MusicPlayer {
             self.playlist_picker = None;
             self.clear_selection();
             self.cleanup_drag_state();
-            self.drag.hovered_track = None;
 
             let playlist_name = self.playlists.playlists[index].name.clone();
             self.push_new_view(ViewData::new_playlist(Some(index), playlist_name, None));
@@ -43,19 +42,45 @@ impl MusicPlayer {
 
     pub fn handle_delete_playlist(&mut self, index: usize) {
         self.playlists.delete(index);
+
+        // The currently viewed playlist may be the one being deleted. A
+        // `Playlist` view must always have a selected playlist, so either keep
+        // a valid adjacent selection or, if none remain, leave for a safe view.
+        let mut navigate_away = false;
+        let mut new_selection: Option<usize> = None;
         if let ViewKind::Playlist {
-            selected_playlist,
-            playlist_name,
-            ..
-        } = &mut self.view_data_mut().kind
+            selected_playlist, ..
+        } = &self.view_data().kind
         {
-            if *selected_playlist == Some(index) {
-                *selected_playlist = None;
-                playlist_name.clear();
-            } else if *selected_playlist > Some(index) {
-                *selected_playlist = selected_playlist.map(|sp| sp - 1);
+            match *selected_playlist {
+                Some(sp) if sp == index => {
+                    if self.playlists.playlists.is_empty() {
+                        navigate_away = true;
+                    } else {
+                        new_selection = Some(index.min(self.playlists.playlists.len() - 1));
+                    }
+                }
+                // The deleted playlist was above the selected one; shift the
+                // selection down by one so it still points at the same playlist.
+                Some(sp) if sp > index => new_selection = Some(sp - 1),
+                _ => {}
             }
         }
+
+        if navigate_away {
+            self.push_new_view(ViewData::new_search(String::new(), self.search_scope));
+        } else if let Some(new_idx) = new_selection {
+            let name = self.playlists.playlists[new_idx].name.clone();
+            if let ViewKind::Playlist {
+                selected_playlist,
+                playlist_name,
+            } = &mut self.view_data_mut().kind
+            {
+                *selected_playlist = Some(new_idx);
+                *playlist_name = name;
+            }
+        }
+
         self.delete_confirm_index = None;
     }
 
@@ -214,5 +239,67 @@ impl MusicPlayer {
             }
         }
         self.clear_selection();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::{MusicPlayer, ViewData, ViewKind};
+    use crate::data::config;
+
+    fn player_with_playlists(names: &[&str]) -> MusicPlayer {
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        p.playlists.playlists.clear();
+        for n in names {
+            p.playlists.create(n);
+        }
+        p.nav_history = vec![ViewData::new_playlist(Some(0), String::new(), None)];
+        p.nav_history_pos = 0;
+        p
+    }
+
+    #[test]
+    fn deleting_selected_playlist_keeps_view_valid() {
+        let mut p = player_with_playlists(&["A", "B", "C"]);
+        p.nav_history = vec![ViewData::new_playlist(Some(1), "B".into(), None)];
+        p.nav_history_pos = 0;
+
+        // Delete the playlist currently being viewed (B at index 1).
+        p.handle_delete_playlist(1);
+        match &p.view_data().kind {
+            ViewKind::Playlist {
+                selected_playlist: Some(sp),
+                playlist_name,
+            } => {
+                assert_eq!(*sp, 1);
+                assert_eq!(playlist_name, "C");
+            }
+            other => panic!("expected Playlist view, got {other:?}"),
+        }
+
+        // Deleting a playlist above the selected one shifts the selection down.
+        p.nav_history = vec![ViewData::new_playlist(Some(1), "C".into(), None)];
+        p.nav_history_pos = 0;
+        p.handle_delete_playlist(0);
+        assert_eq!(
+            p.view_data().kind,
+            ViewKind::Playlist {
+                selected_playlist: Some(0),
+                playlist_name: "C".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn deleting_last_playlist_navigates_away() {
+        let mut p = player_with_playlists(&["A"]);
+        p.nav_history = vec![ViewData::new_playlist(Some(0), "A".into(), None)];
+        p.nav_history_pos = 0;
+
+        // Deleting the only playlist (while viewing it) must leave the
+        // Playlist view rather than leaving it with no selection.
+        p.handle_delete_playlist(0);
+        assert!(p.playlists.playlists.is_empty());
+        assert!(!matches!(p.view_data().kind, ViewKind::Playlist { .. }));
     }
 }

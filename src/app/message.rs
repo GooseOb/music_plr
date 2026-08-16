@@ -21,6 +21,10 @@ pub enum BackendResult {
     LyricsFetched(Option<Lyrics>, String),
     /// A per-track volume-normalization gain computed in the background.
     NormalizationComputed(String, f32),
+    /// Result of browsing a card (artist/album/playlist) to populate a newly
+    /// created local playlist. Carries the playlist index, its (possibly
+    /// de-duplicated) name, and the fetched tracks.
+    CardPlaylistReady(usize, String, Vec<Track>),
 }
 
 #[derive(Debug, Clone)]
@@ -42,9 +46,17 @@ pub enum Message {
     SearchScopeChanged(crate::youtube::SearchScope),
     SearchLoadMore,
     SearchHistorySelected(usize),
-    OpenArtist(String, String),
     OpenAlbum(String, String),
-    OpenPlaylist(String, String),
+    /// A card (artist/album/playlist) was pressed and armed for dragging.
+    /// Releasing without a drag opens the card; dropping onto the playlist
+    /// list turns it into a local playlist.
+    CardPressed(crate::data::library::LibraryItem),
+    /// A card (artist/album/playlist) in search results is hovered, for
+    /// highlight feedback.
+    CardHoverStart(crate::data::library::LibraryItem),
+    /// A card (artist/album/playlist) in the library sidebar is hovered, for
+    /// highlight feedback, independent of `CardHoverStart`.
+    LibraryCardHoverStart(crate::data::library::LibraryItem),
     ToggleLibrarySave(crate::data::library::LibraryItem),
     ToggleLibraryExpanded,
     DeleteSearchHistory(usize),

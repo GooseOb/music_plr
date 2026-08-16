@@ -86,13 +86,13 @@ impl MusicPlayer {
                     Task::none()
                 } else {
                     let first_idx = list.first_index();
-                    if let Some(hovered) = self.drag.hovered_track {
+                    if let Some(hovered) = self.drag.hovered_track() {
                         let new_idx = hovered.index.saturating_sub(1);
                         if new_idx >= first_idx {
-                            self.drag.hovered_track = Some(TrackPos::new(new_idx, list));
+                            self.drag.set_hovered_track(TrackPos::new(new_idx, list));
                         }
                     } else {
-                        self.drag.hovered_track = Some(TrackPos::new(first_idx, list));
+                        self.drag.set_hovered_track(TrackPos::new(first_idx, list));
                     }
                     self.scroll_hovered_track_into_view()
                 }
@@ -103,19 +103,20 @@ impl MusicPlayer {
                 if count == 0 {
                     Task::none()
                 } else {
-                    if let Some(hovered) = self.drag.hovered_track {
+                    if let Some(hovered) = self.drag.hovered_track() {
                         let new_idx = hovered.index + 1;
                         if new_idx < count {
-                            self.drag.hovered_track = Some(TrackPos::new(new_idx, list));
+                            self.drag.set_hovered_track(TrackPos::new(new_idx, list));
                         }
                     } else {
-                        self.drag.hovered_track = Some(TrackPos::new(list.first_index(), list));
+                        self.drag
+                            .set_hovered_track(TrackPos::new(list.first_index(), list));
                     }
                     self.scroll_hovered_track_into_view()
                 }
             }
             iced::keyboard::Key::Named(Named::Enter) => {
-                if let Some(hovered) = self.drag.hovered_track {
+                if let Some(hovered) = self.drag.hovered_track() {
                     self.handle_play_track(hovered);
                 }
                 Task::none()
@@ -150,24 +151,28 @@ impl MusicPlayer {
         if self.track_count(target) == 0 {
             return Task::none();
         }
-        self.drag.hovered_track = Some(TrackPos::new(target.first_index(), target));
+        self.drag
+            .set_hovered_track(TrackPos::new(target.first_index(), target));
         self.scroll_hovered_track_into_view()
     }
 
     /// Scroll the hovered track into view if it's outside the visible
     /// viewport of the current scrollable list. Returns a `scroll_to` task.
     pub(super) fn scroll_hovered_track_into_view(&self) -> Task<Message> {
-        let Some(TrackPos { index, list }) = self.drag.hovered_track else {
+        let Some(TrackPos { index, list }) = self.drag.hovered_track() else {
             return Task::none();
         };
 
         let (bounds, scroll_offset) = if list.in_queue_panel() {
             (
-                self.bounds.queue.map(|g| g.bounds),
-                self.bounds.queue.map_or(0.0, |g| g.translation_y),
+                self.bounds.queue.as_ref().map(|g| g.bounds),
+                self.bounds.queue.as_ref().map_or(0.0, |g| g.translation_y),
             )
         } else {
-            (self.bounds.track.map(|g| g.bounds), self.view_data().scroll)
+            (
+                self.bounds.track.as_ref().map(|g| g.bounds),
+                self.view_data().scroll,
+            )
         };
 
         let Some(bounds) = bounds else {
@@ -200,7 +205,7 @@ impl MusicPlayer {
 
     fn hovered_list(&self) -> TrackListKind {
         self.drag
-            .hovered_track
+            .hovered_track()
             .map_or(TrackListKind::Active, |h| h.list)
     }
 }

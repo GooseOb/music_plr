@@ -1,16 +1,13 @@
 use iced::{
     alignment,
-    widget::{
-        container, image, rule, scrollable, text, Button, Column, Container, Id, MouseArea, Row,
-        Rule,
-    },
+    widget::{container, image, scrollable, text, Button, Column, Container, Id, MouseArea, Row},
     Color, Element, Length,
 };
 
 pub const TRACK_LIST_ID: Id = Id::new("track_list");
 
 use crate::{
-    app::interaction::{TrackListKind, TrackPos},
+    app::interaction::{row_id, TrackListKind, TrackPos},
     icons,
     theme::{AppTheme, Palette},
     types::Track,
@@ -42,15 +39,6 @@ pub fn thumbnail<'a>(
     }
 }
 
-fn drop_indicator() -> Rule<'static, AppTheme> {
-    rule::horizontal(theme::DROP_LINE_HEIGHT).style(|theme: &AppTheme| rule::Style {
-        color: theme.palette.accent,
-        radius: iced::border::Radius::new(0),
-        fill_mode: rule::FillMode::Full,
-        snap: true,
-    })
-}
-
 pub(super) fn view_track_list<'a>(
     tracks: &'a [Track],
     player: &'a MusicPlayer,
@@ -64,33 +52,14 @@ pub(super) fn view_track_list<'a>(
     let show_album = list == TrackListKind::Active
         && !matches!(player.view_data().kind, crate::app::ViewKind::Album { .. });
 
-    let target_matches = player.drag.drag_target_list == Some(list);
-
-    let mut items: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(tracks.len());
-    for (i, track) in tracks.iter().enumerate() {
-        let adjusted = i + index_offset;
-        if player.drag.drag_active && target_matches {
-            if let Some(drop_idx) = player.drag.drag_drop_target {
-                if adjusted == drop_idx {
-                    items.push(drop_indicator().into());
-                }
-            }
-        }
-        items.push(view_track_row(
-            track,
-            TrackPos::new(adjusted, list),
-            player,
-            show_album,
-        ));
-    }
-
-    if player.drag.drag_active && target_matches {
-        if let Some(drop_idx) = player.drag.drag_drop_target {
-            if drop_idx == tracks.len() + index_offset {
-                items.push(drop_indicator().into());
-            }
-        }
-    }
+    let items: Vec<Element<'a, Message, AppTheme>> = tracks
+        .iter()
+        .enumerate()
+        .map(|(i, track)| {
+            let adjusted = i + index_offset;
+            view_track_row(track, TrackPos::new(adjusted, list), player, show_album)
+        })
+        .collect();
 
     scrollable(Column::with_children(items))
         .id(list.scrollable_id())
@@ -103,7 +72,7 @@ pub(super) fn leading_control<'a>(
     player: &'a MusicPlayer,
 ) -> Element<'a, Message, AppTheme> {
     let is_current = player.queue.current().is_some_and(|t| t.url == track.url);
-    let is_hovered = player.drag.hovered_track == Some(pos);
+    let is_hovered = player.drag.hovered_track() == Some(pos);
 
     if is_current {
         play_pause_button(player.is_playing)
@@ -138,7 +107,7 @@ pub(super) fn view_track_row<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let is_selected = player.selection(pos.list).contains(&pos.index);
-    let is_hovered = player.drag.hovered_track == Some(pos);
+    let is_hovered = player.drag.hovered_track() == Some(pos);
     let is_current = player.queue.current().is_some_and(|t| t.url == track.url);
 
     let row_bg = if is_current {
@@ -168,7 +137,7 @@ pub(super) fn view_track_row<'a>(
         .on_right_press(Message::TrackRightClicked(pos))
         .on_move(move |_| Message::TrackHoverStart(pos));
 
-    track_row(track_area, row_bg).into()
+    track_row(track_area, row_bg, Some(row_id(pos.list, pos.index))).into()
 }
 
 // ── shared helpers ─────────────────────────────────────────────
@@ -271,16 +240,23 @@ pub(super) fn track_row_layout<'a>(
 }
 
 /// Wraps row content in a fixed-height container with a background color.
+/// `id` (when `Some`) tags the container so the bounds `Operation` can capture
+/// its measured geometry for drop-target hit-testing.
 pub(super) fn track_row<'a>(
     content: impl Into<Element<'a, Message, AppTheme>>,
     bg: Color,
+    id: Option<Id>,
 ) -> Container<'a, Message, AppTheme> {
-    Container::new(content)
+    let container = Container::new(content)
         .height(theme::ROW_HEIGHT)
         .style(move |_: &AppTheme| container::Style {
             background: Some(bg.into()),
             ..Default::default()
-        })
+        });
+    match id {
+        Some(id) => container.id(id),
+        None => container,
+    }
 }
 
 pub(super) fn empty_state<'a>(msg: impl text::IntoFragment<'a>) -> Element<'a, Message, AppTheme> {
