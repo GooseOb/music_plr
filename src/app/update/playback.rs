@@ -9,7 +9,7 @@ impl MusicPlayer {
         let TrackPos { index, list } = pos;
         if list == TrackListKind::Recent {
             if let Some(track) = self.get_track_at(pos) {
-                self.play_recent_track(track);
+                self.play_track_replacing_queue(track);
             }
             return;
         }
@@ -35,18 +35,8 @@ impl MusicPlayer {
             return;
         }
         if let Some(track) = self.get_track_at(TrackPos::new(index, TrackListKind::Active)) {
-            if let Some(old) = self.queue.current().cloned() {
-                if old.url != track.url {
-                    self.queue
-                        .record_played(&old, self.config.max_recently_played);
-                }
-            }
-            self.play_track_internal(&track);
-            self.queue.clear();
-            self.queue.enqueue(track);
-            self.mpris_dirty = true;
-            let remaining: Vec<Track> = self.tracks_after(index).to_vec();
-            for t in remaining {
+            self.play_track_replacing_queue(track);
+            for t in self.tracks_after(index).to_vec() {
                 self.queue.enqueue(t);
             }
             self.save_session();
@@ -59,7 +49,7 @@ impl MusicPlayer {
         self.view_tracks().get(start..).unwrap_or(&[])
     }
 
-    pub fn play_recent_track(&mut self, track: Track) {
+    fn play_track_replacing_queue(&mut self, track: Track) {
         if let Some(old) = self.queue.current().cloned() {
             if old.url != track.url {
                 self.queue
@@ -189,11 +179,7 @@ impl MusicPlayer {
         self.save_session();
         self.mpris_dirty = true;
         self.notify_tracks("Removed", removed, "from queue");
-        // Drop a now-stale selection if any removed index was selected.
-        let sel = self.queue_selected_indices.clone();
-        if indices.iter().any(|&i| sel.contains(&i)) {
-            self.clear_selection();
-        }
+        self.clear_selection_if_touched(indices, TrackListKind::Queue);
     }
 
     pub fn toggle_play_pause(&mut self) {

@@ -19,7 +19,7 @@ impl MusicPlayer {
         {
             self.playlist_picker = None;
             self.clear_selection();
-            self.cleanup_drag_state();
+            self.drag.cleanup();
 
             let playlist_name = self.playlists.playlists[index].name.clone();
             self.push_new_view(ViewData::new_playlist(Some(index), playlist_name, None));
@@ -151,11 +151,7 @@ impl MusicPlayer {
             if sp < self.playlists.playlists.len() {
                 let removed = self.playlists.remove_tracks_at(sp, indices);
                 self.notify_tracks("Removed", removed, "");
-                // Drop a now-stale selection if any removed index was selected.
-                let sel = self.view_data_mut().selection.clone();
-                if indices.iter().any(|&i| sel.contains(&i)) {
-                    self.clear_selection();
-                }
+                self.clear_selection_if_touched(indices, super::TrackListKind::Active);
             }
         }
     }

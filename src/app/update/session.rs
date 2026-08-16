@@ -43,7 +43,7 @@ impl MusicPlayer {
         self.audio.set_volume(state.volume);
         self.library_expanded = state.library_expanded;
 
-        let _ = self.restore_nav_entry(&state.data);
+        let _ = self.restore_nav_entry(state.data);
 
         self.nav_history = vec![self.view_data().clone()];
         self.nav_history_pos = 0;

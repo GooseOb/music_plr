@@ -15,7 +15,8 @@
 //! `bounds` into that list's `ListGeometry.rows`. Because a scrollable's rows
 //! are visited contiguously right after its own `scrollable` callback, the
 //! `current` flag is correctly scoped — and the only id'd `Container`s in the
-//! tree are tracked-list rows, so nothing else is captured.
+//! tree are list rows (track-list, playlist, and library rows), so nothing
+//! else is captured.
 
 use crate::app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID};
 use crate::app::Message;
@@ -38,12 +39,9 @@ pub struct ListGeometry {
 pub const SIDEBAR_LIST_ID: Id = Id::new("sidebar_playlist_list");
 pub const LIBRARY_LIST_ID: Id = Id::new("sidebar_library_list");
 
-#[derive(Debug, Clone, Copy)]
-enum ListTarget {
-    Sidebar,
-    Library,
-    Queue,
-    Track,
+/// Whether `id` is one of the scrollable lists whose row geometry we capture.
+fn is_tracked_list(id: &Id) -> bool {
+    *id == SIDEBAR_LIST_ID || *id == LIBRARY_LIST_ID || *id == QUEUE_LIST_ID || *id == TRACK_LIST_ID
 }
 
 #[derive(Default, Clone, Debug)]
@@ -52,12 +50,44 @@ pub struct CaptureBounds {
     pub library: Option<ListGeometry>,
     pub queue: Option<ListGeometry>,
     pub track: Option<ListGeometry>,
-    current: Option<ListTarget>,
+    current: Option<Id>,
 }
 
 impl CaptureBounds {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn geo_mut(&mut self, id: &Id) -> &mut Option<ListGeometry> {
+        if *id == SIDEBAR_LIST_ID {
+            &mut self.sidebar
+        } else if *id == LIBRARY_LIST_ID {
+            &mut self.library
+        } else if *id == QUEUE_LIST_ID {
+            &mut self.queue
+        } else {
+            // Callers only pass tracked ids (`current` is always one, and
+            // `scrollable` bails on untracked ids before reaching here).
+            &mut self.track
+        }
+    }
+
+    /// The list (by `Id`) whose bounds contain `point`, if any. Iteration order
+    /// matches `scrollable` priority; lists don't overlap so the first hit wins.
+    pub fn get_containing(&self, point: iced::Point) -> Option<(Id, &ListGeometry)> {
+        for (id, geo) in [
+            (QUEUE_LIST_ID.clone(), &self.queue),
+            (TRACK_LIST_ID.clone(), &self.track),
+            (SIDEBAR_LIST_ID.clone(), &self.sidebar),
+            (LIBRARY_LIST_ID.clone(), &self.library),
+        ] {
+            if let Some(g) = geo {
+                if g.bounds.contains(point) {
+                    return Some((id, g));
+                }
+            }
+        }
+        None
     }
 }
 
@@ -78,29 +108,12 @@ impl Operation<Message> for CaptureBounds {
             self.current = None;
             return;
         };
-        let target = if id == &SIDEBAR_LIST_ID {
-            ListTarget::Sidebar
-        } else if id == &LIBRARY_LIST_ID {
-            ListTarget::Library
-        } else if id == &QUEUE_LIST_ID {
-            ListTarget::Queue
-        } else if id == &TRACK_LIST_ID {
-            ListTarget::Track
-        } else {
-            // Unknown scrollable (e.g. the read-only recently-played list, or
-            // any non-list scrollable): stop collecting rows until the next
-            // known list so its contents aren't misattributed.
+        if !is_tracked_list(id) {
             self.current = None;
             return;
-        };
-        self.current = Some(target);
-        let geo = match target {
-            ListTarget::Sidebar => &mut self.sidebar,
-            ListTarget::Library => &mut self.library,
-            ListTarget::Queue => &mut self.queue,
-            ListTarget::Track => &mut self.track,
-        };
-        *geo = Some(ListGeometry {
+        }
+        self.current = Some(id.clone());
+        *self.geo_mut(id) = Some(ListGeometry {
             bounds,
             translation_y: translation.y,
             content_height: content_bounds.height,
@@ -109,19 +122,13 @@ impl Operation<Message> for CaptureBounds {
     }
 
     fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
-        let Some(_) = id else {
+        if id.is_none() {
+            return;
+        }
+        let Some(target) = self.current.clone() else {
             return;
         };
-        let Some(target) = self.current else {
-            return;
-        };
-        let geo = match target {
-            ListTarget::Sidebar => &mut self.sidebar,
-            ListTarget::Library => &mut self.library,
-            ListTarget::Queue => &mut self.queue,
-            ListTarget::Track => &mut self.track,
-        };
-        if let Some(g) = geo {
+        if let Some(g) = self.geo_mut(&target) {
             g.rows.push(bounds);
         }
     }

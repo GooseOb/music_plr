@@ -9,10 +9,7 @@ use crate::{
     types::{PlayQueue, Track},
 };
 use iced::{Subscription, Task};
-use std::{
-    sync::mpsc,
-    time::{Duration, Instant},
-};
+use std::{sync::mpsc, time::Duration};
 use tracing::{error, warn};
 
 mod interaction;
@@ -21,7 +18,7 @@ mod ui;
 mod update;
 mod view_data;
 
-pub use interaction::{ContextMenuState, DragState, HoverTarget, TrackListKind, TrackPos};
+pub use interaction::{ContextMenuState, DragState, TrackListKind, TrackPos};
 pub use message::{BackendResult, Message};
 pub use view_data::{RequestIdGenerator, ViewData, ViewKind};
 
@@ -104,8 +101,7 @@ pub struct MusicPlayer {
     pub pending_normalization_id: Option<String>,
 
     pub clipboard: Vec<Track>,
-    pub last_click: Option<TrackPos>,
-    pub last_click_time: Instant,
+    pub last_click: Option<(TrackPos, std::time::Instant)>,
 
     pub result_tx: mpsc::Sender<BackendResult>,
     pub result_rx: mpsc::Receiver<BackendResult>,
@@ -204,7 +200,6 @@ impl MusicPlayer {
             window_width: 1280.0,
             clipboard: Vec::new(),
             last_click: None,
-            last_click_time: std::time::Instant::now(),
         };
 
         player.init_mpris();
@@ -291,7 +286,7 @@ impl MusicPlayer {
             }
             Message::CursorMoved(pos) => {
                 self.drag.cursor_pos = pos;
-                if self.drag.is_pressing()
+                if self.drag.pressed.is_some()
                     && self.drag.drag_origin.is_some()
                     && !self.drag.drag_active
                 {
@@ -386,24 +381,12 @@ impl MusicPlayer {
                 self.handle_delete_search_history(index);
                 Task::none()
             }
-            Message::TrackPressed(pos) => {
-                self.handle_track_pressed(pos);
+            Message::DragPress(pressed) => {
+                self.handle_drag_press(pressed);
                 Task::none()
             }
-            Message::CardPressed(item) => {
-                self.handle_card_pressed(item);
-                Task::none()
-            }
-            Message::CardHoverStart(item) => {
-                self.drag.set_hovered(HoverTarget::Card(item));
-                Task::none()
-            }
-            Message::LibraryCardHoverStart(item) => {
-                self.drag.set_hovered(HoverTarget::LibraryCard(item));
-                Task::none()
-            }
-            Message::TrackHoverStart(pos) => {
-                self.drag.set_hovered_track(pos);
+            Message::HoverStart(target) => {
+                self.drag.hovered = Some(target);
                 Task::none()
             }
             Message::TrackRightClicked(pos) => {

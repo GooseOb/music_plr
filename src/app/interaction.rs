@@ -1,7 +1,9 @@
 //! Mouse, drag, and context-menu interaction state.
 
-use crate::data::library::LibraryItem;
-use crate::types::{QueueTab, Track};
+use crate::{
+    data::library::LibraryItem,
+    types::{QueueTab, Track},
+};
 use iced::{widget::Id, Point};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,14 +108,6 @@ pub enum Pressed {
     Card(LibraryItem),
 }
 
-impl Default for Pressed {
-    fn default() -> Self {
-        // Only ever used as the placeholder `Option::take` swaps in; never
-        // observed as a real drag press.
-        Pressed::Track(TrackPos::new(0, TrackListKind::Active))
-    }
-}
-
 /// Mouse and drag interaction state
 #[derive(Debug, Clone, Default)]
 pub struct DragState {
@@ -176,49 +170,9 @@ impl DragState {
         }
     }
 
-    /// Replace the current hover with `target`.
-    pub fn set_hovered(&mut self, target: HoverTarget) {
-        self.hovered = Some(target);
-    }
-
-    /// The pressed track being dragged, if any.
-    pub fn pressed_track(&self) -> Option<TrackPos> {
-        match self.pressed {
-            Some(Pressed::Track(pos)) => Some(pos),
-            _ => None,
-        }
-    }
-
-    /// Arm a track drag from `pos`.
-    pub fn set_pressed_track(&mut self, pos: TrackPos) {
-        self.pressed = Some(Pressed::Track(pos));
-    }
-
-    /// Arm a card drag from `item`.
-    pub fn set_pressed_card(&mut self, item: LibraryItem) {
-        self.pressed = Some(Pressed::Card(item));
-    }
-
     /// Whether a card (vs track) drag is active.
     pub fn is_pressed_card(&self) -> bool {
         matches!(self.pressed, Some(Pressed::Card(_)))
-    }
-
-    /// Whether any drag (track or card) is currently armed.
-    pub fn is_pressing(&self) -> bool {
-        self.pressed.is_some()
-    }
-
-    /// Take the pressed card out, clearing the press. Returns `None` (and
-    /// leaves the press untouched) if what's pressed isn't a card.
-    pub fn take_pressed_card(&mut self) -> Option<LibraryItem> {
-        match self.pressed.take() {
-            Some(Pressed::Card(item)) => Some(item),
-            other => {
-                self.pressed = other;
-                None
-            }
-        }
     }
 }
 

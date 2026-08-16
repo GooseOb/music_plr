@@ -53,11 +53,7 @@ impl MusicPlayer {
                 plural_suffix(removed)
             ));
         }
-        // Drop a now-stale selection if any operated-on index was selected.
-        let sel = self.selection(list);
-        if indices.iter().any(|&i| sel.contains(&i)) {
-            self.clear_selection();
-        }
+        self.clear_selection_if_touched(indices, list);
     }
 
     fn spawn_download_thread(&self, track: Track) {

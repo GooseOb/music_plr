@@ -1,10 +1,14 @@
 use super::{
-    operation::{LIBRARY_LIST_ID, SIDEBAR_LIST_ID},
+    operation::{ListGeometry, LIBRARY_LIST_ID, SIDEBAR_LIST_ID},
     BackendResult, Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData,
     DOUBLE_CLICK_MS,
 };
-use crate::app::interaction::DropTarget;
-use crate::data::library::{LibraryItem, LibraryKind};
+use crate::{
+    app::interaction::{DropTarget, HoverTarget, Pressed},
+    app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID},
+    data::library::{LibraryItem, LibraryKind},
+};
+use iced::widget::Id;
 
 impl MusicPlayer {
     fn cursor_in_sidebar(&self) -> bool {
@@ -32,130 +36,105 @@ impl MusicPlayer {
     }
 
     pub fn handle_left_release(&mut self) {
-        if let Some(item) = self.drag.take_pressed_card() {
-            // A card press: a drag onto a sidebar list becomes a playlist (or
-            // adds/reorders in the library); a plain click drills down.
-            if self.drag.drag_active {
-                if let Some(target) = self.card_drop_target() {
-                    self.handle_card_drop(item, target);
-                }
-            } else {
-                self.open_library_item(item);
-            }
-            self.cleanup_drag_state();
-            return;
-        }
-
-        let Some(pressed) = self.drag.pressed_track() else {
-            self.cleanup_drag_state();
+        let Some(pressed) = self.drag.pressed.take() else {
+            self.drag.cleanup();
             return;
         };
+
         if self.drag.drag_active {
-            self.handle_drag_drop(pressed.list);
+            match pressed {
+                Pressed::Track(pos) => self.handle_track_drop(pos),
+                Pressed::Card(item) => {
+                    if let Some(target) = self
+                        .card_drop_target(self.bounds.get_containing(self.drag.cursor_pos).as_ref())
+                    {
+                        self.handle_card_drop(item, target);
+                    }
+                }
+            }
         } else {
-            self.toggle_selection(pressed);
+            match pressed {
+                Pressed::Track(pos) => {
+                    self.toggle_selection(pos);
+                    if self.show_search_history && !self.is_cursor_in_search_area() {
+                        self.show_search_history = false;
+                    } else if !self.show_search_history
+                        && self.search_input_bounds().contains(self.drag.cursor_pos)
+                        && !self.search_history.get().is_empty()
+                    {
+                        self.update_search_history();
+                        self.show_search_history = true;
+                    }
+                }
+                Pressed::Card(item) => self.open_library_item(item),
+            }
         }
 
-        if self.show_search_history && !self.is_cursor_in_search_area() {
-            self.show_search_history = false;
-        } else if !self.show_search_history
-            && self.search_input_bounds().contains(self.drag.cursor_pos)
-            && !self.search_history.get().is_empty()
-        {
-            self.update_search_history();
-            self.show_search_history = true;
-        }
-
-        self.cleanup_drag_state();
-    }
-
-    pub(super) fn cleanup_drag_state(&mut self) {
         self.drag.cleanup();
     }
 
     pub fn handle_drag_update(&mut self) -> Task<Message> {
-        if matches!(
-            self.drag.hovered,
-            Some(crate::app::interaction::HoverTarget::SidebarPlaylist(_))
-        ) {
+        if matches!(self.drag.hovered, Some(HoverTarget::SidebarPlaylist(_))) {
             self.drag.hovered = None;
         }
         self.drag.drop_target = None;
 
-        // Card drags resolve to a sidebar list (playlists or library) rather
-        // than the track lists, so they're handled entirely here. Edge
-        // autoscroll still applies to whichever sidebar list is under the
-        // cursor.
-        if self.drag.is_pressed_card() {
-            self.drag.drop_target = self.card_drop_target();
-            return self.sidebar_autoscroll();
-        }
-
-        if self.cursor_in_sidebar() {
-            if let Some(idx) = self.sidebar_playlist_at_cursor() {
-                self.drag
-                    .set_hovered(crate::app::interaction::HoverTarget::SidebarPlaylist(idx));
-            }
-            return self.sidebar_autoscroll();
-        }
-
-        let Some(source) = self.drag.pressed_track().map(|p| p.list) else {
+        let Some(pressed) = &self.drag.pressed else {
             return Task::none();
         };
 
-        // Check if cursor is over the queue list (for cross-list copy to queue).
-        if self.show_queue {
-            if let Some(q) = &self.bounds.queue {
-                if q.bounds.contains(self.drag.cursor_pos) {
-                    let target = TrackListKind::Queue;
-                    let drop_idx = self.compute_drop_idx(target);
-                    self.drag.drop_target =
-                        Some(DropTarget::Track(TrackPos::new(drop_idx, target)));
-                    return self.handle_drag_autoscroll(
-                        q.bounds,
-                        q.translation_y,
-                        q.content_height,
-                        target.scrollable_id(),
-                    );
-                }
+        let containing = self.bounds.get_containing(self.drag.cursor_pos);
+
+        match pressed {
+            Pressed::Card(_) => {
+                self.drag.drop_target = self.card_drop_target(containing.as_ref());
             }
-        }
-
-        // Check if cursor is over the current track list (for same-list reorder
-        // or copy from queue to track list). Track bounds come from the live
-        // capture; the scroll offset stays on `view_data` (persisted per slot).
-        if let Some(t) = &self.bounds.track {
-            let lb = t.bounds;
-            if lb.contains(self.drag.cursor_pos) {
-                let target = TrackListKind::Active;
-                let drop_idx = self.compute_drop_idx(target);
-                self.drag.drop_target = Some(DropTarget::Track(TrackPos::new(drop_idx, target)));
-
-                // For same-list drags, prevent dropping onto a selected item
-                // that would shift it (reorder guard). Skip this check for
-                // cross-list copies where every drop position is valid.
-                if source == target {
-                    let sel = self.selection(target).to_vec();
-                    if let (Some(min), Some(max)) =
-                        (sel.iter().copied().min(), sel.iter().copied().max())
-                    {
-                        if drop_idx > min && drop_idx < max {
-                            self.drag.drop_target = None;
-                            return Task::none();
+            Pressed::Track(pos) => match self.resolve_track_drop(*pos, containing.as_ref()) {
+                Some(target) => self.drag.drop_target = Some(target),
+                None => {
+                    if let Some((id, _)) = containing.as_ref() {
+                        if *id == SIDEBAR_LIST_ID {
+                            if let Some(idx) = self.sidebar_playlist_at_cursor() {
+                                self.drag.hovered = Some(HoverTarget::SidebarPlaylist(idx));
+                            }
                         }
                     }
                 }
-
-                return self.handle_drag_autoscroll(
-                    lb,
-                    t.translation_y,
-                    t.content_height,
-                    target.scrollable_id(),
-                );
-            }
+            },
         }
 
-        Task::none()
+        let Some((target_id, geo)) = containing else {
+            return Task::none();
+        };
+
+        self.handle_drag_autoscroll(geo.bounds, geo.translation_y, geo.content_height, target_id)
+    }
+
+    fn resolve_track_drop(
+        &self,
+        source: TrackPos,
+        containing: Option<&(Id, &ListGeometry)>,
+    ) -> Option<DropTarget> {
+        let (id, _geo) = containing?;
+        let list = if *id == QUEUE_LIST_ID {
+            TrackListKind::Queue
+        } else if *id == TRACK_LIST_ID {
+            TrackListKind::Active
+        } else {
+            return None;
+        };
+        let drop_idx = self.compute_drop_idx(list);
+        // Same-list reorder guard: never drop onto a selected run that
+        // would merely shift it. Cross-list copies are unguarded.
+        if source.list == TrackListKind::Active {
+            let sel = self.selection(TrackListKind::Active).to_vec();
+            if let (Some(min), Some(max)) = (sel.iter().copied().min(), sel.iter().copied().max()) {
+                if drop_idx > min && drop_idx < max {
+                    return None;
+                }
+            }
+        }
+        Some(DropTarget::Track(TrackPos::new(drop_idx, list)))
     }
 
     /// Returns a drop index in `list`'s own space (the queue's now-playing
@@ -180,39 +159,12 @@ impl MusicPlayer {
         geo.rows.len() + list.first_index()
     }
 
-    /// Edge autoscroll for whichever sidebar list (playlist or library) is
-    /// under the cursor while a drag is active.
-    fn sidebar_autoscroll(&self) -> Task<Message> {
-        let cursor = self.drag.cursor_pos;
-        if let Some(geo) = &self.bounds.sidebar {
-            if geo.bounds.contains(cursor) {
-                return self.handle_drag_autoscroll(
-                    geo.bounds,
-                    geo.translation_y,
-                    geo.content_height,
-                    SIDEBAR_LIST_ID,
-                );
-            }
-        }
-        if let Some(geo) = &self.bounds.library {
-            if geo.bounds.contains(cursor) {
-                return self.handle_drag_autoscroll(
-                    geo.bounds,
-                    geo.translation_y,
-                    geo.content_height,
-                    LIBRARY_LIST_ID,
-                );
-            }
-        }
-        Task::none()
-    }
-
     fn handle_drag_autoscroll(
         &self,
         bounds: iced::Rectangle,
         current_scroll: f32,
         content_height: f32,
-        scrollable_id: iced::widget::Id,
+        scrollable_id: Id,
     ) -> Task<Message> {
         let cursor = self.drag.cursor_pos;
         let y_offset = cursor.y - bounds.y;
@@ -302,11 +254,9 @@ impl MusicPlayer {
         })
     }
 
-    pub fn handle_drag_drop(&mut self, source: TrackListKind) {
-        let Some(pressed) = self.drag.pressed_track() else {
-            return;
-        };
-        let track_idx = pressed.index;
+    pub fn handle_track_drop(&mut self, pos: TrackPos) {
+        let source = pos.list;
+        let track_idx = pos.index;
 
         let was_in_selection = {
             let sel = self.selection(source);
@@ -319,30 +269,36 @@ impl MusicPlayer {
             vec![track_idx]
         };
 
+        // Dropped on the playlist sidebar: add to that playlist (prepend). No
+        // insertion bar — the row highlight already shows the target.
         if self.cursor_in_sidebar() {
-            if let Some(playlist_idx) = self.sidebar_playlist_at_cursor() {
-                let tracks: Vec<Track> = indices
-                    .iter()
-                    .rev()
-                    .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
-                    .collect();
-                let count = tracks.len();
-                if count > 0 {
-                    self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
+            if let Some(pl) = &self.bounds.sidebar {
+                if pl.bounds.contains(self.drag.cursor_pos) {
+                    if let Some(playlist_idx) = self.sidebar_playlist_at_cursor() {
+                        let tracks: Vec<Track> = indices
+                            .iter()
+                            .rev()
+                            .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
+                            .collect();
+                        let count = tracks.len();
+                        if count > 0 {
+                            self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
+                        }
+                        let name = self.playlists.playlists[playlist_idx].name.clone();
+                        self.notify_tracks("Added", count, &format!("to {name}"));
+                        return;
+                    }
                 }
-                let name = self.playlists.playlists[playlist_idx].name.clone();
-                self.notify_tracks("Added", count, &format!("to {name}"));
-                return;
             }
         }
 
-        let Some(DropTarget::Track(pos)) = self.drag.drop_target else {
+        let Some(DropTarget::Track(drop)) = self.drag.drop_target else {
             return;
         };
-        let drop_idx = pos.index;
+        let drop_idx = drop.index;
 
         // Determine if this is a cross-list copy or a same-list reorder.
-        match pos.list {
+        match drop.list {
             target if target == source => {
                 self.handle_same_list_reorder(drop_idx, &indices, source);
             }
@@ -426,32 +382,19 @@ impl MusicPlayer {
         }
     }
 
-    /// Resolve where a dragged card would land, given the current cursor: the
-    /// playlist list (insert a new playlist at an index) or the library list
-    /// (insert/reorder a saved item). Returns `None` when the cursor isn't
-    /// over either sidebar list.
-    fn card_drop_target(&self) -> Option<DropTarget> {
-        if let Some(pl) = &self.bounds.sidebar {
-            if pl.bounds.contains(self.drag.cursor_pos) {
+    fn card_drop_target(&self, containing: Option<&(Id, &ListGeometry)>) -> Option<DropTarget> {
+        if let Some((id, geo)) = containing {
+            if *id == SIDEBAR_LIST_ID {
                 let count = self.playlists.playlists.len();
                 return Some(DropTarget::Playlist(
-                    self.sidebar_insertion_index(pl, count),
+                    self.sidebar_insertion_index(geo, count),
                 ));
             }
-        }
-        if self.cursor_in_sidebar() {
-            if let Some(lib) = &self.bounds.library {
-                if lib.bounds.contains(self.drag.cursor_pos) {
-                    let count = self.library.items.len();
-                    return Some(DropTarget::Library(
-                        self.sidebar_insertion_index(lib, count),
-                    ));
-                }
-            }
-            // Collapsed (or not-yet-captured) library: the lower sidebar is
-            // the library, so append there.
-            if !self.library_expanded || self.bounds.library.is_none() {
-                return Some(DropTarget::Library(self.library.items.len()));
+            if *id == LIBRARY_LIST_ID {
+                let count = self.library.items.len();
+                return Some(DropTarget::Library(
+                    self.sidebar_insertion_index(geo, count),
+                ));
             }
         }
         None
@@ -459,11 +402,7 @@ impl MusicPlayer {
 
     /// The index within a sidebar list where a drop would insert, given the
     /// cursor's position relative to the list's measured row bounds.
-    fn sidebar_insertion_index(
-        &self,
-        geo: &crate::app::update::operation::ListGeometry,
-        count: usize,
-    ) -> usize {
+    fn sidebar_insertion_index(&self, geo: &ListGeometry, count: usize) -> usize {
         let cursor_y = self.drag.cursor_pos.y + geo.translation_y;
         for (i, row) in geo.rows.iter().enumerate() {
             if cursor_y < row.y + row.height / 2.0 {
@@ -528,7 +467,6 @@ impl MusicPlayer {
         // stream in as the browse result arrives. Select it directly (rather
         // than `handle_select_playlist`) so it activates even when the drop
         // index coincides with the currently selected playlist.
-        let name = self.playlists.playlists[idx].name.clone();
         self.push_new_view(ViewData::new_playlist(Some(idx), name, None));
         self.save_session();
     }
@@ -542,37 +480,36 @@ impl MusicPlayer {
         }
     }
 
-    /// Arm a card (artist/album/playlist) for dragging. A release without a
-    /// drag opens the card; a drag onto the playlist list converts it to a
-    /// local playlist, and a drag onto the library adds/reorders it.
-    pub fn handle_card_pressed(&mut self, item: LibraryItem) {
-        self.drag.set_pressed_card(item);
+    /// Arm a press for dragging. A track row also supports double-click (play
+    /// + select); a card (artist/album/playlist) opens on a plain click.
+    ///
+    /// The drag threshold is promoted in `CursorMoved`, so this only records
+    /// the press origin.
+    pub fn handle_drag_press(&mut self, pressed: Pressed) {
+        match pressed {
+            Pressed::Track(pos) => {
+                let now = std::time::Instant::now();
+                // Comparing the full position, not just the index, keeps a click
+                // in one list from completing a double-click begun in another.
+                let is_double = self.last_click.is_some_and(|(last_pos, last_time)| {
+                    last_pos == pos && now.duration_since(last_time).as_millis() < DOUBLE_CLICK_MS
+                });
+                self.last_click = Some((pos, now));
+                if is_double {
+                    self.drag.pressed = None;
+                    self.drag.drag_origin = None;
+                    self.handle_play_track(pos);
+                    return;
+                }
+                if pos.list.is_interactive() {
+                    self.drag.pressed = Some(Pressed::Track(pos));
+                }
+            }
+            Pressed::Card(item) => {
+                self.drag.pressed = Some(Pressed::Card(item));
+            }
+        }
         self.drag.drag_origin = Some(self.drag.cursor_pos);
         self.drag.drag_active = false;
-    }
-
-    pub fn handle_track_pressed(&mut self, pos: TrackPos) {
-        let now = std::time::Instant::now();
-        // Comparing the full position, not just the index, keeps a click in
-        // one list from completing a double-click begun in another.
-        let is_double = self.last_click == Some(pos)
-            && now.duration_since(self.last_click_time).as_millis() < DOUBLE_CLICK_MS;
-
-        self.last_click = Some(pos);
-        self.last_click_time = now;
-        // Read-only lists neither select nor drag, so they never arm the
-        // press state that `CursorMoved` promotes into a drag.
-        if pos.list.is_interactive() {
-            self.drag.set_pressed_track(pos);
-            self.drag.drag_origin = Some(self.drag.cursor_pos);
-        }
-        self.drag.drag_active = false;
-
-        if is_double {
-            self.drag.pressed = None;
-            self.drag.drag_origin = None;
-            self.handle_play_track(pos);
-            self.toggle_selection(pos);
-        }
     }
 }

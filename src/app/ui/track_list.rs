@@ -7,7 +7,7 @@ use iced::{
 pub const TRACK_LIST_ID: Id = Id::new("track_list");
 
 use crate::{
-    app::interaction::{row_id, TrackListKind, TrackPos},
+    app::interaction::{row_id, HoverTarget, Pressed, TrackListKind, TrackPos},
     icons,
     theme::{AppTheme, Palette},
     types::Track,
@@ -133,9 +133,9 @@ pub(super) fn view_track_row<'a>(
     let inner = track_row_layout(leading, track, player, show_album);
 
     let track_area = MouseArea::new(inner)
-        .on_press(Message::TrackPressed(pos))
+        .on_press(Message::DragPress(Pressed::Track(pos)))
         .on_right_press(Message::TrackRightClicked(pos))
-        .on_move(move |_| Message::TrackHoverStart(pos));
+        .on_move(move |_| Message::HoverStart(HoverTarget::Track(pos)));
 
     track_row(track_area, row_bg, Some(row_id(pos.list, pos.index))).into()
 }

@@ -5,7 +5,10 @@ use iced::{
 };
 
 use crate::{
-    app::{ViewData, ViewKind},
+    app::{
+        interaction::{HoverTarget, Pressed},
+        ViewData, ViewKind,
+    },
     data::library::LibraryItem,
     icons,
     theme::AppTheme,
@@ -112,8 +115,8 @@ fn library_row<'a>(
             ..Default::default()
         }),
     )
-    .on_press(Message::CardPressed(item.clone()))
-    .on_move(move |_| Message::LibraryCardHoverStart(hover_item.clone()))
+    .on_press(Message::DragPress(Pressed::Card(item.clone())))
+    .on_move(move |_| Message::HoverStart(HoverTarget::LibraryCard(hover_item.clone())))
     .into()
 }
 

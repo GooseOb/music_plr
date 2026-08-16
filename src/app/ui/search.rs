@@ -5,7 +5,10 @@ use iced::{
 };
 
 use crate::{
-    app::{interaction::TrackListKind, ViewKind},
+    app::{
+        interaction::{HoverTarget, Pressed, TrackListKind},
+        ViewKind,
+    },
     data::library::LibraryKind,
     icons,
     theme::AppTheme,
@@ -192,8 +195,8 @@ fn card_row<'a>(
     let is_hovered = player.drag.is_hovered_card(item);
     let hover_item = item.clone();
     let main = MouseArea::new(main)
-        .on_press(Message::CardPressed(item.clone()))
-        .on_move(move |_| Message::CardHoverStart(hover_item.clone()));
+        .on_press(Message::DragPress(Pressed::Card(item.clone())))
+        .on_move(move |_| Message::HoverStart(HoverTarget::Card(hover_item.clone())));
     track_list::track_row(
         Row::with_children([main.into(), toggle.into()]),
         if is_hovered { p.bg_hover } else { p.bg },

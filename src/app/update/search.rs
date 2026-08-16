@@ -112,33 +112,46 @@ impl MusicPlayer {
         }
     }
 
-    pub fn start_song_radio(&mut self, song_name: String) {
-        let label = format!("Radio: {song_name}");
-        self.push_new_view(ViewData::new_radio(ViewKind::SongRadio(label.clone())));
+    /// Open a loading radio view, stamp its request id, notify, and fetch its
+    /// tracks via `fetch` (e.g. `radio_song` / `radio_artist`). `make_kind`
+    /// turns the generated "Radio: …" label into the concrete `ViewKind`
+    /// variant; `noun` is the notify phrasing.
+    fn start_radio(
+        &mut self,
+        name: String,
+        noun: &str,
+        make_kind: impl FnOnce(String) -> ViewKind,
+        fetch: fn(&str) -> anyhow::Result<Vec<crate::types::Track>>,
+    ) {
+        let label = format!("Radio: {name}");
+        self.push_new_view(ViewData::new_radio(make_kind(label.clone())));
         let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
-        self.notify(format!("Generating radio for song: {song_name}..."));
+        self.notify(format!("Generating radio for {noun}: {name}..."));
 
         let tx = self.result_tx.clone();
         Self::spawn_backend_thread(
-            move || crate::youtube::radio_song(&song_name),
+            move || fetch(&name),
             move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
             tx,
         );
     }
 
-    pub fn start_artist_radio(&mut self, artist_name: String) {
-        let label = format!("Radio: {artist_name}");
-        self.push_new_view(ViewData::new_radio(ViewKind::ArtistRadio(label.clone())));
-        let rid = self.request_ids.next();
-        self.view_data_mut().request_id = rid;
-        self.notify(format!("Generating radio for artist: {artist_name}..."));
+    pub fn start_song_radio(&mut self, song_name: String) {
+        self.start_radio(
+            song_name,
+            "song",
+            ViewKind::SongRadio,
+            crate::youtube::radio_song,
+        );
+    }
 
-        let tx = self.result_tx.clone();
-        Self::spawn_backend_thread(
-            move || crate::youtube::radio_artist(&artist_name),
-            move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
-            tx,
+    pub fn start_artist_radio(&mut self, artist_name: String) {
+        self.start_radio(
+            artist_name,
+            "artist",
+            ViewKind::ArtistRadio,
+            crate::youtube::radio_artist,
         );
     }
 

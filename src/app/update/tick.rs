@@ -216,8 +216,8 @@ impl MusicPlayer {
                     let count = tracks.len();
                     if count > 0 {
                         self.playlists.insert_tracks_at(idx, &tracks, usize::MAX);
+                        self.notify_tracks("Added", count, &format!("to {name}"));
                     }
-                    self.notify_tracks("Added", count, &format!("to {name}"));
                 }
             }
             BackendResult::RadioResults(rid, label, tracks) => {

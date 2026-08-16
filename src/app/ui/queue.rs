@@ -5,7 +5,7 @@ use iced::{
 };
 
 use crate::{
-    app::interaction::{row_id, TrackListKind, TrackPos},
+    app::interaction::{row_id, HoverTarget, TrackListKind, TrackPos},
     icons,
     theme::{self, AppTheme},
     types::QueueTab,
@@ -177,7 +177,7 @@ fn view_recently_played_row<'a>(
 
     let track_area = MouseArea::new(inner)
         .on_right_press(Message::TrackRightClicked(pos))
-        .on_move(move |_| Message::TrackHoverStart(pos));
+        .on_move(move |_| Message::HoverStart(HoverTarget::Track(pos)));
 
     track_row(
         track_area,

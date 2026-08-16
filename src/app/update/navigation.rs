@@ -28,11 +28,11 @@ impl MusicPlayer {
         }
     }
 
-    pub(super) fn restore_nav_entry(&mut self, data: &ViewData) -> Task<Message> {
+    pub(super) fn restore_nav_entry(&mut self, data: ViewData) -> Task<Message> {
         // Scroll position is stored relative to the main track_list scrollable.
         // (Queue view uses a different Id and is not navigated via history.)
         let y = data.scroll;
-        *self.view_data_mut() = data.clone();
+        *self.view_data_mut() = data;
         self.sync_search_query();
         self.sync_search_scope();
         self.sync_downloads_view();
@@ -73,7 +73,7 @@ impl MusicPlayer {
         if let ViewKind::Search { query, .. } = &mut self.view_data_mut().kind {
             *query = live_query;
         }
-        self.cleanup_drag_state();
+        self.drag.cleanup();
 
         // Push the destination as a fresh slot; the outgoing view stays at the
         // previous position.
@@ -88,27 +88,26 @@ impl MusicPlayer {
     }
 
     pub fn handle_navigate_back(&mut self) -> Task<Message> {
-        if self.nav_history_pos > 0 {
-            self.nav_history_pos -= 1;
-            let entry = self.nav_history[self.nav_history_pos].clone();
-            let task = self.restore_nav_entry(&entry);
-            self.save_session();
-            task
-        } else {
-            Task::none()
+        if self.nav_history_pos == 0 {
+            return Task::none();
         }
+        self.nav_history_pos -= 1;
+        self.sync_navigation()
     }
 
     pub fn handle_navigate_forward(&mut self) -> Task<Message> {
-        if self.nav_history_pos + 1 < self.nav_history.len() {
-            self.nav_history_pos += 1;
-            let entry = self.nav_history[self.nav_history_pos].clone();
-            let task = self.restore_nav_entry(&entry);
-            self.save_session();
-            task
-        } else {
-            Task::none()
+        if self.nav_history_pos + 1 >= self.nav_history.len() {
+            return Task::none();
         }
+        self.nav_history_pos += 1;
+        self.sync_navigation()
+    }
+
+    fn sync_navigation(&mut self) -> Task<Message> {
+        let entry = self.nav_history[self.nav_history_pos].clone();
+        let task = self.restore_nav_entry(entry);
+        self.save_session();
+        task
     }
 
     pub(super) fn slot_for_request(&self, rid: u64) -> Option<usize> {

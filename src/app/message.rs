@@ -2,7 +2,11 @@
 
 use super::ViewData;
 use crate::{
-    app::{interaction::TrackPos, update::operation::CaptureBounds},
+    app::{
+        interaction::{self, TrackPos},
+        update::operation::CaptureBounds,
+    },
+    data::library,
     lyrics::Lyrics,
     types::{QueueTab, Track},
 };
@@ -47,22 +51,12 @@ pub enum Message {
     SearchLoadMore,
     SearchHistorySelected(usize),
     OpenAlbum(String, String),
-    /// A card (artist/album/playlist) was pressed and armed for dragging.
-    /// Releasing without a drag opens the card; dropping onto the playlist
-    /// list turns it into a local playlist.
-    CardPressed(crate::data::library::LibraryItem),
-    /// A card (artist/album/playlist) in search results is hovered, for
-    /// highlight feedback.
-    CardHoverStart(crate::data::library::LibraryItem),
-    /// A card (artist/album/playlist) in the library sidebar is hovered, for
-    /// highlight feedback, independent of `CardHoverStart`.
-    LibraryCardHoverStart(crate::data::library::LibraryItem),
-    ToggleLibrarySave(crate::data::library::LibraryItem),
+    DragPress(interaction::Pressed),
+    HoverStart(interaction::HoverTarget),
+    ToggleLibrarySave(library::LibraryItem),
     ToggleLibraryExpanded,
     DeleteSearchHistory(usize),
 
-    TrackPressed(TrackPos),
-    TrackHoverStart(TrackPos),
     TrackRightClicked(TrackPos),
     PlayTrackAt(TrackPos),
     TogglePlayPause,
