@@ -88,19 +88,19 @@ impl MusicPlayer {
     }
 
     pub fn handle_navigate_back(&mut self) -> Task<Message> {
-        if self.nav_history_pos == 0 {
-            return Task::none();
+        if self.can_navigate_back() {
+            self.nav_history_pos -= 1;
+            return self.sync_navigation();
         }
-        self.nav_history_pos -= 1;
-        self.sync_navigation()
+        Task::none()
     }
 
     pub fn handle_navigate_forward(&mut self) -> Task<Message> {
-        if self.nav_history_pos + 1 >= self.nav_history.len() {
-            return Task::none();
+        if self.can_navigate_forward() {
+            self.nav_history_pos += 1;
+            return self.sync_navigation();
         }
-        self.nav_history_pos += 1;
-        self.sync_navigation()
+        Task::none()
     }
 
     fn sync_navigation(&mut self) -> Task<Message> {
