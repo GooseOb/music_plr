@@ -11,17 +11,10 @@ impl MusicPlayer {
         self.nav_history_pos + 1 < self.nav_history.len()
     }
 
-    /// Sync the global `search_query` from the active `Search` view's stored
-    /// query. Used whenever the active view is replaced (navigate / restore)
-    /// so the always-visible search bar reflects the view being shown.
     fn sync_search_query(&mut self) {
         self.search_query = self.view_data().search_query().to_string();
     }
 
-    /// Sync the global `search_scope` from the active `Search` view's tab. The
-    /// scope selector (and `run_search`) are driven by `search_scope`, so this
-    /// keeps the tab highlight correct when navigating to / between / back to
-    /// Search views whose tab differs from the previously selected scope.
     pub(super) fn sync_search_scope(&mut self) {
         if let ViewKind::Search { tab, .. } = &self.view_data().kind {
             self.search_scope = tab.scope();

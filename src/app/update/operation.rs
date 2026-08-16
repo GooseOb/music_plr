@@ -18,10 +18,11 @@
 //! tree are list rows (track-list, playlist, and library rows), so nothing
 //! else is captured.
 
-use crate::app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID};
-use crate::app::Message;
-use iced::widget::Id;
-use iced::Rectangle;
+use crate::app::{
+    ui::{QUEUE_LIST_ID, TRACK_LIST_ID},
+    Message,
+};
+use iced::{widget::Id, Rectangle};
 use iced_core::widget::operation::{Operation, Outcome, Scrollable};
 
 #[derive(Debug, Clone)]

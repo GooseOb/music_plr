@@ -11,18 +11,11 @@ use crate::{
 use iced::widget::Id;
 
 impl MusicPlayer {
-    fn cursor_in_sidebar(&self) -> bool {
-        match &self.bounds.sidebar {
-            Some(b) => self.drag.cursor_pos.x < b.bounds.x + crate::theme::SIDEBAR_WIDTH,
-            None => self.drag.cursor_pos.x < crate::theme::SIDEBAR_WIDTH,
-        }
-    }
-
     fn sidebar_playlist_at_cursor(&self) -> Option<usize> {
-        if self.drag.cursor_pos.x >= crate::theme::SIDEBAR_WIDTH {
+        let sidebar = self.bounds.sidebar.as_ref()?;
+        if !sidebar.bounds.contains(self.drag.cursor_pos) {
             return None;
         }
-        let sidebar = self.bounds.sidebar.as_ref()?;
         let cursor_y = self.drag.cursor_pos.y + sidebar.translation_y;
         let mut best: Option<(f32, usize)> = None;
         for (i, row) in sidebar.rows.iter().enumerate() {
@@ -271,25 +264,19 @@ impl MusicPlayer {
 
         // Dropped on the playlist sidebar: add to that playlist (prepend). No
         // insertion bar — the row highlight already shows the target.
-        if self.cursor_in_sidebar() {
-            if let Some(pl) = &self.bounds.sidebar {
-                if pl.bounds.contains(self.drag.cursor_pos) {
-                    if let Some(playlist_idx) = self.sidebar_playlist_at_cursor() {
-                        let tracks: Vec<Track> = indices
-                            .iter()
-                            .rev()
-                            .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
-                            .collect();
-                        let count = tracks.len();
-                        if count > 0 {
-                            self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
-                        }
-                        let name = self.playlists.playlists[playlist_idx].name.clone();
-                        self.notify_tracks("Added", count, &format!("to {name}"));
-                        return;
-                    }
-                }
+        if let Some(playlist_idx) = self.sidebar_playlist_at_cursor() {
+            let tracks: Vec<Track> = indices
+                .iter()
+                .rev()
+                .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
+                .collect();
+            let count = tracks.len();
+            if count > 0 {
+                self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
             }
+            let name = self.playlists.playlists[playlist_idx].name.clone();
+            self.notify_tracks("Added", count, &format!("to {name}"));
+            return;
         }
 
         let Some(DropTarget::Track(drop)) = self.drag.drop_target else {
