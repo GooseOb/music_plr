@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{button, scrollable, text, text_input, Button, Column, Container, MouseArea, Row},
+    widget::{scrollable, text, text_input, Button, Column, Container, MouseArea, Row},
     Color, Element, Length,
 };
 
@@ -32,40 +32,46 @@ fn playlist_row<'a>(
     dragged_over: bool,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let interacting = active || dragged_over;
+    let is_dragging_this = matches!(player.drag.pressed, Some(Pressed::Playlist(i)) if i == index);
+    let is_hovered = player.drag.hovered_playlist() == Some(index);
+    let interacting = active || dragged_over || is_hovered;
     let bg_color = if dragged_over {
         p.bg_current
     } else if active {
         p.bg_current.scale_alpha(0.7)
+    } else if is_hovered {
+        p.bg_hover
     } else {
         p.bg_secondary
-    };
-    let bg_hover = if interacting {
-        p.bg_current
-    } else {
-        p.bg_hover
     };
     let icon_color = if interacting { p.accent } else { p.fg_muted };
     let text_color = if interacting { p.fg } else { p.fg_secondary };
 
-    sidebar_button(Row::with_children([
+    let row = Row::with_children([
         icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_MD).into(),
         text(name).color(text_color).into(),
         iced::widget::right(text(track_count).style(fg_secondary())).into(),
-    ]))
-    .style(move |_, status| {
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => bg_hover,
-            _ => bg_color,
-        };
-        button::Style {
-            background: Some(bg.into()),
-            text_color,
-            border: iced::border::rounded(theme::RADIUS_MD),
-            ..Default::default()
-        }
-    })
-    .on_press(Message::SelectPlaylist(index))
+    ])
+    .spacing(theme::SPACING_MD)
+    .align_y(alignment::Vertical::Center);
+
+    MouseArea::new(
+        Container::new(row)
+            .padding([theme::SPACING_SM, theme::SPACING_MD])
+            .style(move |_| iced::widget::container::Style {
+                background: Some(bg_color.into()),
+                border: if is_dragging_this {
+                    iced::border::rounded(theme::RADIUS_MD)
+                        .width(2.0)
+                        .color(p.accent)
+                } else {
+                    iced::border::rounded(theme::RADIUS_MD)
+                },
+                ..Default::default()
+            }),
+    )
+    .on_press(Message::DragPress(Pressed::Playlist(index)))
+    .on_move(move |_| Message::HoverStart(HoverTarget::Playlist(index)))
     .into()
 }
 
@@ -204,8 +210,13 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .map(|(i, pl)| {
             let is_active = matches!(player.view_data().kind, ViewKind::Playlist { .. })
                 && player.view_data().selected_playlist_id() == Some(i);
-            let is_dragged_over =
-                matches!(player.drag.drop_target, Some(DropTarget::PlaylistAdd(j)) if j == i);
+            let is_dragged_over = matches!(
+                player.drag.drop_target,
+                Some(DropTarget::PlaylistAdd(j)) if j == i
+            ) || matches!(
+                player.drag.drop_target,
+                Some(DropTarget::PlaylistReorder { to: j, .. }) if j == i
+            );
             let row = playlist_row(
                 player,
                 i,

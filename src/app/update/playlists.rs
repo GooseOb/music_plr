@@ -298,4 +298,60 @@ mod tests {
         assert!(p.playlists.playlists.is_empty());
         assert!(!matches!(p.view_data().kind, ViewKind::Playlist { .. }));
     }
+
+    #[test]
+    fn reorder_playlist_moves_row_and_keeps_active_selection() {
+        let mut p = player_with_playlists(&["A", "B", "C", "D"]);
+        p.nav_history = vec![ViewData::new_playlist(Some(1), "B".into(), None)];
+        p.nav_history_pos = 0;
+
+        // Drag playlist B (index 1) down to the end (insertion index 4).
+        p.drag.drop_target =
+            Some(crate::app::interaction::DropTarget::PlaylistReorder { from: 1, to: 4 });
+        p.handle_playlist_drop();
+
+        let names: Vec<&str> = p
+            .playlists
+            .playlists
+            .iter()
+            .map(|pl| pl.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["A", "C", "D", "B"]);
+        // The active view still points at B, now at index 3.
+        assert_eq!(
+            p.view_data().kind,
+            ViewKind::Playlist {
+                selected_playlist: Some(3),
+                playlist_name: "B".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn reorder_playlist_above_active_shifts_selection_down() {
+        let mut p = player_with_playlists(&["A", "B", "C", "D"]);
+        p.nav_history = vec![ViewData::new_playlist(Some(2), "C".into(), None)];
+        p.nav_history_pos = 0;
+
+        // Drag D (index 3) up to the front (insertion index 0).
+        p.drag.drop_target =
+            Some(crate::app::interaction::DropTarget::PlaylistReorder { from: 3, to: 0 });
+        p.handle_playlist_drop();
+
+        let names: Vec<&str> = p
+            .playlists
+            .playlists
+            .iter()
+            .map(|pl| pl.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["D", "A", "B", "C"]);
+        // C was at index 2; a row moved in above it, so it shifts to index 3.
+        assert_eq!(
+            p.view_data().kind,
+            ViewKind::Playlist {
+                selected_playlist: Some(3),
+                playlist_name: "C".into(),
+            }
+        );
+    }
 }

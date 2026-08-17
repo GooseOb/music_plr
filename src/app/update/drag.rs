@@ -4,9 +4,15 @@ use super::{
     DOUBLE_CLICK_MS,
 };
 use crate::{
-    app::interaction::{DropTarget, Pressed},
-    app::ui::{QUEUE_LIST_ID, TRACK_LIST_ID},
-    data::library::{LibraryItem, LibraryKind},
+    app::{
+        interaction::{DropTarget, Pressed},
+        ui::{QUEUE_LIST_ID, TRACK_LIST_ID},
+        ViewKind,
+    },
+    data::{
+        library::{LibraryItem, LibraryKind},
+        JsonStore,
+    },
 };
 use iced::widget::Id;
 
@@ -27,6 +33,7 @@ impl MusicPlayer {
                         self.handle_card_drop(item, target);
                     }
                 }
+                Pressed::Playlist(_) => self.handle_playlist_drop(),
             }
         } else {
             match pressed {
@@ -43,6 +50,9 @@ impl MusicPlayer {
                     }
                 }
                 Pressed::Card(item) => self.open_library_item(item),
+                // A click without a drag selects the playlist (mirrors how a
+                // library card opens on a plain click).
+                Pressed::Playlist(i) => self.handle_select_playlist(i),
             }
         }
 
@@ -65,6 +75,9 @@ impl MusicPlayer {
             Pressed::Track(pos) => {
                 self.drag.drop_target = self.resolve_track_drop(*pos, containing.as_ref());
             }
+            Pressed::Playlist(from) => {
+                self.drag.drop_target = self.resolve_playlist_drop(*from, containing.as_ref());
+            }
         }
 
         let Some((target_id, geo)) = containing else {
@@ -72,6 +85,34 @@ impl MusicPlayer {
         };
 
         self.handle_drag_autoscroll(geo.bounds, geo.translation_y, geo.content_height, target_id)
+    }
+
+    /// Resolve a playlist-row reorder: the press must be over the sidebar
+    /// playlist list, and the resolved insertion index must differ from the
+    /// row's current position (a drop onto itself is a no-op).
+    fn resolve_playlist_drop(
+        &self,
+        from: usize,
+        containing: Option<&(Id, &ListGeometry)>,
+    ) -> Option<DropTarget> {
+        let (id, geo) = containing?;
+        if *id != SIDEBAR_LIST_ID {
+            return None;
+        }
+        let count = self.playlists.playlists.len();
+        if from >= count {
+            return None;
+        }
+        let mut to = self.sidebar_insertion_index(geo, count);
+        // Dragging a row onto its own slot (or the gap just below it) is a
+        // no-op, so collapse that into the current position.
+        if to == from || to == from + 1 {
+            to = from;
+        }
+        if to == from {
+            return None;
+        }
+        Some(DropTarget::PlaylistReorder { from, to })
     }
 
     fn resolve_track_drop(
@@ -197,6 +238,7 @@ impl MusicPlayer {
         let (geo, rel) = match self.drag.drop_target {
             Some(DropTarget::Playlist(i)) => (self.bounds.sidebar.as_ref()?, i),
             Some(DropTarget::Library(i)) => (self.bounds.library.as_ref()?, i),
+            Some(DropTarget::PlaylistReorder { to, .. }) => (self.bounds.sidebar.as_ref()?, to),
             Some(DropTarget::Track(pos)) => {
                 let geo = match pos.list {
                     TrackListKind::Queue => self.bounds.queue.as_ref()?,
@@ -388,6 +430,43 @@ impl MusicPlayer {
         geo.rows.len().min(count)
     }
 
+    /// Reorder an existing playlist row within the sidebar list. The active
+    /// `Playlist` view selection is remapped so the same playlist stays
+    /// selected after its index changes.
+    pub fn handle_playlist_drop(&mut self) {
+        let Some(DropTarget::PlaylistReorder { from, to }) = self.drag.drop_target else {
+            return;
+        };
+        if from >= self.playlists.playlists.len() || to > self.playlists.playlists.len() {
+            return;
+        }
+        crate::util::reorder_tracks(&mut self.playlists.playlists, to, &[from], &[]);
+        self.playlists.save();
+
+        // Keep the active Playlist view pointed at the same playlist. After
+        // `reorder_tracks`, the moved row lands at `to - removed_before` where
+        // `removed_before = from < to`. Other selections shift down by one if
+        // the moved row passed above them, then shift again if the moved row
+        // is inserted at or before their new position.
+        let removed_before = usize::from(from < to);
+        let landed = to - removed_before;
+        if let ViewKind::Playlist {
+            selected_playlist, ..
+        } = &mut self.view_data_mut().kind
+        {
+            if *selected_playlist == Some(from) {
+                *selected_playlist = Some(landed);
+            } else if let Some(sp) = selected_playlist {
+                let mut new_sp = *sp - usize::from(from < *sp);
+                if landed <= new_sp {
+                    new_sp += 1;
+                }
+                *sp = new_sp;
+            }
+        }
+        self.notify("Reordered playlist");
+    }
+
     fn handle_card_drop(&mut self, item: LibraryItem, target: DropTarget) {
         match target {
             DropTarget::Playlist(idx) => self.create_playlist_from_card(&item, idx),
@@ -410,7 +489,7 @@ impl MusicPlayer {
                     self.notify(format!("Saved \"{title}\" to library"));
                 }
             }
-            DropTarget::Track(_) | DropTarget::PlaylistAdd(_) => {}
+            _ => {}
         }
     }
 
@@ -481,8 +560,8 @@ impl MusicPlayer {
                     self.drag.pressed = Some(Pressed::Track(pos));
                 }
             }
-            Pressed::Card(item) => {
-                self.drag.pressed = Some(Pressed::Card(item));
+            _ => {
+                self.drag.pressed = Some(pressed);
             }
         }
         self.drag.drag_origin = Some(self.drag.cursor_pos);

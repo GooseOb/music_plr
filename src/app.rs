@@ -428,11 +428,6 @@ impl MusicPlayer {
                 self.playlist_create_name = name;
                 Task::none()
             }
-            Message::SelectPlaylist(index) => {
-                self.lyrics = None;
-                self.handle_select_playlist(index);
-                Task::none()
-            }
             Message::RenamePlaylist(name) => {
                 self.handle_rename_playlist(&name);
                 Task::none()

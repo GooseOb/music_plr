@@ -13,7 +13,7 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 - **Radio** — Song radio and artist radio based on search results
 - **MPRIS** — Full D-Bus MPRIS interface for media key integration
 - **Queue** — Queue panel with Up Next and Recently Played tabs
-- **Drag & Drop** — Drag tracks between views, into the queue, and onto sidebar playlists. Drag an artist/album/playlist card (from search or the Library) onto the playlist list to turn it into a local playlist (its contents are fetched and filled in), or onto the Library to save or reorder it; a placement bar shows the drop position in both lists
+- **Drag & Drop** — Drag tracks between views, into the queue, and onto sidebar playlists. Drag a playlist row in the sidebar to reorder your playlists (a placement bar shows the drop position). Drag an artist/album/playlist card (from search or the Library) onto the playlist list to turn it into a local playlist (its contents are fetched and filled in), or onto the Library to save or reorder it; a placement bar shows the drop position in both lists
 - **Search History** — Fuzzy-searchable search history with persistent storage and inline delete
 - **Settings** — In-app settings view to edit `config.json` values (download directory, stream cache size, history/recently-played limits, and a volume-normalization toggle) live, with a reset-to-defaults action
 - **Volume Normalization** — Optional per-track loudness normalization (RMS-based, computed once via native symphonia decoding and cached) so tracks play at a consistent volume; toggle it from Settings

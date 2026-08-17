@@ -90,6 +90,7 @@ pub enum DropTarget {
     Playlist(usize),
     Library(usize),
     PlaylistAdd(usize),
+    PlaylistReorder { from: usize, to: usize },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,12 +98,14 @@ pub enum HoverTarget {
     Track(TrackPos),
     Card(LibraryItem),
     LibraryCard(LibraryItem),
+    Playlist(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pressed {
     Track(TrackPos),
     Card(LibraryItem),
+    Playlist(usize),
 }
 
 /// Mouse and drag interaction state
@@ -112,10 +115,6 @@ pub struct DragState {
     pub pressed: Option<Pressed>,
     pub drag_origin: Option<Point>,
     pub drag_active: bool,
-    /// The resolved drop target for the active drag, or `None`. A drag targets
-    /// at most one list, so the track-list target (`Track`) and the two
-    /// sidebar-collection targets (`Playlist`/`Library`) share one enum field
-    /// rather than two parallel `Option`s.
     pub drop_target: Option<DropTarget>,
     pub hovered: Option<HoverTarget>,
 }
@@ -162,6 +161,14 @@ impl DragState {
     /// Whether a card (vs track) drag is active.
     pub fn is_pressed_card(&self) -> bool {
         matches!(self.pressed, Some(Pressed::Card(_)))
+    }
+
+    /// The hovered playlist row index, if any.
+    pub fn hovered_playlist(&self) -> Option<usize> {
+        match self.hovered {
+            Some(HoverTarget::Playlist(i)) => Some(i),
+            _ => None,
+        }
     }
 }
 

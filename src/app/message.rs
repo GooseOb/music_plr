@@ -67,7 +67,6 @@ pub enum Message {
 
     CreatePlaylist,
     NewPlaylistNameChanged(String),
-    SelectPlaylist(usize),
     RenamePlaylist(String),
     AddLocalMusic,
     AddToPlaylist(usize),
