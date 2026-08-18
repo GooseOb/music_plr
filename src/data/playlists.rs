@@ -1,6 +1,7 @@
 use super::{JsonStore, StoreLocation};
 use crate::types::Track;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Playlist {
@@ -81,17 +82,22 @@ impl PlaylistStore {
         let Some(pl) = self.playlists.get_mut(playlist_idx) else {
             return 0;
         };
-        let mut insert_pos = pos;
-        let mut inserted_count: usize = 0;
-        for track in tracks {
-            if !pl.tracks.iter().any(|t| t.url == track.url) {
-                insert_pos = insert_pos.min(pl.tracks.len());
-                pl.tracks.insert(insert_pos, track.clone());
-                insert_pos += 1;
-                inserted_count += 1;
-            }
-        }
+        let mut seen: HashSet<String> = pl.tracks.iter().map(|t| t.url.clone()).collect();
+        let insert_pos = pos.min(pl.tracks.len());
+        let batch: Vec<Track> = tracks
+            .into_iter()
+            .filter_map(|track| {
+                let url = track.url.as_str();
+                if seen.contains(url) {
+                    return None;
+                }
+                seen.insert(track.url.clone());
+                Some(track.clone())
+            })
+            .collect();
+        let inserted_count = batch.len();
         if inserted_count > 0 {
+            pl.tracks.splice(insert_pos..insert_pos, batch);
             self.save();
         }
         inserted_count
