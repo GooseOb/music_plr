@@ -150,7 +150,6 @@ impl MusicPlayer {
         let cached = crate::data::lyrics_cache::LyricsCache::load()
             .get_for(&current_id, self.lyrics_client.selected());
         if let Some(cached_lyrics) = cached {
-            eprintln!("Loaded cached lyrics for track {}", current_id);
             state.lyrics = Some(cached_lyrics);
             state.track_id = Some(current_id.clone());
             state.loading = false;

@@ -5,6 +5,7 @@ use crate::{
     app::{
         interaction::{self, TrackPos},
         update::operation::CaptureBounds,
+        ViewKind,
     },
     data::library,
     lyrics::Lyrics,
@@ -50,8 +51,7 @@ pub enum Message {
     SearchScopeChanged(crate::youtube::SearchScope),
     SearchLoadMore,
     SearchHistorySelected(usize),
-    OpenAlbum(String, String),
-    OpenArtist(String, String),
+    Browse(ViewKind),
     DragPress(interaction::Pressed),
     HoverStart(interaction::HoverTarget),
     ToggleLibrarySave(library::LibraryItem),

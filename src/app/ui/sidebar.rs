@@ -83,10 +83,10 @@ fn library_row<'a>(
     let p = &player.app_theme.palette;
     let is_active = matches!(
         &player.view_data().kind,
-        ViewKind::Artist { browse_id, .. }
-            | ViewKind::Album { browse_id, .. }
-            | ViewKind::PlaylistView { playlist_id: browse_id, .. }
-        if browse_id == &item.id
+        ViewKind::Artist { id, .. }
+            | ViewKind::Album { id, .. }
+            | ViewKind::PlaylistView { id, .. }
+        if id == &item.id
     );
     let text_color = if is_active { p.fg } else { p.fg_secondary };
     let thumb = player.thumbnail_index.get(&item.id);

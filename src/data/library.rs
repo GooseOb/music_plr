@@ -16,7 +16,6 @@ pub enum LibraryKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LibraryItem {
     pub kind: LibraryKind,
-    /// `browse_id` for artists/albums, `playlist_id` for playlists.
     pub id: String,
     pub title: String,
     pub thumbnail: String,

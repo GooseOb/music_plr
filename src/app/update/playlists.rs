@@ -33,8 +33,8 @@ impl MusicPlayer {
             if !new_name.trim().is_empty() {
                 self.playlists.playlists[idx].name = new_name.trim().to_string();
                 self.playlists.save();
-                if let ViewKind::Playlist { playlist_name, .. } = &mut self.view_data_mut().kind {
-                    *playlist_name = new_name.trim().to_string();
+                if let ViewKind::Playlist { name, .. } = &mut self.view_data_mut().kind {
+                    *name = new_name.trim().to_string();
                 }
             }
         }
@@ -49,10 +49,11 @@ impl MusicPlayer {
         let mut navigate_away = false;
         let mut new_selection: Option<usize> = None;
         if let ViewKind::Playlist {
-            selected_playlist, ..
+            index: selected_idx,
+            ..
         } = &self.view_data().kind
         {
-            match *selected_playlist {
+            match *selected_idx {
                 Some(sp) if sp == index => {
                     if self.playlists.playlists.is_empty() {
                         navigate_away = true;
@@ -70,14 +71,10 @@ impl MusicPlayer {
         if navigate_away {
             self.push_new_view(ViewData::new_search(String::new(), self.search_scope));
         } else if let Some(new_idx) = new_selection {
-            let name = self.playlists.playlists[new_idx].name.clone();
-            if let ViewKind::Playlist {
-                selected_playlist,
-                playlist_name,
-            } = &mut self.view_data_mut().kind
-            {
-                *selected_playlist = Some(new_idx);
-                *playlist_name = name;
+            let new_name = self.playlists.playlists[new_idx].name.clone();
+            if let ViewKind::Playlist { index, name } = &mut self.view_data_mut().kind {
+                *index = Some(new_idx);
+                *name = new_name;
             }
         }
 
@@ -267,11 +264,11 @@ mod tests {
         p.handle_delete_playlist(1);
         match &p.view_data().kind {
             ViewKind::Playlist {
-                selected_playlist: Some(sp),
-                playlist_name,
+                index: Some(sp),
+                name,
             } => {
                 assert_eq!(*sp, 1);
-                assert_eq!(playlist_name, "C");
+                assert_eq!(name, "C");
             }
             other => panic!("expected Playlist view, got {other:?}"),
         }
@@ -283,8 +280,8 @@ mod tests {
         assert_eq!(
             p.view_data().kind,
             ViewKind::Playlist {
-                selected_playlist: Some(0),
-                playlist_name: "C".into(),
+                index: Some(0),
+                name: "C".into(),
             }
         );
     }
@@ -324,8 +321,8 @@ mod tests {
         assert_eq!(
             p.view_data().kind,
             ViewKind::Playlist {
-                selected_playlist: Some(3),
-                playlist_name: "B".into(),
+                index: Some(3),
+                name: "B".into(),
             }
         );
     }
@@ -352,8 +349,8 @@ mod tests {
         assert_eq!(
             p.view_data().kind,
             ViewKind::Playlist {
-                selected_playlist: Some(3),
-                playlist_name: "C".into(),
+                index: Some(3),
+                name: "C".into(),
             }
         );
     }

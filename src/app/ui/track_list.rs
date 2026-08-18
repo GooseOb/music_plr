@@ -194,7 +194,10 @@ pub(super) fn track_row_layout<'a>(
             let album_button: Element<'a, Message, AppTheme> = Container::new(
                 Button::new(text(album.name.clone()).size(theme::TEXT_SIZE_SM))
                     .style(button_style_album())
-                    .on_press(Message::OpenAlbum(album.id.clone(), album.name.clone())),
+                    .on_press(Message::Browse(crate::app::ViewKind::Album {
+                        id: album.id.clone(),
+                        name: album.name.clone(),
+                    })),
             )
             .width(Length::FillPortion(2))
             .into();
@@ -229,7 +232,10 @@ pub(super) fn track_row_layout<'a>(
         )
         .padding(0)
         .style(button_style_album())
-        .on_press(Message::OpenArtist(artist_id.clone(), artist_name))
+        .on_press(Message::Browse(crate::app::ViewKind::Artist {
+            id: artist_id.clone(),
+            name: artist_name,
+        }))
         .into(),
         None => text(artist_name)
             .size(theme::TEXT_SIZE_SM)

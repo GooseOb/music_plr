@@ -155,53 +155,13 @@ impl MusicPlayer {
         );
     }
 
-    /// Open an artist/album/playlist drill-down view, fetching its tracks.
-    pub fn handle_open_artist(&mut self, browse_id: String, name: &str) {
-        self.start_browse(
-            &ViewKind::Artist {
-                browse_id: browse_id.clone(),
-                name: name.to_string(),
-            },
-            browse_id,
-            "artist",
-            name,
-        );
-    }
-
-    pub fn handle_open_album(&mut self, browse_id: String, title: &str) {
-        self.start_browse(
-            &ViewKind::Album {
-                browse_id: browse_id.clone(),
-                title: title.to_string(),
-            },
-            browse_id,
-            "album",
-            title,
-        );
-    }
-
-    pub fn handle_open_playlist(&mut self, playlist_id: String, title: &str) {
-        self.start_browse(
-            &ViewKind::PlaylistView {
-                playlist_id: playlist_id.clone(),
-                title: title.to_string(),
-            },
-            playlist_id,
-            "playlist",
-            title,
-        );
-    }
-
     /// Shared drill-down: switch to the given browse view kind (loading),
     /// fetch its tracks via ytmusicapi `browse()`, and send `BrowseResults`.
-    /// TODO: non-kind args are redundant; we could extract them from the kind
-    fn start_browse(
-        &mut self,
-        kind: &ViewKind,
-        browse_id: String,
-        kind_str: &'static str,
-        label: &str,
-    ) {
+    /// All browse parameters are derived from `kind` via `ViewKind::browse_params`.
+    pub fn handle_browse(&mut self, kind: &ViewKind) {
+        let (id, kind_str, label) = kind
+            .browse_params()
+            .expect("start_browse called with a non-browse ViewKind");
         self.push_new_view(ViewData {
             kind: kind.clone(),
             loading: true,
@@ -211,9 +171,10 @@ impl MusicPlayer {
         self.view_data_mut().request_id = rid;
         self.notify(format!("Opening: {label}..."));
         let tx = self.result_tx.clone();
+        let id = id.to_string();
         Self::spawn_backend_thread(
             move || {
-                crate::youtube::browse(&browse_id, kind_str)
+                crate::youtube::browse(&id, kind_str)
                     .map(|videos| videos.into_iter().map(Track::from).collect())
             },
             move |tracks| BackendResult::BrowseResults(rid, tracks),
@@ -223,22 +184,22 @@ impl MusicPlayer {
 
     pub fn current_library_item(&self) -> Option<LibraryItem> {
         match &self.view_data().kind {
-            ViewKind::Artist { browse_id, name } => Some(LibraryItem {
+            ViewKind::Artist { id, name } => Some(LibraryItem {
                 kind: LibraryKind::Artist,
-                id: browse_id.clone(),
+                id: id.clone(),
                 title: name.clone(),
                 thumbnail: String::new(),
             }),
-            ViewKind::Album { browse_id, title } => Some(LibraryItem {
+            ViewKind::Album { id, name } => Some(LibraryItem {
                 kind: LibraryKind::Album,
-                id: browse_id.clone(),
-                title: title.clone(),
+                id: id.clone(),
+                title: name.clone(),
                 thumbnail: String::new(),
             }),
-            ViewKind::PlaylistView { playlist_id, title } => Some(LibraryItem {
+            ViewKind::PlaylistView { id, name } => Some(LibraryItem {
                 kind: LibraryKind::Playlist,
-                id: playlist_id.clone(),
-                title: title.clone(),
+                id: id.clone(),
+                title: name.clone(),
                 thumbnail: String::new(),
             }),
             _ => None,

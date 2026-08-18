@@ -1,4 +1,7 @@
-use crate::types::Track;
+use crate::{
+    data::library::{LibraryItem, LibraryKind},
+    types::Track,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default)]
@@ -49,23 +52,42 @@ pub enum ViewKind {
     SongRadio(String),
     ArtistRadio(String),
     Artist {
-        browse_id: String,
+        id: String,
         name: String,
     },
     Album {
-        browse_id: String,
-        title: String,
+        id: String,
+        name: String,
     },
     PlaylistView {
-        playlist_id: String,
-        title: String,
+        id: String,
+        name: String,
     },
     Playlist {
-        selected_playlist: Option<usize>,
-        playlist_name: String,
+        index: Option<usize>,
+        name: String,
     },
     Downloads,
     Settings,
+}
+
+impl From<LibraryItem> for ViewKind {
+    fn from(item: LibraryItem) -> Self {
+        match item.kind {
+            LibraryKind::Artist => ViewKind::Artist {
+                id: item.id,
+                name: item.title,
+            },
+            LibraryKind::Album => ViewKind::Album {
+                id: item.id,
+                name: item.title,
+            },
+            LibraryKind::Playlist => ViewKind::PlaylistView {
+                id: item.id,
+                name: item.title,
+            },
+        }
+    }
 }
 
 impl Default for ViewKind {
@@ -74,6 +96,17 @@ impl Default for ViewKind {
             exhausted: false,
             query: String::new(),
             tab: crate::youtube::SearchTab::Songs,
+        }
+    }
+}
+
+impl ViewKind {
+    pub fn browse_params(&self) -> Option<(&str, &'static str, &str)> {
+        match self {
+            ViewKind::Artist { id, name } => Some((id, "artist", name)),
+            ViewKind::Album { id, name } => Some((id, "album", name)),
+            ViewKind::PlaylistView { id, name } => Some((id, "playlist", name)),
+            _ => None,
         }
     }
 }
@@ -117,14 +150,8 @@ impl ViewData {
             (ViewKind::SongRadio(a), ViewKind::SongRadio(b))
             | (ViewKind::ArtistRadio(a), ViewKind::ArtistRadio(b)) => a == b,
             (
-                ViewKind::Playlist {
-                    selected_playlist: a,
-                    playlist_name: c,
-                },
-                ViewKind::Playlist {
-                    selected_playlist: b,
-                    playlist_name: d,
-                },
+                ViewKind::Playlist { index: a, name: c },
+                ViewKind::Playlist { index: b, name: d },
             ) => a == b && c == d,
             (ViewKind::Downloads, ViewKind::Downloads)
             | (ViewKind::Settings, ViewKind::Settings) => true,
@@ -170,16 +197,14 @@ impl ViewData {
     /// The selected playlist index for the Playlist view, or `None`.
     pub fn selected_playlist_id(&self) -> Option<usize> {
         match &self.kind {
-            ViewKind::Playlist {
-                selected_playlist, ..
-            } => *selected_playlist,
+            ViewKind::Playlist { index, .. } => *index,
             _ => None,
         }
     }
 
     pub fn playlist_name(&self) -> &str {
         match &self.kind {
-            ViewKind::Playlist { playlist_name, .. } => playlist_name,
+            ViewKind::Playlist { name, .. } => name,
             _ => "",
         }
     }
@@ -210,22 +235,15 @@ impl ViewData {
 
     /// Create a `Playlist` view, preserving the selected playlist from the
     /// previous view data if it was already a Playlist view.
-    pub fn new_playlist(
-        selected_playlist: Option<usize>,
-        playlist_name: String,
-        old: Option<&Self>,
-    ) -> Self {
+    pub fn new_playlist(index: Option<usize>, name: String, old: Option<&Self>) -> Self {
         let (sp, name) = match old {
             Some(v) if matches!(v.kind, ViewKind::Playlist { .. }) => {
                 (v.selected_playlist_id(), v.playlist_name().to_string())
             }
-            _ => (selected_playlist, playlist_name),
+            _ => (index, name),
         };
         Self {
-            kind: ViewKind::Playlist {
-                selected_playlist: sp,
-                playlist_name: name,
-            },
+            kind: ViewKind::Playlist { index: sp, name },
             ..Default::default()
         }
     }

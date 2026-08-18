@@ -49,7 +49,7 @@ impl MusicPlayer {
                         self.show_search_history = true;
                     }
                 }
-                Pressed::Card(item) => self.open_library_item(item),
+                Pressed::Card(item) => self.handle_browse(&item.into()),
                 // A click without a drag selects the playlist (mirrors how a
                 // library card opens on a plain click).
                 Pressed::Playlist(i) => self.handle_select_playlist(i),
@@ -450,13 +450,10 @@ impl MusicPlayer {
         // is inserted at or before their new position.
         let removed_before = usize::from(from < to);
         let landed = to - removed_before;
-        if let ViewKind::Playlist {
-            selected_playlist, ..
-        } = &mut self.view_data_mut().kind
-        {
-            if *selected_playlist == Some(from) {
-                *selected_playlist = Some(landed);
-            } else if let Some(sp) = selected_playlist {
+        if let ViewKind::Playlist { index, .. } = &mut self.view_data_mut().kind {
+            if *index == Some(from) {
+                *index = Some(landed);
+            } else if let Some(sp) = index {
                 let mut new_sp = *sp - usize::from(from < *sp);
                 if landed <= new_sp {
                     new_sp += 1;
@@ -505,13 +502,13 @@ impl MusicPlayer {
             LibraryKind::Album => "album",
             LibraryKind::Playlist => "playlist",
         };
-        let browse_id = item.id.clone();
+        let id = item.id.clone();
         let name_for_thread = name.clone();
         let tx = self.result_tx.clone();
         self.notify(format!("Creating playlist \"{name}\"..."));
         Self::spawn_backend_thread(
             move || {
-                crate::youtube::browse(&browse_id, kind_str)
+                crate::youtube::browse(&id, kind_str)
                     .map(|videos| videos.into_iter().map(Track::from).collect())
             },
             move |tracks| BackendResult::CardPlaylistReady(idx, name_for_thread, tracks),
@@ -524,15 +521,6 @@ impl MusicPlayer {
         // index coincides with the currently selected playlist.
         self.push_new_view(ViewData::new_playlist(Some(idx), name, None));
         self.save_session();
-    }
-
-    /// Open a card the same way its drill-down message would.
-    fn open_library_item(&mut self, item: LibraryItem) {
-        match item.kind {
-            LibraryKind::Artist => self.handle_open_artist(item.id, &item.title),
-            LibraryKind::Album => self.handle_open_album(item.id, &item.title),
-            LibraryKind::Playlist => self.handle_open_playlist(item.id, &item.title),
-        }
     }
 
     /// Arm a press for dragging. A track row also supports double-click (play

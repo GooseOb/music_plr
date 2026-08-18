@@ -354,12 +354,8 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Message::OpenAlbum(browse_id, title) => {
-                self.handle_open_album(browse_id, &title);
-                Task::none()
-            }
-            Message::OpenArtist(browse_id, name) => {
-                self.handle_open_artist(browse_id, &name);
+            Message::Browse(kind) => {
+                self.handle_browse(&kind);
                 Task::none()
             }
             Message::ToggleLibrarySave(item) => {
@@ -577,10 +573,11 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuGoToArtist => {
-                if let Some(track) = self.context_menu.take().map(|m| m.track) {
-                    self.handle_open_artist(track.artist.id.expect(
-                            "Illegal state: context menu 'Go to artist' was shown for a track with no artist id" 
-                            ), &track.artist.name);
+                if let Some(artist) = self.context_menu.take().map(|m| m.track.artist) {
+                    self.handle_browse(&ViewKind::Artist {
+                        id: artist.id.expect("Illegal state: context menu 'Go to artist' was shown for a track with no artist id"),
+                        name: artist.name,
+                    });
                 }
                 Task::none()
             }

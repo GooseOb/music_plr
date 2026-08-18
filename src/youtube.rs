@@ -152,7 +152,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
 }
 
 /// Browse the contents of an artist/album/playlist, returning its tracks.
-pub fn browse(browse_id: &str, kind: &str) -> Result<Vec<YouTubeVideo>> {
+pub fn browse(id: &str, kind: &str) -> Result<Vec<YouTubeVideo>> {
     let script_path = std::env::temp_dir().join("music_plr_search.py");
     std::fs::write(&script_path, include_str!("./youtube_search.py"))
         .context("Failed to write ytmusicapi script")?;
@@ -160,7 +160,7 @@ pub fn browse(browse_id: &str, kind: &str) -> Result<Vec<YouTubeVideo>> {
     let output = Command::new("python3")
         .arg(&script_path)
         .arg("browse")
-        .arg(browse_id)
+        .arg(id)
         .arg("50")
         .arg(kind)
         .output()

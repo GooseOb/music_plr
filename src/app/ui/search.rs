@@ -210,8 +210,9 @@ pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme
     let loading = player.view_data().loading;
 
     let label: &str = match &player.view_data().kind {
-        ViewKind::Artist { name, .. } => name,
-        ViewKind::Album { title, .. } | ViewKind::PlaylistView { title, .. } => title,
+        ViewKind::Artist { name, .. }
+        | ViewKind::Album { name, .. }
+        | ViewKind::PlaylistView { name, .. } => name,
         _ => unreachable!("view_browse should only be called for Artist, Album, or Playlist views"),
     };
     let header = Row::with_children([
