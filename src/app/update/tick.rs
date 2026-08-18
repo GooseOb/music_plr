@@ -275,11 +275,10 @@ impl MusicPlayer {
                 state.loading = false;
                 state.lyrics = lyrics;
                 state.track_id = Some(track_id);
+                state.not_found = state.lyrics.is_none();
                 if let Some(lyrics) = &state.lyrics {
                     let mut cache = crate::data::lyrics_cache::LyricsCache::load();
                     cache.insert(state.track_id.as_ref().unwrap(), lyrics);
-                } else {
-                    self.notify("No lyrics found for this track.");
                 }
                 self.sync_lyrics_editor();
             }

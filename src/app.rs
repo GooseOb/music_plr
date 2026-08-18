@@ -27,6 +27,7 @@ pub struct LyricsState {
     pub lyrics: Option<crate::lyrics::Lyrics>,
     pub track_id: Option<String>,
     pub loading: bool,
+    pub not_found: bool,
     pub select_mode: bool,
     pub editor: Option<iced::widget::text_editor::Content>,
 }
@@ -36,7 +37,8 @@ impl LyricsState {
         Self {
             lyrics: None,
             track_id: None,
-            loading: false,
+            loading: true,
+            not_found: false,
             select_mode: false,
             editor: Some(iced::widget::text_editor::Content::with_text("")),
         }

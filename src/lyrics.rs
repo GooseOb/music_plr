@@ -1,32 +1,46 @@
-//! Lyrics fetching, currently backed by `LRCLib` (free, no API key).
+//! Lyrics fetching, backed by a handful of free, no-API-key providers.
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fmt::Write as _;
 
 pub const LRCLIB_BASE: &str = "https://lrclib.net/api";
+pub const LRCMUX_BASE: &str = "https://lrcmux.dev/api";
+pub const LYRICS_OVH_BASE: &str = "https://api.lyrics.ovh/v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum LyricsProvider {
     #[default]
     #[serde(rename = "lrclib")]
     LrcLib,
+    #[serde(rename = "lrcmux")]
+    LrcMux,
+    #[serde(rename = "lyrics_ovh")]
+    LyricsOvh,
 }
 
 impl LyricsProvider {
     pub fn name(self) -> &'static str {
         match self {
             LyricsProvider::LrcLib => "LRCLib",
+            LyricsProvider::LrcMux => "LrcMux",
+            LyricsProvider::LyricsOvh => "Lyrics.ovh",
         }
     }
 
     pub fn all() -> &'static [LyricsProvider] {
-        &[LyricsProvider::LrcLib]
+        &[
+            LyricsProvider::LrcLib,
+            LyricsProvider::LrcMux,
+            LyricsProvider::LyricsOvh,
+        ]
     }
 
     pub fn fetch(self, req: &LyricsRequest) -> Result<Option<Lyrics>> {
         match self {
             LyricsProvider::LrcLib => fetch_lrclib(req),
+            LyricsProvider::LrcMux => fetch_lrcmux(req),
+            LyricsProvider::LyricsOvh => fetch_lyrics_ovh(req),
         }
     }
 }
@@ -43,7 +57,6 @@ pub struct LyricsRequest {
 pub struct Lyrics {
     pub timed: Vec<(f32, String)>,
     pub plain: String,
-    pub synced: bool,
     pub provider: LyricsProvider,
 }
 
@@ -84,10 +97,69 @@ impl LyricsClient {
 }
 
 fn fetch_lrclib(req: &LyricsRequest) -> Result<Option<Lyrics>> {
-    if let Some(lyrics) = get(req)? {
+    fetch_lrclib_compat(req, LRCLIB_BASE, LyricsProvider::LrcLib)
+}
+
+fn fetch_lrcmux(req: &LyricsRequest) -> Result<Option<Lyrics>> {
+    fetch_lrclib_compat(req, LRCMUX_BASE, LyricsProvider::LrcMux)
+}
+
+fn fetch_lrclib_compat(
+    req: &LyricsRequest,
+    base: &str,
+    provider: LyricsProvider,
+) -> Result<Option<Lyrics>> {
+    if let Some(lyrics) = get_lrclib(req, base, provider)? {
         return Ok(Some(lyrics));
     }
-    search(req)
+    search_lrclib(req, base, provider)
+}
+
+fn get_json_opt<T: serde::de::DeserializeOwned>(url: &str, what: &str) -> Result<Option<T>> {
+    match ureq::get(url)
+        .header(
+            "User-Agent",
+            "music_plr/0.1 (https://github.com/gooseob/music_plr)",
+        )
+        .call()
+    {
+        Ok(mut r) => {
+            Ok(Some(r.body_mut().read_json().with_context(|| {
+                format!("{what} response was not valid JSON")
+            })?))
+        }
+        Err(ureq::Error::StatusCode(404)) => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("{what} request failed")),
+    }
+}
+
+// Lyrics.ovh is plain-text only (no synced lyrics) and uses a different URL
+// shape: `/v1/{artist}/{title}`. It returns `{"lyrics": ...}` or 404.
+#[derive(Deserialize)]
+struct OvhBody {
+    lyrics: String,
+}
+
+fn fetch_lyrics_ovh(req: &LyricsRequest) -> Result<Option<Lyrics>> {
+    let url = format!(
+        "{}/{}/{}",
+        LYRICS_OVH_BASE,
+        urlencoding(&req.artist),
+        urlencoding(&req.title)
+    );
+    let resp: OvhBody = match get_json_opt(&url, "Lyrics.ovh")? {
+        Some(body) => body,
+        None => return Ok(None),
+    };
+    let plain = resp.lyrics.trim().to_string();
+    if plain.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(Lyrics {
+        timed: vec![],
+        plain,
+        provider: LyricsProvider::LyricsOvh,
+    }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -98,10 +170,10 @@ struct LrcLibRecord {
     plain_lyrics: Option<String>,
 }
 
-fn get(req: &LyricsRequest) -> Result<Option<Lyrics>> {
+fn get_lrclib(req: &LyricsRequest, base: &str, provider: LyricsProvider) -> Result<Option<Lyrics>> {
     let mut url = format!(
         "{}/get?artist_name={}&track_name={}",
-        LRCLIB_BASE,
+        base,
         urlencoding(&req.artist),
         urlencoding(&req.title)
     );
@@ -114,49 +186,35 @@ fn get(req: &LyricsRequest) -> Result<Option<Lyrics>> {
         let _ = std::write!(url, "{}", req.duration);
     }
 
-    let resp: LrcLibRecord = match ureq::get(&url)
-        .header(
-            "User-Agent",
-            "music_plr/0.1 (https://github.com/gooseob/music_plr)",
-        )
-        .call()
-    {
-        Ok(mut r) => r
-            .body_mut()
-            .read_json()
-            .context("LRCLib response was not valid JSON")?,
-        // 404 means no match; report it as None rather than an error so the
-        // UI can show "not found" instead of surfacing a transport failure.
-        Err(ureq::Error::StatusCode(404)) => return Ok(None),
-        Err(e) => return Err(e).context("LRCLib request failed"),
+    let resp: LrcLibRecord = match get_json_opt(&url, "LRCLib-compatible")? {
+        Some(body) => body,
+        None => return Ok(None),
     };
 
-    Ok(Some(record_to_lyrics(resp, LyricsProvider::LrcLib)))
+    Ok(Some(record_to_lyrics(resp, provider)))
 }
 
-fn search(req: &LyricsRequest) -> Result<Option<Lyrics>> {
+fn search_lrclib(
+    req: &LyricsRequest,
+    base: &str,
+    provider: LyricsProvider,
+) -> Result<Option<Lyrics>> {
     let url = format!(
         "{}/search?artist_name={}&track_name={}",
-        LRCLIB_BASE,
+        base,
         urlencoding(&req.artist),
         urlencoding(&req.title)
     );
 
-    let resp: Vec<LrcLibRecord> = ureq::get(&url)
-        .header(
-            "User-Agent",
-            "music_plr/0.1 (https://github.com/gooseob/music_plr)",
-        )
-        .call()
-        .context("LRCLib request failed")?
-        .body_mut()
-        .read_json()
-        .context("LRCLib response was not valid JSON")?;
+    let resp: Vec<LrcLibRecord> = match get_json_opt(&url, "LRCLib-compatible")? {
+        Some(body) => body,
+        None => return Ok(None),
+    };
 
     Ok(resp
         .into_iter()
         .next()
-        .map(|rec| record_to_lyrics(rec, LyricsProvider::LrcLib)))
+        .map(|rec| record_to_lyrics(rec, provider)))
 }
 
 fn record_to_lyrics(rec: LrcLibRecord, provider: LyricsProvider) -> Lyrics {
@@ -165,7 +223,6 @@ fn record_to_lyrics(rec: LrcLibRecord, provider: LyricsProvider) -> Lyrics {
     let plain = plain.unwrap_or_default();
     let timed = synced.as_deref().map(parse_lrc).unwrap_or_default();
     Lyrics {
-        synced: !timed.is_empty(),
         timed,
         plain,
         provider,
@@ -246,7 +303,6 @@ mod tests {
     #[test]
     fn active_index_follows_position() {
         let lrc = Lyrics {
-            synced: true,
             timed: vec![(0.0, "a".into()), (10.0, "b".into()), (20.0, "c".into())],
             plain: String::new(),
             provider: LyricsProvider::LrcLib,
@@ -260,7 +316,6 @@ mod tests {
     #[test]
     fn active_index_none_when_untimed() {
         let lrc = Lyrics {
-            synced: false,
             timed: vec![],
             plain: "words".into(),
             provider: LyricsProvider::LrcLib,
@@ -274,6 +329,8 @@ mod tests {
             LyricsClient::new(LyricsProvider::LrcLib).selected(),
             LyricsProvider::LrcLib
         );
+        assert_eq!(LyricsProvider::default(), LyricsProvider::LrcLib);
         assert!(LyricsProvider::all().contains(&LyricsProvider::LrcLib));
+        assert_eq!(LyricsProvider::all().len(), 3);
     }
 }

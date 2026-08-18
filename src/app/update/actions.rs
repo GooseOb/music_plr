@@ -143,12 +143,14 @@ impl MusicPlayer {
         let duration = track.duration;
 
         if state.track_id.as_deref() == Some(current_id.as_str())
-            && (state.lyrics.is_some() || state.loading)
+            && (state.lyrics.is_some() || state.loading || state.not_found)
         {
             return;
         }
-        let cached = crate::data::lyrics_cache::LyricsCache::load().get(&current_id);
+        let cached = crate::data::lyrics_cache::LyricsCache::load()
+            .get_for(&current_id, self.lyrics_client.selected());
         if let Some(cached_lyrics) = cached {
+            eprintln!("Loaded cached lyrics for track {}", current_id);
             state.lyrics = Some(cached_lyrics);
             state.track_id = Some(current_id.clone());
             state.loading = false;
@@ -169,8 +171,8 @@ impl MusicPlayer {
         state.lyrics = None;
         state.track_id = Some(id.clone());
         state.loading = true;
+        state.not_found = false;
         self.sync_lyrics_editor();
-        self.notify(format!("Looking up lyrics for \"{}\"...", req.title));
         std::thread::spawn(move || {
             let result = client.fetch(&req);
             match result {

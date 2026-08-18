@@ -1,6 +1,6 @@
 //! On-disk lyrics cache keyed by track id.
 
-use crate::lyrics::Lyrics;
+use crate::lyrics::{Lyrics, LyricsProvider};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -10,13 +10,12 @@ use super::{JsonStore, StoreLocation};
 pub struct CachedLyrics {
     pub plain: String,
     pub timed: Vec<(f32, String)>,
-    pub provider: crate::lyrics::LyricsProvider,
+    pub provider: LyricsProvider,
 }
 
 impl CachedLyrics {
     pub fn to_lyrics(&self) -> Lyrics {
         Lyrics {
-            synced: !self.timed.is_empty(),
             timed: self.timed.clone(),
             plain: self.plain.clone(),
             provider: self.provider,
@@ -26,7 +25,7 @@ impl CachedLyrics {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LyricsCache {
-    entries: HashMap<String, CachedLyrics>,
+    entries: HashMap<String, Vec<CachedLyrics>>,
 }
 
 impl JsonStore for LyricsCache {
@@ -35,21 +34,28 @@ impl JsonStore for LyricsCache {
 }
 
 impl LyricsCache {
-    /// Look up cached lyrics for a track id.
-    pub fn get(&self, track_id: &str) -> Option<Lyrics> {
-        self.entries.get(track_id).map(CachedLyrics::to_lyrics)
+    /// Look up the cached lyrics for a specific provider, if present.
+    pub fn get_for(&self, track_id: &str, provider: LyricsProvider) -> Option<Lyrics> {
+        self.entries
+            .get(track_id)
+            .and_then(|list| list.iter().find(|e| e.provider == provider))
+            .map(CachedLyrics::to_lyrics)
     }
 
-    /// Store lyrics for a track id (overwriting any prior entry).
+    /// Store lyrics for a track id, upserting the per-provider entry (the same
+    /// provider's prior entry is replaced; other providers are preserved).
     pub fn insert(&mut self, track_id: &str, lyrics: &Lyrics) {
-        self.entries.insert(
-            track_id.to_string(),
-            CachedLyrics {
+        let list = self.entries.entry(track_id.to_string()).or_default();
+        if let Some(slot) = list.iter_mut().find(|e| e.provider == lyrics.provider) {
+            slot.plain.clone_from(&lyrics.plain);
+            slot.timed.clone_from(&lyrics.timed);
+        } else {
+            list.push(CachedLyrics {
                 plain: lyrics.plain.clone(),
                 timed: lyrics.timed.clone(),
                 provider: lyrics.provider,
-            },
-        );
+            });
+        }
         self.save();
     }
 }
