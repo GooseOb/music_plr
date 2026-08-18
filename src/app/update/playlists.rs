@@ -115,12 +115,8 @@ impl MusicPlayer {
             return;
         };
 
-        for track in &new_tracks {
-            self.playlists.insert_track_at(idx, track, usize::MAX);
-        }
-        self.playlists.save();
-
-        self.notify_tracks("Added", new_tracks.len(), "");
+        let count = self.playlists.insert_tracks_at(idx, new_tracks.iter(), 0);
+        self.notify_tracks("Added", count, "");
     }
 
     pub fn handle_add_to_playlist(
@@ -137,10 +133,9 @@ impl MusicPlayer {
             .iter()
             .filter_map(|&i| self.get_track_at(super::TrackPos::new(i, list)))
             .collect();
-        let count = tracks.len();
-        if count > 0 {
-            self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
-        }
+        let count = self
+            .playlists
+            .insert_tracks_at(playlist_idx, tracks.iter(), 0);
         self.playlist_picker = None;
         let name = self.playlists.playlists[playlist_idx].name.clone();
         self.notify_tracks("Added", count, &format!("to {name}"));
@@ -199,9 +194,8 @@ impl MusicPlayer {
         let Some(idx) = self.view_data_mut().selected_playlist_id() else {
             return;
         };
-        for track in self.clipboard.iter().rev() {
-            self.playlists.insert_track_at(idx, track, 0);
-        }
+        self.playlists
+            .insert_tracks_at(idx, self.clipboard.iter().rev(), 0);
         self.playlists.save();
         let count = self.clipboard.len();
         let name = self.playlists.playlists[idx].name.clone();

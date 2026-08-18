@@ -71,25 +71,30 @@ impl PlaylistStore {
         }
     }
 
-    pub fn insert_track_at(&mut self, playlist_idx: usize, track: &Track, pos: usize) {
-        self.insert_tracks_at(playlist_idx, std::slice::from_ref(track), pos);
-    }
-
     /// Insert multiple tracks at once, writing to disk only once.
     /// `pos` is clamped per-track to the growing list length.
-    pub fn insert_tracks_at(&mut self, playlist_idx: usize, tracks: &[Track], pos: usize) {
+    /// Returns the number of tracks actually inserted.
+    pub fn insert_tracks_at<'a, I>(&mut self, playlist_idx: usize, tracks: I, pos: usize) -> usize
+    where
+        I: IntoIterator<Item = &'a Track>,
+    {
         let Some(pl) = self.playlists.get_mut(playlist_idx) else {
-            return;
+            return 0;
         };
         let mut insert_pos = pos;
+        let mut inserted_count: usize = 0;
         for track in tracks {
             if !pl.tracks.iter().any(|t| t.url == track.url) {
                 insert_pos = insert_pos.min(pl.tracks.len());
                 pl.tracks.insert(insert_pos, track.clone());
                 insert_pos += 1;
+                inserted_count += 1;
             }
         }
-        self.save();
+        if inserted_count > 0 {
+            self.save();
+        }
+        inserted_count
     }
 
     /// Remove tracks at the given indices (in any order), writing to disk
@@ -167,7 +172,7 @@ mod tests {
             download_path: None,
             album: None,
         };
-        store.insert_track_at(0, &new_track, 0);
+        store.insert_tracks_at(0, std::iter::once(&new_track), 0);
         assert_eq!(
             store.playlists[0]
                 .tracks
@@ -195,7 +200,7 @@ mod tests {
             download_path: None,
             album: None,
         };
-        store.insert_track_at(0, &new_track, 2);
+        store.insert_tracks_at(0, std::iter::once(&new_track), 2);
         assert_eq!(
             store.playlists[0]
                 .tracks
@@ -223,7 +228,7 @@ mod tests {
             download_path: None,
             album: None,
         };
-        store.insert_track_at(0, &new_track, 100);
+        store.insert_tracks_at(0, std::iter::once(&new_track), 100);
         assert_eq!(
             store.playlists[0]
                 .tracks
@@ -251,7 +256,7 @@ mod tests {
             download_path: None,
             album: None,
         };
-        store.insert_track_at(0, &dup_track, 0);
+        store.insert_tracks_at(0, std::iter::once(&dup_track), 0);
         assert_eq!(
             store.playlists[0]
                 .tracks

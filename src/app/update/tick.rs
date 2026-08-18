@@ -213,9 +213,10 @@ impl MusicPlayer {
                 // fills it. The playlist view reads tracks from the store, so
                 // they appear as soon as we insert them.
                 if idx < self.playlists.playlists.len() {
-                    let count = tracks.len();
+                    let count = self
+                        .playlists
+                        .insert_tracks_at(idx, tracks.iter(), usize::MAX);
                     if count > 0 {
-                        self.playlists.insert_tracks_at(idx, &tracks, usize::MAX);
                         self.notify_tracks("Added", count, &format!("to {name}"));
                     }
                 }

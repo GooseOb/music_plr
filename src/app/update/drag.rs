@@ -301,10 +301,9 @@ impl MusicPlayer {
                 .rev()
                 .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
                 .collect();
-            let count = tracks.len();
-            if count > 0 {
-                self.playlists.insert_tracks_at(playlist_idx, &tracks, 0);
-            }
+            let count = self
+                .playlists
+                .insert_tracks_at(playlist_idx, tracks.iter(), 0);
             let name = self.playlists.playlists[playlist_idx].name.clone();
             self.notify_tracks("Added", count, &format!("to {name}"));
             return;
@@ -355,17 +354,15 @@ impl MusicPlayer {
         }
 
         let clamped = drop_idx.min(self.playlists.playlists[sp].tracks.len());
-        let tracks: Vec<Track> = indices
+        let tracks = indices
             .iter()
-            .filter_map(|&queue_idx| self.queue.tracks.get(queue_idx).cloned())
-            .collect();
-        let inserted = tracks.len();
-        if inserted > 0 {
-            self.playlists.insert_tracks_at(sp, &tracks, clamped);
-        }
+            .filter_map(|&queue_idx| self.queue.tracks.get(queue_idx));
+        let inserted = self.playlists.insert_tracks_at(sp, tracks, clamped);
         self.save_session();
         let name = self.playlists.playlists[sp].name.clone();
-        self.notify_tracks("Added", inserted, &format!("to {name}"));
+        if inserted > 0 {
+            self.notify_tracks("Added", inserted, &format!("to {name}"));
+        }
     }
 
     /// Handle reordering within the same list. The selection is always
