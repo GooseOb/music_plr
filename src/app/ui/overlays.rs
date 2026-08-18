@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use iced::{
     alignment,
     widget::{column, container, row, text, Button, Column, Container, MouseArea, Row, Space},
@@ -49,7 +51,7 @@ pub(super) fn view_context_menu<'a>(
 
     let items: Vec<Element<'_, Message, AppTheme>> = {
         let mut v: Vec<Element<'_, Message, AppTheme>> = vec![menu_item(
-            "Play",
+            Cow::Borrowed("Play"),
             icons::PLAY_ICON,
             p,
             Message::ContextMenuPlayTrack(menu.pos),
@@ -59,7 +61,7 @@ pub(super) fn view_context_menu<'a>(
         if menu.track.artist.id.is_some() {
             v.push(
                 menu_item(
-                    "Go to artist",
+                    Cow::Borrowed("Go to artist"),
                     icons::ARTIST_ICON,
                     p,
                     Message::ContextMenuGoToArtist,
@@ -71,7 +73,7 @@ pub(super) fn view_context_menu<'a>(
         if menu.is_youtube {
             v.push(
                 menu_item(
-                    "Song Radio",
+                    Cow::Borrowed("Song Radio"),
                     icons::RADIO_ICON,
                     p,
                     Message::ContextMenuStartSongRadio,
@@ -80,7 +82,7 @@ pub(super) fn view_context_menu<'a>(
             );
             v.push(
                 menu_item(
-                    "Artist Radio",
+                    Cow::Borrowed("Artist Radio"),
                     icons::RADIO_ICON,
                     p,
                     Message::ContextMenuStartArtistRadio,
@@ -90,10 +92,16 @@ pub(super) fn view_context_menu<'a>(
         }
 
         let target_indices = &menu.target_indices;
+        let n = target_indices.len();
 
+        let add_label = if n > 1 {
+            Cow::Owned(format!("Add {n} tracks to Playlist"))
+        } else {
+            Cow::Borrowed("Add to Playlist")
+        };
         v.push(
             menu_item(
-                "Add to Playlist",
+                add_label,
                 icons::FOLDER_ICON,
                 p,
                 Message::TogglePicker(target_indices.clone()),
@@ -103,9 +111,15 @@ pub(super) fn view_context_menu<'a>(
 
         if menu.is_youtube {
             let label = if menu.is_downloaded {
-                "Delete Download"
+                if n > 1 {
+                    Cow::Owned(format!("Delete {n} Downloads"))
+                } else {
+                    Cow::Borrowed("Delete Download")
+                }
+            } else if n > 1 {
+                Cow::Owned(format!("Download {n} tracks"))
             } else {
-                "Download"
+                Cow::Borrowed("Download")
             };
             v.push(
                 menu_item(
@@ -119,9 +133,14 @@ pub(super) fn view_context_menu<'a>(
         }
 
         if menu.pos.list == TrackListKind::Queue {
+            let label = if n > 1 {
+                Cow::Owned(format!("Remove {n} tracks from queue"))
+            } else {
+                Cow::Borrowed("Remove from Queue")
+            };
             v.push(
                 menu_item(
-                    "Remove from Queue",
+                    label,
                     icons::DELETE_ICON,
                     p,
                     Message::ContextMenuRemoveFromQueue(target_indices.clone()),
@@ -129,9 +148,14 @@ pub(super) fn view_context_menu<'a>(
                 .into(),
             );
         } else if menu.in_playlist && menu.pos.list != TrackListKind::Recent {
+            let label = if n > 1 {
+                Cow::Owned(format!("Remove {n} tracks from playlist"))
+            } else {
+                Cow::Borrowed("Remove from Playlist")
+            };
             v.push(
                 menu_item(
-                    "Remove from Playlist",
+                    label,
                     icons::DELETE_ICON,
                     p,
                     Message::ContextMenuRemoveFromPlaylist(target_indices.clone()),
@@ -164,7 +188,7 @@ pub(super) fn view_context_menu<'a>(
 }
 
 fn menu_item<'a>(
-    label: &'a str,
+    label: Cow<'a, str>,
     icon: &'static [u8],
     p: &'a Palette,
     on_press: Message,
