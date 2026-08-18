@@ -13,11 +13,17 @@ pub struct TrackAlbum {
     pub id: String,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrackArtist {
+    pub name: String,
+    pub id: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Track {
     pub id: String,
     pub title: String,
-    pub artist: String,
+    pub artist: TrackArtist,
     pub duration: u32,
     pub url: String,
     pub source: TrackSource,
@@ -106,7 +112,10 @@ impl From<crate::youtube::YouTubeVideo> for Track {
         Self {
             id: v.id,
             title: v.title,
-            artist: v.channel,
+            artist: TrackArtist {
+                name: v.channel,
+                id: v.artist_id,
+            },
             duration: v.duration as u32,
             url: v.url,
             source: TrackSource::YouTube,
@@ -125,7 +134,10 @@ mod tests {
         Track {
             id: id.into(),
             title: format!("Track {id}"),
-            artist: "Artist".into(),
+            artist: TrackArtist {
+                name: "Artist".into(),
+                id: None,
+            },
             duration: 10,
             url: url.into(),
             source: TrackSource::YouTube,
@@ -142,7 +154,10 @@ mod tests {
             Track {
                 id: "1".into(),
                 title: "A".into(),
-                artist: "X".into(),
+                artist: TrackArtist {
+                    name: "X".into(),
+                    id: None,
+                },
                 duration: 10,
                 url: String::new(),
                 source: TrackSource::YouTube,
@@ -153,7 +168,10 @@ mod tests {
             Track {
                 id: "2".into(),
                 title: "B".into(),
-                artist: "X".into(),
+                artist: TrackArtist {
+                    name: "X".into(),
+                    id: None,
+                },
                 duration: 10,
                 url: String::new(),
                 source: TrackSource::YouTube,
@@ -164,7 +182,10 @@ mod tests {
             Track {
                 id: "3".into(),
                 title: "C".into(),
-                artist: "X".into(),
+                artist: TrackArtist {
+                    name: "X".into(),
+                    id: None,
+                },
                 duration: 10,
                 url: String::new(),
                 source: TrackSource::YouTube,

@@ -358,6 +358,10 @@ impl MusicPlayer {
                 self.handle_open_album(browse_id, &title);
                 Task::none()
             }
+            Message::OpenArtist(browse_id, name) => {
+                self.handle_open_artist(browse_id, &name);
+                Task::none()
+            }
             Message::ToggleLibrarySave(item) => {
                 let saved = self.toggle_library_save(item);
                 self.notify(if saved {
@@ -568,7 +572,15 @@ impl MusicPlayer {
             }
             Message::ContextMenuStartArtistRadio => {
                 if let Some(track) = self.context_menu.take().map(|m| m.track) {
-                    self.start_artist_radio(track.artist);
+                    self.start_artist_radio(track.artist.name);
+                }
+                Task::none()
+            }
+            Message::ContextMenuGoToArtist => {
+                if let Some(track) = self.context_menu.take().map(|m| m.track) {
+                    self.handle_open_artist(track.artist.id.expect(
+                            "Illegal state: context menu 'Go to artist' was shown for a track with no artist id" 
+                            ), &track.artist.name);
                 }
                 Task::none()
             }

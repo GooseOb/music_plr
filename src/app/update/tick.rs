@@ -298,7 +298,7 @@ impl MusicPlayer {
                 }
                 .into(),
                 title: track.map(|t| t.title.clone()).unwrap_or_default(),
-                artist: track.map(|t| t.artist.clone()).unwrap_or_default(),
+                artist: track.map(|t| t.artist.name.clone()).unwrap_or_default(),
                 duration_secs: self.duration,
                 position_us: (self.progress * self.duration * 1_000_000.0) as i64,
                 volume: self.volume,

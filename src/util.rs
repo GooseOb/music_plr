@@ -236,7 +236,10 @@ mod tests {
             .map(|i| Track {
                 id: format!("id{i}"),
                 title: format!("Track {i}"),
-                artist: "Artist".into(),
+                artist: crate::types::TrackArtist {
+                    name: "Artist".into(),
+                    id: None,
+                },
                 duration: 10,
                 url: format!("url{i}"),
                 source: TrackSource::YouTube,

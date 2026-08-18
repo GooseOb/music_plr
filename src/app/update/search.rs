@@ -194,6 +194,7 @@ impl MusicPlayer {
 
     /// Shared drill-down: switch to the given browse view kind (loading),
     /// fetch its tracks via ytmusicapi `browse()`, and send `BrowseResults`.
+    /// TODO: non-kind args are redundant; we could extract them from the kind
     fn start_browse(
         &mut self,
         kind: &ViewKind,

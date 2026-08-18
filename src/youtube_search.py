@@ -56,6 +56,7 @@ def result_to_item(r, rt):
             return None
         artists = r.get("artists", [])
         artist = artists[0].get("name", "") if artists else ""
+        artist_id = artists[0].get("id") if artists else None
         duration = r.get("duration_seconds", 0) or 0
         album = r.get("album") or {}
         album_name = album.get("name", "") or ""
@@ -75,6 +76,7 @@ def result_to_item(r, rt):
             "duration": duration,
             "thumbnail": thumb,
             "channel": artist,
+            "artist_id": artist_id,
             "album": album_obj,
         }
     if rt == "artist":
@@ -218,6 +220,7 @@ def browse(browse_id, limit=50, kind=None):
                         "duration": _dur(e.get("duration")),
                         "thumbnail": (e.get("thumbnails") or [{}])[-1].get("url", ""),
                         "channel": e.get("artist", ""),
+                        "artist_id": browse_id,
                     }
                 )
             if len(out) >= limit:

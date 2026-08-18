@@ -2,6 +2,7 @@ use crate::theme::AppTheme;
 use iced::{widget::svg, Color};
 
 pub const ADD_ICON: &[u8] = include_bytes!("../icons/add.svg");
+pub const ARTIST_ICON: &[u8] = include_bytes!("../icons/artist.svg");
 pub const BACK_ICON: &[u8] = include_bytes!("../icons/back.svg");
 pub const BOOKMARK_ICON: &[u8] = include_bytes!("../icons/bookmark.svg");
 pub const CACHE_ICON: &[u8] = include_bytes!("../icons/cache.svg");

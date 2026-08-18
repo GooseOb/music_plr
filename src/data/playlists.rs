@@ -117,7 +117,10 @@ mod tests {
                 .map(|s| Track {
                     id: s.to_string(),
                     title: s.to_string(),
-                    artist: String::new(),
+                    artist: crate::types::TrackArtist {
+                        name: String::new(),
+                        id: None,
+                    },
                     duration: 0,
                     url: s.to_string(),
                     source: crate::types::TrackSource::YouTube,
@@ -153,7 +156,10 @@ mod tests {
         let new_track = Track {
             id: "new".to_string(),
             title: "new".to_string(),
-            artist: String::new(),
+            artist: crate::types::TrackArtist {
+                name: String::new(),
+                id: None,
+            },
             duration: 0,
             url: "new".to_string(),
             source: crate::types::TrackSource::YouTube,
@@ -178,7 +184,10 @@ mod tests {
         let new_track = Track {
             id: "new".to_string(),
             title: "new".to_string(),
-            artist: String::new(),
+            artist: crate::types::TrackArtist {
+                name: String::new(),
+                id: None,
+            },
             duration: 0,
             url: "new".to_string(),
             source: crate::types::TrackSource::YouTube,
@@ -203,7 +212,10 @@ mod tests {
         let new_track = Track {
             id: "new".to_string(),
             title: "new".to_string(),
-            artist: String::new(),
+            artist: crate::types::TrackArtist {
+                name: String::new(),
+                id: None,
+            },
             duration: 0,
             url: "new".to_string(),
             source: crate::types::TrackSource::YouTube,
@@ -228,7 +240,10 @@ mod tests {
         let dup_track = Track {
             id: "a".to_string(),
             title: "a".to_string(),
-            artist: String::new(),
+            artist: crate::types::TrackArtist {
+                name: String::new(),
+                id: None,
+            },
             duration: 0,
             url: "a".to_string(),
             source: crate::types::TrackSource::YouTube,

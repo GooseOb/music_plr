@@ -150,7 +150,7 @@ pub(super) fn inner_row_layout<'a>(
     leading: Element<'a, Message, AppTheme>,
     thumbnail: Option<Element<'a, Message, AppTheme>>,
     title: &'a str,
-    subtitle: Option<&'a str>,
+    subtitle: Option<Element<'a, Message, AppTheme>>,
     trailing: Option<Element<'a, Message, AppTheme>>,
 ) -> Row<'a, Message, AppTheme> {
     let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(5);
@@ -160,15 +160,9 @@ pub(super) fn inner_row_layout<'a>(
     }
     let title_el = text(title).size(theme::TEXT_SIZE_MD).width(Length::Fill);
     children.push(match subtitle {
-        Some(sub) => Column::with_children([
-            title_el.into(),
-            text(sub)
-                .size(theme::TEXT_SIZE_SM)
-                .style(fg_secondary())
-                .into(),
-        ])
-        .spacing(theme::SPACING_2XS)
-        .into(),
+        Some(sub) => Column::with_children([title_el.into(), sub])
+            .spacing(theme::SPACING_2XS)
+            .into(),
         None => title_el.into(),
     });
     if let Some(trailing) = trailing {
@@ -226,11 +220,28 @@ pub(super) fn track_row_layout<'a>(
         .into(),
     );
 
+    let artist_name = track.artist.name.clone();
+    let artist_subtitle: Element<'a, Message, AppTheme> = match &track.artist.id {
+        Some(artist_id) => Button::new(
+            text(artist_name.clone())
+                .size(theme::TEXT_SIZE_SM)
+                .style(fg_secondary()),
+        )
+        .padding(0)
+        .style(button_style_album())
+        .on_press(Message::OpenArtist(artist_id.clone(), artist_name))
+        .into(),
+        None => text(artist_name)
+            .size(theme::TEXT_SIZE_SM)
+            .style(fg_secondary())
+            .into(),
+    };
+
     inner_row_layout(
         leading,
         Some(thumbnail(p, theme::THUMBNAIL_SIZE, thumb)),
         &track.title,
-        Some(&track.artist),
+        Some(artist_subtitle),
         Some(
             Row::with_children(trailing_children)
                 .align_y(alignment::Vertical::Center)

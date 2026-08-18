@@ -137,7 +137,7 @@ impl MusicPlayer {
         };
 
         let current_id = track.id.clone();
-        let artist = track.artist.clone();
+        let artist = track.artist.name.clone();
         let title = track.title.clone();
         let album = track.album.as_ref().map(|a| a.name.clone());
         let duration = track.duration;

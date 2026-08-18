@@ -62,24 +62,17 @@ pub struct YouTubeVideo {
     pub channel: String,
     pub thumbnail: String,
     pub album: Option<crate::types::TrackAlbum>,
+    pub artist_id: Option<String>,
 }
 
-/// A non-track search result (artist/album/playlist) available for
-/// drill-down. The three search tabs share this one concrete shape; the
-/// active `SearchTab` variant says which kind it is.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CardData {
-    /// `browse_id` for artists/albums, `playlist_id` for playlists.
     pub id: String,
     pub title: String,
-    /// Artist (album) or author (playlist); empty for artists.
     pub subtitle: String,
     pub thumbnail: String,
 }
 
-/// Which tab a `Search` view is on. `Songs`/`Videos` show the playable track
-/// list (stored in `ViewData.tracks`); the others carry their concrete card
-/// list for drill-down.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SearchTab {
     Songs,
@@ -192,6 +185,7 @@ pub fn browse(browse_id: &str, kind: &str) -> Result<Vec<YouTubeVideo>> {
             channel: r.channel,
             thumbnail: r.thumbnail,
             album: r.album,
+            artist_id: None,
         })
         .collect())
 }
@@ -261,6 +255,7 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
                         channel: r.channel,
                         thumbnail: r.thumbnail,
                         album: r.album,
+                        artist_id: r.artist_id,
                     }));
                 }
             }
@@ -290,6 +285,8 @@ struct YtMusicResult {
     thumbnail: String,
     #[serde(default)]
     album: Option<crate::types::TrackAlbum>,
+    #[serde(default)]
+    artist_id: Option<String>,
 }
 
 fn search_ytdlp(query: &str, offset: usize, page_size: usize) -> Result<Vec<YouTubeVideo>> {
@@ -365,6 +362,7 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
                 channel: String::new(),
                 thumbnail: format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg"),
                 album: None,
+                artist_id: None,
             });
         }
     }

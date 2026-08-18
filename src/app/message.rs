@@ -51,6 +51,7 @@ pub enum Message {
     SearchLoadMore,
     SearchHistorySelected(usize),
     OpenAlbum(String, String),
+    OpenArtist(String, String),
     DragPress(interaction::Pressed),
     HoverStart(interaction::HoverTarget),
     ToggleLibrarySave(library::LibraryItem),
@@ -100,6 +101,8 @@ pub enum Message {
     ContextMenuPlayTrack(TrackPos),
     ContextMenuStartSongRadio,
     ContextMenuStartArtistRadio,
+    /// Navigate to the right-clicked track's artist from the context menu.
+    ContextMenuGoToArtist,
     ContextMenuDownloadOrDelete(Vec<usize>),
     ContextMenuRemoveFromPlaylist(Vec<usize>),
     ContextMenuRemoveFromQueue(Vec<usize>),

@@ -94,7 +94,10 @@ impl MusicPlayer {
                 new_tracks.push(Track {
                     id: filename.to_string(),
                     title: filename.to_string(),
-                    artist: "Unknown Artist".to_string(),
+                    artist: crate::types::TrackArtist {
+                        name: "Unknown Artist".to_string(),
+                        id: None,
+                    },
                     duration,
                     url: path_str,
                     source: TrackSource::Local,

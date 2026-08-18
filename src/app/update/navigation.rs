@@ -194,7 +194,10 @@ mod tests {
         let track = crate::types::Track {
             id: "t1".into(),
             title: "Song".into(),
-            artist: "Artist".into(),
+            artist: crate::types::TrackArtist {
+                name: "Artist".into(),
+                id: None,
+            },
             duration: 0,
             url: String::new(),
             source: crate::types::TrackSource::YouTube,

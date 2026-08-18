@@ -56,6 +56,18 @@ pub(super) fn view_context_menu<'a>(
         )
         .into()];
 
+        if menu.track.artist.id.is_some() {
+            v.push(
+                menu_item(
+                    "Go to artist",
+                    icons::ARTIST_ICON,
+                    p,
+                    Message::ContextMenuGoToArtist,
+                )
+                .into(),
+            );
+        }
+
         if menu.is_youtube {
             v.push(
                 menu_item(

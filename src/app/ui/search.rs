@@ -180,18 +180,18 @@ fn card_row<'a>(
         toggle_bookmark_button(p, saved).on_press(Message::ToggleLibrarySave(item.clone())),
     )
     .padding([0.0, theme::SPACING_MD]);
-    let main = track_list::inner_row_layout(
-        leading.into(),
-        Some(thumb),
-        title,
-        if subtitle.is_empty() {
-            None
-        } else {
-            Some(subtitle)
-        },
-        None,
-    )
-    .width(Length::Fill);
+    let subtitle_el = if subtitle.is_empty() {
+        None
+    } else {
+        Some(
+            text(subtitle)
+                .size(theme::TEXT_SIZE_SM)
+                .style(fg_secondary())
+                .into(),
+        )
+    };
+    let main = track_list::inner_row_layout(leading.into(), Some(thumb), title, subtitle_el, None)
+        .width(Length::Fill);
     let is_hovered = player.drag.is_hovered_card(item);
     let hover_item = item.clone();
     let main = MouseArea::new(main)
