@@ -14,17 +14,6 @@ impl RequestIdGenerator {
     }
 }
 
-/// All per-view state, stored in one flat struct. The `kind` field is the
-/// only variant-specific part; everything else is shared view chrome that is
-/// identical regardless of which view is active. Serialized directly into
-/// [`crate::app::MusicPlayer::nav_history`] (one entry per history slot) and
-/// into [`crate::data::session::SessionState`] for restore.
-///
-/// The active instance lives in `nav_history[nav_history_pos]`; there is no
-/// separate live copy. The `query` (search-bar text) is intentionally kept
-/// on [`crate::app::MusicPlayer`] rather than here: the search bar is always
-/// visible regardless of which view is active, so the query is global UI
-/// state rather than view-specific data.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ViewData {
     pub kind: ViewKind,
@@ -39,9 +28,6 @@ pub struct ViewData {
     pub request_id: u64,
 }
 
-/// The kind of view currently active. Carries everything that differs between
-/// views: the search `exhausted` flag, the radio label, and the selected
-/// playlist identity.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ViewKind {
     Search {

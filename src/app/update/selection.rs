@@ -48,9 +48,22 @@ impl MusicPlayer {
     }
 
     pub fn clear_selection(&mut self) {
-        self.view_data_mut().selection.clear();
-        self.queue_selected_indices.clear();
+        self.clear_selection_for(TrackListKind::Active);
+        self.clear_selection_for(TrackListKind::Queue);
         self.playlist_picker = None;
+    }
+
+    pub fn clear_selection_for(&mut self, list: TrackListKind) {
+        if let Some(sel) = self.selection_mut(list) {
+            sel.clear();
+        }
+        self.playlist_picker = None;
+    }
+
+    /// Whether any list currently holds a selection.
+    pub fn has_selection(&self) -> bool {
+        !self.selection(TrackListKind::Active).is_empty()
+            || !self.selection(TrackListKind::Queue).is_empty()
     }
 
     /// Clear the selection if any of `indices` was selected — used after a

@@ -66,10 +66,12 @@ impl MusicPlayer {
             iced::keyboard::Key::Named(Named::Escape) => {
                 if self.show_search_history {
                     self.show_search_history = false;
-                } else if self.view_data_mut().selection.is_empty() {
-                    self.handle_navigate_to(ViewData::new_search(String::new(), self.search_scope));
-                } else {
+                } else if let Some(hovered) = self.drag.hovered_track() {
+                    self.clear_selection_for(hovered.list);
+                } else if self.has_selection() {
                     self.clear_selection();
+                } else {
+                    self.handle_navigate_to(ViewData::new_search(String::new(), self.search_scope));
                 }
                 Task::none()
             }

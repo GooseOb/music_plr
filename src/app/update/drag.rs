@@ -56,7 +56,7 @@ impl MusicPlayer {
             }
         }
 
-        self.drag.cleanup();
+        self.drag.stop();
     }
 
     pub fn handle_drag_update(&mut self) -> Task<Message> {

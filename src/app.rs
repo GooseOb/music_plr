@@ -396,9 +396,6 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::PlayTrackAt(pos) => {
-                if pos.list == TrackListKind::Active {
-                    self.drag.clear_hovered_track();
-                }
                 self.handle_play_track(pos);
                 Task::none()
             }

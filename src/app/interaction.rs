@@ -120,11 +120,15 @@ pub struct DragState {
 }
 
 impl DragState {
-    pub(crate) fn cleanup(&mut self) {
+    pub fn stop(&mut self) {
         self.drag_active = false;
         self.drag_origin = None;
         self.pressed = None;
         self.drop_target = None;
+    }
+
+    pub(crate) fn cleanup(&mut self) {
+        self.stop();
         self.hovered = None;
     }
 
