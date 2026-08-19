@@ -18,6 +18,25 @@ SCOPE_FILTER = {
     "playlists": "playlists",
 }
 
+SINGULAR = {"songs": "song", "videos": "video"}
+
+
+def _make_track(vid, title, artist, *, duration=0, thumbnail="",
+                album=None, artist_id=None):
+    return {
+        "kind": "track",
+        "resultType": "song",
+        "id": vid,
+        "title": title,
+        "subtitle": artist,
+        "url": f"https://youtube.com/watch?v={vid}",
+        "duration": duration,
+        "thumbnail": thumbnail,
+        "channel": artist,
+        "artist_id": artist_id,
+        "album": album,
+    }
+
 
 def _yt():
     return YTMusic()
@@ -25,19 +44,19 @@ def _yt():
 
 def search(query, scope="all", limit=20):
     filt = SCOPE_FILTER.get(scope, None)
-    if filt is not None:
-        # Filtered endpoints return only that result type and rank within it.
-        results = _yt().search(query, filter=filt, limit=limit)
-    else:
+    if filt is None:
         # General search: over-fetch so we can still trim to `limit` after we
         # keep only the playable/known types.
         results = _yt().search(query, limit=limit * 3)
+    else:
+        # Filtered endpoints return only that result type and rank within it.
+        results = _yt().search(query, filter=filt, limit=limit)
     out = []
     for r in results:
         rt = r.get("resultType")
         # Paranoia guard: if the endpoint ever returns mixed types, drop
         # anything that doesn't match the requested scope.
-        if scope != "all" and rt != scope.rstrip("s"):
+        if scope != "all" and rt != SINGULAR.get(scope, scope):
             continue
         item = result_to_item(r, rt)
         if item is not None:
@@ -66,19 +85,11 @@ def result_to_item(r, rt):
             if album_name and album_id
             else None
         )
-        return {
-            "kind": "track",
-            "resultType": rt,
-            "id": vid,
-            "title": r.get("title", ""),
-            "subtitle": artist,
-            "url": f"https://youtube.com/watch?v={vid}",
-            "duration": duration,
-            "thumbnail": thumb,
-            "channel": artist,
-            "artist_id": artist_id,
-            "album": album_obj,
-        }
+        return _make_track(
+            vid, r.get("title", ""), artist,
+            duration=duration, thumbnail=thumb, album=album_obj,
+            artist_id=artist_id,
+        )
     if rt == "artist":
         bid = r.get("browseId", "")
         if not bid:
@@ -137,22 +148,13 @@ def _track_from_album_entry(e, album=None):
     vid = e.get("videoId") or ""
     if not vid:
         return None
-    return {
-        "kind": "track",
-        "resultType": "song",
-        "id": vid,
-        "title": e.get("title", ""),
-        "subtitle": e.get("artists", [{}])[0].get("name", "")
-        if e.get("artists")
-        else (e.get("artist", "") or ""),
-        "url": f"https://youtube.com/watch?v={vid}",
-        "duration": _dur(e.get("duration")),
-        "thumbnail": (e.get("thumbnails") or [{}])[-1].get("url", ""),
-        "channel": e.get("artists", [{}])[0].get("name", "")
-        if e.get("artists")
-        else (e.get("artist", "") or ""),
-        "album": album,
-    }
+    artist = e.get("artists", [{}])[0].get("name", "") if e.get("artists") \
+        else (e.get("artist", "") or "")
+    thumb = (e.get("thumbnails") or [{}])[-1].get("url", "")
+    return _make_track(
+        vid, e.get("title", ""), artist,
+        duration=_dur(e.get("duration")), thumbnail=thumb, album=album,
+    )
 
 
 def _dur(d):
@@ -196,37 +198,82 @@ def browse(browse_id, limit=50, kind=None):
                 if t:
                     out.append(t)
         return out
-    # artist
-    artist = yt.get_artist(browse_id)
-    songs = artist.get("songs", {})
-    for e in songs.get("browseId") and [] or []:
-        pass
-    # get_artist's "songs" is just a shelf with a browseId; fetch the full
-    # song list via the artist's songs endpoint.
+    # artist: get_artist's "songs" is just a shelf with a browseId; the real
+    # tracks live in artist["songs"]["results"], so fetch once and read that.
     try:
-        songs_list = yt.get_artist(browse_id)
-        # The artist's top songs are in artist["songs"]["results"].
-        for e in songs_list.get("songs", {}).get("results", []):
+        artist = yt.get_artist(browse_id)
+        for e in artist.get("songs", {}).get("results", []):
             vid = e.get("videoId") or ""
-            if vid:
-                out.append(
-                    {
-                        "kind": "track",
-                        "resultType": "song",
-                        "id": vid,
-                        "title": e.get("title", ""),
-                        "subtitle": e.get("artist", ""),
-                        "url": f"https://youtube.com/watch?v={vid}",
-                        "duration": _dur(e.get("duration")),
-                        "thumbnail": (e.get("thumbnails") or [{}])[-1].get("url", ""),
-                        "channel": e.get("artist", ""),
-                        "artist_id": browse_id,
-                    }
+            if not vid:
+                continue
+            thumb = (e.get("thumbnails") or [{}])[-1].get("url", "")
+            out.append(
+                _make_track(
+                    vid, e.get("title", ""), e.get("artist", ""),
+                    duration=_dur(e.get("duration")), thumbnail=thumb,
+                    artist_id=browse_id,
                 )
+            )
             if len(out) >= limit:
                 break
     except Exception:
         pass
+    return out
+
+
+def watch_playlist(video_id=None, playlist_id=None, radio=True, limit=50):
+    """Return the tracks of a YouTube Music radio/mix playlist.
+
+    This is the same engine that powers the site's "Start radio" button.
+    For a song radio pass `video_id`; for an artist/playlist radio pass the
+    `playlist_id`. A raw artist channel browseId (starts with `UC`) is
+    resolved to its generated `radioId` via `get_artist`, since
+    `get_watch_playlist` only accepts radio/mix playlist ids (`RD...`) or a
+    videoId. `radio=True` seeds the autoplay continuation so the returned
+    list is the generated mix rather than a static playlist.
+    """
+    yt = _yt()
+    # A channel browseId can't be fed straight to get_watch_playlist; resolve
+    # it to the artist's radio playlist id first.
+    if playlist_id and playlist_id.startswith("UC"):
+        try:
+            artist = yt.get_artist(playlist_id)
+            radio_id = artist.get("radioId")
+            if radio_id:
+                playlist_id = radio_id
+        except Exception:
+            pass
+    try:
+        wp = yt.get_watch_playlist(
+            videoId=video_id, playlistId=playlist_id, radio=radio
+        )
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
+        sys.exit(1)
+    tracks = wp.get("tracks", [])
+    out = []
+    for t in tracks:
+        vid = t.get("videoId") or ""
+        if not vid:
+            continue
+        artists = t.get("artists", [])
+        artist = artists[0].get("name", "") if artists else ""
+        artist_id = artists[0].get("id") if artists else None
+        # watch_playlist omits numeric duration and thumbnails, so derive them
+        # locally: parse the "M:SS" / "H:MM:SS" length string and synthesize
+        # the standard thumbnail URL. This avoids a slow per-track yt-dlp
+        # metadata pass (which added ~100s for a 50-track radio).
+        duration = _dur(t.get("length"))
+        thumbs = t.get("thumbnails") or []
+        thumbnail = thumbs[-1].get("url", "") if thumbs else f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"
+        out.append(
+            _make_track(
+                vid, t.get("title", ""), artist,
+                duration=duration, thumbnail=thumbnail, artist_id=artist_id,
+            )
+        )
+        if len(out) >= limit:
+            break
     return out
 
 
@@ -237,6 +284,13 @@ def main():
         limit = int(sys.argv[3]) if len(sys.argv) > 3 else 50
         kind = sys.argv[4] if len(sys.argv) > 4 else None
         print(json.dumps(browse(bid, limit, kind)))
+        return
+    if cmd == "watch":
+        # watch <videoId|''> <playlistId|''> [limit]
+        video_id = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] else None
+        playlist_id = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
+        limit = int(sys.argv[4]) if len(sys.argv) > 4 else 50
+        print(json.dumps(watch_playlist(video_id, playlist_id, True, limit)))
         return
     # default: search <query> [scope] [limit]
     query = sys.argv[2] if len(sys.argv) > 2 else ""

@@ -118,7 +118,8 @@ impl MusicPlayer {
     /// variant; `noun` is the notify phrasing.
     fn start_radio(
         &mut self,
-        name: String,
+        name: &str,
+        fetch_arg: String,
         noun: &str,
         make_kind: impl FnOnce(String) -> ViewKind,
         fetch: fn(&str) -> anyhow::Result<Vec<crate::types::Track>>,
@@ -131,24 +132,26 @@ impl MusicPlayer {
 
         let tx = self.result_tx.clone();
         Self::spawn_backend_thread(
-            move || fetch(&name),
+            move || fetch(&fetch_arg),
             move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
             tx,
         );
     }
 
-    pub fn start_song_radio(&mut self, song_name: String) {
+    pub fn start_song_radio(&mut self, name: &str, video_id: String) {
         self.start_radio(
-            song_name,
+            name,
+            video_id,
             "song",
             ViewKind::SongRadio,
             crate::youtube::radio_song,
         );
     }
 
-    pub fn start_artist_radio(&mut self, artist_name: String) {
+    pub fn start_artist_radio(&mut self, name: &str, browse_id: String) {
         self.start_radio(
-            artist_name,
+            name,
+            browse_id,
             "artist",
             ViewKind::ArtistRadio,
             crate::youtube::radio_artist,

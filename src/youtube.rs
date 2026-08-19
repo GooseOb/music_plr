@@ -53,15 +53,20 @@ impl SearchScope {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct YouTubeVideo {
     pub id: String,
     pub title: String,
     pub url: String,
+    #[serde(default)]
     pub duration: f64,
+    #[serde(default)]
     pub channel: String,
+    #[serde(default)]
     pub thumbnail: String,
+    #[serde(default)]
     pub album: Option<crate::types::TrackAlbum>,
+    #[serde(default)]
     pub artist_id: Option<String>,
 }
 
@@ -172,22 +177,10 @@ pub fn browse(id: &str, kind: &str) -> Result<Vec<YouTubeVideo>> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let items: Vec<YtMusicResult> =
+    let items: Vec<YouTubeVideo> =
         serde_json::from_str(&stdout).context("Failed to parse ytmusicapi browse output")?;
 
-    Ok(items
-        .into_iter()
-        .map(|r| YouTubeVideo {
-            id: r.id,
-            title: r.title,
-            url: r.url,
-            duration: f64::from(r.duration),
-            channel: r.channel,
-            thumbnail: r.thumbnail,
-            album: r.album,
-            artist_id: None,
-        })
-        .collect())
+    Ok(items)
 }
 
 fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, SearchTab)> {
@@ -246,17 +239,8 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
             }),
             _ => {
                 // song / video -> YouTubeVideo
-                if let Ok(r) = serde_json::from_value::<YtMusicResult>(v.clone()) {
-                    tracks.push(Track::from(YouTubeVideo {
-                        id: r.id,
-                        title: r.title,
-                        url: r.url,
-                        duration: f64::from(r.duration),
-                        channel: r.channel,
-                        thumbnail: r.thumbnail,
-                        album: r.album,
-                        artist_id: r.artist_id,
-                    }));
+                if let Ok(video) = serde_json::from_value::<YouTubeVideo>(v) {
+                    tracks.push(video.into());
                 }
             }
         }
@@ -270,23 +254,6 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
         SearchScope::Playlists => SearchTab::Playlists(playlists),
     };
     Ok((tracks, tab))
-}
-
-#[derive(Deserialize)]
-struct YtMusicResult {
-    id: String,
-    title: String,
-    url: String,
-    #[serde(default)]
-    duration: u32,
-    #[serde(default)]
-    channel: String,
-    #[serde(default)]
-    thumbnail: String,
-    #[serde(default)]
-    album: Option<crate::types::TrackAlbum>,
-    #[serde(default)]
-    artist_id: Option<String>,
 }
 
 fn search_ytdlp(query: &str, offset: usize, page_size: usize) -> Result<Vec<YouTubeVideo>> {
@@ -439,18 +406,52 @@ fn fetch_batch_metadata(
     results
 }
 
-pub fn radio_song(song_name: &str) -> Result<Vec<Track>> {
-    let (tracks, _) = search(&format!("{song_name} similar songs"), SearchScope::Songs, 0)?;
-    Ok(tracks)
+/// Fetch a `YouTube` Music radio/mix playlist via ytmusicapi's watch-playlist
+/// engine (the same one behind the site's "Start radio" button). Pass a
+/// `video_id` for a song-seeded mix or a `playlist_id` (e.g. an artist
+/// browseId) for an artist/playlist mix. Durations and thumbnails are derived
+/// locally from the watch-playlist response, so no extra yt-dlp pass is
+/// needed (which keeps radio generation to a couple of seconds).
+pub fn watch_playlist(video_id: Option<&str>, playlist_id: Option<&str>) -> Result<Vec<Track>> {
+    let script_path = std::env::temp_dir().join("music_plr_search.py");
+    std::fs::write(&script_path, include_str!("./youtube_search.py"))
+        .context("Failed to write ytmusicapi script")?;
+
+    let video_arg = video_id.unwrap_or("");
+    let playlist_arg = playlist_id.unwrap_or("");
+    let output = Command::new("python3")
+        .arg(&script_path)
+        .arg("watch")
+        .arg(video_arg)
+        .arg(playlist_arg)
+        .arg("50")
+        .output()
+        .context("Failed to run python3. Is it installed?")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("ytmusicapi watch_playlist failed: {stderr}");
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let items: Vec<YouTubeVideo> =
+        serde_json::from_str(&stdout).context("Failed to parse ytmusicapi watch output")?;
+
+    let videos: Vec<YouTubeVideo> = items;
+
+    Ok(videos.into_iter().map(Track::from).collect())
 }
 
-pub fn radio_artist(artist_name: &str) -> Result<Vec<Track>> {
-    let (tracks, _) = search(
-        &format!("{artist_name} official songs"),
-        SearchScope::Songs,
-        0,
-    )?;
-    Ok(tracks)
+/// Build a song radio from a real `YouTube` Music mix seeded by the track's
+/// `video_id`.
+pub fn radio_song(video_id: &str) -> Result<Vec<Track>> {
+    watch_playlist(Some(video_id), None)
+}
+
+/// Build an artist radio from a real `YouTube` Music mix seeded by the artist's
+/// `browse_id` (resolved from `track.artist.id`).
+pub fn radio_artist(browse_id: &str) -> Result<Vec<Track>> {
+    watch_playlist(None, Some(browse_id))
 }
 
 pub fn download(video_url: &str, download_dir: &str) -> Result<String> {

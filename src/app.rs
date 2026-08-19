@@ -559,13 +559,15 @@ impl MusicPlayer {
             }
             Message::ContextMenuStartSongRadio => {
                 if let Some(track) = self.context_menu.take().map(|m| m.track) {
-                    self.start_song_radio(track.title);
+                    self.start_song_radio(&track.title, track.id);
                 }
                 Task::none()
             }
             Message::ContextMenuStartArtistRadio => {
                 if let Some(track) = self.context_menu.take().map(|m| m.track) {
-                    self.start_artist_radio(track.artist.name);
+                    if let Some(browse_id) = track.artist.id {
+                        self.start_artist_radio(&track.artist.name, browse_id);
+                    }
                 }
                 Task::none()
             }
