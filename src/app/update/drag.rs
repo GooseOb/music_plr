@@ -504,10 +504,7 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         self.notify(format!("Creating playlist \"{name}\"..."));
         Self::spawn_backend_thread(
-            move || {
-                crate::youtube::browse(&id, kind_str)
-                    .map(|videos| videos.into_iter().map(Track::from).collect())
-            },
+            move || crate::youtube::browse(&id, kind_str),
             move |tracks| BackendResult::CardPlaylistReady(idx, name_for_thread, tracks),
             tx,
         );

@@ -116,7 +116,7 @@ impl From<crate::youtube::YouTubeVideo> for Track {
                 name: v.channel,
                 id: v.artist_id,
             },
-            duration: v.duration as u32,
+            duration: v.duration,
             url: v.url,
             source: TrackSource::YouTube,
             thumbnail: v.thumbnail,

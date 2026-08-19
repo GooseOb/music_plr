@@ -1,4 +1,4 @@
-use super::{mpsc, thread, BackendResult, MusicPlayer, Track, ViewData};
+use super::{mpsc, thread, BackendResult, MusicPlayer, ViewData};
 use crate::app::ViewKind;
 use crate::data::library::{LibraryItem, LibraryKind};
 
@@ -176,10 +176,7 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         let id = id.to_string();
         Self::spawn_backend_thread(
-            move || {
-                crate::youtube::browse(&id, kind_str)
-                    .map(|videos| videos.into_iter().map(Track::from).collect())
-            },
+            move || crate::youtube::browse(&id, kind_str),
             move |tracks| BackendResult::BrowseResults(rid, tracks),
             tx,
         );

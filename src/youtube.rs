@@ -59,7 +59,7 @@ pub struct YouTubeVideo {
     pub title: String,
     pub url: String,
     #[serde(default)]
-    pub duration: f64,
+    pub duration: u32,
     #[serde(default)]
     pub channel: String,
     #[serde(default)]
@@ -132,7 +132,7 @@ struct YTDLPSearchResult {
     id: String,
     title: String,
     #[serde(default)]
-    duration: f64,
+    duration: u32,
     channel: String,
     #[serde(default)]
     webpage_url: String,
@@ -157,7 +157,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
 }
 
 /// Browse the contents of an artist/album/playlist, returning its tracks.
-pub fn browse(id: &str, kind: &str) -> Result<Vec<YouTubeVideo>> {
+pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
     let script_path = std::env::temp_dir().join("music_plr_search.py");
     std::fs::write(&script_path, include_str!("./youtube_search.py"))
         .context("Failed to write ytmusicapi script")?;
@@ -180,7 +180,7 @@ pub fn browse(id: &str, kind: &str) -> Result<Vec<YouTubeVideo>> {
     let items: Vec<YouTubeVideo> =
         serde_json::from_str(&stdout).context("Failed to parse ytmusicapi browse output")?;
 
-    Ok(items)
+    Ok(items.into_iter().map(Track::from).collect())
 }
 
 fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, SearchTab)> {
@@ -325,7 +325,7 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
                 } else {
                     item.webpage_url
                 },
-                duration: 0.0,
+                duration: 0,
                 channel: String::new(),
                 thumbnail: format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg"),
                 album: None,
