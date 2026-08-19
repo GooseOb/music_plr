@@ -478,6 +478,8 @@ pub fn download_audio(video_url: &str, output_path: &str) -> Result<String> {
             "--output",
             output_path,
             "--no-warnings",
+            "--extractor-args",
+            "youtube:player_client=web_embedded",
             video_url,
         ])
         .output()

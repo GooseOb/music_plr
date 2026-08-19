@@ -432,7 +432,7 @@ fn spawn_stream_to_cache(
             "--no-warnings",
             "--no-check-formats",
             "--extractor-args",
-            "youtube:skip=webpage,dash,msn,player_client=android",
+            "youtube:player_client=web_embedded",
             url,
         ])
         .stdout(Stdio::piped())
