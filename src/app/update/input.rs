@@ -199,6 +199,7 @@ impl MusicPlayer {
 
     /// Set the hovered track and center it in its list.
     fn move_hovered(&mut self, pos: TrackPos) -> Task<Message> {
+        self.drag.is_hover_controlled = true;
         self.drag.set_hovered_track(pos);
         self.scroll_track_into_view(pos)
     }
@@ -288,26 +289,39 @@ impl MusicPlayer {
     /// The hovered track is the current occurrence, so this is how the user
     /// walks between matches; the new current is scrolled into view.
     pub(crate) fn handle_floating_search_step(&mut self, dir: isize) -> Task<Message> {
-        let list = match &self.floating_search {
-            Some(fs) => fs.list,
-            None => return Task::none(),
+        let Some(fs) = self.floating_search.as_ref() else {
+            return Task::none();
         };
-        let fs = self.floating_search.as_ref().expect("checked above");
         if fs.matches.len() <= 1 {
             return Task::none();
         }
         let from = match self.drag.hovered_track() {
-            Some(h) if h.list == list => h.index,
+            Some(h) if h.list == fs.list => h.index,
             _ => 0,
         };
-        let Some(pos) = fs.matches.iter().position(|&m| m == from) else {
-            return Task::none();
+        let target = {
+            let back = dir < 0;
+            let mut lo = 0usize;
+            let mut hi = fs.matches.len();
+            while lo < hi {
+                let mid = lo + (hi - lo) / 2;
+                // forward: skip the exact match; backward: keep it (step back)
+                if fs.matches[mid] < from || (!back && fs.matches[mid] == from) {
+                    lo = mid + 1; // match is at or before `from`
+                } else {
+                    hi = mid; // match is after `from`
+                }
+            }
+            if dir < 0 {
+                // previous match; wrap to last past the start
+                *fs.matches
+                    .get(lo.wrapping_sub(1))
+                    .unwrap_or_else(|| fs.matches.last().unwrap())
+            } else {
+                // next match; wrap to first past the end
+                fs.matches.get(lo).copied().unwrap_or(fs.matches[0])
+            }
         };
-        let offset = if dir < 0 { fs.matches.len() - 1 } else { 1 };
-        let target = fs.matches.iter().cycle().skip(pos).nth(offset).copied();
-        let Some(target) = target else {
-            return Task::none();
-        };
-        self.move_hovered(TrackPos::new(target, list))
+        self.move_hovered(TrackPos::new(target, fs.list))
     }
 }

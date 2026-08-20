@@ -290,6 +290,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::CursorMoved(pos) => {
+                self.drag.is_hover_controlled = false;
                 self.drag.cursor_pos = pos;
                 if self.drag.pressed.is_some()
                     && self.drag.drag_origin.is_some()
@@ -390,12 +391,8 @@ impl MusicPlayer {
                 self.handle_drag_press(pressed);
                 Task::none()
             }
-            // TODO: Still produces some bugs
             Message::HoverStart(target) => {
-                // iced re-fires on_move on every scroll under a still cursor.
-                // Dedup on the absolute cursor_pos so keyboard nav keeps hover.
-                if self.drag.last_mouse_hover != Some(self.drag.cursor_pos) {
-                    self.drag.last_mouse_hover = Some(self.drag.cursor_pos);
+                if !self.drag.is_hover_controlled {
                     self.drag.hovered = Some(target);
                 }
                 Task::none()

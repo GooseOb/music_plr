@@ -119,11 +119,12 @@ pub enum Pressed {
 #[derive(Debug, Clone, Default)]
 pub struct DragState {
     pub cursor_pos: Point,
-    pub last_mouse_hover: Option<Point>,
+    // pub last_mouse_hover: Option<Point>,
     pub pressed: Option<Pressed>,
     pub drag_origin: Option<Point>,
     pub drag_active: bool,
     pub drop_target: Option<DropTarget>,
+    pub is_hover_controlled: bool,
     pub hovered: Option<HoverTarget>,
 }
 
