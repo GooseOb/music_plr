@@ -6,7 +6,7 @@ use super::{
 use crate::{
     app::{
         interaction::{DropTarget, Pressed},
-        ui::{QUEUE_LIST_ID, TRACK_LIST_ID},
+        ui::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, TRACK_LIST_ID},
         ViewKind,
     },
     data::{
@@ -133,6 +133,8 @@ impl MusicPlayer {
             TrackListKind::Queue
         } else if *id == TRACK_LIST_ID {
             TrackListKind::Active
+        } else if *id == QUEUE_RECENT_LIST_ID {
+            TrackListKind::Recent
         } else if *id == SIDEBAR_LIST_ID {
             let count = self.playlists.playlists.len();
             let cursor_y = self.drag.cursor_pos.y + geo.translation_y;
@@ -148,6 +150,10 @@ impl MusicPlayer {
         } else {
             return None;
         };
+        // Only local playlists and queue can be dropped onto
+        if list == TrackListKind::Active && self.view_data().selected_playlist_id().is_none() {
+            return None;
+        }
         let drop_idx = self.compute_drop_idx(list);
         // Same-list reorder guard: never drop onto a selected run that
         // would merely shift it. Cross-list copies are unguarded.
@@ -335,17 +341,17 @@ impl MusicPlayer {
             target if target == source => {
                 self.handle_same_list_reorder(drop_idx, &indices, source);
             }
-            TrackListKind::Queue => self.copy_to_queue(&indices, drop_idx),
-            TrackListKind::Active => self.copy_from_queue(&indices, drop_idx),
+            TrackListKind::Queue => self.copy_to_queue(source, &indices, drop_idx),
+            TrackListKind::Active => self.copy_from_queue(source, &indices, drop_idx),
             TrackListKind::Recent => {}
         }
     }
 
-    fn copy_to_queue(&mut self, indices: &[usize], drop_idx: usize) {
+    fn copy_to_queue(&mut self, source: TrackListKind, indices: &[usize], drop_idx: usize) {
         let clamped = drop_idx.min(self.queue.tracks.len());
         let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&i| self.get_track_at(TrackPos::new(i, TrackListKind::Active)))
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
             .collect();
         let inserted = tracks.len();
         for (j, track) in tracks.into_iter().enumerate() {
@@ -355,10 +361,9 @@ impl MusicPlayer {
         self.notify_tracks("Added", inserted, "to queue");
     }
 
-    /// Insert tracks from the queue into the current playlist at the given
-    /// drop index. `indices` are positions in the queue's up-next list
-    /// (starting after index 0, i.e. the current track).
-    fn copy_from_queue(&mut self, indices: &[usize], drop_idx: usize) {
+    /// Insert tracks from `source` into the current playlist at the given
+    /// drop index. `indices` are positions in the source list.
+    fn copy_from_queue(&mut self, source: TrackListKind, indices: &[usize], drop_idx: usize) {
         let Some(sp) = self.view_data_mut().selected_playlist_id() else {
             if !self.view_data_mut().is_search_like() {
                 self.notify("Select a playlist to drop tracks into");
@@ -370,10 +375,11 @@ impl MusicPlayer {
         }
 
         let clamped = drop_idx.min(self.playlists.playlists[sp].tracks.len());
-        let tracks = indices
+        let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&queue_idx| self.queue.tracks.get(queue_idx));
-        let inserted = self.playlists.insert_tracks_at(sp, tracks, clamped);
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
+            .collect();
+        let inserted = self.playlists.insert_tracks_at(sp, tracks.iter(), clamped);
         self.save_session();
         let name = self.playlists.playlists[sp].name.clone();
         if inserted > 0 {
@@ -554,9 +560,7 @@ impl MusicPlayer {
                     self.handle_play_track(pos);
                     return;
                 }
-                if pos.list.is_interactive() {
-                    self.drag.pressed = Some(Pressed::Track(pos));
-                }
+                self.drag.pressed = Some(Pressed::Track(pos));
             }
             _ => {
                 self.drag.pressed = Some(pressed);
