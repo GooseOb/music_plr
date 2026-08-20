@@ -185,12 +185,17 @@ impl DragState {
         }
     }
 
-    pub fn cursor_interaction(&self) -> iced::mouse::Interaction {
+    pub fn cursor_interaction(&self) -> Option<iced::mouse::Interaction> {
         if self.drag_active && self.pressed.is_some() {
-            iced::mouse::Interaction::Grabbing
+            Some(iced::mouse::Interaction::Grabbing)
         } else {
-            iced::mouse::Interaction::Pointer
+            None
         }
+    }
+
+    pub fn clickable_cursor_interaction(&self) -> iced::mouse::Interaction {
+        self.cursor_interaction()
+            .unwrap_or(iced::mouse::Interaction::Pointer)
     }
 }
 

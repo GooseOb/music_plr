@@ -182,6 +182,7 @@ fn view_recently_played_row<'a>(
     let inner = track_row_layout(leading, track, player, false);
 
     let track_area = MouseArea::new(inner)
+        .interaction(player.drag.clickable_cursor_interaction())
         .on_right_press(Message::TrackRightClicked(pos))
         .on_move(move |_| Message::HoverStart(HoverTarget::Track(pos)));
 

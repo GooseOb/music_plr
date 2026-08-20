@@ -48,14 +48,18 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         stack = stack.push(overlays::view_delete_confirm());
     } else if let Some(menu) = &player.context_menu {
         stack = stack.push(overlays::view_context_menu(menu, &player.app_theme.palette));
-    } else if let Some(rect) = player.drop_indicator_rect() {
+    }
+    if let Some(rect) = player.drop_indicator_rect() {
         stack = stack.push(overlays::view_drop_indicator(
             rect,
             &player.app_theme.palette,
         ));
     }
 
-    widget::MouseArea::new(stack)
-        .interaction(player.drag.cursor_interaction())
-        .into()
+    match player.drag.cursor_interaction() {
+        Some(interaction) => widget::MouseArea::new(stack)
+            .interaction(interaction)
+            .into(),
+        None => stack.into(),
+    }
 }

@@ -313,6 +313,10 @@ impl MusicPlayer {
                             if self.drag.is_pressed_card() {
                                 self.library_expanded = true;
                             }
+                            return Task::batch([
+                                iced_runtime::task::widget(update::operation::CaptureBounds::new()),
+                                self.handle_drag_update(),
+                            ]);
                         }
                     }
                 }

@@ -70,6 +70,7 @@ fn playlist_row<'a>(
                 ..Default::default()
             }),
     )
+    .interaction(player.drag.clickable_cursor_interaction())
     .on_press(Message::DragPress(Pressed::Playlist(index)))
     .on_double_click(Message::OpenAndPlayPlaylist(index))
     .on_move(move |_| Message::HoverStart(HoverTarget::Playlist(index)))
@@ -122,6 +123,7 @@ fn library_row<'a>(
             ..Default::default()
         }),
     )
+    .interaction(player.drag.clickable_cursor_interaction())
     .on_press(Message::DragPress(Pressed::Card(item.clone())))
     .on_move(move |_| Message::HoverStart(HoverTarget::LibraryCard(hover_item.clone())))
     .into()

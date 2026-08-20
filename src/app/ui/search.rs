@@ -195,6 +195,7 @@ fn card_row<'a>(
     let is_hovered = player.drag.is_hovered_card(item);
     let hover_item = item.clone();
     let main = MouseArea::new(main)
+        .interaction(player.drag.clickable_cursor_interaction())
         .on_press(Message::DragPress(Pressed::Card(item.clone())))
         .on_move(move |_| Message::HoverStart(HoverTarget::Card(hover_item.clone())));
     track_list::track_row(

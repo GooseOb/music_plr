@@ -67,18 +67,6 @@ pub(super) fn view_track_list<'a>(
     })
 }
 
-/// Render a scrollable of `count` rows, building only the rows currently
-/// visible in the viewport (plus a small overscan) and padding the rest with
-/// fixed-height spacers so the scrollable's total height — and therefore its
-/// scroll range — stays `count * ROW_HEIGHT`.
-///
-/// Without this, `view()` rebuilds and lays out every row on every message
-/// (the 250ms `Tick`, every `CursorMoved`), so a long playlist makes the UI
-/// stutter on startup and scroll. The visible window is derived from the scroll
-/// offset: the viewport height and content height come from the one-time
-/// `CaptureBounds` pass (see `player.bounds`), and the live offset is updated
-/// per scroll by [`Message::ListScrolled`]. Until the bounds are captured the
-/// list falls back to rendering all rows, which is correct, just not windowed.
 pub(super) fn virtual_scrollable<'a, F>(
     count: usize,
     list: TrackListKind,
@@ -204,6 +192,7 @@ pub(super) fn view_track_row<'a>(
     let inner = track_row_layout(leading, track, player, show_album);
 
     let track_area = MouseArea::new(inner)
+        .interaction(player.drag.clickable_cursor_interaction())
         .on_press(Message::DragPress(Pressed::Track(pos)))
         .on_right_press(Message::TrackRightClicked(pos))
         .on_move(move |_| Message::HoverStart(HoverTarget::Track(pos)));
