@@ -19,7 +19,7 @@ use iced::widget::Id;
 impl MusicPlayer {
     pub fn handle_left_release(&mut self) {
         let Some(pressed) = self.drag.pressed.take() else {
-            self.drag.cleanup();
+            self.drag.stop();
             return;
         };
 

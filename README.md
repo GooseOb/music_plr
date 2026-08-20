@@ -50,11 +50,13 @@ cargo test
 | Key | Action |
 |-----|--------|
 | <kbd>Space</kbd> | Toggle play/pause |
-| <kbd>Esc</kbd> | Close search history → clear selection → return to Search |
+| <kbd>Esc</kbd> | Close in-list search → close search history → clear selection → return to Search |
 | <kbd>Delete</kbd> | Delete selected tracks (playlist view only) |
 | <kbd>Tab</kbd> | Switch keyboard focus between the track list and the queue |
 | <kbd>↑</kbd>/<kbd>↓</kbd> | Move through the focused list (auto-scrolls) |
-| <kbd>Enter</kbd> | Play the focused track |
+| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Open in-list fuzzy search over the hovered track list (title/artist); matched rows get a border, the hovered (current) match is highlighted with a brighter border and centered in the viewport. Only opens when a track list (queue or main) is hovered — not over cards/sidebar. |
+| <kbd>Enter</kbd> | In the in-list search: play the hovered track (same as normal navigation). Otherwise: play the focused track |
+| ↑ / ↓ (search bar buttons) | In the in-list search: move to the next / previous match, relative to the hovered row (wraps around). The hovered track is the current match. |
 | <kbd>Ctrl</kbd>+<kbd>C</kbd> | Copy selected tracks to clipboard |
 | <kbd>Ctrl</kbd>+<kbd>V</kbd> | Paste clipboard tracks into the current playlist |
 

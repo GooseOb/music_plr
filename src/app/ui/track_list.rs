@@ -109,6 +109,7 @@ pub(super) fn view_track_row<'a>(
     let is_selected = player.selection(pos.list).contains(&pos.index);
     let is_hovered = player.drag.hovered_track() == Some(pos);
     let is_current = player.queue.current().is_some_and(|t| t.url == track.url);
+    let is_match = player.is_floating_match(pos);
 
     let row_bg = if is_current {
         if is_selected {
@@ -137,7 +138,19 @@ pub(super) fn view_track_row<'a>(
         .on_right_press(Message::TrackRightClicked(pos))
         .on_move(move |_| Message::HoverStart(HoverTarget::Track(pos)));
 
-    track_row(track_area, row_bg, Some(row_id(pos.list, pos.index))).into()
+    let border = if is_match {
+        Some(if is_hovered { p.accent } else { p.fg_muted })
+    } else {
+        None
+    };
+
+    track_row(
+        track_area,
+        row_bg,
+        Some(row_id(pos.list, pos.index)),
+        border,
+    )
+    .into()
 }
 
 // ── shared helpers ─────────────────────────────────────────────
@@ -258,16 +271,24 @@ pub(super) fn track_row_layout<'a>(
 
 /// Wraps row content in a fixed-height container with a background color.
 /// `id` (when `Some`) tags the container so the bounds `Operation` can capture
-/// its measured geometry for drop-target hit-testing.
+/// its measured geometry for drop-target hit-testing. `border` (when `Some`)
+/// draws a 1px outline in the given color (used by the floating in-list
+/// search to mark matched / current tracks).
 pub(super) fn track_row<'a>(
     content: impl Into<Element<'a, Message, AppTheme>>,
     bg: Color,
     id: Option<Id>,
+    border: Option<Color>,
 ) -> Container<'a, Message, AppTheme> {
     let container = Container::new(content)
         .height(theme::ROW_HEIGHT)
         .style(move |_: &AppTheme| container::Style {
             background: Some(bg.into()),
+            border: border.map_or(iced::border::Border::default(), |c| iced::border::Border {
+                width: 1.0,
+                color: c,
+                radius: 0.0.into(),
+            }),
             ..Default::default()
         });
     match id {

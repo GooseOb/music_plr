@@ -32,7 +32,15 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
         QueueTab::RecentlyPlayed => view_recently_played_tab(player),
     };
 
-    Container::new(Column::with_children([tab_bar.into(), body]))
+    let mut children: Vec<Element<'_, Message, AppTheme>> = vec![tab_bar.into(), body];
+    if matches!(
+        player.floating_search.as_ref().map(|fs| fs.list),
+        Some(crate::app::TrackListKind::Queue)
+    ) {
+        children.insert(1, super::floating_search::view_floating_search(player));
+    }
+
+    Container::new(Column::with_children(children))
         .width(queue_width)
         .style(bg_secondary())
         .into()
@@ -183,6 +191,7 @@ fn view_recently_played_row<'a>(
         track_area,
         row_bg,
         Some(row_id(TrackListKind::Recent, index)),
+        None,
     )
     .into()
 }

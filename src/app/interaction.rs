@@ -73,6 +73,13 @@ impl TrackPos {
 }
 
 #[derive(Debug, Clone)]
+pub struct FloatingSearch {
+    pub list: TrackListKind,
+    pub query: String,
+    pub matches: Vec<usize>,
+}
+
+#[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct ContextMenuState {
     pub pos: TrackPos,
@@ -112,6 +119,7 @@ pub enum Pressed {
 #[derive(Debug, Clone, Default)]
 pub struct DragState {
     pub cursor_pos: Point,
+    pub last_mouse_hover: Option<Point>,
     pub pressed: Option<Pressed>,
     pub drag_origin: Option<Point>,
     pub drag_active: bool,

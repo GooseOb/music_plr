@@ -77,6 +77,11 @@ pub enum Message {
     ConfirmDeletePlaylist,
     HideDeleteConfirm,
 
+    FloatingSearchInput(String),
+    FloatingSearchNext,
+    FloatingSearchPrev,
+    FloatingSearchClose,
+
     ToggleQueue,
     SwitchQueueTab(QueueTab),
     ToggleRepeat,
@@ -101,7 +106,6 @@ pub enum Message {
     ContextMenuPlayTrack(TrackPos),
     ContextMenuStartSongRadio,
     ContextMenuStartArtistRadio,
-    /// Navigate to the right-clicked track's artist from the context menu.
     ContextMenuGoToArtist,
     ContextMenuDownloadOrDelete(Vec<usize>),
     ContextMenuRemoveFromPlaylist(Vec<usize>),

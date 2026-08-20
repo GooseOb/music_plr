@@ -18,7 +18,7 @@ mod ui;
 mod update;
 mod view_data;
 
-pub use interaction::{ContextMenuState, DragState, TrackListKind, TrackPos};
+pub use interaction::{ContextMenuState, DragState, FloatingSearch, TrackListKind, TrackPos};
 pub use message::{BackendResult, Message};
 pub use view_data::{RequestIdGenerator, ViewData, ViewKind};
 
@@ -120,6 +120,8 @@ pub struct MusicPlayer {
 
     pub queue_selected_indices: Vec<usize>,
 
+    pub floating_search: Option<FloatingSearch>,
+
     pub app_theme: AppTheme,
 
     pub bounds: crate::app::update::operation::CaptureBounds,
@@ -197,6 +199,7 @@ impl MusicPlayer {
             drag: DragState::default(),
             context_menu: None,
             queue_selected_indices: Vec::new(),
+            floating_search: None,
             app_theme: AppTheme::new(Palette::dark()),
             bounds: crate::app::update::operation::CaptureBounds::default(),
             window_width: 1280.0,
@@ -387,8 +390,14 @@ impl MusicPlayer {
                 self.handle_drag_press(pressed);
                 Task::none()
             }
+            // TODO: Still produces some bugs
             Message::HoverStart(target) => {
-                self.drag.hovered = Some(target);
+                // iced re-fires on_move on every scroll under a still cursor.
+                // Dedup on the absolute cursor_pos so keyboard nav keeps hover.
+                if self.drag.last_mouse_hover != Some(self.drag.cursor_pos) {
+                    self.drag.last_mouse_hover = Some(self.drag.cursor_pos);
+                    self.drag.hovered = Some(target);
+                }
                 Task::none()
             }
             Message::TrackRightClicked(pos) => {
@@ -474,6 +483,13 @@ impl MusicPlayer {
             }
             Message::HideDeleteConfirm => {
                 self.delete_confirm_index = None;
+                Task::none()
+            }
+            Message::FloatingSearchInput(query) => self.handle_floating_search_input(&query),
+            Message::FloatingSearchNext => self.handle_floating_search_step(1),
+            Message::FloatingSearchPrev => self.handle_floating_search_step(-1),
+            Message::FloatingSearchClose => {
+                self.floating_search = None;
                 Task::none()
             }
             Message::ToggleQueue => {

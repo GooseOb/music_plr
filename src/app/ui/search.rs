@@ -201,6 +201,7 @@ fn card_row<'a>(
         Row::with_children([main.into(), toggle.into()]),
         if is_hovered { p.bg_hover } else { p.bg },
         None,
+        None,
     )
     .into()
 }

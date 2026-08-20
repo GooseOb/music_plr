@@ -8,6 +8,7 @@ use iced::{
 use super::{ContextMenuState, Message, MusicPlayer};
 
 mod content;
+pub(super) mod floating_search;
 mod lyrics;
 mod overlays;
 mod playbar;

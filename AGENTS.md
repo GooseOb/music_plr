@@ -72,18 +72,25 @@ src/
 
 ## State Management
 
-- **`MusicPlayer`** (`app.rs`): audio, config, `search_history`, `queue`, `playlists`, UI flags, mpsc
-  channels, `DragState`, context menu, `nav_history`, clipboard, last-click timing, `download_registry`,
-  `stream_cache`, `thumbnail_cache` (ID→exists bool, filled in tick), `picker`
-  (`Option<PlaylistPicker>` carrying the resolved target indices — all selected indices if the
-  right-clicked track is selected, else just it), `lyrics`/`lyrics_track_id`/`lyrics_loading`
-  (lyrics view result, cached LRCLib payload keyed to the current track, in-flight guard). **All per-view state** lives
-  differs per view (search `exhausted`, radio label, selected playlist). No separate `View`/`RadioKind`
-  enum or per-view fields exist.
+- **`MusicPlayer`** (`app.rs`): the single source of truth. Holds audio/queue/playlists/config,
+  mpsc channels, `DragState`, context menu, `nav_history`, `download_registry`, `stream_cache`,
+  `thumbnail_cache`, `picker` (resolved target indices for the playlist-picker overlay),
+  `lyrics`/`lyrics_track_id`/`lyrics_loading`, and `floating_search` (the in-list Ctrl+F overlay:
+  the active `TrackListKind`, live query, matched indices; the current match is just
+  `drag.hovered` when it is among the matches). **All per-view state** lives in `view_data`
+  (search `exhausted`, radio label, selected playlist); no separate `View`/`RadioKind` enum.
 - **`TrackListKind`** (`app/interaction.rs`): `Queue` / `Active` / `Recent` — the single carrier for "which track list?" across messages, `DragState`, selection, and scroll targeting. Helpers: `scrollable_id()` (each list has its own, so scroll ops can't hit the wrong widget), `first_index()` (1 for Queue, whose now-playing row renders outside the scrollable), `is_interactive()` (false for read-only `Recent`), `in_queue_panel()` (Queue+Recent share a geometry slot). Pass this instead of a bool.
 - **`TrackPos`** (`app/interaction.rs`): `{ index, list }` — an index is only meaningful against its list, so they travel together. Carried by `TrackPressed`/`TrackHoverStart`/`TrackRightClicked`/`PlayTrackAtIndex`/`ContextMenuPlayTrack`, `DragState`'s `pressed` (`Pressed::Track`), `last_click`, and the `get_track_at`/`toggle_selection` accessors. Pass this instead of a loose `(usize, TrackListKind)` pair.
-- **`ContextMenuState`**: `pos: TrackPos`, `target_indices` (selection-aware, indexes `pos.list`), flags `is_youtube`/`is_downloaded`/`in_playlist`. Menu ops apply to all selected if the right-clicked track is selected, else just it; "Play"/radio target only the right-clicked track. `Recent` tracks come from `recently_played` (queue/playlist-specific items suppressed).
-- **`DragState`** (`app/interaction.rs`): cursor/origin/active flags, `pressed: Option<Pressed>` (the single thing the cursor is dragging — `Track(TrackPos)` or `Card(LibraryItem)`; only one drag can start at a time so the two old parallel `Option`s are merged), `drop_target: Option<DropTarget>` (the resolved drop target for the active drag, replacing the old `drag_drop_pos`/`sidebar_drop` pair — one enum field, not two parallel `Option`s), and a single `hovered: Option<HoverTarget>` (the one thing the cursor is over: `Track(TrackPos)` — also the keyboard-navigation focus, `Card(LibraryItem)` for search cards, `LibraryCard(LibraryItem)` for library cards). Because only one cursor target can be active, the press and hover are mutually exclusive in one enum field each rather than separate parallel `Option`s; `DragState` exposes typed accessors (`pressed_track()`, `set_pressed_track()`, `set_pressed_card()`, `is_pressed_card()`, `is_pressing()`, `hovered_track()`, `is_hovered_card()`, `is_hovered_library_card()`, `hovered_playlist()`, `set_hovered*`, `clear_hovered_track()`). `Pressed` variants: `Track(TrackPos)` (drag a track row), `Card(LibraryItem)` (a search/library card), `Playlist(usize)` (a playlist *row* in the sidebar — drag to reorder within the list). `HoverTarget` mirrors these (`Track`/`Card`/`LibraryCard`/`Playlist`). Cleaned via `DragState::cleanup()`. `DropTarget` variants: `Track(TrackPos)` (reorder/copy within a track list, insertion line), `Playlist(usize)` (a *card* dropped on the playlist sidebar → create a playlist at that index, insertion line), `Library(usize)` (a *card* dropped on the library → add/reorder item, insertion line), `PlaylistAdd(usize)` (a *track* dropped on the playlist sidebar → add to that existing playlist, no line; its row is highlighted in the sidebar view), `PlaylistReorder { from, to }` (a playlist *row* dragged to a new position in the sidebar list — `from` is dimmed/border-highlighted, `to` draws the insertion line and highlights the target row; the active `Playlist` view selection is remapped to follow the moved playlist). Tracks: same-list drag reorders (`target == source`), cross-list copies; dragging a selected track moves all selected. Cards (artist/album/playlist) from search or the library: a plain release opens the card, a drag onto the playlist list turns it into a local playlist (`create_at` + background `browse`), a drag onto the library adds it or reorders it. Playlist rows in the sidebar drag to reorder among themselves (no card involved). The card→sidebar drops and the playlist-row reorder render a `drop_indicator` line at the resolved insertion index; the track→playlist drop highlights the target playlist row instead (no line).
+- **`ContextMenuState`**: `pos: TrackPos` + selection-aware `target_indices`. Ops apply to all
+  selected if the right-clicked track is selected, else just it; "Play"/radio target only it.
+  `Recent` tracks come from `recently_played` (queue/playlist items suppressed).
+- **`DragState`** (`app/interaction.rs`): one `pressed: Option<Pressed>` (dragged thing:
+  `Track(TrackPos)` / `Card(LibraryItem)` / `Playlist(usize)` row) and one `hovered: Option<HoverTarget>`
+  (cursor target; `Track` doubles as the keyboard-navigation focus). Single enum field each. `drop_target`
+  resolves the active drag: `Track`/`Playlist`/`Library` (insertion line), `PlaylistAdd` (track→existing
+  playlist, row highlighted), `PlaylistReorder { from, to }`. Same-list reorders; cross-list copies move
+  all selected; cards dropped on the playlist list become local playlists (`create_at` + bg `browse`).
+  Cleaned via `cleanup()`; accessors `pressed_track()`/`hovered_track()`/`set_hovered*`.
 - **Selection / list access** (`app/update/selection.rs`): `selection`, `toggle_selection`, `clear_selection`, `view_tracks`, `get_track_at`, `track_count` — all keyed by a `TrackListKind`. `Recent` has no selection: `selection` returns `&[]` and mutations are no-ops.
 - **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailsDownloaded` (clears `thumbnail_cache`), `LyricsFetched(Option<Lyrics>, String)` (sets `lyrics`, caches to `lyrics_cache.json`, auto-cleared on track change), `NormalizationComputed(String, f32)` (caches a per-track gain in memory; read on subsequent plays), `CardPlaylistReady(usize, String, Vec<Track>)` (a dragged card became a playlist; fills the playlist at the given index with the browsed tracks). 250ms tick drains → `process_result`.
 - **MPRIS**: D-Bus thread → `MprisCommand` → `process_mpris_command` (tick); `MprisUpdate` flows main → thread.
@@ -117,32 +124,24 @@ src/
 
 `AudioPlayer` runs a dedicated output thread (mpsc command channel). **No ffmpeg** — decoding is fully native via symphonia.
 
-- **Stream+cache**: `yt-dlp -f bestaudio[ext=m4a]/bestaudio -o -` writes raw AAC-in-M4A bytes straight to the cache file (`.cache`, owned by `StreamCache`). A copy thread drains yt-dlp stdout → cache file and flips `writer_alive` when done.
-- **Decoding** goes through a custom `SymphoniaStreamingSource` (rodio `Source` + `Iterator<Item=i16>`) wrapping a non-seekable `GrowingMediaSource`. The non-seekable source makes symphonia demux _sequentially_ (no init seek), so it can probe and play a still-growing file without the `SeekError` panic that `rodio::Decoder::new` hits (it hardcodes `byte_len() = None`). The reader blocks at EOF while `writer_alive`, so playback starts within a few KB and runs seamlessly to the end.
-- **Cached/downloaded/local playback** (`PlayCached`) uses the same `SymphoniaStreamingSource` with `writer_alive = None` (complete, seekable file with real `byte_len`), so seeking works on replay. `rodio::Decoder::new` is intentionally avoided for both paths.
-- **Stream completion**: detected when yt-dlp exits AND the copy thread finishes (`writer_alive` false) → `cache_ready` flips, tick loop calls `stream_cache.insert(id)` to register the cache. Track end → sink empties → `stream_finished` → auto-advance (no subprocess exit polling needed).
-- **Volume normalization** (optional, `config.volume_normalization`): each track's loudness gain is computed once via `compute_normalization_gain` (a full symphonia decode → RMS/peak → linear gain, cached in memory keyed by track id). The gain is applied per-sample inside `SymphoniaStreamingSource` (not rodio's `Amplify`, which would break seeking) so it composes with the sink's master `set_volume`. The first play of a track uses gain 1.0; a background thread (`request_normalization_analysis`) fills the cache so subsequent plays are normalized. Fresh streams analyze once `cache_ready` (tick loop), downloaded/local/cached files immediately.
+- **Stream+cache**: `yt-dlp -f bestaudio[ext=m4a]/bestaudio -o -` writes AAC-in-M4A to the cache file (`.cache`, owned by `StreamCache`); a copy thread drains stdout and flips `writer_alive` when done.
+- **Decoding**: a custom `SymphoniaStreamingSource` (rodio `Source` + `Iterator<Item=i16>`) wraps a non-seekable `GrowingMediaSource`, so symphonia demuxes sequentially and plays a still-growing file without `rodio::Decoder::new`'s `SeekError`. The reader blocks at EOF while `writer_alive`, so playback starts within a few KB.
+- **Cached/downloaded/local** (`PlayCached`) reuse the same source with `writer_alive = None` (real `byte_len`) so seeking works on replay.
+- **Stream completion**: when yt-dlp and the copy thread both finish (`writer_alive` false), the tick loop registers the cache; track end → sink empties → auto-advance.
+- **Volume normalization** (optional `config.volume_normalization`): a per-track RMS/peak gain from `compute_normalization_gain`, applied per-sample inside `SymphoniaStreamingSource` (composes with `set_volume`, survives seeking). First play uses gain 1.0; `request_normalization_analysis` fills the cache afterwards.
 
 ## YouTube & Key Files
 
-- `search()`: scoped search via `ytmusicapi` (`youtube_search.py`); `scope` (`SearchScope`: Songs/Videos/Artists/Albums/Playlists, default Songs) maps to ytmusicapi `filter=` for all scopes. First page from `ytmusicapi`; pagination (`search_more`) falls back to `yt-dlp --flat-playlist` (tracks only). Returns `(Vec<Track>, SearchTab)` where `SearchTab` carries the concrete card lists (Artists/Albums/Playlists) or marks a track tab (Songs/Videos). `browse()` drills into an artist/album/playlist via ytmusicapi `get_artist`/`get_album`/`get_playlist`. `SEARCH_PAGE_SIZE = 10`.
-- `radio_song()`/`radio_artist()`: query-modified search; `download()`/`download_audio()` use `yt-dlp --extract-audio` → MP3.
-- `theme/`: `Palette` + `AppTheme` (`mod.rs`), constants (`layout.rs`, re-exported so `crate::theme::SPACING_SM` still resolves), `Catalog` impls (`catalog.rs`). `SEARCH_PAGE_SIZE` referenced by `youtube.rs` + `app/update/tick.rs`.
-- `ViewKind` (`app/view_data.rs`) selects the active view in `ui/content.rs`, `drag.rs`, `navigation.rs`, `playback.rs`; variants include `Search`, `SongRadio`, `ArtistRadio`, `Artist`, `Album`, `PlaylistView`, `Playlist`, `Downloads`, `Settings`, `Lyrics` (synced/plain lyrics for the current track).
-- `util.rs`: `format_duration`, `fuzzy_match`, `plural_suffix`, `try_probe_duration`, plus the two index-manipulation routines `remove_at` and `reorder_tracks` (generic, unit-tested in one place).
+- `search()`/`browse()`: scoped search via `ytmusicapi` (`youtube_search.py`), `scope` → ytmusicapi `filter=`; pagination (`search_more`) falls back to `yt-dlp --flat-playlist`. `browse()` drills via `get_artist`/`get_album`/`get_playlist`. `SEARCH_PAGE_SIZE = 10`.
+- `radio_song()`/`radio_artist()`: query-modified search; `download()`/`download_audio()` → `yt-dlp --extract-audio` MP3.
+- `theme/`: `Palette`+`AppTheme` (`mod.rs`), constants (`layout.rs`, re-exported), `Catalog` impls (`catalog.rs`).
+- `ViewKind` (`app/view_data.rs`): `Search`/`SongRadio`/`ArtistRadio`/`Artist`/`Album`/`PlaylistView`/`Playlist`/`Downloads`/`Settings`/`Lyrics` (active view selector).
+- `util.rs`: `format_duration`, `fuzzy_match`, `plural_suffix`, `try_probe_duration`, `remove_at`, `reorder_tracks` (unit-tested).
 
 ## Maintenance
 
 After structural changes (new/removed files, renamed types/functions), verify `AGENTS.md` reflects actual state. Keep it under ~150 lines.
 
-**`README.md` must be kept up to date too.** It is user-facing, so it drifts in ways this file
-does not — check it whenever any of the following change:
-
-- **Module layout** — it carries its own `src/` tree (less granular than the one above).
-- **Keyboard shortcuts** — handled in `app/update/input.rs`. Never document a binding without
-  confirming a handler exists; a stale <kbd>Ctrl</kbd>+<kbd>F</kbd> row survived there for a while.
-- **Config fields** — must match `data/config.rs` exactly, including defaults. The file is
-  `config.json` (JsonStore).
-- **On-disk paths** — the `FILE` consts in `data/*.rs` and the dirs in `data/mod.rs`.
-- **External tool requirements** — keep the Prerequisites list accurate (yt-dlp, Python 3 + ytmusicapi, D-Bus session bus); ffmpeg is intentionally not required (decoding is native via symphonia).
-- **Features / audio pipeline** — keep the pipeline summary consistent with the one above.
+**`README.md` must be kept up to date too** — user-facing, drifts. Check it whenever module layout,
+keyboard shortcuts (`app/update/input.rs`), config fields (`data/config.rs`, `config.json`),
+on-disk paths (`data/*.rs` `FILE` consts), external tool requirements, or the audio pipeline change.

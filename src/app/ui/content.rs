@@ -2,8 +2,9 @@ use iced::widget::{Column, Container, Row, Stack};
 
 use crate::{app::ViewKind, theme::AppTheme};
 
-use super::{lyrics, playlist, search, settings, theme, Element, Message, MusicPlayer};
-
+use super::{
+    floating_search, lyrics, playlist, search, settings, theme, Element, Message, MusicPlayer,
+};
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let search_bar = search::view_search_bar(player);
 
@@ -21,7 +22,15 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
         }
     };
 
-    let base = Column::with_children([search_bar, inner]);
+    let mut children: Vec<Element<'a, Message, AppTheme>> = vec![search_bar];
+    if matches!(
+        player.floating_search.as_ref().map(|fs| fs.list),
+        Some(crate::app::TrackListKind::Active)
+    ) {
+        children.push(floating_search::view_floating_search(player));
+    }
+    children.push(inner);
+    let base = Column::with_children(children);
 
     let mut stack = Stack::new().push(base);
 
