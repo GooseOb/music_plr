@@ -84,7 +84,15 @@ impl MusicPlayer {
             return Task::none();
         };
 
-        self.handle_drag_autoscroll(geo.bounds, geo.translation_y, geo.content_height, target_id)
+        let count = if target_id == QUEUE_LIST_ID {
+            self.track_count(TrackListKind::Queue)
+        } else if target_id == TRACK_LIST_ID {
+            self.track_count(TrackListKind::Active)
+        } else {
+            return Task::none();
+        };
+        let content_height = count as f32 * crate::theme::ROW_HEIGHT;
+        self.handle_drag_autoscroll(geo.bounds, geo.translation_y, content_height, target_id)
     }
 
     /// Resolve a playlist-row reorder: the press must be over the sidebar
@@ -155,8 +163,10 @@ impl MusicPlayer {
     }
 
     /// Returns a drop index in `list`'s own space (the queue's now-playing
-    /// offset folded back in), found by comparing the cursor against the
-    /// measured bounds of each row rather than assuming a fixed row height.
+    /// offset folded back in), found from the cursor position in the
+    /// scrollable's content space. Rows are uniform `ROW_HEIGHT`, so the
+    /// insertion index is the nearest row boundary — this stays correct even
+    /// though the list is virtualized and `geo.rows` only holds visible rows.
     fn compute_drop_idx(&self, list: TrackListKind) -> usize {
         let geo = match list {
             TrackListKind::Queue | TrackListKind::Recent => &self.bounds.queue,
@@ -165,15 +175,14 @@ impl MusicPlayer {
         let Some(geo) = geo else {
             return list.first_index();
         };
-        // Rows are captured in the scrollable's untranslated content space, so
-        // convert the screen-space cursor into that space before comparing.
-        let cursor_y = self.drag.cursor_pos.y + geo.translation_y;
-        for (i, row) in geo.rows.iter().enumerate() {
-            if cursor_y < row.y + row.height / 2.0 {
-                return i + list.first_index();
-            }
-        }
-        geo.rows.len() + list.first_index()
+        let first = list.first_index();
+        let count = self.track_count(list);
+        // Cursor position in the scrollable's content space (y = 0 at the top
+        // of the first row).
+        let cursor_y = (self.drag.cursor_pos.y - geo.bounds.y) + geo.translation_y;
+        let row_f = (cursor_y / crate::theme::ROW_HEIGHT).max(0.0);
+        let idx = (row_f + 0.5).floor() as usize + first;
+        idx.clamp(first, count)
     }
 
     fn handle_drag_autoscroll(
@@ -253,11 +262,18 @@ impl MusicPlayer {
             Some(DropTarget::PlaylistAdd(_)) | None => return None,
         };
 
+        // The queue/active lists are virtualized, so `geo.rows` is intentionally
+        // empty for them; their boundary comes from the uniform `ROW_HEIGHT`.
+        // Sidebar/library lists are not virtualized, so their measured `rows`
+        // must be present for the drop math below.
+        let is_track = matches!(self.drag.drop_target, Some(DropTarget::Track(_)));
         let rows = &geo.rows;
-        if rows.is_empty() {
+        if !is_track && rows.is_empty() {
             return None;
         }
-        let boundary_y = if rel == 0 {
+        let boundary_y = if is_track {
+            geo.bounds.y - geo.translation_y + rel as f32 * crate::theme::ROW_HEIGHT
+        } else if rel == 0 {
             rows[0].y - geo.translation_y
         } else if rel <= rows.len() {
             let k = rel - 1;

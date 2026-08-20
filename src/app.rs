@@ -142,7 +142,15 @@ impl Default for MusicPlayer {
 
 impl MusicPlayer {
     pub fn new() -> (Self, Task<Message>) {
-        (Self::default(), Task::none())
+        // Capture scrollable geometry once on the first render so the track
+        // lists can virtualize immediately at startup (before any mouse move
+        // or scroll). Live scroll offsets are then kept fresh by `on_scroll`
+        // via `Message::ListScrolled`; `CursorMoved` re-captures for drag
+        // hit-testing.
+        (
+            Self::default(),
+            iced_runtime::task::widget(update::operation::CaptureBounds::new()),
+        )
     }
 
     fn new_with(config: crate::data::config::Config) -> Self {
@@ -283,7 +291,7 @@ impl MusicPlayer {
             }
             Message::WindowResized(size) => {
                 self.window_width = size.width;
-                Task::none()
+                iced_runtime::task::widget(update::operation::CaptureBounds::new())
             }
             Message::WindowClose => {
                 self.flush_session();
@@ -308,15 +316,10 @@ impl MusicPlayer {
                         }
                     }
                 }
-                // Refresh scrollable geometry every cursor move so drag,
-                // drop hit-testing, and scroll-into-view read live bounds
-                // without depending on `on_scroll` (which never fires when a
-                // list doesn't overflow).
-                let capture = iced_runtime::task::widget(update::operation::CaptureBounds::new());
                 if self.drag.drag_active {
-                    iced::Task::batch([capture, self.handle_drag_update()])
+                    self.handle_drag_update()
                 } else {
-                    capture
+                    Task::none()
                 }
             }
             Message::LeftButtonReleased => {
@@ -328,6 +331,20 @@ impl MusicPlayer {
                 self.bounds = bounds;
                 self.view_data_mut().scroll = scroll;
 
+                Task::none()
+            }
+            Message::ListScrolled {
+                list,
+                translation_y,
+            } => {
+                let geo = match list {
+                    TrackListKind::Queue => &mut self.bounds.queue,
+                    TrackListKind::Active => &mut self.bounds.track,
+                    TrackListKind::Recent => &mut self.bounds.recent,
+                };
+                if let Some(g) = geo {
+                    g.translation_y = translation_y;
+                }
                 Task::none()
             }
             Message::KeyPressed { key, modifiers } => self.handle_key_press(&key, modifiers),

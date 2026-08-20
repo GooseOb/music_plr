@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{rule, scrollable, text, Button, Column, Container, Id, MouseArea, Row},
+    widget::{rule, text, Button, Column, Container, Id, MouseArea, Row},
     Element, Length,
 };
 
@@ -13,7 +13,10 @@ use crate::{
 
 use super::{
     styles::{bg_secondary, button_style_panel_item, fg_secondary},
-    track_list::{empty_state, section_header, track_row, track_row_layout, view_track_list},
+    track_list::{
+        empty_state, section_header, track_row, track_row_layout, view_track_list,
+        virtual_scrollable,
+    },
     Message, MusicPlayer,
 };
 
@@ -156,14 +159,9 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
         return empty_state("No recently played tracks");
     }
 
-    let items = tracks
-        .iter()
-        .enumerate()
-        .map(|(i, track)| view_recently_played_row(track, i, player));
-
-    scrollable(Column::with_children(items))
-        .id(QUEUE_RECENT_LIST_ID)
-        .into()
+    virtual_scrollable(tracks.len(), TrackListKind::Recent, player, |i| {
+        view_recently_played_row(&tracks[i], i, player)
+    })
 }
 
 fn view_recently_played_row<'a>(

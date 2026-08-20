@@ -3,7 +3,7 @@
 use super::ViewData;
 use crate::{
     app::{
-        interaction::{self, TrackPos},
+        interaction::{self, TrackListKind, TrackPos},
         update::operation::CaptureBounds,
         ViewKind,
     },
@@ -41,6 +41,10 @@ pub enum Message {
     CursorMoved(Point),
     LeftButtonReleased,
     ListBoundsCaptured(CaptureBounds),
+    ListScrolled {
+        list: TrackListKind,
+        translation_y: f32,
+    },
     KeyPressed {
         key: iced::keyboard::key::Key,
         modifiers: iced::keyboard::Modifiers,

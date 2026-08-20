@@ -1,13 +1,18 @@
 use iced::{
     alignment,
-    widget::{container, image, scrollable, text, Button, Column, Container, Id, MouseArea, Row},
+    widget::{
+        container, image, scrollable, text, Button, Column, Container, Id, MouseArea, Row, Space,
+    },
     Color, Element, Length,
 };
 
 pub const TRACK_LIST_ID: Id = Id::new("track_list");
 
 use crate::{
-    app::interaction::{row_id, HoverTarget, Pressed, TrackListKind, TrackPos},
+    app::{
+        interaction::{row_id, HoverTarget, Pressed, TrackListKind, TrackPos},
+        update::operation::ListGeometry,
+    },
     icons,
     theme::{AppTheme, Palette},
     types::Track,
@@ -52,18 +57,83 @@ pub(super) fn view_track_list<'a>(
     let show_album = list == TrackListKind::Active
         && !matches!(player.view_data().kind, crate::app::ViewKind::Album { .. });
 
-    let items: Vec<Element<'a, Message, AppTheme>> = tracks
-        .iter()
-        .enumerate()
-        .map(|(i, track)| {
-            let adjusted = i + index_offset;
-            view_track_row(track, TrackPos::new(adjusted, list), player, show_album)
-        })
-        .collect();
+    virtual_scrollable(tracks.len(), list, player, |i| {
+        view_track_row(
+            &tracks[i],
+            TrackPos::new(i + index_offset, list),
+            player,
+            show_album,
+        )
+    })
+}
 
-    scrollable(Column::with_children(items))
-        .id(list.scrollable_id())
+/// Render a scrollable of `count` rows, building only the rows currently
+/// visible in the viewport (plus a small overscan) and padding the rest with
+/// fixed-height spacers so the scrollable's total height — and therefore its
+/// scroll range — stays `count * ROW_HEIGHT`.
+///
+/// Without this, `view()` rebuilds and lays out every row on every message
+/// (the 250ms `Tick`, every `CursorMoved`), so a long playlist makes the UI
+/// stutter on startup and scroll. The visible window is derived from the scroll
+/// offset: the viewport height and content height come from the one-time
+/// `CaptureBounds` pass (see `player.bounds`), and the live offset is updated
+/// per scroll by [`Message::ListScrolled`]. Until the bounds are captured the
+/// list falls back to rendering all rows, which is correct, just not windowed.
+pub(super) fn virtual_scrollable<'a, F>(
+    count: usize,
+    list: TrackListKind,
+    player: &'a MusicPlayer,
+    render_row: F,
+) -> Element<'a, Message, AppTheme>
+where
+    F: Fn(usize) -> Element<'a, Message, AppTheme>,
+{
+    let geo = match list {
+        TrackListKind::Queue => player.bounds.queue.as_ref(),
+        TrackListKind::Active => player.bounds.track.as_ref(),
+        TrackListKind::Recent => player.bounds.recent.as_ref(),
+    };
+    let children: Vec<Element<'a, Message, AppTheme>> = match geo {
+        Some(ListGeometry {
+            translation_y,
+            bounds,
+            ..
+        }) if count > 0 && count as f32 * crate::theme::ROW_HEIGHT > bounds.height + 1.0 => {
+            let viewport_height = bounds.height;
+            let overscan = 6i32;
+            let row_h = crate::theme::ROW_HEIGHT;
+
+            let first =
+                ((((translation_y / row_h) - overscan as f32).max(0.0)) as usize).min(count);
+            let visible = ((viewport_height / row_h).ceil() as usize) + (overscan as usize) * 2;
+            let end = (first + visible).min(count);
+
+            let mut items = Vec::with_capacity((end - first) + 2);
+            if first > 0 {
+                items.push(row_spacer(first as f32 * row_h));
+            }
+            for i in first..end {
+                items.push(render_row(i));
+            }
+            if end < count {
+                items.push(row_spacer((count - end) as f32 * row_h));
+            }
+            items
+        }
+        _ => (0..count).map(render_row).collect(),
+    };
+
+    scrollable(Column::with_children(children))
+        .id(list)
+        .on_scroll(move |vp| Message::ListScrolled {
+            list,
+            translation_y: vp.absolute_offset().y,
+        })
         .into()
+}
+
+pub(super) fn row_spacer<'a>(height: f32) -> Element<'a, Message, AppTheme> {
+    Space::new().height(Length::Fixed(height)).into()
 }
 
 pub(super) fn leading_control<'a>(

@@ -15,11 +15,12 @@
 //! `bounds` into that list's `ListGeometry.rows`. Because a scrollable's rows
 //! are visited contiguously right after its own `scrollable` callback, the
 //! `current` flag is correctly scoped — and the only id'd `Container`s in the
-//! tree are list rows (track-list, playlist, and library rows), so nothing
-//! else is captured.
+//! tree are list rows (sidebar playlist and library rows), so nothing else is
+//! captured. The track/queue/recent lists are virtualized and uniform-height,
+//! so they use `ROW_HEIGHT` for drop math instead and don't need `rows`.
 
 use crate::app::{
-    ui::{QUEUE_LIST_ID, TRACK_LIST_ID},
+    ui::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, TRACK_LIST_ID},
     Message,
 };
 use iced::{widget::Id, Rectangle};
@@ -29,11 +30,8 @@ use iced_core::widget::operation::{Operation, Outcome, Scrollable};
 pub struct ListGeometry {
     pub bounds: Rectangle,
     pub translation_y: f32,
-    /// Total content height (from `scrollable`'s `content_bounds`). Replaces
-    /// `count * ROW_HEIGHT` for autoscroll max-scroll clamping.
-    pub content_height: f32,
-    /// Absolute `bounds` of every row `Container`, in DOM order. Replaces the
-    /// hard-coded row height in drop-index math.
+    /// Absolute `bounds` of every row `Container`, in DOM order. Used by the
+    /// sidebar/library lists (non-virtualized) for drop-index math.
     pub rows: Vec<Rectangle>,
 }
 
@@ -42,7 +40,11 @@ pub const LIBRARY_LIST_ID: Id = Id::new("sidebar_library_list");
 
 /// Whether `id` is one of the scrollable lists whose row geometry we capture.
 fn is_tracked_list(id: &Id) -> bool {
-    *id == SIDEBAR_LIST_ID || *id == LIBRARY_LIST_ID || *id == QUEUE_LIST_ID || *id == TRACK_LIST_ID
+    *id == SIDEBAR_LIST_ID
+        || *id == LIBRARY_LIST_ID
+        || *id == QUEUE_LIST_ID
+        || *id == QUEUE_RECENT_LIST_ID
+        || *id == TRACK_LIST_ID
 }
 
 #[derive(Default, Clone, Debug)]
@@ -51,6 +53,7 @@ pub struct CaptureBounds {
     pub library: Option<ListGeometry>,
     pub queue: Option<ListGeometry>,
     pub track: Option<ListGeometry>,
+    pub recent: Option<ListGeometry>,
     current: Option<Id>,
 }
 
@@ -66,6 +69,8 @@ impl CaptureBounds {
             &mut self.library
         } else if *id == QUEUE_LIST_ID {
             &mut self.queue
+        } else if *id == QUEUE_RECENT_LIST_ID {
+            &mut self.recent
         } else {
             // Callers only pass tracked ids (`current` is always one, and
             // `scrollable` bails on untracked ids before reaching here).
@@ -79,6 +84,7 @@ impl CaptureBounds {
         for (id, geo) in [
             (QUEUE_LIST_ID.clone(), &self.queue),
             (TRACK_LIST_ID.clone(), &self.track),
+            (QUEUE_RECENT_LIST_ID.clone(), &self.recent),
             (SIDEBAR_LIST_ID.clone(), &self.sidebar),
             (LIBRARY_LIST_ID.clone(), &self.library),
         ] {
@@ -101,7 +107,7 @@ impl Operation<Message> for CaptureBounds {
         &mut self,
         id: Option<&Id>,
         bounds: Rectangle,
-        content_bounds: Rectangle,
+        _content_bounds: Rectangle,
         translation: iced::Vector,
         _state: &mut dyn Scrollable,
     ) {
@@ -117,7 +123,6 @@ impl Operation<Message> for CaptureBounds {
         *self.geo_mut(id) = Some(ListGeometry {
             bounds,
             translation_y: translation.y,
-            content_height: content_bounds.height,
             rows: Vec::new(),
         });
     }
@@ -129,6 +134,13 @@ impl Operation<Message> for CaptureBounds {
         let Some(target) = self.current.clone() else {
             return;
         };
+        // Only the sidebar/library lists use measured row geometry for
+        // drop-index math; the virtualized track/queue/recent lists derive
+        // their boundaries from the uniform `ROW_HEIGHT`, so collecting their
+        // rows would be wasted work.
+        if target == QUEUE_LIST_ID || target == TRACK_LIST_ID || target == QUEUE_RECENT_LIST_ID {
+            return;
+        }
         if let Some(g) = self.geo_mut(&target) {
             g.rows.push(bounds);
         }

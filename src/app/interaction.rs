@@ -6,22 +6,24 @@ use crate::{
 };
 use iced::{widget::Id, Point};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TrackListKind {
     Queue,
     Active,
     Recent,
 }
 
-impl TrackListKind {
-    pub fn scrollable_id(self) -> Id {
-        match self {
+impl From<TrackListKind> for Id {
+    fn from(list: TrackListKind) -> Self {
+        match list {
             TrackListKind::Queue => crate::app::ui::QUEUE_LIST_ID,
             TrackListKind::Active => crate::app::ui::TRACK_LIST_ID,
             TrackListKind::Recent => crate::app::ui::QUEUE_RECENT_LIST_ID,
         }
     }
+}
 
+impl TrackListKind {
     pub const fn is_interactive(self) -> bool {
         !matches!(self, TrackListKind::Recent)
     }
@@ -119,7 +121,6 @@ pub enum Pressed {
 #[derive(Debug, Clone, Default)]
 pub struct DragState {
     pub cursor_pos: Point,
-    // pub last_mouse_hover: Option<Point>,
     pub pressed: Option<Pressed>,
     pub drag_origin: Option<Point>,
     pub drag_active: bool,
@@ -197,13 +198,14 @@ impl DragState {
 mod tests {
     use super::TrackListKind::{Active, Queue, Recent};
     use crate::app::ui::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, TRACK_LIST_ID};
+    use iced::widget::Id;
 
     #[test]
     fn each_list_targets_a_distinct_scrollable() {
-        assert_eq!(Queue.scrollable_id(), QUEUE_LIST_ID);
-        assert_eq!(Active.scrollable_id(), TRACK_LIST_ID);
-        assert_eq!(Recent.scrollable_id(), QUEUE_RECENT_LIST_ID);
-        assert_ne!(Queue.scrollable_id(), Recent.scrollable_id());
+        assert_eq!(Id::from(Queue), QUEUE_LIST_ID);
+        assert_eq!(Id::from(Active), TRACK_LIST_ID);
+        assert_eq!(Id::from(Recent), QUEUE_RECENT_LIST_ID);
+        assert_ne!(Id::from(Queue), Id::from(Recent));
     }
 
     #[test]

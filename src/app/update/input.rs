@@ -168,7 +168,7 @@ impl MusicPlayer {
         // directly, so center the row within the viewport height.
         let absolute = (row_y + crate::theme::ROW_HEIGHT / 2.0 - bounds.height / 2.0).max(0.0);
         operation::scroll_to::<Message>(
-            list.scrollable_id(),
+            list,
             operation::AbsoluteOffset {
                 x: 0.0,
                 y: absolute,
