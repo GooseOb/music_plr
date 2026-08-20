@@ -71,6 +71,7 @@ fn playlist_row<'a>(
             }),
     )
     .on_press(Message::DragPress(Pressed::Playlist(index)))
+    .on_double_click(Message::OpenAndPlayPlaylist(index))
     .on_move(move |_| Message::HoverStart(HoverTarget::Playlist(index)))
     .into()
 }

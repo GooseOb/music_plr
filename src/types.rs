@@ -102,6 +102,13 @@ impl PlayQueue {
         self.tracks.push(track);
     }
 
+    pub fn set_queue(&mut self, tracks: Vec<Track>, max_len: usize) {
+        if let Some(old) = self.current().cloned() {
+            self.record_played(&old, max_len);
+        }
+        self.tracks = tracks;
+    }
+
     pub fn clear(&mut self) {
         self.tracks.clear();
     }

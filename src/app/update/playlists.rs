@@ -28,6 +28,22 @@ impl MusicPlayer {
         }
     }
 
+    pub fn handle_open_and_play_playlist(&mut self, index: usize) {
+        self.handle_select_playlist(index);
+        if let Some(playlist) = self.playlists.playlists.get(index) {
+            if playlist.tracks.is_empty() {
+                return;
+            }
+            let tracks = playlist.tracks.clone();
+            let first = tracks[0].clone();
+            self.queue
+                .set_queue(tracks, self.config.max_recently_played);
+            self.play_track_internal(&first);
+            self.save_session();
+            self.mpris_dirty = true;
+        }
+    }
+
     pub fn handle_rename_playlist(&mut self, new_name: &str) {
         if let Some(idx) = self.view_data_mut().selected_playlist_id() {
             if !new_name.trim().is_empty() {

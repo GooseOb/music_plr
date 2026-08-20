@@ -76,6 +76,7 @@ pub enum Message {
     ShowDeleteConfirm(usize),
     ConfirmDeletePlaylist,
     HideDeleteConfirm,
+    OpenAndPlayPlaylist(usize),
 
     FloatingSearchInput(String),
     FloatingSearchNext,

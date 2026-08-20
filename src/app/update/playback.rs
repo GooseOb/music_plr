@@ -49,7 +49,7 @@ impl MusicPlayer {
         self.view_tracks().get(start..).unwrap_or(&[])
     }
 
-    fn play_track_replacing_queue(&mut self, track: Track) {
+    pub fn play_track_replacing_queue(&mut self, track: Track) {
         if let Some(old) = self.queue.current().cloned() {
             if old.url != track.url {
                 self.queue

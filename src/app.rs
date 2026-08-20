@@ -485,6 +485,10 @@ impl MusicPlayer {
                 self.delete_confirm_index = None;
                 Task::none()
             }
+            Message::OpenAndPlayPlaylist(index) => {
+                self.handle_open_and_play_playlist(index);
+                Task::none()
+            }
             Message::FloatingSearchInput(query) => self.handle_floating_search_input(&query),
             Message::FloatingSearchNext => self.handle_floating_search_step(1),
             Message::FloatingSearchPrev => self.handle_floating_search_step(-1),
