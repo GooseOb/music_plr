@@ -1,6 +1,7 @@
 /target
 rustypipe_cache.json
+__pycache__
 /ruff_cache
 /.ruff_cache
-/__pycache__
+**/__pycache__
 /scripts/__pycache__

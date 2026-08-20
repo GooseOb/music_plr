@@ -55,5 +55,8 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             &player.app_theme.palette,
         ));
     }
-    stack.into()
+
+    widget::MouseArea::new(stack)
+        .interaction(player.drag.cursor_interaction())
+        .into()
 }
