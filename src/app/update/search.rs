@@ -175,7 +175,7 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         let id = id.to_string();
         Self::spawn_backend_thread(
-            move || crate::providers::youtube::browse(&id, kind_str),
+            move || crate::providers::browse(crate::providers::ProviderId::YouTube, &id, kind_str),
             move |tracks| BackendResult::BrowseResults(rid, tracks),
             tx,
         );

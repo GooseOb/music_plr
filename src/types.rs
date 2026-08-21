@@ -1,6 +1,8 @@
 use crate::providers::{ProviderId, ProviderMap};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, VecDeque};
+#[cfg(test)]
+use std::collections::HashMap;
+use std::collections::VecDeque;
 
 /// Per-provider identifier/url for a track. Re-exported from the provider
 /// module for convenience.
@@ -206,33 +208,6 @@ impl PlayQueue {
 
     pub fn clear(&mut self) {
         self.tracks.clear();
-    }
-}
-
-impl From<crate::providers::youtube::YouTubeVideo> for Track {
-    fn from(v: crate::providers::youtube::YouTubeVideo) -> Self {
-        let mut providers: ProviderMap = HashMap::new();
-        providers.insert(
-            ProviderId::YouTube,
-            ProviderTrack {
-                id: v.id.clone(),
-                url: v.url.clone(),
-                artist_id: v.artist_id.clone(),
-            },
-        );
-        Self {
-            title: v.title,
-            artist: TrackArtist {
-                name: v.channel,
-                id: v.artist_id.clone(),
-            },
-            duration: v.duration,
-            thumbnail: v.thumbnail,
-            download_path: None,
-            album: v.album,
-            origin: ProviderId::YouTube,
-            providers,
-        }
     }
 }
 

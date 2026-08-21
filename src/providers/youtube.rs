@@ -1,7 +1,8 @@
-use crate::providers::{CardData, SearchScope, SearchTab};
-use crate::types::Track;
+use crate::providers::{CardData, ProviderId, ProviderMap, SearchScope, SearchTab};
+use crate::types::{Track, TrackArtist};
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::{
     io::Write,
     process::{Command, Stdio},
@@ -22,6 +23,33 @@ pub struct YouTubeVideo {
     pub album: Option<crate::types::TrackAlbum>,
     #[serde(default)]
     pub artist_id: Option<String>,
+}
+
+impl From<YouTubeVideo> for Track {
+    fn from(v: YouTubeVideo) -> Self {
+        let mut providers: ProviderMap = HashMap::new();
+        providers.insert(
+            ProviderId::YouTube,
+            crate::providers::ProviderTrack {
+                id: v.id.clone(),
+                url: v.url.clone(),
+                artist_id: v.artist_id.clone(),
+            },
+        );
+        Self {
+            title: v.title,
+            artist: TrackArtist {
+                name: v.channel,
+                id: v.artist_id.clone(),
+            },
+            duration: v.duration,
+            thumbnail: v.thumbnail,
+            download_path: None,
+            album: v.album,
+            origin: ProviderId::YouTube,
+            providers,
+        }
+    }
 }
 
 #[derive(Deserialize)]
