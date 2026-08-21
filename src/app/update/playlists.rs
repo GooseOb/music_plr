@@ -110,7 +110,7 @@ impl MusicPlayer {
                 let duration = crate::util::try_probe_duration(&path_str).unwrap_or(0);
                 let mut providers = std::collections::HashMap::new();
                 providers.insert(
-                    crate::provider::ProviderId::Local,
+                    crate::providers::ProviderId::Local,
                     crate::types::ProviderTrack {
                         id: filename.to_string(),
                         url: path_str.clone(),
@@ -127,7 +127,7 @@ impl MusicPlayer {
                     thumbnail: String::new(),
                     download_path: None,
                     album: None,
-                    origin: crate::provider::ProviderId::Local,
+                    origin: crate::providers::ProviderId::Local,
                     providers,
                 });
             }

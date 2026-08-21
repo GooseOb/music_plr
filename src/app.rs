@@ -60,10 +60,10 @@ pub struct MusicPlayer {
     pub search_query: String,
     /// The active search scope (All / Songs / Videos / Artists / Albums /
     /// Playlists). Global UI state, like `search_query`.
-    pub search_scope: crate::provider::SearchScope,
+    pub search_scope: crate::providers::SearchScope,
     /// The active search provider (`YouTube` / `SoundCloud` / …). The scope list is
     /// filtered to this provider's supported scopes. Global UI state.
-    pub search_provider: crate::provider::ProviderId,
+    pub search_provider: crate::providers::ProviderId,
     /// Whether the search-history dropdown is open (global UI state).
     pub show_search_history: bool,
     /// Filtered history list for the dropdown (derived from
@@ -173,8 +173,8 @@ impl MusicPlayer {
             lyrics: None,
             config,
             search_query: String::new(),
-            search_scope: crate::provider::SearchScope::Songs,
-            search_provider: crate::provider::ProviderId::YouTube,
+            search_scope: crate::providers::SearchScope::Songs,
+            search_provider: crate::providers::ProviderId::YouTube,
             show_search_history: false,
             last_filtered_history: Vec::new(),
             queue: PlayQueue::new(),

@@ -3,7 +3,7 @@
 //! track found here carries only a `MusicBrainz` id; playing or downloading it
 //! triggers a fallback resolution on the default (stream+download) provider.
 
-use crate::provider::{ProviderId, SearchScope, SearchTab};
+use crate::providers::{ProviderId, SearchScope, SearchTab};
 use crate::types::{ProviderTrack, Track, TrackAlbum, TrackArtist};
 use crate::util::urlencode;
 use serde::Deserialize;

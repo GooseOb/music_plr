@@ -10,13 +10,13 @@ impl MusicPlayer {
     /// "download from [provider]" context-menu flow).
     pub(super) fn spawn_download_thread_for(
         &self,
-        provider: crate::provider::ProviderId,
+        provider: crate::providers::ProviderId,
         track: Track,
     ) {
         let download_dir = self.config.download_dir.clone();
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
-            let result = crate::provider::download(provider, &track, &download_dir);
+            let result = crate::providers::download(provider, &track, &download_dir);
             match result {
                 Ok(path) => {
                     let mut downloaded = track;

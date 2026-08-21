@@ -5,7 +5,7 @@ use super::{
 use crate::app::ViewKind;
 use crate::data::cache::StreamCache;
 use crate::data::JsonStore;
-use crate::provider::ProviderId;
+use crate::providers::ProviderId;
 use tracing::debug;
 
 /// Split a cache key of the form `"{provider:?}:{id}"` back into its parts.
@@ -120,9 +120,9 @@ impl MusicPlayer {
         }
         if let ViewKind::Search {
             tab:
-                crate::provider::SearchTab::Artists(cards)
-                | crate::provider::SearchTab::Albums(cards)
-                | crate::provider::SearchTab::Playlists(cards),
+                crate::providers::SearchTab::Artists(cards)
+                | crate::providers::SearchTab::Albums(cards)
+                | crate::providers::SearchTab::Playlists(cards),
             ..
         } = &view.kind
         {
@@ -187,7 +187,7 @@ impl MusicPlayer {
         &mut self,
         rid: u64,
         tracks: Vec<crate::types::Track>,
-        tab: crate::provider::SearchTab,
+        tab: crate::providers::SearchTab,
     ) {
         // Apply to the slot that requested this search.
         if let Some(idx) = self.slot_for_request(rid) {
@@ -320,7 +320,7 @@ impl MusicPlayer {
     fn apply_provider_resolution(
         &mut self,
         mut original: crate::types::Track,
-        provider: crate::provider::ProviderId,
+        provider: crate::providers::ProviderId,
         id: Option<(String, String)>,
         pos: Option<crate::app::interaction::TrackPos>,
         play: bool,

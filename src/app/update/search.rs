@@ -28,7 +28,7 @@ impl MusicPlayer {
 
         let tx = self.result_tx.clone();
         Self::spawn_backend_thread(
-            move || crate::provider::search(provider, &query, scope, 0),
+            move || crate::providers::search(provider, &query, scope, 0),
             move |(tracks, tab)| BackendResult::SearchResults(rid, tracks, tab),
             tx,
         );
@@ -78,7 +78,7 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
 
         thread::spawn(move || {
-            let tracks = match crate::provider::search_more(provider, &query, offset) {
+            let tracks = match crate::providers::search_more(provider, &query, offset) {
                 Ok(tracks) => tracks,
                 Err(e) => {
                     let _ = tx.send(BackendResult::SearchError(e.to_string()));
@@ -118,7 +118,7 @@ impl MusicPlayer {
     /// as the rest of the radio flow.
     pub fn start_radio_provider(
         &mut self,
-        provider: crate::provider::ProviderId,
+        provider: crate::providers::ProviderId,
         name: &str,
         id: &str,
         artist: bool,
@@ -143,12 +143,12 @@ impl MusicPlayer {
         let id = id.to_string();
         let tx = self.result_tx.clone();
         let radio_fn: fn(
-            crate::provider::ProviderId,
+            crate::providers::ProviderId,
             &str,
         ) -> anyhow::Result<Vec<crate::types::Track>> = if artist {
-            crate::provider::radio_artist
+            crate::providers::radio_artist
         } else {
-            crate::provider::radio_song
+            crate::providers::radio_song
         };
         Self::spawn_backend_thread(
             move || radio_fn(provider, &id),

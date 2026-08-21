@@ -121,8 +121,8 @@ mod tests {
     use super::*;
     use crate::app::{message::BackendResult, ViewKind};
     use crate::data::config;
-    use crate::provider::ProviderId;
-    use crate::provider::SearchScope;
+    use crate::providers::ProviderId;
+    use crate::providers::SearchScope;
 
     fn player() -> MusicPlayer {
         // `new_with` inits MPRIS (spawns a thread, no-ops if D-Bus is absent),
@@ -210,7 +210,7 @@ mod tests {
         // Deliver the search results (simulating the background thread).
         let mut providers = std::collections::HashMap::new();
         providers.insert(
-            crate::provider::ProviderId::YouTube,
+            crate::providers::ProviderId::YouTube,
             crate::types::ProviderTrack {
                 id: "t1".into(),
                 url: String::new(),
@@ -227,13 +227,13 @@ mod tests {
             thumbnail: String::new(),
             download_path: None,
             album: None,
-            origin: crate::provider::ProviderId::YouTube,
+            origin: crate::providers::ProviderId::YouTube,
             providers,
         };
         p.process_result(BackendResult::SearchResults(
             rid,
             vec![track],
-            crate::provider::SearchTab::Songs,
+            crate::providers::SearchTab::Songs,
         ));
 
         // The active (Playlist) slot must be untouched.

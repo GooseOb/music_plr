@@ -4,7 +4,7 @@
 //! network or API is unavailable.
 
 use crate::data::JsonStore;
-use crate::provider::{ProviderId, SearchScope, SearchTab};
+use crate::providers::{ProviderId, SearchScope, SearchTab};
 use crate::types::{ProviderTrack, Track, TrackAlbum, TrackArtist};
 use crate::util::urlencode;
 use anyhow::Result;

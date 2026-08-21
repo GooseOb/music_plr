@@ -4,7 +4,7 @@ use iced::{
     Element, Length,
 };
 
-use crate::provider::ProviderId;
+use crate::providers::ProviderId;
 use crate::theme::{self, AppTheme};
 
 use super::{shared_components::scope_tab_row, Message, MusicPlayer};

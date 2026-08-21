@@ -1,6 +1,6 @@
 use crate::{
     data::library::{LibraryItem, LibraryKind},
-    provider::ProviderId,
+    providers::ProviderId,
     types::Track,
 };
 use serde::{Deserialize, Serialize};
@@ -35,7 +35,7 @@ pub enum ViewKind {
         exhausted: bool,
         query: String,
         provider: ProviderId,
-        tab: crate::provider::SearchTab,
+        tab: crate::providers::SearchTab,
     },
     SongRadio(String),
     ArtistRadio(String),
@@ -84,7 +84,7 @@ impl Default for ViewKind {
             exhausted: false,
             query: String::new(),
             provider: ProviderId::YouTube,
-            tab: crate::provider::SearchTab::Songs,
+            tab: crate::providers::SearchTab::Songs,
         }
     }
 }
@@ -207,14 +207,14 @@ impl ViewData {
     pub fn new_search(
         query: String,
         provider: ProviderId,
-        scope: crate::provider::SearchScope,
+        scope: crate::providers::SearchScope,
     ) -> Self {
         Self {
             kind: ViewKind::Search {
                 exhausted: false,
                 query,
                 provider,
-                tab: crate::provider::SearchTab::from_scope(scope),
+                tab: crate::providers::SearchTab::from_scope(scope),
             },
             ..Default::default()
         }

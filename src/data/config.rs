@@ -1,5 +1,5 @@
 use crate::data::JsonStore;
-use crate::provider::ProviderId;
+use crate::providers::ProviderId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

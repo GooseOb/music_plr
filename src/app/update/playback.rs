@@ -1,7 +1,7 @@
 use super::{MusicPlayer, Track, TrackListKind, TrackPos};
 use crate::app::ViewKind;
 use crate::data::cache::StreamCache;
-use crate::provider::ProviderId;
+use crate::providers::ProviderId;
 use std::path::PathBuf;
 use tracing::debug;
 
@@ -171,7 +171,9 @@ impl MusicPlayer {
         ));
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
-            let id = crate::provider::resolve_id(provider, &track).ok().flatten();
+            let id = crate::providers::resolve_id(provider, &track)
+                .ok()
+                .flatten();
             let result = if play {
                 crate::app::BackendResult::ProviderResolved {
                     original: track,

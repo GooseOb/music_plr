@@ -2,7 +2,7 @@
 //! supports `SoundCloud` directly (no API key). Streaming reuses the `YouTube`
 //! pipeline because both are yt-dlp-backed.
 
-use crate::provider::{ProviderId, SearchScope, SearchTab};
+use crate::providers::{ProviderId, SearchScope, SearchTab};
 use crate::types::{ProviderTrack, Track, TrackAlbum, TrackArtist};
 use anyhow::Result;
 use serde::Deserialize;

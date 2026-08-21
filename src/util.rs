@@ -263,7 +263,7 @@ mod tests {
             .map(|i| {
                 let mut providers = std::collections::HashMap::new();
                 providers.insert(
-                    crate::provider::ProviderId::YouTube,
+                    crate::providers::ProviderId::YouTube,
                     crate::types::ProviderTrack {
                         id: format!("id{i}"),
                         url: format!("url{i}"),
@@ -280,7 +280,7 @@ mod tests {
                     thumbnail: String::new(),
                     download_path: None,
                     album: None,
-                    origin: crate::provider::ProviderId::YouTube,
+                    origin: crate::providers::ProviderId::YouTube,
                     providers,
                 }
             })
@@ -382,7 +382,7 @@ mod tests {
         tracks
             .iter()
             .map(|t| {
-                t.provider_id(crate::provider::ProviderId::YouTube)
+                t.provider_id(crate::providers::ProviderId::YouTube)
                     .unwrap_or("")
             })
             .collect()

@@ -52,7 +52,7 @@ impl MusicPlayer {
         self.config.save();
     }
 
-    pub fn handle_settings_default_provider(&mut self, provider: crate::provider::ProviderId) {
+    pub fn handle_settings_default_provider(&mut self, provider: crate::providers::ProviderId) {
         // Only providers that support both streaming and downloading are valid
         // defaults; ignore others defensively.
         if provider.capabilities().stream && provider.capabilities().download {

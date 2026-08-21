@@ -1,4 +1,4 @@
-use crate::provider::{CardData, SearchScope, SearchTab};
+use crate::providers::{CardData, SearchScope, SearchTab};
 use crate::types::Track;
 use anyhow::{Context, Result};
 use serde::Deserialize;

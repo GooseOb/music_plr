@@ -62,7 +62,7 @@ src/
 ├── theme/mod.rs       # Palette + AppTheme
 ├── theme/layout.rs    # Spacing / size / geometry constants (re-exported from theme)
 ├── theme/catalog.rs   # widget::*::Catalog impls for AppTheme
-├── providers/         # Per-provider backends (jamendo, musicbrainz, soundcloud, youtube)
+├── providers/         # Provider types + dispatch (mod.rs) and per-provider backends (jamendo, musicbrainz, soundcloud, youtube)
 ├── mpris.rs           # MPRIS D-Bus (MediaPlayer2 + Player)
 ├── types.rs           # Track, TrackSource, PlayQueue
 ├── lyrics.rs          # LyricsProvider enum + LyricsClient (provider registry)

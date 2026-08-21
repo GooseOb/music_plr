@@ -11,7 +11,7 @@ use crate::{
     },
     data::library::LibraryKind,
     icons,
-    provider::{CardData, ProviderId, SearchTab},
+    providers::{CardData, ProviderId, SearchTab},
     theme::AppTheme,
 };
 
@@ -94,7 +94,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
 
 pub(super) fn view_search<'a>(
     player: &'a MusicPlayer,
-    tab: &'a crate::provider::SearchTab,
+    tab: &'a crate::providers::SearchTab,
 ) -> Element<'a, Message, AppTheme> {
     if player.view_data().loading {
         track_list::empty_state("Searching...")

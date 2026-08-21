@@ -15,7 +15,7 @@ use iced::Point;
 
 #[derive(Debug, Clone)]
 pub enum BackendResult {
-    SearchResults(u64, Vec<Track>, crate::provider::SearchTab),
+    SearchResults(u64, Vec<Track>, crate::providers::SearchTab),
     SearchResultsAppend(u64, Vec<Track>),
     RadioResults(u64, String, Vec<Track>),
     BrowseResults(u64, Vec<Track>),
@@ -35,7 +35,7 @@ pub enum BackendResult {
     /// was found. Drives the "play via / download from [provider]" flow.
     ProviderResolved {
         original: Track,
-        provider: crate::provider::ProviderId,
+        provider: crate::providers::ProviderId,
         /// Resolved `(id, url)` for the provider.
         id: Option<(String, String)>,
         /// Where the track was selected from, so the resolved provider id can
@@ -47,7 +47,7 @@ pub enum BackendResult {
     /// be downloaded (not played) once its id is known.
     ProviderResolvedDownload {
         original: Track,
-        provider: crate::provider::ProviderId,
+        provider: crate::providers::ProviderId,
         /// Resolved `(id, url)` for the provider.
         id: Option<(String, String)>,
         /// Where the track was selected from, so the resolved provider id can
@@ -76,8 +76,8 @@ pub enum Message {
 
     SearchInputChanged(String),
     SearchExecute,
-    SearchScopeChanged(crate::provider::SearchScope),
-    SearchProviderChanged(crate::provider::ProviderId),
+    SearchScopeChanged(crate::providers::SearchScope),
+    SearchProviderChanged(crate::providers::ProviderId),
     SearchLoadMore,
     SearchHistorySelected(usize),
     DeleteSearchHistory(usize),
@@ -131,7 +131,7 @@ pub enum Message {
     SettingsCacheMaxSizeChanged(String),
     SettingsMaxRecentlyPlayedChanged(String),
     SettingsVolumeNormalizationToggled(bool),
-    SettingsDefaultProviderChanged(crate::provider::ProviderId),
+    SettingsDefaultProviderChanged(crate::providers::ProviderId),
     SettingsJamendoClientIdChanged(String),
     SettingsResetDefaults,
 
@@ -139,15 +139,15 @@ pub enum Message {
     ContextMenuGoToArtist,
     /// Play the track via the given provider. If the track already carries
     /// that provider's id, play directly; otherwise resolve its id first.
-    ContextMenuPlayViaProvider(crate::provider::ProviderId, TrackPos),
+    ContextMenuPlayViaProvider(crate::providers::ProviderId, TrackPos),
     /// Download the track from the given provider (resolving its id first if
     /// needed).
-    ContextMenuDownloadViaProvider(crate::provider::ProviderId, Vec<usize>),
+    ContextMenuDownloadViaProvider(crate::providers::ProviderId, Vec<usize>),
     /// Start a song radio seeded by the given provider (only providers that
     /// support similarity search offer this).
-    ContextMenuSongRadioProvider(crate::provider::ProviderId),
+    ContextMenuSongRadioProvider(crate::providers::ProviderId),
     /// Start an artist radio seeded by the given provider.
-    ContextMenuArtistRadioProvider(crate::provider::ProviderId),
+    ContextMenuArtistRadioProvider(crate::providers::ProviderId),
     ContextMenuRemoveFromPlaylist(Vec<usize>),
     ContextMenuRemoveFromQueue(Vec<usize>),
     CloseContextMenu,

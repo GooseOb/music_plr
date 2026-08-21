@@ -70,7 +70,7 @@ pub(super) fn view_context_menu<'a>(
         // Per-provider playback/download. Providers the track already carries
         // an id for play/download directly; others show a search icon and
         // trigger an id-resolving lookup first.
-        for &provider in crate::provider::ProviderId::searchable() {
+        for &provider in crate::providers::ProviderId::searchable() {
             if !provider.capabilities().stream {
                 continue;
             }
@@ -116,7 +116,7 @@ pub(super) fn view_context_menu<'a>(
 
         // Download: for each stream+download provider, offer direct download
         // when the track has an id, or a search-then-download otherwise.
-        for &provider in crate::provider::ProviderId::defaultable() {
+        for &provider in crate::providers::ProviderId::defaultable() {
             if !provider.capabilities().download {
                 continue;
             }
@@ -144,7 +144,7 @@ pub(super) fn view_context_menu<'a>(
 
         // Radio: only providers that support similarity search, and only when
         // the track already carries that provider's id.
-        for &provider in crate::provider::ProviderId::searchable() {
+        for &provider in crate::providers::ProviderId::searchable() {
             if !provider.capabilities().radio {
                 continue;
             }

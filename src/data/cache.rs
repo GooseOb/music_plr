@@ -1,4 +1,4 @@
-use crate::provider::ProviderId;
+use crate::providers::ProviderId;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
