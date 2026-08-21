@@ -48,12 +48,16 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         stack = stack.push(overlays::view_delete_confirm());
     } else if let Some(menu) = &player.context_menu {
         stack = stack.push(overlays::view_context_menu(menu, &player.app_theme.palette));
-    }
-    if let Some(rect) = player.drop_indicator_rect() {
+    } else if let Some(rect) = player.drop_indicator_rect() {
         stack = stack.push(overlays::view_drop_indicator(
             rect,
             &player.app_theme.palette,
         ));
+    }
+    if player.show_search_history {
+        if let Some(input_rect) = player.bounds.search_input {
+            stack = stack.push(search::view_search_history(player, input_rect));
+        }
     }
 
     match player.drag.cursor_interaction() {

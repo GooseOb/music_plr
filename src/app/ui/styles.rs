@@ -35,6 +35,14 @@ pub fn bg_popup() -> impl Fn(&AppTheme) -> container::Style + 'static {
     }
 }
 
+pub fn bg_search_hist() -> impl Fn(&AppTheme) -> container::Style + 'static {
+    move |theme| container::Style {
+        background: Some(theme.palette.bg_tertiary.into()),
+        border: border::rounded(theme::RADIUS_MD),
+        ..Default::default()
+    }
+}
+
 pub fn fg_secondary() -> impl Fn(&AppTheme) -> text::Style + 'static {
     |theme| text::Style {
         color: theme.palette.fg_secondary.into(),
@@ -237,15 +245,22 @@ pub fn button_style_panel_item(
     }
 }
 
-pub fn button_style_delete() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
+pub fn button_style_hist() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
     |theme, status| {
         let p = &theme.palette;
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-            _ => p.bg_secondary,
+        let background = match status {
+            button::Status::Hovered | button::Status::Pressed => {
+                Some(p.fg.scale_alpha(0.15).into())
+            }
+            _ => None,
+        };
+        let text_color = match status {
+            button::Status::Hovered | button::Status::Pressed => p.fg,
+            _ => p.fg_secondary,
         };
         button::Style {
-            background: Some(bg.into()),
+            background,
+            text_color,
             border: border::rounded(theme::RADIUS_SM),
             ..Default::default()
         }

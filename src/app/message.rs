@@ -80,12 +80,12 @@ pub enum Message {
     SearchProviderChanged(crate::provider::ProviderId),
     SearchLoadMore,
     SearchHistorySelected(usize),
+    DeleteSearchHistory(usize),
     Browse(ViewKind),
     DragPress(interaction::Pressed),
     HoverStart(interaction::HoverTarget),
     ToggleLibrarySave(library::LibraryItem),
     ToggleLibraryExpanded,
-    DeleteSearchHistory(usize),
 
     TrackRightClicked(TrackPos),
     PlayTrackAt(TrackPos),

@@ -26,6 +26,10 @@ use crate::app::{
 use iced::{widget::Id, Rectangle};
 use iced_core::widget::operation::{Operation, Outcome, Scrollable};
 
+/// Id of the search input `Container` whose measured bounds we capture so the
+/// search-history dropdown can be positioned off the real input rectangle.
+pub const SEARCH_INPUT_ID: Id = Id::new("search_input");
+
 #[derive(Debug, Clone)]
 pub struct ListGeometry {
     pub bounds: Rectangle,
@@ -54,6 +58,7 @@ pub struct CaptureBounds {
     pub queue: Option<ListGeometry>,
     pub track: Option<ListGeometry>,
     pub recent: Option<ListGeometry>,
+    pub search_input: Option<Rectangle>,
     current: Option<Id>,
 }
 
@@ -128,7 +133,11 @@ impl Operation<Message> for CaptureBounds {
     }
 
     fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
-        if id.is_none() {
+        let Some(id) = id else {
+            return;
+        };
+        if *id == SEARCH_INPUT_ID {
+            self.search_input = Some(bounds);
             return;
         }
         let Some(target) = self.current.clone() else {

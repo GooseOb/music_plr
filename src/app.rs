@@ -336,7 +336,7 @@ impl MusicPlayer {
             }
             Message::ListBoundsCaptured(bounds) => {
                 let scroll = bounds.track.as_ref().map_or(0.0, |b| b.translation_y);
-                self.bounds = bounds;
+                self.bounds = bounds.clone();
                 self.view_data_mut().scroll = scroll;
 
                 Task::none()
@@ -369,7 +369,6 @@ impl MusicPlayer {
             Message::SearchInputChanged(query) => {
                 self.search_query = query;
                 self.update_search_history();
-                self.show_search_history = true;
                 Task::none()
             }
             Message::SearchExecute => {

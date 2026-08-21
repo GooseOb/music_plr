@@ -1,12 +1,13 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, text_input, Button, Column, Container, MouseArea, Row},
-    Color, Element, Length,
+    widget::{scrollable, text, text_input, Button, Column, Container, MouseArea, Row, Space},
+    Color, Element, Length, Rectangle,
 };
 
 use crate::{
     app::{
         interaction::{HoverTarget, Pressed, TrackListKind},
+        ui::overlays::{no_click_propagation, pos_absolute},
         ViewKind,
     },
     data::library::LibraryKind,
@@ -19,11 +20,13 @@ use crate::{
 use super::{
     shared_components::toggle_bookmark_button,
     styles::{
-        bg_secondary, button_style_delete, button_style_list_item, button_style_primary,
-        button_style_scope, fg_secondary,
+        bg_search_hist, bg_secondary, button_style_hist, button_style_primary, button_style_scope,
+        fg_secondary,
     },
     theme, track_list, view_track_list, Message, MusicPlayer,
 };
+
+use crate::app::update::operation::SEARCH_INPUT_ID;
 
 pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let input = Container::new(
@@ -35,6 +38,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
         .on_submit(Message::SearchExecute)
         .padding([theme::SPACING_SM, theme::SPACING_MD]),
     )
+    .id(SEARCH_INPUT_ID)
     .width(Length::Fill)
     .into();
 
@@ -88,11 +92,19 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
         .spacing(theme::SPACING_XS)
         .wrap();
 
-    let rows = Column::with_children([controls.into(), provider_row.into(), scope_row.into()])
-        .spacing(theme::SPACING_SM);
+    let rows = Column::with_children([
+        controls.into(),
+        Row::with_children([
+            scope_row.into(),
+            Space::new().width(Length::Fill).into(),
+            provider_row.into(),
+        ])
+        .into(),
+    ])
+    .spacing(theme::SPACING_SM);
 
     Container::new(rows)
-        .width(Length::Fill)
+        .padding([theme::SPACING_SM, theme::SPACING_XL])
         .style(bg_secondary())
         .into()
 }
@@ -289,67 +301,79 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
     Column::with_children([header.into(), track_list]).into()
 }
 
-pub(super) fn view_search_history(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+pub(super) fn view_search_history(
+    player: &MusicPlayer,
+    input_rect: Rectangle,
+) -> Element<'_, Message, AppTheme> {
     let p = &player.app_theme.palette;
 
-    if player.last_filtered_history.is_empty() {
-        return Container::new(text("No recent searches").style(fg_secondary()))
+    let content: Element<'_, Message, AppTheme> = if player.last_filtered_history.is_empty() {
+        text("No recent searches")
+            .style(fg_secondary())
             .width(Length::Fill)
-            .height(theme::SEARCH_HISTORY_ITEM_HEIGHT)
-            .padding([theme::SPACING_SM, theme::SPACING_XL])
-            .style(bg_secondary())
-            .into();
-    }
-
-    let items = player
-        .last_filtered_history
-        .iter()
-        .enumerate()
-        .map(|(i, q)| {
-            Container::new(
-                Row::with_children([
-                    Button::new(
-                        Row::with_children([
-                            icons::icon(icons::SEARCH_ICON, p.fg_muted, theme::ICON_SIZE_SM).into(),
-                            text(q).size(theme::TEXT_SIZE_SM).into(),
-                        ])
-                        .spacing(theme::SPACING_SM)
-                        .padding([theme::SPACING_XS, theme::SPACING_MD])
-                        .align_y(alignment::Vertical::Center),
-                    )
-                    .width(Length::Fill)
-                    .padding(0)
-                    .style(button_style_list_item(false))
-                    .on_press(Message::SearchHistorySelected(i))
-                    .into(),
-                    Button::new(icons::icon(
-                        icons::DELETE_ICON,
-                        p.fg_muted,
-                        theme::ICON_SIZE_SM,
-                    ))
-                    .padding(theme::SPACING_XS)
-                    .style(button_style_delete())
-                    .on_press(Message::DeleteSearchHistory(i))
-                    .width(theme::DELETE_BTN_SIZE)
-                    .height(theme::DELETE_BTN_SIZE)
-                    .into(),
-                ])
-                .align_y(alignment::Vertical::Center),
-            )
-            .style(bg_secondary())
             .into()
-        });
+    } else {
+        let items = player
+            .last_filtered_history
+            .iter()
+            .enumerate()
+            .map(|(i, q)| {
+                Container::new(
+                    Row::with_children([
+                        Button::new(
+                            Row::with_children([
+                                icons::icon(icons::SEARCH_ICON, p.fg_muted, theme::ICON_SIZE_SM)
+                                    .into(),
+                                text(q).size(theme::TEXT_SIZE_SM).into(),
+                            ])
+                            .spacing(theme::SPACING_SM)
+                            .padding([theme::SPACING_XS, theme::SPACING_MD])
+                            .align_y(alignment::Vertical::Center),
+                        )
+                        .width(Length::Fill)
+                        .padding(0)
+                        .style(button_style_hist())
+                        .on_press(Message::SearchHistorySelected(i))
+                        .into(),
+                        Button::new(icons::icon(
+                            icons::DELETE_ICON,
+                            p.fg_muted,
+                            theme::ICON_SIZE_SM,
+                        ))
+                        .padding(theme::SPACING_XS)
+                        .style(button_style_hist())
+                        .on_press(Message::DeleteSearchHistory(i))
+                        .into(),
+                    ])
+                    .align_y(alignment::Vertical::Center),
+                )
+                .into()
+            });
 
-    let dropdown_height = (player.last_filtered_history.len() as f32
-        * theme::SEARCH_HISTORY_ITEM_HEIGHT)
-        .min(theme::SEARCH_DROPDOWN_MAX_HEIGHT);
+        let dropdown_height = (player.last_filtered_history.len() as f32
+            * theme::SEARCH_HISTORY_ITEM_HEIGHT)
+            .min(theme::SEARCH_DROPDOWN_MAX_HEIGHT);
 
-    let content = scrollable(Column::with_children(items))
+        scrollable(Column::with_children(items).padding(iced::Padding {
+            top: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+            right: theme::SPACING_SM,
+        }))
         .id(iced::widget::Id::new("search_history_list"))
-        .height(dropdown_height);
-
-    Container::new(content)
         .height(dropdown_height)
-        .style(bg_secondary())
         .into()
+    };
+
+    let dropdown = Container::new(content)
+        .padding([theme::SPACING_SM, theme::SPACING_XS])
+        .style(bg_search_hist())
+        .width(input_rect.width);
+
+    pos_absolute(
+        no_click_propagation(dropdown.into()),
+        input_rect.x,
+        input_rect.y + input_rect.height,
+    )
+    .into()
 }

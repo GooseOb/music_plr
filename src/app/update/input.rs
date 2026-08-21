@@ -4,57 +4,6 @@ use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData
 use crate::app::FloatingSearch;
 
 impl MusicPlayer {
-    pub fn search_input_geometry(&self) -> (f32, f32) {
-        let queue_width = if self.show_queue {
-            (self.window_width * crate::theme::QUEUE_WIDTH_RATIO).max(crate::theme::QUEUE_MIN_WIDTH)
-        } else {
-            0.0
-        };
-        let main_width = (self.window_width - crate::theme::SIDEBAR_WIDTH - queue_width).max(0.0);
-        let input_x = crate::theme::SPACING_XL;
-        let input_width = (main_width
-            - 2.0 * crate::theme::SPACING_XL
-            - crate::theme::SEARCH_BTN_SIZE
-            - crate::theme::SPACING_SM)
-            .max(100.0);
-        (input_x, input_width)
-    }
-
-    pub fn search_input_bounds(&self) -> iced::Rectangle {
-        let (input_x, input_width) = self.search_input_geometry();
-        iced::Rectangle {
-            x: crate::theme::SIDEBAR_WIDTH + input_x,
-            y: 0.0,
-            width: input_width,
-            height: crate::theme::SEARCH_BAR_HEIGHT,
-        }
-    }
-
-    pub fn search_dropdown_bounds(&self) -> iced::Rectangle {
-        let input_bounds = self.search_input_bounds();
-        let count = self.last_filtered_history.len();
-        let height = if count == 0 {
-            crate::theme::SEARCH_HISTORY_ITEM_HEIGHT
-        } else {
-            (count as f32 * crate::theme::SEARCH_HISTORY_ITEM_HEIGHT)
-                .min(crate::theme::SEARCH_DROPDOWN_MAX_HEIGHT)
-        };
-        iced::Rectangle {
-            x: input_bounds.x,
-            y: input_bounds.y + input_bounds.height,
-            width: input_bounds.width,
-            height,
-        }
-    }
-
-    pub fn is_cursor_in_search_area(&self) -> bool {
-        let cursor = self.drag.cursor_pos;
-        if self.search_input_bounds().contains(cursor) {
-            return true;
-        }
-        self.search_dropdown_bounds().contains(cursor)
-    }
-
     pub fn handle_key_press(
         &mut self,
         key: &iced::keyboard::key::Key,

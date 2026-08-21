@@ -13,10 +13,7 @@ use crate::{
 };
 
 use super::{
-    styles::{
-        bg_overlay, bg_popup, bg_secondary, button_style_danger, button_style_popup_item,
-        fg_secondary,
-    },
+    styles::{bg_overlay, bg_popup, button_style_danger, button_style_popup_item, fg_secondary},
     theme, ContextMenuState, Message, MusicPlayer,
 };
 
@@ -216,16 +213,24 @@ pub(super) fn view_context_menu<'a>(
     .width(theme::CONTEXT_MENU_WIDTH)
     .style(bg_popup());
 
-    let overlay = Container::new(column![
-        Space::new().height(pos_y),
-        row![Space::new().width(pos_x), menu_content]
-    ])
-    .width(Length::Fill)
-    .height(Length::Fill);
+    let overlay = Container::new(pos_absolute(menu_content.into(), pos_x, pos_y))
+        .width(Length::Fill)
+        .height(Length::Fill);
 
     MouseArea::new(overlay)
         .on_press(Message::CloseContextMenu)
         .into()
+}
+
+pub fn pos_absolute(
+    content: Element<'_, Message, AppTheme>,
+    pos_x: impl Into<Length>,
+    pos_y: impl Into<Length>,
+) -> Column<'_, Message, AppTheme> {
+    column![
+        Space::new().height(pos_y),
+        Row::with_children([Space::new().width(pos_x).into(), content])
+    ]
 }
 
 fn menu_item<'a>(
@@ -233,23 +238,20 @@ fn menu_item<'a>(
     icon: &'static [u8],
     p: &'a Palette,
     on_press: Message,
-) -> Container<'a, Message, AppTheme> {
-    Container::new(
-        Button::new(
-            Row::with_children([
-                icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
-                text(label).into(),
-            ])
-            .spacing(theme::SPACING_SM)
-            .padding([theme::SPACING_XS, theme::SPACING_SM])
-            .align_y(alignment::Vertical::Center)
-            .width(Length::Fill),
-        )
-        .padding(0)
-        .style(button_style_popup_item())
-        .on_press(on_press),
+) -> Button<'a, Message, AppTheme> {
+    Button::new(
+        Row::with_children([
+            icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
+            text(label).into(),
+        ])
+        .spacing(theme::SPACING_SM)
+        .padding([theme::SPACING_XS, theme::SPACING_SM])
+        .align_y(alignment::Vertical::Center)
+        .width(Length::Fill),
     )
-    .style(bg_secondary())
+    .padding(0)
+    .style(button_style_popup_item())
+    .on_press(on_press)
 }
 
 pub(super) fn view_playlist_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {

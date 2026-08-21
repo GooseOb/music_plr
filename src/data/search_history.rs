@@ -14,10 +14,6 @@ impl JsonStore for SearchHistory {
 }
 
 impl SearchHistory {
-    pub fn get(&self) -> &[String] {
-        &self.queries
-    }
-
     pub fn push(&mut self, query: String, max_stored: usize) {
         if let Some(index) = self.queries.iter().position(|q| q == &query) {
             if index != 0 {

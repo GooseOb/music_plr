@@ -18,6 +18,21 @@ use iced::widget::Id;
 
 impl MusicPlayer {
     pub fn handle_left_release(&mut self) {
+        let cursor = self.drag.cursor_pos;
+        let is_cursor_in_search_input =
+            self.bounds.search_input.is_some_and(|r| r.contains(cursor));
+        if self.show_search_history {
+            if !is_cursor_in_search_input {
+                self.show_search_history = false;
+            }
+        } else {
+            if is_cursor_in_search_input {
+                self.update_search_history();
+                self.show_search_history = true;
+                return;
+            }
+        }
+
         let Some(pressed) = self.drag.pressed.take() else {
             self.drag.stop();
             return;
@@ -39,15 +54,6 @@ impl MusicPlayer {
             match pressed {
                 Pressed::Track(pos) => {
                     self.toggle_selection(pos);
-                    if self.show_search_history && !self.is_cursor_in_search_area() {
-                        self.show_search_history = false;
-                    } else if !self.show_search_history
-                        && self.search_input_bounds().contains(self.drag.cursor_pos)
-                        && !self.search_history.get().is_empty()
-                    {
-                        self.update_search_history();
-                        self.show_search_history = true;
-                    }
                 }
                 Pressed::Card(item) => self.handle_browse(&item.into()),
                 // A click without a drag selects the playlist (mirrors how a

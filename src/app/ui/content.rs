@@ -1,10 +1,9 @@
-use iced::widget::{Column, Container, Row, Stack};
+use iced::widget::Column;
 
 use crate::{app::ViewKind, theme::AppTheme};
 
-use super::{
-    floating_search, lyrics, playlist, search, settings, theme, Element, Message, MusicPlayer,
-};
+use super::{floating_search, lyrics, playlist, search, settings, Element, Message, MusicPlayer};
+
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let search_bar = search::view_search_bar(player);
 
@@ -30,27 +29,5 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
         children.push(floating_search::view_floating_search(player));
     }
     children.push(inner);
-    let base = Column::with_children(children);
-
-    let mut stack = Stack::new().push(base);
-
-    if player.show_search_history {
-        let (input_x, input_width) = player.search_input_geometry();
-        let dropdown = Container::new(search::view_search_history(player)).width(input_width);
-
-        let positioned = Column::with_children([
-            Container::new(Row::new())
-                .height(theme::SEARCH_BAR_HEIGHT)
-                .into(),
-            Row::with_children([
-                Container::new(Row::new()).width(input_x).into(),
-                dropdown.into(),
-            ])
-            .into(),
-        ]);
-
-        stack = stack.push(positioned);
-    }
-
-    stack.into()
+    Column::with_children(children).into()
 }

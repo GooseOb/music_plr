@@ -27,7 +27,6 @@ pub const RADIUS_SM: f32 = 8.0;
 pub const RADIUS_MD: f32 = 12.0;
 // pub const RADIUS_LG: f32 = 16.0;
 pub const SEARCH_BTN_SIZE: f32 = 35.0;
-pub const SEARCH_BAR_HEIGHT: f32 = 66.0;
 pub const SEARCH_HISTORY_ITEM_HEIGHT: f32 = ICON_SIZE_SM + 2.0 * SPACING_XS + SPACING_SM / 2.0;
 pub const SEARCH_DROPDOWN_MAX_HEIGHT: f32 = 240.0;
 
@@ -48,5 +47,4 @@ pub const PLAYBAR_TRACK_INFO_WIDTH: f32 = 164.0;
 pub const TIME_TEXT_WIDTH: f32 = 48.0;
 pub const CONTEXT_MENU_WIDTH: f32 = 190.0;
 pub const DIALOG_WIDTH: f32 = 300.0;
-pub const DELETE_BTN_SIZE: f32 = 24.0;
 pub const QUEUE_WIDTH_RATIO: f32 = 0.2;
