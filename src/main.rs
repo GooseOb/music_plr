@@ -10,6 +10,8 @@ mod data;
 mod icons;
 mod lyrics;
 mod mpris;
+mod provider;
+mod providers;
 mod theme;
 mod types;
 mod util;

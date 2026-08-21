@@ -21,6 +21,12 @@ impl MusicPlayer {
         }
     }
 
+    pub(super) fn sync_search_provider(&mut self) {
+        if let ViewKind::Search { provider, .. } = &self.view_data().kind {
+            self.search_provider = *provider;
+        }
+    }
+
     pub(super) fn restore_nav_entry(&mut self, data: ViewData) -> Task<Message> {
         // Scroll position is stored relative to the main track_list scrollable.
         // (Queue view uses a different Id and is not navigated via history.)
@@ -28,6 +34,7 @@ impl MusicPlayer {
         *self.view_data_mut() = data;
         self.sync_search_query();
         self.sync_search_scope();
+        self.sync_search_provider();
         self.sync_downloads_view();
 
         iced::widget::operation::scroll_to::<Message>(
@@ -73,6 +80,7 @@ impl MusicPlayer {
         self.push_new_view(data);
         self.sync_search_query();
         self.sync_search_scope();
+        self.sync_search_provider();
         self.sync_downloads_view();
 
         let view = self.view_data().clone();
@@ -113,6 +121,7 @@ mod tests {
     use super::*;
     use crate::app::{message::BackendResult, ViewKind};
     use crate::data::config;
+    use crate::provider::ProviderId;
     use crate::youtube::SearchScope;
 
     fn player() -> MusicPlayer {
@@ -149,7 +158,11 @@ mod tests {
         assert!(p.can_navigate_back());
 
         // Navigate to a Search view (simulates `run_search` pushing a slot).
-        p.handle_navigate_to(ViewData::new_search("song".into(), SearchScope::Songs));
+        p.handle_navigate_to(ViewData::new_search(
+            "song".into(),
+            ProviderId::YouTube,
+            SearchScope::Songs,
+        ));
         assert_eq!(p.nav_history.len(), 3);
         assert!(matches!(p.view_data().kind, ViewKind::Search { .. }));
 
@@ -181,7 +194,11 @@ mod tests {
         let mut p = player();
         // Replicates `run_search`'s slot stamping; the threaded version can't
         // run here.
-        p.handle_navigate_to(ViewData::new_search("song".into(), SearchScope::Songs));
+        p.handle_navigate_to(ViewData::new_search(
+            "song".into(),
+            ProviderId::YouTube,
+            SearchScope::Songs,
+        ));
         let rid = p.request_ids.next();
         p.view_data_mut().request_id = rid;
 
@@ -191,19 +208,27 @@ mod tests {
         assert_eq!(p.view_data().request_id, 0);
 
         // Deliver the search results (simulating the background thread).
+        let mut providers = std::collections::HashMap::new();
+        providers.insert(
+            crate::provider::ProviderId::YouTube,
+            crate::types::ProviderTrack {
+                id: "t1".into(),
+                url: String::new(),
+                artist_id: None,
+            },
+        );
         let track = crate::types::Track {
-            id: "t1".into(),
             title: "Song".into(),
             artist: crate::types::TrackArtist {
                 name: "Artist".into(),
                 id: None,
             },
             duration: 0,
-            url: String::new(),
-            source: crate::types::TrackSource::YouTube,
             thumbnail: String::new(),
             download_path: None,
             album: None,
+            origin: crate::provider::ProviderId::YouTube,
+            providers,
         };
         p.process_result(BackendResult::SearchResults(
             rid,

@@ -82,16 +82,20 @@ impl PlaylistStore {
         let Some(pl) = self.playlists.get_mut(playlist_idx) else {
             return 0;
         };
-        let mut seen: HashSet<String> = pl.tracks.iter().map(|t| t.url.clone()).collect();
+        let mut seen: HashSet<String> = pl
+            .tracks
+            .iter()
+            .map(super::super::types::Track::cache_key)
+            .collect();
         let insert_pos = pos.min(pl.tracks.len());
         let batch: Vec<Track> = tracks
             .into_iter()
             .filter_map(|track| {
-                let url = track.url.as_str();
-                if seen.contains(url) {
+                let key = track.cache_key();
+                if seen.contains(&key) {
                     return None;
                 }
-                seen.insert(track.url.clone());
+                seen.insert(key);
                 Some(track.clone())
             })
             .collect();
@@ -119,25 +123,63 @@ impl PlaylistStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::provider::ProviderId;
+    use crate::types::ProviderTrack;
+
+    /// Build a YouTube-origin test track from an id (url mirrors id).
+    fn mk(id: &str) -> Track {
+        let mut providers = std::collections::HashMap::new();
+        providers.insert(
+            ProviderId::YouTube,
+            ProviderTrack {
+                id: id.to_string(),
+                url: id.to_string(),
+                artist_id: None,
+            },
+        );
+        Track {
+            title: id.to_string(),
+            artist: crate::types::TrackArtist {
+                name: String::new(),
+                id: None,
+            },
+            duration: 0,
+            thumbnail: String::new(),
+            download_path: None,
+            album: None,
+            origin: ProviderId::YouTube,
+            providers,
+        }
+    }
 
     fn make_store(tracks: &[&str]) -> PlaylistStore {
         let playlist = Playlist {
             name: "Test".to_string(),
             tracks: tracks
                 .iter()
-                .map(|s| Track {
-                    id: s.to_string(),
-                    title: s.to_string(),
-                    artist: crate::types::TrackArtist {
-                        name: String::new(),
-                        id: None,
-                    },
-                    duration: 0,
-                    url: s.to_string(),
-                    source: crate::types::TrackSource::YouTube,
-                    thumbnail: String::new(),
-                    download_path: None,
-                    album: None,
+                .map(|s| {
+                    let mut providers = std::collections::HashMap::new();
+                    providers.insert(
+                        crate::provider::ProviderId::YouTube,
+                        crate::types::ProviderTrack {
+                            id: s.to_string(),
+                            url: s.to_string(),
+                            artist_id: None,
+                        },
+                    );
+                    Track {
+                        title: s.to_string(),
+                        artist: crate::types::TrackArtist {
+                            name: String::new(),
+                            id: None,
+                        },
+                        duration: 0,
+                        thumbnail: String::new(),
+                        download_path: None,
+                        album: None,
+                        origin: crate::provider::ProviderId::YouTube,
+                        providers,
+                    }
                 })
                 .collect(),
         };
@@ -164,26 +206,13 @@ mod tests {
     #[test]
     fn insert_track_at_top() {
         let mut store = make_store(&["a", "b", "c"]);
-        let new_track = Track {
-            id: "new".to_string(),
-            title: "new".to_string(),
-            artist: crate::types::TrackArtist {
-                name: String::new(),
-                id: None,
-            },
-            duration: 0,
-            url: "new".to_string(),
-            source: crate::types::TrackSource::YouTube,
-            thumbnail: String::new(),
-            download_path: None,
-            album: None,
-        };
+        let new_track = mk("new");
         store.insert_tracks_at(0, std::iter::once(&new_track), 0);
         assert_eq!(
             store.playlists[0]
                 .tracks
                 .iter()
-                .map(|t| t.id.as_str())
+                .map(|t| t.provider_id(ProviderId::YouTube).unwrap_or(""))
                 .collect::<Vec<_>>(),
             vec!["new", "a", "b", "c"]
         );
@@ -192,26 +221,13 @@ mod tests {
     #[test]
     fn insert_track_at_position() {
         let mut store = make_store(&["a", "b", "c"]);
-        let new_track = Track {
-            id: "new".to_string(),
-            title: "new".to_string(),
-            artist: crate::types::TrackArtist {
-                name: String::new(),
-                id: None,
-            },
-            duration: 0,
-            url: "new".to_string(),
-            source: crate::types::TrackSource::YouTube,
-            thumbnail: String::new(),
-            download_path: None,
-            album: None,
-        };
+        let new_track = mk("new");
         store.insert_tracks_at(0, std::iter::once(&new_track), 2);
         assert_eq!(
             store.playlists[0]
                 .tracks
                 .iter()
-                .map(|t| t.id.as_str())
+                .map(|t| t.provider_id(ProviderId::YouTube).unwrap_or(""))
                 .collect::<Vec<_>>(),
             vec!["a", "b", "new", "c"]
         );
@@ -220,26 +236,13 @@ mod tests {
     #[test]
     fn insert_track_at_clamps_position() {
         let mut store = make_store(&["a", "b", "c"]);
-        let new_track = Track {
-            id: "new".to_string(),
-            title: "new".to_string(),
-            artist: crate::types::TrackArtist {
-                name: String::new(),
-                id: None,
-            },
-            duration: 0,
-            url: "new".to_string(),
-            source: crate::types::TrackSource::YouTube,
-            thumbnail: String::new(),
-            download_path: None,
-            album: None,
-        };
+        let new_track = mk("new");
         store.insert_tracks_at(0, std::iter::once(&new_track), 100);
         assert_eq!(
             store.playlists[0]
                 .tracks
                 .iter()
-                .map(|t| t.id.as_str())
+                .map(|t| t.provider_id(ProviderId::YouTube).unwrap_or(""))
                 .collect::<Vec<_>>(),
             vec!["a", "b", "c", "new"]
         );
@@ -248,26 +251,13 @@ mod tests {
     #[test]
     fn insert_track_at_dedup_ignored() {
         let mut store = make_store(&["a", "b", "c"]);
-        let dup_track = Track {
-            id: "a".to_string(),
-            title: "a".to_string(),
-            artist: crate::types::TrackArtist {
-                name: String::new(),
-                id: None,
-            },
-            duration: 0,
-            url: "a".to_string(),
-            source: crate::types::TrackSource::YouTube,
-            thumbnail: String::new(),
-            download_path: None,
-            album: None,
-        };
+        let dup_track = mk("a");
         store.insert_tracks_at(0, std::iter::once(&dup_track), 0);
         assert_eq!(
             store.playlists[0]
                 .tracks
                 .iter()
-                .map(|t| t.id.as_str())
+                .map(|t| t.provider_id(ProviderId::YouTube).unwrap_or(""))
                 .collect::<Vec<_>>(),
             vec!["a", "b", "c"]
         );

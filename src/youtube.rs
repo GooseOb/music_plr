@@ -6,52 +6,9 @@ use std::{
     process::{Command, Stdio},
 };
 
-/// Which subset of `YouTube Music` a search is scoped to. `Songs` is the default;
-/// the others map to ytmusicapi's `filter=` endpoints.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SearchScope {
-    #[default]
-    Songs,
-    Videos,
-    Artists,
-    Albums,
-    Playlists,
-}
-
-impl SearchScope {
-    /// The `filter=` argument ytmusicapi expects.
-    pub fn ytm_filter(self) -> &'static str {
-        match self {
-            SearchScope::Songs => "songs",
-            SearchScope::Videos => "videos",
-            SearchScope::Artists => "artists",
-            SearchScope::Albums => "albums",
-            SearchScope::Playlists => "playlists",
-        }
-    }
-
-    /// Label shown on the scope tab.
-    pub fn label(self) -> &'static str {
-        match self {
-            SearchScope::Songs => "Songs",
-            SearchScope::Videos => "Videos",
-            SearchScope::Artists => "Artists",
-            SearchScope::Albums => "Albums",
-            SearchScope::Playlists => "Playlists",
-        }
-    }
-
-    /// All scopes in display order.
-    pub fn all() -> &'static [SearchScope] {
-        &[
-            SearchScope::Songs,
-            SearchScope::Videos,
-            SearchScope::Artists,
-            SearchScope::Albums,
-            SearchScope::Playlists,
-        ]
-    }
-}
+/// Re-export provider types so legacy `crate::youtube::{CardData,
+/// SearchScope, SearchTab}` imports keep resolving.
+pub use crate::provider::{CardData, SearchScope, SearchTab};
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct YouTubeVideo {
@@ -68,63 +25,6 @@ pub struct YouTubeVideo {
     pub album: Option<crate::types::TrackAlbum>,
     #[serde(default)]
     pub artist_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct CardData {
-    pub id: String,
-    pub title: String,
-    pub subtitle: String,
-    pub thumbnail: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum SearchTab {
-    Songs,
-    Videos,
-    Artists(Vec<CardData>),
-    Albums(Vec<CardData>),
-    Playlists(Vec<CardData>),
-}
-
-impl SearchTab {
-    /// The tab for a search scope when no results have arrived yet.
-    pub fn from_scope(scope: SearchScope) -> Self {
-        match scope {
-            SearchScope::Songs => SearchTab::Songs,
-            SearchScope::Videos => SearchTab::Videos,
-            SearchScope::Artists => SearchTab::Artists(Vec::new()),
-            SearchScope::Albums => SearchTab::Albums(Vec::new()),
-            SearchScope::Playlists => SearchTab::Playlists(Vec::new()),
-        }
-    }
-
-    /// The search scope represented by this tab (inverse of [`from_scope`]).
-    pub fn scope(&self) -> SearchScope {
-        match self {
-            SearchTab::Songs => SearchScope::Songs,
-            SearchTab::Videos => SearchScope::Videos,
-            SearchTab::Artists(_) => SearchScope::Artists,
-            SearchTab::Albums(_) => SearchScope::Albums,
-            SearchTab::Playlists(_) => SearchScope::Playlists,
-        }
-    }
-
-    /// Whether this tab shows the playable track list (vs. card results).
-    pub fn is_track_tab(&self) -> bool {
-        matches!(self, SearchTab::Songs | SearchTab::Videos)
-    }
-
-    /// Number of results shown by this tab (tracks for track tabs, cards
-    /// otherwise). Used to decide whether more pages are available.
-    pub fn len(&self) -> usize {
-        match self {
-            SearchTab::Songs | SearchTab::Videos => 0,
-            SearchTab::Artists(items) | SearchTab::Albums(items) | SearchTab::Playlists(items) => {
-                items.len()
-            }
-        }
-    }
 }
 
 #[derive(Deserialize)]
@@ -189,7 +89,7 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
         .context("Failed to write ytmusicapi script")?;
 
     let limit = 20;
-    let scope_arg = scope.ytm_filter();
+    let scope_arg = scope.youtube_filter();
     let output = Command::new("python3")
         .arg(&script_path)
         .arg("search")
@@ -452,6 +352,26 @@ pub fn radio_song(video_id: &str) -> Result<Vec<Track>> {
 /// `browse_id` (resolved from `track.artist.id`).
 pub fn radio_artist(browse_id: &str) -> Result<Vec<Track>> {
     watch_playlist(None, Some(browse_id))
+}
+
+/// Resolve a logical track (title + artist) to a `YouTube` video id by running a
+/// yt-dlp search and returning the first result's id. Used by the "play via /
+/// download from `YouTube`" flow when a track lacks a `YouTube` id.
+pub fn resolve_id(track: &Track) -> Result<Option<(String, String)>> {
+    let query = if track.artist.name.is_empty() {
+        track.title.clone()
+    } else {
+        format!("{} {}", track.title, track.artist.name)
+    };
+    let (videos, _) = flat_search(&query, 1, 1)?;
+    Ok(videos.into_iter().next().map(|v| {
+        let url = if v.url.is_empty() {
+            format!("https://www.youtube.com/watch?v={}", v.id)
+        } else {
+            v.url
+        };
+        (v.id, url)
+    }))
 }
 
 pub fn download(video_url: &str, download_dir: &str) -> Result<String> {

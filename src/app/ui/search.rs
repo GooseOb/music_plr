@@ -11,8 +11,9 @@ use crate::{
     },
     data::library::LibraryKind,
     icons,
+    provider::ProviderId,
     theme::AppTheme,
-    youtube::{CardData, SearchScope, SearchTab},
+    youtube::{CardData, SearchTab},
 };
 
 use super::{
@@ -26,10 +27,13 @@ use super::{
 
 pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let input = Container::new(
-        text_input("Search YouTube Music...", &player.search_query)
-            .on_input(Message::SearchInputChanged)
-            .on_submit(Message::SearchExecute)
-            .padding([theme::SPACING_SM, theme::SPACING_MD]),
+        text_input(
+            player.search_provider.search_placeholder(),
+            &player.search_query,
+        )
+        .on_input(Message::SearchInputChanged)
+        .on_submit(Message::SearchExecute)
+        .padding([theme::SPACING_SM, theme::SPACING_MD]),
     )
     .width(Length::Fill)
     .into();
@@ -46,32 +50,51 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
     .on_press(Message::SearchExecute)
     .into();
 
-    // Scope selector: a segmented row of tabs under the search input.
-    let scope_tabs = SearchScope::all().iter().map(|&scope| {
-        let selected = player.search_scope == scope;
-        Button::new(text(scope.label()).size(theme::TEXT_SIZE_SM))
+    // Provider picker: a segmented row of providers to the left of the scope
+    // row. Picking a provider filters the scopes to those it supports.
+    let controls = Row::with_children([input, search_btn])
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center);
+
+    let provider_tabs = ProviderId::searchable().iter().map(|&provider| {
+        let selected = player.search_provider == provider;
+        Button::new(text(provider.label()).size(theme::TEXT_SIZE_SM))
             .padding([theme::SPACING_XS, theme::SPACING_SM])
             .style(button_style_scope(selected))
-            .on_press(Message::SearchScopeChanged(scope))
+            .on_press(Message::SearchProviderChanged(provider))
             .into()
     });
+
+    let provider_row = Row::with_children(provider_tabs)
+        .spacing(theme::SPACING_XS)
+        .wrap();
+
+    // Scope selector: a segmented row of tabs under the search input, filtered
+    // to the scopes the active provider supports.
+    let scope_tabs = player
+        .search_provider
+        .supported_scopes()
+        .iter()
+        .map(|&scope| {
+            let selected = player.search_scope == scope;
+            Button::new(text(scope.label()).size(theme::TEXT_SIZE_SM))
+                .padding([theme::SPACING_XS, theme::SPACING_SM])
+                .style(button_style_scope(selected))
+                .on_press(Message::SearchScopeChanged(scope))
+                .into()
+        });
 
     let scope_row = Row::with_children(scope_tabs)
         .spacing(theme::SPACING_XS)
         .wrap();
 
-    let controls = Row::with_children([input, search_btn])
-        .spacing(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center);
+    let rows = Column::with_children([controls.into(), provider_row.into(), scope_row.into()])
+        .spacing(theme::SPACING_SM);
 
-    Container::new(
-        Column::with_children([controls.into(), scope_row.into()])
-            .spacing(theme::SPACING_SM)
-            .padding([theme::SPACING_LG, theme::SPACING_XL]),
-    )
-    .width(Length::Fill)
-    .style(bg_secondary())
-    .into()
+    Container::new(rows)
+        .width(Length::Fill)
+        .style(bg_secondary())
+        .into()
 }
 
 pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {

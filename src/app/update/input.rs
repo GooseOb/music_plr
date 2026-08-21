@@ -81,7 +81,11 @@ impl MusicPlayer {
                 } else if self.has_selection() {
                     self.clear_selection();
                 } else {
-                    self.handle_navigate_to(ViewData::new_search(String::new(), self.search_scope));
+                    self.handle_navigate_to(ViewData::new_search(
+                        String::new(),
+                        self.search_provider,
+                        self.search_scope,
+                    ));
                 }
                 Task::none()
             }

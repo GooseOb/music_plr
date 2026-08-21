@@ -45,6 +45,12 @@ enum PlayerCommand {
         cache_path: PathBuf,
         gain: f32,
     },
+    StreamHttp {
+        url: String,
+        duration: f32,
+        cache_path: PathBuf,
+        gain: f32,
+    },
     PlayCached {
         cache_path: PathBuf,
         duration: f32,
@@ -174,6 +180,45 @@ impl AudioPlayer {
                             pending_gain = gain;
                         }
 
+                        PlayerCommand::StreamHttp {
+                            url,
+                            duration,
+                            cache_path,
+                            gain,
+                        } => {
+                            if let Some(ref current) = stream_url {
+                                if current == &url {
+                                    debug!("Ignoring duplicate StreamHttp for same URL");
+                                    continue;
+                                }
+                            }
+
+                            reset_pipeline!();
+
+                            if let Some(dir) = cache_path.parent() {
+                                let _ = std::fs::create_dir_all(dir);
+                            }
+
+                            debug!(
+                                "Streaming HTTP audio to cache file: {} (duration={})",
+                                cache_path.display(),
+                                duration
+                            );
+
+                            let Some(alive_flag) = spawn_http_stream_to_cache(&url, &cache_path)
+                            else {
+                                continue;
+                            };
+
+                            ytdlp = None;
+                            writer_alive = Some(alive_flag);
+                            playback_file = Some(cache_path);
+                            stream_url = Some(url);
+                            expected_duration = duration;
+                            stream_active = true;
+                            pending_gain = gain;
+                        }
+
                         PlayerCommand::PlayCached {
                             cache_path,
                             duration,
@@ -262,14 +307,21 @@ impl AudioPlayer {
                 // progressively rather than after a full download. `PlayCached`
                 // has no streaming state and finishes via the sink-empty path.
                 if stream_active {
-                    let ytdlp_exit = ytdlp.as_mut().and_then(|p| p.try_wait().ok().flatten());
+                    // `ytdlp` is `None` for the direct-HTTP path (StreamHttp),
+                    // so treat a missing child process as already finished.
+                    let child_done = ytdlp
+                        .as_mut()
+                        .is_none_or(|p| p.try_wait().ok().flatten().is_some());
                     let copy_done = writer_alive
                         .as_ref()
                         .is_none_or(|w| !w.load(Ordering::SeqCst));
 
-                    if ytdlp_exit.is_some() && copy_done {
-                        if ytdlp_exit.is_some_and(|s| !s.success()) {
-                            warn!("yt-dlp exited with error");
+                    if child_done && copy_done {
+                        if let Some(exit) = ytdlp.as_mut().and_then(|p| p.try_wait().ok().flatten())
+                        {
+                            if !exit.success() {
+                                warn!("yt-dlp exited with error");
+                            }
                         }
                         ytdlp.take();
                         writer_alive.take();
@@ -364,6 +416,15 @@ impl AudioPlayer {
         });
     }
 
+    pub fn play_stream_http(&self, url: &str, duration: f32, cache_path: PathBuf, gain: f32) {
+        let _ = self.cmd_tx.send(PlayerCommand::StreamHttp {
+            url: url.to_string(),
+            duration,
+            cache_path,
+            gain,
+        });
+    }
+
     pub fn play_cached(&self, cache_path: PathBuf, duration: f32, gain: f32) {
         let _ = self.cmd_tx.send(PlayerCommand::PlayCached {
             cache_path,
@@ -408,7 +469,56 @@ impl AudioPlayer {
     }
 }
 
-/// Spawn `yt-dlp` streaming `url` to stdout, plus a copy thread draining that
+/// Spawn a direct HTTP stream of `url` into `cache_path` (used by non-yt-dlp
+/// providers such as Jamendo). The response body is
+/// written straight to the cache file; symphonia decodes the growing file
+/// during playback, so there is no transmux step.
+fn spawn_http_stream_to_cache(url: &str, cache_path: &std::path::Path) -> Option<Arc<AtomicBool>> {
+    let Ok(mut resp) = ureq::get(url).call() else {
+        warn!("Failed to start HTTP stream: {url}");
+        return None;
+    };
+
+    let alive_flag = Arc::new(AtomicBool::new(true));
+    let path = cache_path.to_path_buf();
+    let flag = alive_flag.clone();
+    thread::spawn(move || {
+        let mut file = match std::fs::File::create(&path) {
+            Ok(f) => f,
+            Err(e) => {
+                warn!("Failed to create cache file: {e}");
+                flag.store(false, Ordering::SeqCst);
+                return;
+            }
+        };
+        let mut reader = resp.body_mut().as_reader();
+        let mut buf = [0u8; 8192];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if file.write_all(&buf[..n]).is_err() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    warn!("HTTP stream read error: {e}");
+                    break;
+                }
+            }
+        }
+        debug!(
+            "http stream copy thread done: {} ({} bytes)",
+            path.display(),
+            file.metadata().map_or(0, |m| m.len())
+        );
+        flag.store(false, Ordering::SeqCst);
+    });
+
+    Some(alive_flag)
+}
+
+/// Spawn `yt-dlp` streaming `url` to stdout plus a thread copying its
 /// stdout into `cache_path`.
 ///
 /// Returns the child process and a "writer alive" flag that the copy thread

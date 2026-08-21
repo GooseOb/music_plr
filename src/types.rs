@@ -1,11 +1,10 @@
+use crate::provider::{ProviderId, ProviderMap};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub enum TrackSource {
-    #[default]
-    YouTube,
-    Local,
-}
+/// Per-provider identifier/url for a track. Re-exported from the provider
+/// module for convenience.
+pub use crate::provider::ProviderTrack;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrackAlbum {
@@ -21,12 +20,9 @@ pub struct TrackArtist {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Track {
-    pub id: String,
     pub title: String,
     pub artist: TrackArtist,
     pub duration: u32,
-    pub url: String,
-    pub source: TrackSource,
     #[serde(default)]
     pub thumbnail: String,
     /// Absolute path to the downloaded audio file on disk, if this track has
@@ -35,6 +31,96 @@ pub struct Track {
     pub download_path: Option<String>,
     #[serde(default)]
     pub album: Option<TrackAlbum>,
+    /// The provider that produced this track (its display source and the
+    /// default provider to stream/download from when multiple are present).
+    #[serde(default)]
+    pub origin: ProviderId,
+    /// Per-provider identifiers/urls. Keyed by [`ProviderId`]; at least the
+    /// `origin` provider is always present. A single logical track may carry
+    /// several (e.g. a `YouTube` result later resolved on `SoundCloud`).
+    #[serde(default)]
+    pub providers: ProviderMap,
+}
+
+impl Track {
+    /// The provider id for `provider`, if known.
+    pub fn provider_id(&self, provider: ProviderId) -> Option<&str> {
+        self.providers.get(&provider).map(|t| t.id.as_str())
+    }
+
+    /// The provider URL for `provider`, if known.
+    pub fn provider_url(&self, provider: ProviderId) -> Option<&str> {
+        self.providers.get(&provider).map(|t| t.url.as_str())
+    }
+
+    /// The provider artist id for `provider`, if known.
+    pub fn provider_artist_id(&self, provider: ProviderId) -> Option<&str> {
+        self.providers
+            .get(&provider)
+            .and_then(|t| t.artist_id.as_deref())
+    }
+
+    /// Whether this track carries an identity for `provider`.
+    pub fn has_provider(&self, provider: ProviderId) -> bool {
+        self.providers.contains_key(&provider)
+    }
+
+    /// Insert or replace the provider-specific data on this track. Updates
+    /// `origin` to the first non-`Local` provider seen.
+    pub fn set_provider(&mut self, provider: ProviderId, pt: ProviderTrack) {
+        self.providers.insert(provider, pt);
+        if self.origin == ProviderId::Local && provider != ProviderId::Local {
+            self.origin = provider;
+        }
+    }
+
+    /// Whether this track can be downloaded from `provider`.
+    pub fn can_download_from(&self, provider: ProviderId) -> bool {
+        provider.capabilities().download && self.providers.contains_key(&provider)
+    }
+
+    /// Pick the best stream+download provider for playback, preferring
+    /// `preferred` (e.g. the default provider) then the origin, then any
+    /// stream-capable provider.
+    pub fn best_stream_provider(&self, preferred: ProviderId) -> Option<ProviderId> {
+        let candidates: Vec<ProviderId> = self
+            .providers
+            .keys()
+            .copied()
+            .filter(|p| p.capabilities().stream && p.capabilities().download)
+            .collect();
+        if candidates.contains(&preferred) {
+            return Some(preferred);
+        }
+        if candidates.contains(&self.origin) {
+            return Some(self.origin);
+        }
+        candidates.first().copied()
+    }
+
+    /// A stable identity key used to de-duplicate recently-played entries and
+    /// MPRIS metadata. Built from title + artist so the same song played from
+    /// different providers collapses to one history entry.
+    pub fn dedup_key(&self) -> String {
+        format!("{}|{}", self.title, self.artist.name)
+    }
+
+    /// The id for this track's origin provider (display/identity key).
+    pub fn primary_id(&self) -> &str {
+        self.provider_id(self.origin).unwrap_or("")
+    }
+
+    /// The url for this track's origin provider.
+    pub fn primary_url(&self) -> &str {
+        self.provider_url(self.origin).unwrap_or("")
+    }
+
+    /// A stable cache key namespacing the origin provider with its id, used to
+    /// key the on-disk stream cache and download registry.
+    pub fn cache_key(&self) -> String {
+        let id = self.primary_id();
+        format!("{:?}:{}", self.origin, id)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -43,8 +129,6 @@ pub enum QueueTab {
     Queue,
     RecentlyPlayed,
 }
-
-use std::collections::VecDeque;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlayQueue {
@@ -78,9 +162,10 @@ impl PlayQueue {
     }
 
     /// Record a track as just-played and push it onto `recently_played`.
-    /// Deduplicates by url, keeping most-recent-first. Trims to `max_len`.
+    /// Deduplicates by dedup key, keeping most-recent-first. Trims to `max_len`.
     pub fn record_played(&mut self, track: &Track, max_len: usize) {
-        self.recently_played.retain(|t| t.url != track.url);
+        let key = track.dedup_key();
+        self.recently_played.retain(|t| t.dedup_key() != key);
         self.recently_played.push_front(track.clone());
         while self.recently_played.len() > max_len {
             self.recently_played.pop_back();
@@ -116,19 +201,27 @@ impl PlayQueue {
 
 impl From<crate::youtube::YouTubeVideo> for Track {
     fn from(v: crate::youtube::YouTubeVideo) -> Self {
+        let mut providers: ProviderMap = HashMap::new();
+        providers.insert(
+            ProviderId::YouTube,
+            ProviderTrack {
+                id: v.id.clone(),
+                url: v.url.clone(),
+                artist_id: v.artist_id.clone(),
+            },
+        );
         Self {
-            id: v.id,
             title: v.title,
             artist: TrackArtist {
                 name: v.channel,
-                id: v.artist_id,
+                id: v.artist_id.clone(),
             },
             duration: v.duration,
-            url: v.url,
-            source: TrackSource::YouTube,
             thumbnail: v.thumbnail,
             download_path: None,
             album: v.album,
+            origin: ProviderId::YouTube,
+            providers,
         }
     }
 }
@@ -138,86 +231,67 @@ mod tests {
     use super::*;
 
     fn make_track(id: &str, url: &str) -> Track {
-        Track {
-            id: id.into(),
+        let mut t = Track {
             title: format!("Track {id}"),
             artist: TrackArtist {
                 name: "Artist".into(),
                 id: None,
             },
             duration: 10,
-            url: url.into(),
-            source: TrackSource::YouTube,
             thumbnail: String::new(),
             download_path: None,
             album: None,
-        }
+            origin: ProviderId::YouTube,
+            providers: HashMap::new(),
+        };
+        t.set_provider(
+            ProviderId::YouTube,
+            ProviderTrack {
+                id: id.into(),
+                url: url.into(),
+                artist_id: None,
+            },
+        );
+        t
     }
 
     #[test]
     fn play_queue_advance_and_restore_previous() {
         let mut q = PlayQueue::new();
         q.tracks = vec![
-            Track {
-                id: "1".into(),
-                title: "A".into(),
-                artist: TrackArtist {
-                    name: "X".into(),
-                    id: None,
-                },
-                duration: 10,
-                url: String::new(),
-                source: TrackSource::YouTube,
-                thumbnail: String::new(),
-                download_path: None,
-                album: None,
-            },
-            Track {
-                id: "2".into(),
-                title: "B".into(),
-                artist: TrackArtist {
-                    name: "X".into(),
-                    id: None,
-                },
-                duration: 10,
-                url: String::new(),
-                source: TrackSource::YouTube,
-                thumbnail: String::new(),
-                download_path: None,
-                album: None,
-            },
-            Track {
-                id: "3".into(),
-                title: "C".into(),
-                artist: TrackArtist {
-                    name: "X".into(),
-                    id: None,
-                },
-                duration: 10,
-                url: String::new(),
-                source: TrackSource::YouTube,
-                thumbnail: String::new(),
-                download_path: None,
-                album: None,
-            },
+            make_track("1", "url1"),
+            make_track("2", "url2"),
+            make_track("3", "url3"),
         ];
-        assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
+        assert_eq!(
+            q.current().map(|t| t.provider_id(ProviderId::YouTube)),
+            Some(Some("1"))
+        );
 
-        // advance removes the current track, making the next one current
         assert!(q.advance());
-        assert_eq!(q.current().map(|t| t.id.as_str()), Some("2"));
+        assert_eq!(
+            q.current().map(|t| t.provider_id(ProviderId::YouTube)),
+            Some(Some("2"))
+        );
 
-        // record played and restore_previous puts it back at the front
         let t1 = make_track("1", "url1");
         q.record_played(&t1, 50);
         assert!(q.restore_previous());
-        assert_eq!(q.current().map(|t| t.id.as_str()), Some("1"));
+        assert_eq!(
+            q.current().map(|t| t.provider_id(ProviderId::YouTube)),
+            Some(Some("1"))
+        );
 
-        // advance through all tracks
         assert!(q.advance());
-        assert_eq!(q.current().map(|t| t.id.as_str()), Some("2"));
+        assert_eq!(
+            q.current().map(|t| t.provider_id(ProviderId::YouTube)),
+            Some(Some("2"))
+        );
         assert!(q.advance());
-        assert_eq!(q.current().map(|t| t.id.as_str()), Some("3"));
+        assert_eq!(
+            q.current().map(|t| t.provider_id(ProviderId::YouTube)),
+            Some(Some("3"))
+        );
         assert!(q.advance());
         assert!(q.current().is_none());
         assert!(!q.advance());
@@ -243,15 +317,29 @@ mod tests {
         q.record_played(&t3, 50);
 
         assert_eq!(q.recently_played.len(), 3);
-        assert_eq!(q.recently_played[0].id, "3");
-        assert_eq!(q.recently_played[2].id, "1");
+        assert_eq!(
+            q.recently_played[0].provider_id(ProviderId::YouTube),
+            Some("3")
+        );
+        assert_eq!(
+            q.recently_played[2].provider_id(ProviderId::YouTube),
+            Some("1")
+        );
 
-        // Re-recording dedupes: t2 moves to front
         q.record_played(&t2, 50);
         assert_eq!(q.recently_played.len(), 3);
-        assert_eq!(q.recently_played[0].id, "2");
-        assert_eq!(q.recently_played[1].id, "3");
-        assert_eq!(q.recently_played[2].id, "1");
+        assert_eq!(
+            q.recently_played[0].provider_id(ProviderId::YouTube),
+            Some("2")
+        );
+        assert_eq!(
+            q.recently_played[1].provider_id(ProviderId::YouTube),
+            Some("3")
+        );
+        assert_eq!(
+            q.recently_played[2].provider_id(ProviderId::YouTube),
+            Some("1")
+        );
     }
 
     #[test]
@@ -261,8 +349,14 @@ mod tests {
             q.record_played(&make_track(&i.to_string(), &format!("url{i}")), 50);
         }
         assert_eq!(q.recently_played.len(), 50);
-        assert_eq!(q.recently_played[0].id, "60");
-        assert_eq!(q.recently_played[49].id, "11");
+        assert_eq!(
+            q.recently_played[0].provider_id(ProviderId::YouTube),
+            Some("60")
+        );
+        assert_eq!(
+            q.recently_played[49].provider_id(ProviderId::YouTube),
+            Some("11")
+        );
     }
 
     #[test]

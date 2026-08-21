@@ -1,69 +1,30 @@
-use super::{BackendResult, ContextMenuState, MusicPlayer, Track, TrackSource};
+use super::{BackendResult, ContextMenuState, MusicPlayer, Track};
 use crate::app::interaction::{TrackListKind, TrackPos};
 use crate::{
     app::{PlaylistPicker, ViewKind},
     data::JsonStore,
-    util::plural_suffix,
 };
 
 impl MusicPlayer {
-    /// Handle download / delete-download for a set of track indices.
-    /// Tracks already downloaded get removed from the registry; tracks
-    /// not yet downloaded get queued for download. `list` sources the tracks
-    /// from the matching list (queue, active track list, or Recently Played).
-    pub fn handle_download_or_remove_tracks(&mut self, indices: &[usize], list: TrackListKind) {
-        let mut to_download = Vec::new();
-        let mut to_remove = Vec::new();
-
-        for &idx in indices {
-            let track = self.get_track_at(TrackPos::new(idx, list));
-            if let Some(track) = track {
-                if self.download_registry.contains(&track.url) {
-                    to_remove.push(track);
-                } else if track.source == TrackSource::YouTube {
-                    to_download.push(track);
-                }
-            }
-        }
-
-        for track in &to_remove {
-            self.download_registry.remove(&track.url);
-        }
-
-        if !to_download.is_empty() {
-            if to_download.len() == 1 {
-                let track = to_download[0].clone();
-                self.notify(format!("Downloading \"{}\"...", track.title));
-                self.spawn_download_thread(track);
-            } else {
-                let count = to_download.len();
-                self.notify(format!("Downloading {count} tracks..."));
-                for track in &to_download {
-                    let track = track.clone();
-                    self.spawn_download_thread(track);
-                }
-            }
-        }
-
-        if !to_remove.is_empty() {
-            let removed = to_remove.len();
-            self.notify(format!(
-                "Removed {} download{}",
-                removed,
-                plural_suffix(removed)
-            ));
-        }
-        self.clear_selection_if_touched(indices, list);
-    }
-
-    fn spawn_download_thread(&self, track: Track) {
+    /// Spawn a download for `track` specifically from `provider` (used by the
+    /// "download from [provider]" context-menu flow).
+    pub(super) fn spawn_download_thread_for(
+        &self,
+        provider: crate::provider::ProviderId,
+        track: Track,
+    ) {
         let download_dir = self.config.download_dir.clone();
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
-            let result = crate::youtube::download(&track.url, &download_dir);
+            let result = crate::provider::download(provider, &track, &download_dir);
             match result {
                 Ok(path) => {
-                    let _ = tx.send(BackendResult::DownloadComplete(track, path));
+                    let mut downloaded = track;
+                    downloaded.download_path = Some(path);
+                    let _ = tx.send(BackendResult::DownloadComplete(
+                        downloaded,
+                        provider.label().to_string(),
+                    ));
                 }
                 Err(e) => {
                     let _ = tx.send(BackendResult::DownloadError(e.to_string()));
@@ -136,7 +97,7 @@ impl MusicPlayer {
             return;
         };
 
-        let current_id = track.id.clone();
+        let current_id = track.primary_id().to_string();
         let artist = track.artist.name.clone();
         let title = track.title.clone();
         let album = track.album.as_ref().map(|a| a.name.clone());
@@ -214,8 +175,6 @@ impl MusicPlayer {
             pos,
             target_indices,
             position: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
-            is_youtube: track.source == TrackSource::YouTube,
-            is_downloaded: self.download_registry.contains(&track.url),
             in_playlist: matches!(self.view_data_mut().kind, ViewKind::Playlist { .. }),
             track,
         });

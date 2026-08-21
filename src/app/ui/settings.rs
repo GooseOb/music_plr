@@ -1,19 +1,46 @@
 use iced::{
-    widget::{checkbox, scrollable, text, text_input, Button, Column, Container},
-    Element,
+    alignment,
+    widget::{checkbox, scrollable, text, text_input, Button, Column, Container, Row},
+    Element, Length,
 };
 
+use crate::provider::ProviderId;
 use crate::theme::{self, AppTheme};
 
 use super::{Message, MusicPlayer};
 
 fn section_header<'a>(player: &'a MusicPlayer, label: &'a str) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
-    Container::new(text(label).size(theme::TEXT_SIZE_LG).color(p.accent))
-        .padding([theme::SPACING_MD, theme::SPACING_XL])
-        .into()
+    Container::new(
+        text(label)
+            .size(theme::TEXT_SIZE_LG)
+            .color(player.app_theme.palette.accent),
+    )
+    .padding([theme::SPACING_MD, theme::SPACING_XL])
+    .into()
 }
 
+fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let tabs = ProviderId::defaultable().iter().map(|&provider| {
+        let selected = player.config.default_provider == provider;
+        Button::new(text(provider.label()).size(theme::TEXT_SIZE_SM))
+            .padding([theme::SPACING_XS, theme::SPACING_SM])
+            .style(crate::app::ui::styles::button_style_scope(selected))
+            .on_press(Message::SettingsDefaultProviderChanged(provider))
+            .into()
+    });
+    let row = Row::with_children(tabs).spacing(theme::SPACING_XS).wrap();
+    Container::new(
+        Column::with_children([
+            text("Default stream & download provider").into(),
+            row.into(),
+        ])
+        .spacing(theme::SPACING_XS)
+        .align_x(alignment::Horizontal::Left),
+    )
+    .width(Length::Fill)
+    .padding([theme::SPACING_MD, theme::SPACING_XL])
+    .into()
+}
 fn text_input_row<'a>(
     label: &'a str,
     value: &str,
@@ -81,9 +108,17 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         Message::SettingsMaxRecentlyPlayedChanged,
     );
 
+    let jamendo = text_input_row(
+        "Jamendo client ID (required for Jamendo search)",
+        &cfg.jamendo_client_id,
+        "get one at devportal.jamendo.com",
+        Message::SettingsJamendoClientIdChanged,
+    );
+
     let content = Column::with_children([
         section_header(player, "Playback"),
         normalize,
+        default_provider_section(player),
         section_header(player, "Storage"),
         download_dir,
         cache_size,
@@ -91,6 +126,8 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         hist_visible,
         hist_stored,
         recent,
+        section_header(player, "Providers"),
+        jamendo,
         Container::new(
             Button::new(text("Reset to defaults"))
                 .padding([theme::SPACING_SM, theme::SPACING_MD])

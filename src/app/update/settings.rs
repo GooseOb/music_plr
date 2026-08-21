@@ -51,4 +51,13 @@ impl MusicPlayer {
         self.config.volume_normalization = enabled;
         self.config.save();
     }
+
+    pub fn handle_settings_default_provider(&mut self, provider: crate::provider::ProviderId) {
+        // Only providers that support both streaming and downloading are valid
+        // defaults; ignore others defensively.
+        if provider.capabilities().stream && provider.capabilities().download {
+            self.config.default_provider = provider;
+            self.config.save();
+        }
+    }
 }

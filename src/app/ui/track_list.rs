@@ -129,7 +129,10 @@ pub(super) fn leading_control<'a>(
     track: &'a Track,
     player: &'a MusicPlayer,
 ) -> Element<'a, Message, AppTheme> {
-    let is_current = player.queue.current().is_some_and(|t| t.url == track.url);
+    let is_current = player
+        .queue
+        .current()
+        .is_some_and(|t| t.cache_key() == track.cache_key());
     let is_hovered = player.drag.hovered_track() == Some(pos);
 
     if is_current {
@@ -166,7 +169,10 @@ pub(super) fn view_track_row<'a>(
     let p = &player.app_theme.palette;
     let is_selected = player.selection(pos.list).contains(&pos.index);
     let is_hovered = player.drag.hovered_track() == Some(pos);
-    let is_current = player.queue.current().is_some_and(|t| t.url == track.url);
+    let is_current = player
+        .queue
+        .current()
+        .is_some_and(|t| t.cache_key() == track.cache_key());
     let is_match = player.is_floating_match(pos);
 
     let row_bg = if is_current {
@@ -255,9 +261,11 @@ pub(super) fn track_row_layout<'a>(
     show_album: bool,
 ) -> Row<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let thumb = player.thumbnail_index.get(&track.id);
-    let is_downloaded = player.download_registry.contains(&track.url);
-    let is_cached = player.stream_cache.index_contains(&track.id);
+    let thumb = player.thumbnail_index.get(track.primary_id());
+    let is_downloaded = player.download_registry.contains(&track.cache_key());
+    let is_cached = player
+        .stream_cache
+        .index_contains(track.origin, track.primary_id());
 
     let mut trailing_children = Vec::with_capacity(2);
 

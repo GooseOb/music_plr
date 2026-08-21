@@ -3,8 +3,26 @@ use super::{
     MusicPlayer, ViewData,
 };
 use crate::app::ViewKind;
+use crate::data::cache::StreamCache;
 use crate::data::JsonStore;
+use crate::provider::ProviderId;
 use tracing::debug;
+
+/// Split a cache key of the form `"{provider:?}:{id}"` back into its parts.
+fn parse_cache_key(key: &str) -> (ProviderId, String) {
+    if let Some((p, id)) = key.split_once(':') {
+        let provider = match p {
+            "YouTube" => ProviderId::YouTube,
+            "SoundCloud" => ProviderId::SoundCloud,
+            "Jamendo" => ProviderId::Jamendo,
+            "MusicBrainz" => ProviderId::MusicBrainz,
+            _ => ProviderId::Local,
+        };
+        (provider, id.to_string())
+    } else {
+        (ProviderId::YouTube, key.to_string())
+    }
+}
 
 impl MusicPlayer {
     pub fn init_mpris(&mut self) {
@@ -42,14 +60,15 @@ impl MusicPlayer {
             // Register the cache as soon as the stream pipeline
             // finishes writing the file (`cache_ready`)
             if s.cache_ready {
-                if self.stream_cache.insert(&pending) {
+                let (provider, id) = parse_cache_key(&pending);
+                if self.stream_cache.insert(provider, &id) {
                     debug!("Registered cached track: {}", pending);
                 }
                 self.pending_cache_id = None;
                 // The cache file is now complete: analyze it for volume
                 // normalization if a fresh stream was awaiting this.
                 if self.pending_normalization_id.as_deref() == Some(pending.as_str()) {
-                    let path = self.stream_cache.path_for(&pending);
+                    let path = StreamCache::path_for(provider, &id);
                     self.request_normalization_analysis(&pending, path);
                     self.pending_normalization_id = None;
                 }
@@ -62,7 +81,7 @@ impl MusicPlayer {
             if self.repeat {
                 if let Some(track) = self.queue.current() {
                     let track = track.clone();
-                    self.play_track_internal(&track);
+                    self.play_track_internal(&track, track.origin);
                 }
                 self.audio.clear_stream_finished();
             } else if self.queue.current().is_some() {
@@ -92,8 +111,11 @@ impl MusicPlayer {
     /// results installed) — the tick only drains, it never re-scans visibility.
     pub(crate) fn seed_view_thumbnails(&mut self, view: &ViewData) {
         for track in &view.tracks {
-            if track.source == crate::types::TrackSource::YouTube {
-                self.thumbnail_index.ensure(&track.id, &track.thumbnail);
+            // Seed thumbnails for any track that carries a thumbnail URL,
+            // regardless of provider (YouTube, SoundCloud, MusicBrainz, …).
+            if !track.thumbnail.is_empty() {
+                self.thumbnail_index
+                    .ensure(track.primary_id(), &track.thumbnail);
             }
         }
         if let ViewKind::Search {
@@ -227,12 +249,11 @@ impl MusicPlayer {
                     self.install_results(idx, tracks);
                 }
             }
-            BackendResult::DownloadComplete(track, path) => {
-                let mut track = track;
-                track.download_path = Some(path.clone());
+            BackendResult::DownloadComplete(track, _provider) => {
+                let path = track.download_path.clone().unwrap_or_default();
                 self.download_registry.register(track.clone());
                 self.notify(format!("Download complete! Saved to {path}"));
-                self.thumbnail_index.mark_downloaded(&track.id);
+                self.thumbnail_index.mark_downloaded(track.primary_id());
                 if matches!(self.view_data().kind, ViewKind::Downloads) {
                     self.view_data_mut().tracks.push(track);
                 }
@@ -251,6 +272,18 @@ impl MusicPlayer {
                 self.clear_notification();
                 self.notify_error(msg);
             }
+            BackendResult::ProviderResolved {
+                original,
+                provider,
+                id,
+                pos,
+            } => self.apply_provider_resolution(original, provider, id, pos, true),
+            BackendResult::ProviderResolvedDownload {
+                original,
+                provider,
+                id,
+                pos,
+            } => self.apply_provider_resolution(original, provider, id, pos, false),
             BackendResult::ThumbnailsDownloaded(ids) => {
                 for id in &ids {
                     self.thumbnail_index.mark_downloaded(id);
@@ -278,6 +311,51 @@ impl MusicPlayer {
                     cache.insert(state.track_id.as_ref().unwrap(), lyrics);
                 }
                 self.sync_lyrics_editor();
+            }
+        }
+    }
+
+    /// Apply a resolved provider id to `original`: write it back into the
+    /// source list, then either play (replacing the queue) or download.
+    fn apply_provider_resolution(
+        &mut self,
+        mut original: crate::types::Track,
+        provider: crate::provider::ProviderId,
+        id: Option<(String, String)>,
+        pos: Option<crate::app::interaction::TrackPos>,
+        play: bool,
+    ) {
+        match id {
+            Some((resolved_id, url)) => {
+                original.set_provider(
+                    provider,
+                    crate::types::ProviderTrack {
+                        id: resolved_id,
+                        url,
+                        artist_id: None,
+                    },
+                );
+                if let Some(p) = pos {
+                    self.set_track_at(p, original.clone());
+                }
+                if play {
+                    self.play_track_replacing_queue(original, provider);
+                    if let Some(p) = pos {
+                        for t in self.tracks_after(p.index).to_vec() {
+                            self.queue.enqueue(t);
+                        }
+                    }
+                    self.save_session();
+                } else {
+                    self.spawn_download_thread_for(provider, original);
+                }
+            }
+            None => {
+                self.notify_error(format!(
+                    "Could not find \"{}\" on {}",
+                    original.title,
+                    provider.label()
+                ));
             }
         }
     }

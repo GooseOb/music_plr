@@ -2,7 +2,6 @@ use super::{
     error, mpris, mpsc, warn, BackendResult, ContextMenuState, Message, MprisCommand, MprisUpdate,
     MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData,
 };
-pub use crate::types::TrackSource;
 use std::thread;
 
 mod actions;

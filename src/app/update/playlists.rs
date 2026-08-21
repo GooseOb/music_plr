@@ -1,4 +1,4 @@
-use super::{MusicPlayer, Track, TrackSource, ViewData};
+use super::{MusicPlayer, Track, ViewData};
 use crate::{app::ViewKind, data::JsonStore};
 use std::path::PathBuf;
 
@@ -38,7 +38,7 @@ impl MusicPlayer {
             let first = tracks[0].clone();
             self.queue
                 .set_queue(tracks, self.config.max_recently_played);
-            self.play_track_internal(&first);
+            self.play_track_internal(&first, first.origin);
             self.save_session();
             self.mpris_dirty = true;
         }
@@ -85,7 +85,11 @@ impl MusicPlayer {
         }
 
         if navigate_away {
-            self.push_new_view(ViewData::new_search(String::new(), self.search_scope));
+            self.push_new_view(ViewData::new_search(
+                String::new(),
+                self.search_provider,
+                self.search_scope,
+            ));
         } else if let Some(new_idx) = new_selection {
             let new_name = self.playlists.playlists[new_idx].name.clone();
             if let ViewKind::Playlist { index, name } = &mut self.view_data_mut().kind {
@@ -104,19 +108,27 @@ impl MusicPlayer {
             let path_str = path.to_string_lossy().to_string();
             if let Some(filename) = path.file_stem().and_then(|s| s.to_str()) {
                 let duration = crate::util::try_probe_duration(&path_str).unwrap_or(0);
+                let mut providers = std::collections::HashMap::new();
+                providers.insert(
+                    crate::provider::ProviderId::Local,
+                    crate::types::ProviderTrack {
+                        id: filename.to_string(),
+                        url: path_str.clone(),
+                        artist_id: None,
+                    },
+                );
                 new_tracks.push(Track {
-                    id: filename.to_string(),
                     title: filename.to_string(),
                     artist: crate::types::TrackArtist {
                         name: "Unknown Artist".to_string(),
                         id: None,
                     },
                     duration,
-                    url: path_str,
-                    source: TrackSource::Local,
                     thumbnail: String::new(),
                     download_path: None,
                     album: None,
+                    origin: crate::provider::ProviderId::Local,
+                    providers,
                 });
             }
         }
@@ -236,7 +248,7 @@ impl MusicPlayer {
             let tracks = &mut self.view_data_mut().tracks;
             let removed_urls: Vec<String> = indices
                 .iter()
-                .filter_map(|&i| tracks.get(i).map(|t| t.url.clone()))
+                .filter_map(|&i| tracks.get(i).map(|t| t.primary_url().to_string()))
                 .collect();
             let removed = crate::util::remove_at(tracks, &indices);
             self.notify_tracks("Removed", removed, "from downloads");

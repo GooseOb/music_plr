@@ -61,6 +61,9 @@ pub struct MusicPlayer {
     /// The active search scope (All / Songs / Videos / Artists / Albums /
     /// Playlists). Global UI state, like `search_query`.
     pub search_scope: crate::youtube::SearchScope,
+    /// The active search provider (`YouTube` / `SoundCloud` / …). The scope list is
+    /// filtered to this provider's supported scopes. Global UI state.
+    pub search_provider: crate::provider::ProviderId,
     /// Whether the search-history dropdown is open (global UI state).
     pub show_search_history: bool,
     /// Filtered history list for the dropdown (derived from
@@ -171,6 +174,7 @@ impl MusicPlayer {
             config,
             search_query: String::new(),
             search_scope: crate::youtube::SearchScope::Songs,
+            search_provider: crate::provider::ProviderId::YouTube,
             show_search_history: false,
             last_filtered_history: Vec::new(),
             queue: PlayQueue::new(),
@@ -375,6 +379,17 @@ impl MusicPlayer {
             Message::SearchScopeChanged(scope) => {
                 if scope != self.search_scope {
                     self.search_scope = scope;
+                    self.run_search();
+                }
+                Task::none()
+            }
+            Message::SearchProviderChanged(provider) => {
+                if provider != self.search_provider {
+                    self.search_provider = provider;
+                    // Clamp the scope to one the new provider supports.
+                    if !provider.supported_scopes().contains(&self.search_scope) {
+                        self.search_scope = provider.supported_scopes()[0];
+                    }
                     self.run_search();
                 }
                 Task::none()
@@ -586,6 +601,15 @@ impl MusicPlayer {
                 self.handle_settings_volume_normalization(enabled);
                 Task::none()
             }
+            Message::SettingsDefaultProviderChanged(provider) => {
+                self.handle_settings_default_provider(provider);
+                Task::none()
+            }
+            Message::SettingsJamendoClientIdChanged(id) => {
+                self.config.jamendo_client_id = id;
+                self.config.save();
+                Task::none()
+            }
             Message::SettingsResetDefaults => {
                 self.handle_settings_reset_defaults();
                 Task::none()
@@ -593,20 +617,6 @@ impl MusicPlayer {
             Message::ContextMenuPlayTrack(pos) => {
                 self.context_menu = None;
                 self.handle_play_track(pos);
-                Task::none()
-            }
-            Message::ContextMenuStartSongRadio => {
-                if let Some(track) = self.context_menu.take().map(|m| m.track) {
-                    self.start_song_radio(&track.title, track.id);
-                }
-                Task::none()
-            }
-            Message::ContextMenuStartArtistRadio => {
-                if let Some(track) = self.context_menu.take().map(|m| m.track) {
-                    if let Some(browse_id) = track.artist.id {
-                        self.start_artist_radio(&track.artist.name, browse_id);
-                    }
-                }
                 Task::none()
             }
             Message::ContextMenuGoToArtist => {
@@ -618,13 +628,28 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Message::ContextMenuDownloadOrDelete(indices) => {
-                let list = self.context_menu.as_ref().map(|m| m.pos.list);
-                self.drag.pressed = None;
-                // Resolved per-index inside the handler (it reports per-track
-                // download state), so only the list kind is needed here.
-                if let Some(list) = list {
-                    self.handle_download_or_remove_tracks(&indices, list);
+            Message::ContextMenuPlayViaProvider(provider, pos) => {
+                self.context_menu = None;
+                self.play_track_via_provider(provider, pos);
+                Task::none()
+            }
+            Message::ContextMenuDownloadViaProvider(provider, indices) => {
+                self.context_menu = None;
+                self.download_track_via_provider(provider, &indices);
+                Task::none()
+            }
+            Message::ContextMenuSongRadioProvider(provider) => {
+                if let Some(track) = self.context_menu.take().map(|m| m.track) {
+                    let id = track.provider_id(provider).unwrap_or_default().to_string();
+                    self.start_song_radio_provider(provider, &track.title, &id);
+                }
+                Task::none()
+            }
+            Message::ContextMenuArtistRadioProvider(provider) => {
+                if let Some(track) = self.context_menu.take().map(|m| m.track) {
+                    if let Some(browse_id) = track.provider_artist_id(provider) {
+                        self.start_artist_radio_provider(provider, &track.artist.name, browse_id);
+                    }
                 }
                 Task::none()
             }

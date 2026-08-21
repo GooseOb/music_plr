@@ -6,6 +6,24 @@ pub fn format_duration(secs: u32) -> std::borrow::Cow<'static, str> {
     }
 }
 
+/// Percent-encode a string for use in a URL query (RFC 3986 unreserved set).
+pub fn urlencode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            b' ' => out.push('+'),
+            _ => {
+                use std::fmt::Write as _;
+                let _ = write!(out, "%{b:02X}");
+            }
+        }
+    }
+    out
+}
+
 /// Returns "" for 1 item, "s" otherwise, for simple English pluralization.
 pub const fn plural_suffix(count: usize) -> &'static str {
     if count == 1 {
@@ -157,7 +175,7 @@ pub fn reorder_tracks<T: Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{Track, TrackSource};
+    use crate::types::Track;
 
     #[test]
     fn format_duration_seconds() {
@@ -233,19 +251,29 @@ mod tests {
 
     fn make_tracks(count: usize) -> Vec<Track> {
         (0..count)
-            .map(|i| Track {
-                id: format!("id{i}"),
-                title: format!("Track {i}"),
-                artist: crate::types::TrackArtist {
-                    name: "Artist".into(),
-                    id: None,
-                },
-                duration: 10,
-                url: format!("url{i}"),
-                source: TrackSource::YouTube,
-                thumbnail: String::new(),
-                download_path: None,
-                album: None,
+            .map(|i| {
+                let mut providers = std::collections::HashMap::new();
+                providers.insert(
+                    crate::provider::ProviderId::YouTube,
+                    crate::types::ProviderTrack {
+                        id: format!("id{i}"),
+                        url: format!("url{i}"),
+                        artist_id: None,
+                    },
+                );
+                Track {
+                    title: format!("Track {i}"),
+                    artist: crate::types::TrackArtist {
+                        name: "Artist".into(),
+                        id: None,
+                    },
+                    duration: 10,
+                    thumbnail: String::new(),
+                    download_path: None,
+                    album: None,
+                    origin: crate::provider::ProviderId::YouTube,
+                    providers,
+                }
             })
             .collect()
     }
@@ -342,6 +370,12 @@ mod tests {
     }
 
     fn tracks_ids(tracks: &[Track]) -> Vec<&str> {
-        tracks.iter().map(|t| t.id.as_str()).collect()
+        tracks
+            .iter()
+            .map(|t| {
+                t.provider_id(crate::provider::ProviderId::YouTube)
+                    .unwrap_or("")
+            })
+            .collect()
     }
 }

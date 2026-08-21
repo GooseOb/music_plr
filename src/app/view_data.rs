@@ -1,5 +1,6 @@
 use crate::{
     data::library::{LibraryItem, LibraryKind},
+    provider::ProviderId,
     types::Track,
 };
 use serde::{Deserialize, Serialize};
@@ -33,6 +34,7 @@ pub enum ViewKind {
     Search {
         exhausted: bool,
         query: String,
+        provider: ProviderId,
         tab: crate::youtube::SearchTab,
     },
     SongRadio(String),
@@ -81,6 +83,7 @@ impl Default for ViewKind {
         ViewKind::Search {
             exhausted: false,
             query: String::new(),
+            provider: ProviderId::YouTube,
             tab: crate::youtube::SearchTab::Songs,
         }
     }
@@ -123,14 +126,16 @@ impl ViewData {
                 ViewKind::Search {
                     exhausted: a,
                     query: qa,
+                    provider: pa,
                     tab: ta,
                 },
                 ViewKind::Search {
                     exhausted: b,
                     query: qb,
+                    provider: pb,
                     tab: tb,
                 },
-            ) => a == b && qa == qb && ta == tb,
+            ) => a == b && qa == qb && pa == pb && ta == tb,
             // Distinct variants despite identical bodies: a SongRadio and an
             // ArtistRadio with the same label are different views.
             (ViewKind::SongRadio(a), ViewKind::SongRadio(b))
@@ -197,12 +202,18 @@ impl ViewData {
 
     // ── constructors ─────────────────────────────────────────────
 
-    /// Create a fresh `Search` view for `query` on the given search `scope`.
-    pub fn new_search(query: String, scope: crate::youtube::SearchScope) -> Self {
+    /// Create a fresh `Search` view for `query` on `provider` at the given
+    /// `scope`.
+    pub fn new_search(
+        query: String,
+        provider: ProviderId,
+        scope: crate::youtube::SearchScope,
+    ) -> Self {
         Self {
             kind: ViewKind::Search {
                 exhausted: false,
                 query,
+                provider,
                 tab: crate::youtube::SearchTab::from_scope(scope),
             },
             ..Default::default()

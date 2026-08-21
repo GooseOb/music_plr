@@ -70,22 +70,30 @@ pub(super) fn view_context_menu<'a>(
             );
         }
 
-        if menu.is_youtube {
+        // Per-provider playback/download. Providers the track already carries
+        // an id for play/download directly; others show a search icon and
+        // trigger an id-resolving lookup first.
+        for &provider in crate::provider::ProviderId::searchable() {
+            if !provider.capabilities().stream {
+                continue;
+            }
+            let has_id = menu.track.has_provider(provider);
+            let label = if has_id {
+                Cow::Owned(format!("Play via {}", provider.label()))
+            } else {
+                Cow::Owned(format!("Play via {} (search)", provider.label()))
+            };
+            let icon = if has_id {
+                icons::PLAY_ICON
+            } else {
+                icons::SEARCH_ICON
+            };
             v.push(
                 menu_item(
-                    Cow::Borrowed("Song Radio"),
-                    icons::RADIO_ICON,
+                    label,
+                    icon,
                     p,
-                    Message::ContextMenuStartSongRadio,
-                )
-                .into(),
-            );
-            v.push(
-                menu_item(
-                    Cow::Borrowed("Artist Radio"),
-                    icons::RADIO_ICON,
-                    p,
-                    Message::ContextMenuStartArtistRadio,
+                    Message::ContextMenuPlayViaProvider(provider, menu.pos),
                 )
                 .into(),
             );
@@ -109,27 +117,60 @@ pub(super) fn view_context_menu<'a>(
             .into(),
         );
 
-        if menu.is_youtube {
-            let label = if menu.is_downloaded {
-                if n > 1 {
-                    Cow::Owned(format!("Delete {n} Downloads"))
-                } else {
-                    Cow::Borrowed("Delete Download")
-                }
-            } else if n > 1 {
-                Cow::Owned(format!("Download {n} tracks"))
+        // Download: for each stream+download provider, offer direct download
+        // when the track has an id, or a search-then-download otherwise.
+        for &provider in crate::provider::ProviderId::defaultable() {
+            if !provider.capabilities().download {
+                continue;
+            }
+            let has_id = menu.track.has_provider(provider);
+            let label = if has_id {
+                Cow::Owned(format!("Download from {}", provider.label()))
             } else {
-                Cow::Borrowed("Download")
+                Cow::Owned(format!("Download from {} (search)", provider.label()))
+            };
+            let icon = if has_id {
+                icons::DOWNLOAD_ICON
+            } else {
+                icons::SEARCH_ICON
             };
             v.push(
                 menu_item(
                     label,
-                    icons::DOWNLOAD_ICON,
+                    icon,
                     p,
-                    Message::ContextMenuDownloadOrDelete(target_indices.clone()),
+                    Message::ContextMenuDownloadViaProvider(provider, target_indices.clone()),
                 )
                 .into(),
             );
+        }
+
+        // Radio: only providers that support similarity search, and only when
+        // the track already carries that provider's id.
+        for &provider in crate::provider::ProviderId::searchable() {
+            if !provider.capabilities().radio {
+                continue;
+            }
+            if menu.track.has_provider(provider) {
+                v.push(
+                    menu_item(
+                        Cow::Owned(format!("Song Radio – {}", provider.label())),
+                        icons::RADIO_ICON,
+                        p,
+                        Message::ContextMenuSongRadioProvider(provider),
+                    )
+                    .into(),
+                );
+                v.push(
+                    menu_item(
+                        Cow::Owned(format!("Artist Radio – {}", provider.label())),
+                        icons::RADIO_ICON,
+                        p,
+                        Message::ContextMenuArtistRadioProvider(provider),
+                    )
+                    .into(),
+                );
+            }
         }
 
         if menu.pos.list == TrackListKind::Queue {

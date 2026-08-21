@@ -86,8 +86,6 @@ pub struct FloatingSearch {
 pub struct ContextMenuState {
     pub pos: TrackPos,
     pub position: (f32, f32),
-    pub is_youtube: bool,
-    pub is_downloaded: bool,
     pub in_playlist: bool,
     pub track: Track,
     pub target_indices: Vec<usize>,

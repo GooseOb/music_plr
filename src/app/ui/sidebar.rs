@@ -198,7 +198,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     let nav_items: Vec<Element<'_, Message, AppTheme>> = vec![
         sidebar_nav_item(
             "Search",
-            ViewData::new_search(String::new(), player.search_scope),
+            ViewData::new_search(String::new(), player.search_provider, player.search_scope),
             player,
         ),
         sidebar_nav_item("Downloads", downloads_view_data(player), player),

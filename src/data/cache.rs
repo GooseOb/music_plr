@@ -1,3 +1,4 @@
+use crate::provider::ProviderId;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -18,7 +19,6 @@ struct CacheIndex {
 
 pub struct StreamCache {
     max_size_bytes: u64,
-    cache_dir: PathBuf,
     index_path: PathBuf,
     index: CacheIndex,
     current_total: u64,
@@ -31,8 +31,32 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
+fn key(provider: ProviderId, id: &str) -> String {
+    format!("{provider:?}:{id}")
+}
+
+fn parse_key(key: &str) -> (ProviderId, String) {
+    // Best-effort parse; provider enum debug labels are stable.
+    if let Some((p, id)) = key.split_once(':') {
+        let provider = match p {
+            "YouTube" => ProviderId::YouTube,
+            "SoundCloud" => ProviderId::SoundCloud,
+            "Jamendo" => ProviderId::Jamendo,
+            "MusicBrainz" => ProviderId::MusicBrainz,
+            _ => ProviderId::Local,
+        };
+        (provider, id.to_string())
+    } else {
+        (ProviderId::YouTube, key.to_string())
+    }
+}
+
 fn cache_dir() -> PathBuf {
-    super::cache_path("youtube")
+    super::cache_path("streams")
+}
+
+fn provider_dir(provider: ProviderId) -> PathBuf {
+    cache_dir().join(format!("{provider:?}"))
 }
 
 fn index_path() -> PathBuf {
@@ -41,9 +65,8 @@ fn index_path() -> PathBuf {
 
 impl StreamCache {
     pub fn new(max_size_mb: u64) -> Self {
-        let cache_dir = cache_dir();
         let index_path = index_path();
-        let _ = std::fs::create_dir_all(&cache_dir);
+        let _ = std::fs::create_dir_all(cache_dir());
 
         let (index, current_total) = std::fs::read_to_string(&index_path)
             .ok()
@@ -56,15 +79,14 @@ impl StreamCache {
 
         Self {
             max_size_bytes: max_size_mb * 1024 * 1024,
-            cache_dir,
             index_path,
             index,
             current_total,
         }
     }
 
-    pub fn path_for(&self, id: &str) -> PathBuf {
-        self.cache_dir.join(format!("{id}.cache"))
+    pub fn path_for(provider: ProviderId, id: &str) -> PathBuf {
+        provider_dir(provider).join(format!("{id}.cache"))
     }
 
     /// Update the cache size cap (used by the Settings view). Eviction itself
@@ -73,20 +95,21 @@ impl StreamCache {
         self.max_size_bytes = mb * 1024 * 1024;
     }
 
-    pub fn contains(&self, id: &str) -> bool {
-        self.index.entries.contains_key(id) && self.path_for(id).exists()
+    pub fn contains(&self, provider: ProviderId, id: &str) -> bool {
+        self.index.entries.contains_key(&key(provider, id)) && Self::path_for(provider, id).exists()
     }
 
     /// In-memory check of whether `id` has a completed cache entry in the
     /// index. Unlike `contains`, this does NOT touch the filesystem — the
     /// index is loaded into memory at startup and updated as streams finish,
     /// so it's safe to call on every redraw.
-    pub fn index_contains(&self, id: &str) -> bool {
-        self.index.entries.contains_key(id)
+    pub fn index_contains(&self, provider: ProviderId, id: &str) -> bool {
+        self.index.entries.contains_key(&key(provider, id))
     }
 
-    pub fn insert(&mut self, id: &str) -> bool {
-        let path = self.path_for(id);
+    pub fn insert(&mut self, provider: ProviderId, id: &str) -> bool {
+        let key = key(provider, id);
+        let path = Self::path_for(provider, id);
         if !path.exists() {
             return false;
         }
@@ -96,13 +119,13 @@ impl StreamCache {
             return false;
         }
         let now = now_secs();
-        if let Some(entry) = self.index.entries.get_mut(id) {
+        if let Some(entry) = self.index.entries.get_mut(&key) {
             entry.last_accessed = now;
             self.save();
             return true;
         }
         self.index.entries.insert(
-            id.to_string(),
+            key,
             CacheEntry {
                 size_bytes: size,
                 last_accessed: now,
@@ -123,13 +146,14 @@ impl StreamCache {
         sorted.sort_by_key(|(_, e)| e.last_accessed);
 
         let mut kept: HashMap<String, CacheEntry> = HashMap::new();
-        for (id, entry) in sorted {
+        for (key, entry) in sorted {
             if self.current_total > self.max_size_bytes {
-                let path = self.path_for(&id);
+                let (provider, id) = parse_key(&key);
+                let path = Self::path_for(provider, &id);
                 let _ = std::fs::remove_file(&path);
                 self.current_total = self.current_total.saturating_sub(entry.size_bytes);
             } else {
-                kept.insert(id, entry);
+                kept.insert(key, entry);
             }
         }
         self.index.entries = kept;

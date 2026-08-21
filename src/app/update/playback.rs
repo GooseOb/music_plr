@@ -1,4 +1,7 @@
 use super::{MusicPlayer, Track, TrackListKind, TrackPos};
+use crate::app::ViewKind;
+use crate::data::cache::StreamCache;
+use crate::provider::ProviderId;
 use std::path::PathBuf;
 use tracing::debug;
 
@@ -9,7 +12,7 @@ impl MusicPlayer {
         let TrackPos { index, list } = pos;
         if list == TrackListKind::Recent {
             if let Some(track) = self.get_track_at(pos) {
-                self.play_track_replacing_queue(track);
+                self.play_track_replacing_queue(track, self.config.default_provider);
             }
             return;
         }
@@ -27,7 +30,7 @@ impl MusicPlayer {
                 self.queue.tracks.drain(0..index);
                 if let Some(t) = self.queue.current() {
                     let t = t.clone();
-                    self.play_track_internal(&t);
+                    self.play_track_internal(&t, self.config.default_provider);
                 }
                 self.save_session();
                 self.mpris_dirty = true;
@@ -35,7 +38,7 @@ impl MusicPlayer {
             return;
         }
         if let Some(track) = self.get_track_at(TrackPos::new(index, TrackListKind::Active)) {
-            self.play_track_replacing_queue(track);
+            self.play_track_replacing_queue(track, self.config.default_provider);
             for t in self.tracks_after(index).to_vec() {
                 self.queue.enqueue(t);
             }
@@ -44,28 +47,152 @@ impl MusicPlayer {
     }
 
     /// Returns the tracks after `index` in the current view.
-    fn tracks_after(&self, index: usize) -> &[Track] {
+    pub(super) fn tracks_after(&self, index: usize) -> &[Track] {
         let start = index + 1;
         self.view_tracks().get(start..).unwrap_or(&[])
     }
 
-    pub fn play_track_replacing_queue(&mut self, track: Track) {
+    /// Persist `track` back into the list it came from (`pos`), so a resolved
+    /// provider id survives and the source view/queue reflects it.
+    pub(super) fn set_track_at(&mut self, pos: TrackPos, track: Track) {
+        let TrackPos { index, list } = pos;
+        match list {
+            TrackListKind::Queue => {
+                if let Some(t) = self.queue.tracks.get_mut(index) {
+                    *t = track;
+                }
+            }
+            TrackListKind::Active => {
+                // Avoid holding a `view_data_mut` borrow across the playlist
+                // store access by deciding the target first.
+                let target = match &self.view_data().kind {
+                    ViewKind::Playlist {
+                        index: Some(sp), ..
+                    } => Some(*sp),
+                    _ => None,
+                };
+                match target {
+                    Some(sp) => {
+                        if let Some(pl) = self.playlists.playlists.get_mut(sp) {
+                            if let Some(t) = pl.tracks.get_mut(index) {
+                                *t = track;
+                            }
+                        }
+                    }
+                    None => {
+                        if let Some(t) = self.view_data_mut().tracks.get_mut(index) {
+                            *t = track;
+                        }
+                    }
+                }
+            }
+            TrackListKind::Recent => {}
+        }
+    }
+
+    pub fn play_track_replacing_queue(&mut self, track: Track, preferred: ProviderId) {
+        let key = track.cache_key();
         if let Some(old) = self.queue.current().cloned() {
-            if old.url != track.url {
+            if old.cache_key() != key {
                 self.queue
                     .record_played(&old, self.config.max_recently_played);
             }
         }
-        self.play_track_internal(&track);
+        self.play_track_internal(&track, preferred);
         self.queue.clear();
         self.queue.enqueue(track);
         self.save_session();
         self.mpris_dirty = true;
     }
 
-    pub fn play_track_internal(&mut self, track: &Track) {
+    /// Play `pos` through `provider`. If the track already carries that
+    /// provider's id, switch its origin and play directly; otherwise resolve
+    /// the id on `provider` in the background, then stream.
+    pub fn play_track_via_provider(&mut self, provider: ProviderId, pos: TrackPos) {
+        let Some(track) = self.get_track_at(pos) else {
+            return;
+        };
+        if track.has_provider(provider) {
+            let mut t = track;
+            if provider.capabilities().stream && provider.capabilities().download {
+                t.origin = provider;
+            }
+            self.play_track_replacing_queue(t, provider);
+            for t in self.tracks_after(pos.index).to_vec() {
+                self.queue.enqueue(t);
+            }
+            self.save_session();
+        } else {
+            self.resolve_and_play(provider, track, Some(pos));
+        }
+    }
+
+    /// Download `indices` from `provider`. Tracks lacking the provider id are
+    /// resolved first (best-effort; the resolve flow stores the id and then
+    /// downloads).
+    pub fn download_track_via_provider(&mut self, provider: ProviderId, indices: &[usize]) {
+        let list = self.context_menu.as_ref().map(|m| m.pos.list);
+        let mut to_download: Vec<Track> = Vec::new();
+        if let Some(list) = list {
+            for &idx in indices {
+                if let Some(track) = self.get_track_at(TrackPos::new(idx, list)) {
+                    if track.can_download_from(provider) {
+                        to_download.push(track);
+                    } else {
+                        let pos = TrackPos::new(idx, list);
+                        self.resolve_and_download(provider, track, Some(pos));
+                    }
+                }
+            }
+        }
+        if !to_download.is_empty() {
+            self.notify(format!("Downloading {} track(s)...", to_download.len()));
+            for track in to_download {
+                self.spawn_download_thread_for(provider, track);
+            }
+        }
+    }
+
+    /// Resolve a track's id on `provider` in the background, then play it.
+    fn resolve_and_play(&mut self, provider: ProviderId, track: Track, pos: Option<TrackPos>) {
+        self.notify(format!(
+            "Resolving \"{}\" on {}...",
+            track.title,
+            provider.label()
+        ));
+        let tx = self.result_tx.clone();
+        std::thread::spawn(move || {
+            let id = crate::provider::resolve_id(provider, &track).ok().flatten();
+            let _ = tx.send(crate::app::BackendResult::ProviderResolved {
+                original: track,
+                provider,
+                id,
+                pos,
+            });
+        });
+    }
+
+    /// Resolve a track's id on `provider` in the background, then download it.
+    fn resolve_and_download(&mut self, provider: ProviderId, track: Track, pos: Option<TrackPos>) {
+        self.notify(format!(
+            "Resolving \"{}\" on {}...",
+            track.title,
+            provider.label()
+        ));
+        let tx = self.result_tx.clone();
+        std::thread::spawn(move || {
+            let id = crate::provider::resolve_id(provider, &track).ok().flatten();
+            let _ = tx.send(crate::app::BackendResult::ProviderResolvedDownload {
+                original: track,
+                provider,
+                id,
+                pos,
+            });
+        });
+    }
+
+    pub fn play_track_internal(&mut self, track: &Track, preferred: ProviderId) {
         self.track_loading = true;
-        let id = track.id.clone();
         // The active track changed: drop any cached lyrics so the overlay
         // re-fetches for the new track when reopened.
         self.clear_lyrics_for_track_change();
@@ -78,61 +205,78 @@ impl MusicPlayer {
         let mut analysis_path: Option<PathBuf> = None;
         let mut streaming = false;
 
-        // Prefer a downloaded file on disk over streaming.
-        if let Some(dl_path) = self.download_registry.path_for(&track.url) {
-            let path = PathBuf::from(&dl_path);
-            if path.exists() {
-                debug!("Playing downloaded file: {}", path.display());
-                self.audio
-                    .play_cached(path.clone(), track.duration as f32, gain);
-                self.pending_cache_id = None;
-                analysis_path = Some(path);
-            }
-        }
+        let provider = track.best_stream_provider(preferred);
 
-        if analysis_path.is_none() {
-            // YouTube tracks go through the stream/cache pipeline (yt-dlp
-            // writes raw AAC-in-M4A straight to the cache file). Local files
-            // are played directly from disk (the `PlayCached` path handles any
-            // symphonia-decodable format uniformly), so they never hit yt-dlp.
-            if track.source == crate::types::TrackSource::YouTube && self.stream_cache.contains(&id)
-            {
-                let path = self.stream_cache.path_for(&id);
-                debug!("Playing from cache: {}", path.display());
-                self.audio
-                    .play_cached(path.clone(), track.duration as f32, gain);
+        match provider {
+            None => {
+                // No streamable provider for this track: resolve it on the
+                // default provider, then stream from there.
+                let track = track.clone();
                 self.pending_cache_id = None;
-                analysis_path = Some(path);
-            } else if track.source == crate::types::TrackSource::Local {
-                let path = PathBuf::from(&track.url);
-                debug!("Playing local file: {}", path.display());
-                self.audio
-                    .play_cached(path.clone(), track.duration as f32, gain);
-                self.pending_cache_id = None;
-                analysis_path = Some(path);
-            } else {
-                self.pending_cache_id = Some(id.clone());
-                let cache_path = self.stream_cache.path_for(&id);
-                debug!("Streaming: {}", cache_path.display());
-                self.audio.play_stream_cache(
-                    &track.url,
-                    track.duration as f32,
-                    cache_path.clone(),
-                    gain,
-                );
-                streaming = true;
-                analysis_path = Some(cache_path);
+                self.resolve_and_play(self.config.default_provider, track, None);
+                return;
+            }
+            Some(provider) => {
+                let id = track.provider_id(provider).unwrap_or_default().to_string();
+
+                // Prefer a downloaded file on disk over streaming.
+                let dl_key = track.cache_key();
+                if let Some(dl_path) = self.download_registry.path_for(&dl_key) {
+                    let path = PathBuf::from(&dl_path);
+                    if path.exists() {
+                        debug!("Playing downloaded file: {}", path.display());
+                        self.audio
+                            .play_cached(path.clone(), track.duration as f32, gain);
+                        self.pending_cache_id = None;
+                        analysis_path = Some(path);
+                    }
+                }
+
+                if analysis_path.is_none() {
+                    if self.stream_cache.contains(provider, &id) {
+                        let path = StreamCache::path_for(provider, &id);
+                        debug!("Playing from cache: {}", path.display());
+                        self.audio
+                            .play_cached(path.clone(), track.duration as f32, gain);
+                        self.pending_cache_id = None;
+                        analysis_path = Some(path);
+                    } else {
+                        let url = track.provider_url(provider).unwrap_or_default().to_string();
+                        self.pending_cache_id = Some(format!("{provider:?}:{id}"));
+                        let cache_path = StreamCache::path_for(provider, &id);
+                        debug!("Streaming ({}): {}", provider.label(), cache_path.display());
+                        if provider.uses_ytdlp() {
+                            self.audio.play_stream_cache(
+                                &url,
+                                track.duration as f32,
+                                cache_path.clone(),
+                                gain,
+                            );
+                        } else {
+                            self.audio.play_stream_http(
+                                &url,
+                                track.duration as f32,
+                                cache_path.clone(),
+                                gain,
+                            );
+                        }
+                        streaming = true;
+                        analysis_path = Some(cache_path);
+                    }
+                }
             }
         }
 
         // Kick off background loudness analysis so subsequent plays are
         // normalized. A streaming track's cache is incomplete until it
         // finishes downloading, so defer analysis to the tick loop.
-        if self.config.volume_normalization && !self.normalization_cache.contains_key(&id) {
+        if self.config.volume_normalization
+            && !self.normalization_cache.contains_key(&track.cache_key())
+        {
             if streaming {
-                self.pending_normalization_id = Some(id);
+                self.pending_normalization_id = Some(track.cache_key());
             } else if let Some(path) = analysis_path {
-                self.request_normalization_analysis(&id, path);
+                self.request_normalization_analysis(&track.cache_key(), path);
             }
         }
     }
@@ -142,7 +286,7 @@ impl MusicPlayer {
     fn normalization_gain_for(&self, track: &Track) -> f32 {
         if self.config.volume_normalization {
             self.normalization_cache
-                .get(&track.id)
+                .get(&track.cache_key())
                 .copied()
                 .unwrap_or(1.0)
         } else {
@@ -189,7 +333,7 @@ impl MusicPlayer {
             } else if self.audio.has_output() {
                 self.audio.resume();
             } else {
-                self.play_track_internal(&track);
+                self.play_track_internal(&track, track.origin);
             }
         }
         self.mpris_dirty = true;
@@ -205,7 +349,7 @@ impl MusicPlayer {
         if let Some(t) = self.queue.current() {
             self.track_loading = true;
             let t = t.clone();
-            self.play_track_internal(&t);
+            self.play_track_internal(&t, t.origin);
             self.save_session();
             self.mpris_dirty = true;
         }
@@ -216,7 +360,7 @@ impl MusicPlayer {
             self.track_loading = true;
             if let Some(t) = self.queue.current() {
                 let t = t.clone();
-                self.play_track_internal(&t);
+                self.play_track_internal(&t, t.origin);
             }
             self.save_session();
             self.mpris_dirty = true;

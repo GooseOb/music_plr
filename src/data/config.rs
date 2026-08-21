@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-
 use crate::data::JsonStore;
+use crate::provider::ProviderId;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -10,6 +10,21 @@ pub struct Config {
     pub cache_max_size_mb: u64,
     pub max_recently_played: usize,
     pub volume_normalization: bool,
+    /// The provider used to stream/download when a track lacks a streamable
+    /// id or when playing a search-only (e.g. `MusicBrainz`) result. Constrained
+    /// at the UI level to providers that support both streaming and
+    /// downloading.
+    #[serde(default)]
+    pub default_provider: ProviderId,
+    /// Jamendo API client id. Jamendo requires a registered id from their
+    /// Developer Portal; the default is a legacy demo id that may be revoked,
+    /// so users should set their own in Settings for reliable search.
+    #[serde(default = "default_jamendo_client_id")]
+    pub jamendo_client_id: String,
+}
+
+fn default_jamendo_client_id() -> String {
+    "96b38aef".to_string()
 }
 
 impl Default for Config {
@@ -21,6 +36,8 @@ impl Default for Config {
             cache_max_size_mb: 1024,
             max_recently_played: 50,
             volume_normalization: false,
+            default_provider: ProviderId::YouTube,
+            jamendo_client_id: default_jamendo_client_id(),
         }
     }
 }

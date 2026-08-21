@@ -9,11 +9,12 @@ impl MusicPlayer {
         }
         let query = self.search_query.clone();
         let scope = self.search_scope;
+        let provider = self.search_provider;
 
         // Switch to Search view. `new_search()` returns an empty, non-loading
         // state for the active scope; flip `loading` on and clear the dropdown.
         // Push as a fresh history slot so the outgoing view survives for Back.
-        let mut new_view = ViewData::new_search(query.clone(), scope);
+        let mut new_view = ViewData::new_search(query.clone(), provider, scope);
         new_view.loading = true;
         self.push_new_view(new_view);
         let rid = self.request_ids.next();
@@ -27,7 +28,7 @@ impl MusicPlayer {
 
         let tx = self.result_tx.clone();
         Self::spawn_backend_thread(
-            move || crate::youtube::search(&query, scope, 0),
+            move || crate::provider::search(provider, &query, scope, 0),
             move |(tracks, tab)| BackendResult::SearchResults(rid, tracks, tab),
             tx,
         );
@@ -73,10 +74,11 @@ impl MusicPlayer {
 
         let query = self.search_query.clone();
         let offset = count;
+        let provider = self.search_provider;
         let tx = self.result_tx.clone();
 
         thread::spawn(move || {
-            let tracks = match crate::youtube::search_more(&query, offset) {
+            let tracks = match crate::provider::search_more(provider, &query, offset) {
                 Ok(tracks) => tracks,
                 Err(e) => {
                     let _ = tx.send(BackendResult::SearchError(e.to_string()));
@@ -113,49 +115,57 @@ impl MusicPlayer {
     }
 
     /// Open a loading radio view, stamp its request id, notify, and fetch its
-    /// tracks via `fetch` (e.g. `radio_song` / `radio_artist`). `make_kind`
-    /// turns the generated "Radio: …" label into the concrete `ViewKind`
-    /// variant; `noun` is the notify phrasing.
-    fn start_radio(
+    /// Start a song radio seeded by `provider` (only providers that support
+    /// similarity search offer this; currently `YouTube`). Tracks from other
+    /// providers fall back to a `YouTube` radio when a `YouTube` id is present.
+    pub fn start_song_radio_provider(
         &mut self,
+        provider: crate::provider::ProviderId,
         name: &str,
-        fetch_arg: String,
-        noun: &str,
-        make_kind: impl FnOnce(String) -> ViewKind,
-        fetch: fn(&str) -> anyhow::Result<Vec<crate::types::Track>>,
+        id: &str,
     ) {
-        let label = format!("Radio: {name}");
-        self.push_new_view(ViewData::new_radio(make_kind(label.clone())));
-        let rid = self.request_ids.next();
-        self.view_data_mut().request_id = rid;
-        self.notify(format!("Generating radio for {noun}: {name}..."));
-
-        let tx = self.result_tx.clone();
-        Self::spawn_backend_thread(
-            move || fetch(&fetch_arg),
-            move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
-            tx,
-        );
+        if provider.capabilities().radio {
+            let label = format!("Radio ({}): {name}", provider.label());
+            self.push_new_view(ViewData::new_radio(ViewKind::SongRadio(label.clone())));
+            let rid = self.request_ids.next();
+            self.view_data_mut().request_id = rid;
+            self.notify(format!("Generating radio for song: {name}..."));
+            let id = id.to_string();
+            let tx = self.result_tx.clone();
+            Self::spawn_backend_thread(
+                move || crate::provider::radio_song(provider, &id),
+                move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
+                tx,
+            );
+        } else {
+            self.notify(format!("{provider:?} does not support radio"));
+        }
     }
 
-    pub fn start_song_radio(&mut self, name: &str, video_id: String) {
-        self.start_radio(
-            name,
-            video_id,
-            "song",
-            ViewKind::SongRadio,
-            crate::youtube::radio_song,
-        );
-    }
-
-    pub fn start_artist_radio(&mut self, name: &str, browse_id: String) {
-        self.start_radio(
-            name,
-            browse_id,
-            "artist",
-            ViewKind::ArtistRadio,
-            crate::youtube::radio_artist,
-        );
+    /// Start an artist radio seeded by `provider`. Same fallback rules as
+    /// [`Self::start_song_radio_provider`].
+    pub fn start_artist_radio_provider(
+        &mut self,
+        provider: crate::provider::ProviderId,
+        name: &str,
+        id: &str,
+    ) {
+        if provider.capabilities().radio {
+            let label = format!("Radio ({}): {name}", provider.label());
+            self.push_new_view(ViewData::new_radio(ViewKind::ArtistRadio(label.clone())));
+            let rid = self.request_ids.next();
+            self.view_data_mut().request_id = rid;
+            self.notify(format!("Generating radio for artist: {name}..."));
+            let id = id.to_string();
+            let tx = self.result_tx.clone();
+            Self::spawn_backend_thread(
+                move || crate::provider::radio_artist(provider, &id),
+                move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
+                tx,
+            );
+        } else {
+            self.notify(format!("{provider:?} does not support radio"));
+        }
     }
 
     /// Shared drill-down: switch to the given browse view kind (loading),
