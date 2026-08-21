@@ -60,7 +60,7 @@ pub struct MusicPlayer {
     pub search_query: String,
     /// The active search scope (All / Songs / Videos / Artists / Albums /
     /// Playlists). Global UI state, like `search_query`.
-    pub search_scope: crate::youtube::SearchScope,
+    pub search_scope: crate::provider::SearchScope,
     /// The active search provider (`YouTube` / `SoundCloud` / …). The scope list is
     /// filtered to this provider's supported scopes. Global UI state.
     pub search_provider: crate::provider::ProviderId,
@@ -173,7 +173,7 @@ impl MusicPlayer {
             lyrics: None,
             config,
             search_query: String::new(),
-            search_scope: crate::youtube::SearchScope::Songs,
+            search_scope: crate::provider::SearchScope::Songs,
             search_provider: crate::provider::ProviderId::YouTube,
             show_search_history: false,
             last_filtered_history: Vec::new(),
@@ -640,14 +640,14 @@ impl MusicPlayer {
             Message::ContextMenuSongRadioProvider(provider) => {
                 if let Some(track) = self.context_menu.take().map(|m| m.track) {
                     let id = track.provider_id(provider).unwrap_or_default().to_string();
-                    self.start_song_radio_provider(provider, &track.title, &id);
+                    self.start_radio_provider(provider, &track.title, &id, false);
                 }
                 Task::none()
             }
             Message::ContextMenuArtistRadioProvider(provider) => {
                 if let Some(track) = self.context_menu.take().map(|m| m.track) {
                     if let Some(browse_id) = track.provider_artist_id(provider) {
-                        self.start_artist_radio_provider(provider, &track.artist.name, browse_id);
+                        self.start_radio_provider(provider, &track.artist.name, browse_id, true);
                     }
                 }
                 Task::none()

@@ -532,7 +532,7 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         self.notify(format!("Creating playlist \"{name}\"..."));
         Self::spawn_backend_thread(
-            move || crate::youtube::browse(&id, kind_str),
+            move || crate::providers::youtube::browse(&id, kind_str),
             move |tracks| BackendResult::CardPlaylistReady(idx, name_for_thread, tracks),
             tx,
         );
@@ -541,7 +541,7 @@ impl MusicPlayer {
         // stream in as the browse result arrives. Select it directly (rather
         // than `handle_select_playlist`) so it activates even when the drop
         // index coincides with the currently selected playlist.
-        self.push_new_view(ViewData::new_playlist(Some(idx), name, None));
+        self.push_new_view(ViewData::new_playlist(Some(idx), name));
         self.save_session();
     }
 

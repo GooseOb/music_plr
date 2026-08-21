@@ -4,9 +4,10 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{lyrics::LyricsProvider, theme::AppTheme};
+use crate::theme::AppTheme;
 
 use super::{
+    shared_components::scope_tab_row,
     styles::{button_style_panel_item, button_style_scope, fg_secondary},
     theme,
     track_list::empty_state,
@@ -59,7 +60,14 @@ fn view_bottom_controls(player: &MusicPlayer, is_select_mode: bool) -> Row<'_, M
     .style(button_style_scope(is_select_mode))
     .on_press(Message::ToggleLyricsSelectMode);
 
-    let provider_row = view_provider_selector(player.lyrics_client.selected());
+    let selected_provider = player.lyrics_client.selected();
+    let provider_row = scope_tab_row(crate::lyrics::LyricsProvider::all().iter().map(|provider| {
+        (
+            provider.name().to_string(),
+            *provider == selected_provider,
+            Message::SelectLyricsProvider(*provider),
+        )
+    }));
 
     Row::with_children([select_toggle.into(), provider_row])
         .padding(theme::SPACING_SM)
@@ -95,22 +103,6 @@ fn view_select_editor(
                 selection: p.accent.scale_alpha(0.4),
             }
         })
-        .into()
-}
-
-fn view_provider_selector<'a>(selected_provider: LyricsProvider) -> Element<'a, Message, AppTheme> {
-    let chips = crate::lyrics::LyricsProvider::all().iter().map(|provider| {
-        let is_active = *provider == selected_provider;
-        Button::new(text(provider.name()).size(theme::TEXT_SIZE_SM))
-            .padding([theme::SPACING_XS, theme::SPACING_MD])
-            .style(button_style_scope(is_active))
-            .on_press(Message::SelectLyricsProvider(*provider))
-            .into()
-    });
-
-    Row::with_children(chips)
-        .spacing(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center)
         .into()
 }
 

@@ -22,6 +22,7 @@ mod styles;
 mod track_list;
 
 pub use queue::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID};
+pub use search::SEARCH_INPUT_ID;
 pub use track_list::TRACK_LIST_ID;
 
 use track_list::view_track_list;

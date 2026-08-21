@@ -1,3 +1,4 @@
+use crate::provider::{CardData, SearchScope, SearchTab};
 use crate::types::Track;
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -5,10 +6,6 @@ use std::{
     io::Write,
     process::{Command, Stdio},
 };
-
-/// Re-export provider types so legacy `crate::youtube::{CardData,
-/// SearchScope, SearchTab}` imports keep resolving.
-pub use crate::provider::{CardData, SearchScope, SearchTab};
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct YouTubeVideo {
@@ -59,7 +56,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
 /// Browse the contents of an artist/album/playlist, returning its tracks.
 pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
     let script_path = std::env::temp_dir().join("music_plr_search.py");
-    std::fs::write(&script_path, include_str!("./youtube_search.py"))
+    std::fs::write(&script_path, include_str!("../youtube_search.py"))
         .context("Failed to write ytmusicapi script")?;
 
     let output = Command::new("python3")
@@ -85,7 +82,7 @@ pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
 
 fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, SearchTab)> {
     let script_path = std::env::temp_dir().join("music_plr_search.py");
-    std::fs::write(&script_path, include_str!("./youtube_search.py"))
+    std::fs::write(&script_path, include_str!("../youtube_search.py"))
         .context("Failed to write ytmusicapi script")?;
 
     let limit = 20;
@@ -314,7 +311,7 @@ fn fetch_batch_metadata(
 /// needed (which keeps radio generation to a couple of seconds).
 pub fn watch_playlist(video_id: Option<&str>, playlist_id: Option<&str>) -> Result<Vec<Track>> {
     let script_path = std::env::temp_dir().join("music_plr_search.py");
-    std::fs::write(&script_path, include_str!("./youtube_search.py"))
+    std::fs::write(&script_path, include_str!("../youtube_search.py"))
         .context("Failed to write ytmusicapi script")?;
 
     let video_arg = video_id.unwrap_or("");
@@ -358,11 +355,7 @@ pub fn radio_artist(browse_id: &str) -> Result<Vec<Track>> {
 /// yt-dlp search and returning the first result's id. Used by the "play via /
 /// download from `YouTube`" flow when a track lacks a `YouTube` id.
 pub fn resolve_id(track: &Track) -> Result<Option<(String, String)>> {
-    let query = if track.artist.name.is_empty() {
-        track.title.clone()
-    } else {
-        format!("{} {}", track.title, track.artist.name)
-    };
+    let query = track.search_query();
     let (videos, _) = flat_search(&query, 1, 1)?;
     Ok(videos.into_iter().next().map(|v| {
         let url = if v.url.is_empty() {

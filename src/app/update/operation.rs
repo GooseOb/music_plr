@@ -20,22 +20,16 @@
 //! so they use `ROW_HEIGHT` for drop math instead and don't need `rows`.
 
 use crate::app::{
-    ui::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, TRACK_LIST_ID},
+    ui::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, SEARCH_INPUT_ID, TRACK_LIST_ID},
     Message,
 };
 use iced::{widget::Id, Rectangle};
 use iced_core::widget::operation::{Operation, Outcome, Scrollable};
 
-/// Id of the search input `Container` whose measured bounds we capture so the
-/// search-history dropdown can be positioned off the real input rectangle.
-pub const SEARCH_INPUT_ID: Id = Id::new("search_input");
-
 #[derive(Debug, Clone)]
 pub struct ListGeometry {
     pub bounds: Rectangle,
     pub translation_y: f32,
-    /// Absolute `bounds` of every row `Container`, in DOM order. Used by the
-    /// sidebar/library lists (non-virtualized) for drop-index math.
     pub rows: Vec<Rectangle>,
 }
 

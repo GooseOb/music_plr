@@ -15,7 +15,6 @@ mod providers;
 mod theme;
 mod types;
 mod util;
-mod youtube;
 
 use tracing_subscriber::EnvFilter;
 

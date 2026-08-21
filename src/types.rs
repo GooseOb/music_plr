@@ -105,6 +105,16 @@ impl Track {
         format!("{}|{}", self.title, self.artist.name)
     }
 
+    /// The search query used to resolve this track on a provider: the title
+    /// alone when there is no artist, otherwise `title artist`.
+    pub fn search_query(&self) -> String {
+        if self.artist.name.is_empty() {
+            self.title.clone()
+        } else {
+            format!("{} {}", self.title, self.artist.name)
+        }
+    }
+
     /// The id for this track's origin provider (display/identity key).
     pub fn primary_id(&self) -> &str {
         self.provider_id(self.origin).unwrap_or("")
@@ -199,8 +209,8 @@ impl PlayQueue {
     }
 }
 
-impl From<crate::youtube::YouTubeVideo> for Track {
-    fn from(v: crate::youtube::YouTubeVideo) -> Self {
+impl From<crate::providers::youtube::YouTubeVideo> for Track {
+    fn from(v: crate::providers::youtube::YouTubeVideo) -> Self {
         let mut providers: ProviderMap = HashMap::new();
         providers.insert(
             ProviderId::YouTube,

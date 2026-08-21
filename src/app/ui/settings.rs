@@ -1,13 +1,13 @@
 use iced::{
     alignment,
-    widget::{checkbox, scrollable, text, text_input, Button, Column, Container, Row},
+    widget::{checkbox, scrollable, text, text_input, Button, Column, Container},
     Element, Length,
 };
 
 use crate::provider::ProviderId;
 use crate::theme::{self, AppTheme};
 
-use super::{Message, MusicPlayer};
+use super::{shared_components::scope_tab_row, Message, MusicPlayer};
 
 fn section_header<'a>(player: &'a MusicPlayer, label: &'a str) -> Element<'a, Message, AppTheme> {
     Container::new(
@@ -20,22 +20,17 @@ fn section_header<'a>(player: &'a MusicPlayer, label: &'a str) -> Element<'a, Me
 }
 
 fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let tabs = ProviderId::defaultable().iter().map(|&provider| {
-        let selected = player.config.default_provider == provider;
-        Button::new(text(provider.label()).size(theme::TEXT_SIZE_SM))
-            .padding([theme::SPACING_XS, theme::SPACING_SM])
-            .style(crate::app::ui::styles::button_style_scope(selected))
-            .on_press(Message::SettingsDefaultProviderChanged(provider))
-            .into()
-    });
-    let row = Row::with_children(tabs).spacing(theme::SPACING_XS).wrap();
+    let row = scope_tab_row(ProviderId::defaultable().iter().map(|&provider| {
+        (
+            provider.label().to_string(),
+            player.config.default_provider == provider,
+            Message::SettingsDefaultProviderChanged(provider),
+        )
+    }));
     Container::new(
-        Column::with_children([
-            text("Default stream & download provider").into(),
-            row.into(),
-        ])
-        .spacing(theme::SPACING_XS)
-        .align_x(alignment::Horizontal::Left),
+        Column::with_children([text("Default stream & download provider").into(), row])
+            .spacing(theme::SPACING_XS)
+            .align_x(alignment::Horizontal::Left),
     )
     .width(Length::Fill)
     .padding([theme::SPACING_MD, theme::SPACING_XL])

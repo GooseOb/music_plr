@@ -7,7 +7,7 @@
 //! so a single logical track can be played/downloaded from any provider that
 //! carries it.
 
-use crate::types::Track;
+use crate::{providers, types::Track};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -252,10 +252,10 @@ pub fn search(
     offset: usize,
 ) -> Result<(Vec<Track>, SearchTab)> {
     match provider {
-        ProviderId::YouTube => crate::youtube::search(query, scope, offset),
-        ProviderId::SoundCloud => Ok(crate::providers::soundcloud::search(query, scope, offset)),
-        ProviderId::Jamendo => Ok(crate::providers::jamendo::search(query, scope, offset)),
-        ProviderId::MusicBrainz => Ok(crate::providers::musicbrainz::search(query, scope, offset)),
+        ProviderId::YouTube => providers::youtube::search(query, scope, offset),
+        ProviderId::SoundCloud => Ok(providers::soundcloud::search(query, scope, offset)),
+        ProviderId::Jamendo => Ok(providers::jamendo::search(query, scope, offset)),
+        ProviderId::MusicBrainz => Ok(providers::musicbrainz::search(query, scope, offset)),
         ProviderId::Local => Ok((Vec::new(), SearchTab::Songs)),
     }
 }
@@ -263,10 +263,10 @@ pub fn search(
 /// Pagination for the active search, mirroring [`search`].
 pub fn search_more(provider: ProviderId, query: &str, offset: usize) -> Result<Vec<Track>> {
     match provider {
-        ProviderId::YouTube => crate::youtube::search_more(query, offset),
-        ProviderId::SoundCloud => Ok(crate::providers::soundcloud::search_more(query, offset)),
-        ProviderId::Jamendo => Ok(crate::providers::jamendo::search_more(query, offset)),
-        ProviderId::MusicBrainz => Ok(crate::providers::musicbrainz::search_more(query, offset)),
+        ProviderId::YouTube => providers::youtube::search_more(query, offset),
+        ProviderId::SoundCloud => Ok(providers::soundcloud::search_more(query, offset)),
+        ProviderId::Jamendo => Ok(providers::jamendo::search_more(query, offset)),
+        ProviderId::MusicBrainz => Ok(providers::musicbrainz::search_more(query, offset)),
         ProviderId::Local => Ok(Vec::new()),
     }
 }
@@ -274,7 +274,7 @@ pub fn search_more(provider: ProviderId, query: &str, offset: usize) -> Result<V
 /// Build a song radio from a provider id (`YouTube` only supports similarity).
 pub fn radio_song(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     match provider {
-        ProviderId::YouTube => crate::youtube::radio_song(id),
+        ProviderId::YouTube => providers::youtube::radio_song(id),
         _ => Ok(Vec::new()),
     }
 }
@@ -282,7 +282,7 @@ pub fn radio_song(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
 /// Build an artist radio from a provider browse id (`YouTube` only).
 pub fn radio_artist(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     match provider {
-        ProviderId::YouTube => crate::youtube::radio_artist(id),
+        ProviderId::YouTube => providers::youtube::radio_artist(id),
         _ => Ok(Vec::new()),
     }
 }
@@ -295,14 +295,14 @@ pub fn radio_artist(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
 /// [provider]" flow.
 pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<(String, String)>> {
     match provider {
-        ProviderId::YouTube => crate::youtube::resolve_id(track),
-        ProviderId::SoundCloud => crate::providers::soundcloud::resolve_id(track)
+        ProviderId::YouTube => providers::youtube::resolve_id(track),
+        ProviderId::SoundCloud => providers::soundcloud::resolve_id(track)
             .map(Some)
             .ok_or_else(|| anyhow::anyhow!("SoundCloud resolve failed")),
-        ProviderId::Jamendo => crate::providers::jamendo::resolve_id(track)
+        ProviderId::Jamendo => providers::jamendo::resolve_id(track)
             .map(Some)
             .ok_or_else(|| anyhow::anyhow!("Jamendo resolve failed")),
-        ProviderId::MusicBrainz => crate::providers::musicbrainz::resolve_id(track)
+        ProviderId::MusicBrainz => providers::musicbrainz::resolve_id(track)
             .map(Some)
             .ok_or_else(|| anyhow::anyhow!("MusicBrainz resolve failed")),
         ProviderId::Local => Ok(None),
@@ -317,10 +317,10 @@ pub fn download(provider: ProviderId, track: &Track, download_dir: &str) -> Resu
             let url = track
                 .provider_url(provider)
                 .unwrap_or_else(|| track.primary_url());
-            crate::youtube::download(url, download_dir)
+            providers::youtube::download(url, download_dir)
         }
-        ProviderId::SoundCloud => crate::providers::soundcloud::download(track, download_dir),
-        ProviderId::Jamendo => crate::providers::jamendo::download(track, download_dir),
+        ProviderId::SoundCloud => providers::soundcloud::download(track, download_dir),
+        ProviderId::Jamendo => providers::jamendo::download(track, download_dir),
         _ => anyhow::bail!("provider does not support downloading"),
     }
 }

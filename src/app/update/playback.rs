@@ -38,12 +38,18 @@ impl MusicPlayer {
             return;
         }
         if let Some(track) = self.get_track_at(TrackPos::new(index, TrackListKind::Active)) {
-            self.play_track_replacing_queue(track, self.config.default_provider);
-            for t in self.tracks_after(index).to_vec() {
-                self.queue.enqueue(t);
-            }
-            self.save_session();
+            self.play_and_queue_rest(track, self.config.default_provider, index);
         }
+    }
+
+    /// Play `track` through `provider`, replacing the queue, then enqueue the
+    /// remaining view tracks after `index` and persist the session.
+    fn play_and_queue_rest(&mut self, track: Track, provider: ProviderId, index: usize) {
+        self.play_track_replacing_queue(track, provider);
+        for t in self.tracks_after(index).to_vec() {
+            self.queue.enqueue(t);
+        }
+        self.save_session();
     }
 
     /// Returns the tracks after `index` in the current view.
@@ -117,13 +123,9 @@ impl MusicPlayer {
             if provider.capabilities().stream && provider.capabilities().download {
                 t.origin = provider;
             }
-            self.play_track_replacing_queue(t, provider);
-            for t in self.tracks_after(pos.index).to_vec() {
-                self.queue.enqueue(t);
-            }
-            self.save_session();
+            self.play_and_queue_rest(t, provider, pos.index);
         } else {
-            self.resolve_and_play(provider, track, Some(pos));
+            self.resolve_provider(provider, track, Some(pos), true);
         }
     }
 
@@ -140,7 +142,7 @@ impl MusicPlayer {
                         to_download.push(track);
                     } else {
                         let pos = TrackPos::new(idx, list);
-                        self.resolve_and_download(provider, track, Some(pos));
+                        self.resolve_provider(provider, track, Some(pos), false);
                     }
                 }
             }
@@ -153,8 +155,15 @@ impl MusicPlayer {
         }
     }
 
-    /// Resolve a track's id on `provider` in the background, then play it.
-    fn resolve_and_play(&mut self, provider: ProviderId, track: Track, pos: Option<TrackPos>) {
+    /// Resolve a track's id on `provider` in the background. If `play` is true
+    /// the resolved track is streamed; otherwise it is downloaded.
+    fn resolve_provider(
+        &mut self,
+        provider: ProviderId,
+        track: Track,
+        pos: Option<TrackPos>,
+        play: bool,
+    ) {
         self.notify(format!(
             "Resolving \"{}\" on {}...",
             track.title,
@@ -163,31 +172,22 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
             let id = crate::provider::resolve_id(provider, &track).ok().flatten();
-            let _ = tx.send(crate::app::BackendResult::ProviderResolved {
-                original: track,
-                provider,
-                id,
-                pos,
-            });
-        });
-    }
-
-    /// Resolve a track's id on `provider` in the background, then download it.
-    fn resolve_and_download(&mut self, provider: ProviderId, track: Track, pos: Option<TrackPos>) {
-        self.notify(format!(
-            "Resolving \"{}\" on {}...",
-            track.title,
-            provider.label()
-        ));
-        let tx = self.result_tx.clone();
-        std::thread::spawn(move || {
-            let id = crate::provider::resolve_id(provider, &track).ok().flatten();
-            let _ = tx.send(crate::app::BackendResult::ProviderResolvedDownload {
-                original: track,
-                provider,
-                id,
-                pos,
-            });
+            let result = if play {
+                crate::app::BackendResult::ProviderResolved {
+                    original: track,
+                    provider,
+                    id,
+                    pos,
+                }
+            } else {
+                crate::app::BackendResult::ProviderResolvedDownload {
+                    original: track,
+                    provider,
+                    id,
+                    pos,
+                }
+            };
+            let _ = tx.send(result);
         });
     }
 
@@ -213,7 +213,7 @@ impl MusicPlayer {
                 // default provider, then stream from there.
                 let track = track.clone();
                 self.pending_cache_id = None;
-                self.resolve_and_play(self.config.default_provider, track, None);
+                self.resolve_provider(self.config.default_provider, track, None, true);
                 return;
             }
             Some(provider) => {

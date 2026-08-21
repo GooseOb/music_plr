@@ -35,7 +35,7 @@ pub enum ViewKind {
         exhausted: bool,
         query: String,
         provider: ProviderId,
-        tab: crate::youtube::SearchTab,
+        tab: crate::provider::SearchTab,
     },
     SongRadio(String),
     ArtistRadio(String),
@@ -84,7 +84,7 @@ impl Default for ViewKind {
             exhausted: false,
             query: String::new(),
             provider: ProviderId::YouTube,
-            tab: crate::youtube::SearchTab::Songs,
+            tab: crate::provider::SearchTab::Songs,
         }
     }
 }
@@ -207,14 +207,14 @@ impl ViewData {
     pub fn new_search(
         query: String,
         provider: ProviderId,
-        scope: crate::youtube::SearchScope,
+        scope: crate::provider::SearchScope,
     ) -> Self {
         Self {
             kind: ViewKind::Search {
                 exhausted: false,
                 query,
                 provider,
-                tab: crate::youtube::SearchTab::from_scope(scope),
+                tab: crate::provider::SearchTab::from_scope(scope),
             },
             ..Default::default()
         }
@@ -230,17 +230,10 @@ impl ViewData {
         }
     }
 
-    /// Create a `Playlist` view, preserving the selected playlist from the
-    /// previous view data if it was already a Playlist view.
-    pub fn new_playlist(index: Option<usize>, name: String, old: Option<&Self>) -> Self {
-        let (sp, name) = match old {
-            Some(v) if matches!(v.kind, ViewKind::Playlist { .. }) => {
-                (v.selected_playlist_id(), v.playlist_name().to_string())
-            }
-            _ => (index, name),
-        };
+    /// Create a `Playlist` view.
+    pub fn new_playlist(index: Option<usize>, name: String) -> Self {
         Self {
-            kind: ViewKind::Playlist { index: sp, name },
+            kind: ViewKind::Playlist { index, name },
             ..Default::default()
         }
     }

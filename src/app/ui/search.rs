@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, text_input, Button, Column, Container, MouseArea, Row, Space},
+    widget::{scrollable, text, text_input, Button, Column, Container, Id, MouseArea, Row, Space},
     Color, Element, Length, Rectangle,
 };
 
@@ -8,25 +8,20 @@ use crate::{
     app::{
         interaction::{HoverTarget, Pressed, TrackListKind},
         ui::overlays::{no_click_propagation, pos_absolute},
-        ViewKind,
     },
     data::library::LibraryKind,
     icons,
-    provider::ProviderId,
+    provider::{CardData, ProviderId, SearchTab},
     theme::AppTheme,
-    youtube::{CardData, SearchTab},
 };
 
 use super::{
-    shared_components::toggle_bookmark_button,
-    styles::{
-        bg_search_hist, bg_secondary, button_style_hist, button_style_primary, button_style_scope,
-        fg_secondary,
-    },
+    shared_components::{scope_tab_row, toggle_bookmark_button},
+    styles::{bg_search_hist, bg_secondary, button_style_hist, button_style_primary, fg_secondary},
     theme, track_list, view_track_list, Message, MusicPlayer,
 };
 
-use crate::app::update::operation::SEARCH_INPUT_ID;
+pub const SEARCH_INPUT_ID: Id = Id::new("search_input");
 
 pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let input = Container::new(
@@ -54,50 +49,38 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
     .on_press(Message::SearchExecute)
     .into();
 
-    // Provider picker: a segmented row of providers to the left of the scope
-    // row. Picking a provider filters the scopes to those it supports.
     let controls = Row::with_children([input, search_btn])
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center);
 
-    let provider_tabs = ProviderId::searchable().iter().map(|&provider| {
-        let selected = player.search_provider == provider;
-        Button::new(text(provider.label()).size(theme::TEXT_SIZE_SM))
-            .padding([theme::SPACING_XS, theme::SPACING_SM])
-            .style(button_style_scope(selected))
-            .on_press(Message::SearchProviderChanged(provider))
-            .into()
-    });
+    let provider_row = scope_tab_row(ProviderId::searchable().iter().map(|&provider| {
+        (
+            provider.label().to_string(),
+            player.search_provider == provider,
+            Message::SearchProviderChanged(provider),
+        )
+    }));
 
-    let provider_row = Row::with_children(provider_tabs)
-        .spacing(theme::SPACING_XS)
-        .wrap();
-
-    // Scope selector: a segmented row of tabs under the search input, filtered
-    // to the scopes the active provider supports.
-    let scope_tabs = player
-        .search_provider
-        .supported_scopes()
-        .iter()
-        .map(|&scope| {
-            let selected = player.search_scope == scope;
-            Button::new(text(scope.label()).size(theme::TEXT_SIZE_SM))
-                .padding([theme::SPACING_XS, theme::SPACING_SM])
-                .style(button_style_scope(selected))
-                .on_press(Message::SearchScopeChanged(scope))
-                .into()
-        });
-
-    let scope_row = Row::with_children(scope_tabs)
-        .spacing(theme::SPACING_XS)
-        .wrap();
+    let scope_row = scope_tab_row(
+        player
+            .search_provider
+            .supported_scopes()
+            .iter()
+            .map(|&scope| {
+                (
+                    scope.label().to_string(),
+                    player.search_scope == scope,
+                    Message::SearchScopeChanged(scope),
+                )
+            }),
+    );
 
     let rows = Column::with_children([
         controls.into(),
         Row::with_children([
-            scope_row.into(),
+            scope_row,
             Space::new().width(Length::Fill).into(),
-            provider_row.into(),
+            provider_row,
         ])
         .into(),
     ])
@@ -109,14 +92,10 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
         .into()
 }
 
-pub(super) fn view_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    // Dispatched from `content.rs` on `ViewKind::Search`; pull the active tab
-    // out of the view kind. Track tabs (Songs/Videos) render the playable
-    // list; card tabs (Artists/Albums/Playlists) render their own list.
-    let ViewKind::Search { tab, .. } = &player.view_data().kind else {
-        return Column::new().into();
-    };
-
+pub(super) fn view_search<'a>(
+    player: &'a MusicPlayer,
+    tab: &'a crate::provider::SearchTab,
+) -> Element<'a, Message, AppTheme> {
     if player.view_data().loading {
         track_list::empty_state("Searching...")
     } else if tab.is_track_tab() {
@@ -160,13 +139,13 @@ fn view_search_card_tab<'a>(
     player: &'a MusicPlayer,
     tab: &'a SearchTab,
 ) -> Element<'a, Message, AppTheme> {
-    // Each card tab shares the same row shape; only the drill-down message
-    // differs, so pull out the slice and its click constructor once.
     let (items, kind): (&[CardData], LibraryKind) = match tab {
         SearchTab::Artists(items) => (items, LibraryKind::Artist),
         SearchTab::Albums(items) => (items, LibraryKind::Album),
         SearchTab::Playlists(items) => (items, LibraryKind::Playlist),
-        _ => (&[], LibraryKind::Artist), // unreachable, but needed for type inference
+        _ => unreachable!(
+            "view_search_card_tab should only be called for Artists, Albums, or Playlists tabs"
+        ),
     };
 
     if items.is_empty() {
@@ -242,16 +221,13 @@ fn card_row<'a>(
     .into()
 }
 
-pub(super) fn view_browse(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+pub(super) fn view_browse<'a>(
+    player: &'a MusicPlayer,
+    label: &'a str,
+) -> Element<'a, Message, AppTheme> {
     let tracks = player.view_data().tracks.as_slice();
     let loading = player.view_data().loading;
 
-    let label: &str = match &player.view_data().kind {
-        ViewKind::Artist { name, .. }
-        | ViewKind::Album { name, .. }
-        | ViewKind::PlaylistView { name, .. } => name,
-        _ => unreachable!("view_browse should only be called for Artist, Album, or Playlist views"),
-    };
     let header = Row::with_children([
         text(label)
             .size(theme::TEXT_SIZE_LG)

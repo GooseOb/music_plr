@@ -6,18 +6,27 @@ pub fn format_duration(secs: u32) -> std::borrow::Cow<'static, str> {
     }
 }
 
-/// Percent-encode a string for use in a URL query (RFC 3986 unreserved set).
+use std::fmt::Write as _;
+
+/// Percent-encode a string for use in a URL query. Keeps the RFC 3986
+/// unreserved set as-is, maps spaces to `+`, and percent-encodes everything
+/// else (including `+`, `&`, `#`, `=`, and multi-byte UTF-8).
 pub fn urlencode(s: &str) -> String {
-    let mut out = String::new();
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char);
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            ' ' => out.push('+'),
+            '+' => out.push_str("%2B"),
+            '&' => out.push_str("%26"),
+            '#' => out.push_str("%23"),
+            '=' => out.push_str("%3D"),
+            c if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '~' => {
+                out.push(c);
             }
-            b' ' => out.push('+'),
-            _ => {
-                use std::fmt::Write as _;
-                let _ = write!(out, "%{b:02X}");
+            c => {
+                for b in c.to_string().into_bytes() {
+                    let _ = std::write!(out, "%{b:02X}");
+                }
             }
         }
     }

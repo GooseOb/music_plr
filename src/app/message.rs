@@ -15,7 +15,7 @@ use iced::Point;
 
 #[derive(Debug, Clone)]
 pub enum BackendResult {
-    SearchResults(u64, Vec<Track>, crate::youtube::SearchTab),
+    SearchResults(u64, Vec<Track>, crate::provider::SearchTab),
     SearchResultsAppend(u64, Vec<Track>),
     RadioResults(u64, String, Vec<Track>),
     BrowseResults(u64, Vec<Track>),
@@ -76,7 +76,7 @@ pub enum Message {
 
     SearchInputChanged(String),
     SearchExecute,
-    SearchScopeChanged(crate::youtube::SearchScope),
+    SearchScopeChanged(crate::provider::SearchScope),
     SearchProviderChanged(crate::provider::ProviderId),
     SearchLoadMore,
     SearchHistorySelected(usize),

@@ -108,11 +108,7 @@ pub fn search_more(query: &str, offset: usize) -> Vec<Track> {
 
 /// Resolve a logical track to a Jamendo id via search.
 pub fn resolve_id(track: &Track) -> Option<(String, String)> {
-    let q = if track.artist.name.is_empty() {
-        track.title.clone()
-    } else {
-        format!("{} {}", track.title, track.artist.name)
-    };
+    let q = track.search_query();
     let path = format!(
         "tracks/?format=json&limit=1&track_name={}&include=musicinfo&audioformat=mp32",
         urlencode(&q)

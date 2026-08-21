@@ -126,11 +126,7 @@ pub fn search_more(query: &str, offset: usize) -> Vec<Track> {
 
 /// Resolve a logical track to a `MusicBrainz` recording MBID.
 pub fn resolve_id(track: &Track) -> Option<(String, String)> {
-    let q = if track.artist.name.is_empty() {
-        track.title.clone()
-    } else {
-        format!("{} {}", track.title, track.artist.name)
-    };
+    let q = track.search_query();
     let url = format!(
         "https://musicbrainz.org/ws/2/recording/?query=recording:{}&fmt=json",
         urlencode(&q)

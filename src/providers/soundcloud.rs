@@ -122,11 +122,7 @@ pub fn search_more(query: &str, offset: usize) -> Vec<Track> {
 
 /// Resolve a logical track to a `SoundCloud` id via yt-dlp search.
 pub fn resolve_id(track: &Track) -> Option<(String, String)> {
-    let query = if track.artist.name.is_empty() {
-        track.title.clone()
-    } else {
-        format!("{} {}", track.title, track.artist.name)
-    };
+    let query = track.search_query();
     let items = sc_search(&query, 1, 1);
     items.into_iter().next().map(|i| (i.id, i.webpage_url))
 }

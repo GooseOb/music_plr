@@ -1,11 +1,11 @@
 use iced::{
     alignment,
-    widget::{rule, text, Button, Column, Container, Id, MouseArea, Row},
+    widget::{rule, text, Button, Column, Container, Id, Row},
     Element, Length,
 };
 
 use crate::{
-    app::interaction::{row_id, HoverTarget, Pressed, TrackListKind, TrackPos},
+    app::interaction::{TrackListKind, TrackPos},
     icons,
     theme::{self, AppTheme},
     types::QueueTab,
@@ -14,7 +14,7 @@ use crate::{
 use super::{
     styles::{bg_secondary, button_style_panel_item, fg_secondary},
     track_list::{
-        empty_state, section_header, track_row, track_row_layout, view_track_list,
+        empty_state, section_header, track_row_layout, view_track_list, view_track_row,
         virtual_scrollable,
     },
     Message, MusicPlayer,
@@ -91,7 +91,9 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let now_playing_row: Element<'_, Message, AppTheme> =
         if let Some(track) = player.queue.current() {
-            view_now_playing_row(track, player)
+            Container::new(track_row_layout(Row::new().into(), track, player, false))
+                .height(theme::ROW_HEIGHT)
+                .into()
         } else {
             Container::new(
                 text("No track playing")
@@ -143,15 +145,6 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     .into()
 }
 
-fn view_now_playing_row<'a>(
-    track: &'a crate::types::Track,
-    player: &'a MusicPlayer,
-) -> Element<'a, Message, AppTheme> {
-    let inner = track_row_layout(Row::new().into(), track, player, false);
-
-    Container::new(inner).height(theme::ROW_HEIGHT).into()
-}
-
 fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let tracks = &player.queue.recently_played;
 
@@ -160,38 +153,11 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
     }
 
     virtual_scrollable(tracks.len(), TrackListKind::Recent, player, |i| {
-        view_recently_played_row(&tracks[i], i, player)
+        view_track_row(
+            &tracks[i],
+            TrackPos::new(i, TrackListKind::Recent),
+            player,
+            false,
+        )
     })
-}
-
-fn view_recently_played_row<'a>(
-    track: &'a crate::types::Track,
-    index: usize,
-    player: &'a MusicPlayer,
-) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
-    let pos = TrackPos::new(index, TrackListKind::Recent);
-    let row_bg = if player.drag.hovered_track() == Some(pos) {
-        p.bg_hover
-    } else {
-        p.bg
-    };
-
-    let leading = super::track_list::leading_control(pos, track, player);
-
-    let inner = track_row_layout(leading, track, player, false);
-
-    let track_area = MouseArea::new(inner)
-        .interaction(player.drag.clickable_cursor_interaction())
-        .on_press(Message::DragPress(Pressed::Track(pos)))
-        .on_right_press(Message::TrackRightClicked(pos))
-        .on_move(move |_| Message::HoverStart(HoverTarget::Track(pos)));
-
-    track_row(
-        track_area,
-        row_bg,
-        Some(row_id(TrackListKind::Recent, index)),
-        None,
-    )
-    .into()
 }

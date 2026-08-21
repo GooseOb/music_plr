@@ -22,7 +22,7 @@ impl MusicPlayer {
             self.drag.cleanup();
 
             let playlist_name = self.playlists.playlists[index].name.clone();
-            self.push_new_view(ViewData::new_playlist(Some(index), playlist_name, None));
+            self.push_new_view(ViewData::new_playlist(Some(index), playlist_name));
 
             self.save_session();
         }
@@ -271,7 +271,7 @@ mod tests {
         for n in names {
             p.playlists.create(n);
         }
-        p.nav_history = vec![ViewData::new_playlist(Some(0), String::new(), None)];
+        p.nav_history = vec![ViewData::new_playlist(Some(0), String::new())];
         p.nav_history_pos = 0;
         p
     }
@@ -279,7 +279,7 @@ mod tests {
     #[test]
     fn deleting_selected_playlist_keeps_view_valid() {
         let mut p = player_with_playlists(&["A", "B", "C"]);
-        p.nav_history = vec![ViewData::new_playlist(Some(1), "B".into(), None)];
+        p.nav_history = vec![ViewData::new_playlist(Some(1), "B".into())];
         p.nav_history_pos = 0;
 
         // Delete the playlist currently being viewed (B at index 1).
@@ -296,7 +296,7 @@ mod tests {
         }
 
         // Deleting a playlist above the selected one shifts the selection down.
-        p.nav_history = vec![ViewData::new_playlist(Some(1), "C".into(), None)];
+        p.nav_history = vec![ViewData::new_playlist(Some(1), "C".into())];
         p.nav_history_pos = 0;
         p.handle_delete_playlist(0);
         assert_eq!(
@@ -311,7 +311,7 @@ mod tests {
     #[test]
     fn deleting_last_playlist_navigates_away() {
         let mut p = player_with_playlists(&["A"]);
-        p.nav_history = vec![ViewData::new_playlist(Some(0), "A".into(), None)];
+        p.nav_history = vec![ViewData::new_playlist(Some(0), "A".into())];
         p.nav_history_pos = 0;
 
         // Deleting the only playlist (while viewing it) must leave the
@@ -324,7 +324,7 @@ mod tests {
     #[test]
     fn reorder_playlist_moves_row_and_keeps_active_selection() {
         let mut p = player_with_playlists(&["A", "B", "C", "D"]);
-        p.nav_history = vec![ViewData::new_playlist(Some(1), "B".into(), None)];
+        p.nav_history = vec![ViewData::new_playlist(Some(1), "B".into())];
         p.nav_history_pos = 0;
 
         // Drag playlist B (index 1) down to the end (insertion index 4).
@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn reorder_playlist_above_active_shifts_selection_down() {
         let mut p = player_with_playlists(&["A", "B", "C", "D"]);
-        p.nav_history = vec![ViewData::new_playlist(Some(2), "C".into(), None)];
+        p.nav_history = vec![ViewData::new_playlist(Some(2), "C".into())];
         p.nav_history_pos = 0;
 
         // Drag D (index 3) up to the front (insertion index 0).

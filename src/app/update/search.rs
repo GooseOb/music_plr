@@ -114,58 +114,47 @@ impl MusicPlayer {
         }
     }
 
-    /// Open a loading radio view, stamp its request id, notify, and fetch its
-    /// Start a song radio seeded by `provider` (only providers that support
-    /// similarity search offer this; currently `YouTube`). Tracks from other
-    /// providers fall back to a `YouTube` radio when a `YouTube` id is present.
-    pub fn start_song_radio_provider(
+    /// Start a song or artist radio seeded by `provider`. Same fallback rules
+    /// as the rest of the radio flow.
+    pub fn start_radio_provider(
         &mut self,
         provider: crate::provider::ProviderId,
         name: &str,
         id: &str,
+        artist: bool,
     ) {
-        if provider.capabilities().radio {
-            let label = format!("Radio ({}): {name}", provider.label());
-            self.push_new_view(ViewData::new_radio(ViewKind::SongRadio(label.clone())));
-            let rid = self.request_ids.next();
-            self.view_data_mut().request_id = rid;
-            self.notify(format!("Generating radio for song: {name}..."));
-            let id = id.to_string();
-            let tx = self.result_tx.clone();
-            Self::spawn_backend_thread(
-                move || crate::provider::radio_song(provider, &id),
-                move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
-                tx,
-            );
-        } else {
+        if !provider.capabilities().radio {
             self.notify(format!("{provider:?} does not support radio"));
+            return;
         }
-    }
-
-    /// Start an artist radio seeded by `provider`. Same fallback rules as
-    /// [`Self::start_song_radio_provider`].
-    pub fn start_artist_radio_provider(
-        &mut self,
-        provider: crate::provider::ProviderId,
-        name: &str,
-        id: &str,
-    ) {
-        if provider.capabilities().radio {
-            let label = format!("Radio ({}): {name}", provider.label());
-            self.push_new_view(ViewData::new_radio(ViewKind::ArtistRadio(label.clone())));
-            let rid = self.request_ids.next();
-            self.view_data_mut().request_id = rid;
-            self.notify(format!("Generating radio for artist: {name}..."));
-            let id = id.to_string();
-            let tx = self.result_tx.clone();
-            Self::spawn_backend_thread(
-                move || crate::provider::radio_artist(provider, &id),
-                move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
-                tx,
-            );
+        let label = format!("Radio ({}): {name}", provider.label());
+        let kind = if artist {
+            ViewKind::ArtistRadio(label.clone())
         } else {
-            self.notify(format!("{provider:?} does not support radio"));
-        }
+            ViewKind::SongRadio(label.clone())
+        };
+        self.push_new_view(ViewData::new_radio(kind));
+        let rid = self.request_ids.next();
+        self.view_data_mut().request_id = rid;
+        self.notify(format!(
+            "Generating radio for {}: {name}...",
+            if artist { "artist" } else { "song" }
+        ));
+        let id = id.to_string();
+        let tx = self.result_tx.clone();
+        let radio_fn: fn(
+            crate::provider::ProviderId,
+            &str,
+        ) -> anyhow::Result<Vec<crate::types::Track>> = if artist {
+            crate::provider::radio_artist
+        } else {
+            crate::provider::radio_song
+        };
+        Self::spawn_backend_thread(
+            move || radio_fn(provider, &id),
+            move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
+            tx,
+        );
     }
 
     /// Shared drill-down: switch to the given browse view kind (loading),
@@ -186,7 +175,7 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         let id = id.to_string();
         Self::spawn_backend_thread(
-            move || crate::youtube::browse(&id, kind_str),
+            move || crate::providers::youtube::browse(&id, kind_str),
             move |tracks| BackendResult::BrowseResults(rid, tracks),
             tx,
         );

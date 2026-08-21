@@ -120,9 +120,9 @@ impl MusicPlayer {
         }
         if let ViewKind::Search {
             tab:
-                crate::youtube::SearchTab::Artists(cards)
-                | crate::youtube::SearchTab::Albums(cards)
-                | crate::youtube::SearchTab::Playlists(cards),
+                crate::provider::SearchTab::Artists(cards)
+                | crate::provider::SearchTab::Albums(cards)
+                | crate::provider::SearchTab::Playlists(cards),
             ..
         } = &view.kind
         {
@@ -187,7 +187,7 @@ impl MusicPlayer {
         &mut self,
         rid: u64,
         tracks: Vec<crate::types::Track>,
-        tab: crate::youtube::SearchTab,
+        tab: crate::provider::SearchTab,
     ) {
         // Apply to the slot that requested this search.
         if let Some(idx) = self.slot_for_request(rid) {

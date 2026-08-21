@@ -4,11 +4,11 @@ fn thumbnails_dir() -> PathBuf {
     super::cache_path("thumbnails")
 }
 
-pub fn thumbnail_path(video_id: &str) -> PathBuf {
+pub(crate) fn thumbnail_path(video_id: &str) -> PathBuf {
     thumbnails_dir().join(format!("{video_id}.jpg"))
 }
 
-pub fn thumbnail_url(video_id: &str) -> String {
+pub(crate) fn thumbnail_url(video_id: &str) -> String {
     format!("https://i.ytimg.com/vi/{video_id}/mqdefault.jpg")
 }
 

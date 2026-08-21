@@ -4,6 +4,8 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fmt::Write as _;
 
+use crate::util::urlencode;
+
 pub const LRCLIB_BASE: &str = "https://lrclib.net/api";
 pub const LRCMUX_BASE: &str = "https://lrcmux.dev/api";
 pub const LYRICS_OVH_BASE: &str = "https://api.lyrics.ovh/v1";
@@ -144,8 +146,8 @@ fn fetch_lyrics_ovh(req: &LyricsRequest) -> Result<Option<Lyrics>> {
     let url = format!(
         "{}/{}/{}",
         LYRICS_OVH_BASE,
-        urlencoding(&req.artist),
-        urlencoding(&req.title)
+        urlencode(&req.artist),
+        urlencode(&req.title)
     );
     let resp: OvhBody = match get_json_opt(&url, "Lyrics.ovh")? {
         Some(body) => body,
@@ -174,12 +176,12 @@ fn get_lrclib(req: &LyricsRequest, base: &str, provider: LyricsProvider) -> Resu
     let mut url = format!(
         "{}/get?artist_name={}&track_name={}",
         base,
-        urlencoding(&req.artist),
-        urlencoding(&req.title)
+        urlencode(&req.artist),
+        urlencode(&req.title)
     );
     if !req.album.is_empty() {
         url.push_str("&album_name=");
-        let _ = std::write!(url, "{}", urlencoding(&req.album));
+        let _ = std::write!(url, "{}", urlencode(&req.album));
     }
     if req.duration > 0 {
         url.push_str("&duration=");
@@ -202,8 +204,8 @@ fn search_lrclib(
     let url = format!(
         "{}/search?artist_name={}&track_name={}",
         base,
-        urlencoding(&req.artist),
-        urlencoding(&req.title)
+        urlencode(&req.artist),
+        urlencode(&req.title)
     );
 
     let resp: Vec<LrcLibRecord> = match get_json_opt(&url, "LRCLib-compatible")? {
@@ -253,29 +255,6 @@ fn parse_timestamp(stamp: &str) -> Option<f32> {
     let min: f32 = parts.next()?.parse().ok()?;
     let sec: f32 = parts.next()?.parse().ok()?;
     Some(min * 60.0 + sec)
-}
-
-fn urlencoding(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            ' ' => out.push('+'),
-            '+' => out.push_str("%2B"),
-            '&' => out.push_str("%26"),
-            '#' => out.push_str("%23"),
-            '=' => out.push_str("%3D"),
-            c if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '~' => {
-                out.push(c);
-            }
-            c => {
-                let bytes = c.to_string().into_bytes();
-                for b in bytes {
-                    let _ = std::write!(out, "%{b:02X}");
-                }
-            }
-        }
-    }
-    out
 }
 
 #[cfg(test)]
