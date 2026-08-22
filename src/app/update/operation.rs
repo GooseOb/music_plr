@@ -18,6 +18,9 @@
 //! tree are list rows (sidebar playlist and library rows), so nothing else is
 //! captured. The track/queue/recent lists are virtualized and uniform-height,
 //! so they use `ROW_HEIGHT` for drop math instead and don't need `rows`.
+//! The global search `text_input` (id `SEARCH_INPUT_ID`) is captured via the
+//! `text_input` callback so its bounds can hit-test the search-history
+//! dropdown.
 
 use crate::app::{
     ui::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, SEARCH_INPUT_ID, TRACK_LIST_ID},
@@ -126,14 +129,7 @@ impl Operation<Message> for CaptureBounds {
         });
     }
 
-    fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
-        let Some(id) = id else {
-            return;
-        };
-        if *id == SEARCH_INPUT_ID {
-            self.search_input = Some(bounds);
-            return;
-        }
+    fn container(&mut self, _id: Option<&Id>, bounds: Rectangle) {
         let Some(target) = self.current.clone() else {
             return;
         };
@@ -146,6 +142,17 @@ impl Operation<Message> for CaptureBounds {
         }
         if let Some(g) = self.geo_mut(&target) {
             g.rows.push(bounds);
+        }
+    }
+
+    fn text_input(
+        &mut self,
+        id: Option<&Id>,
+        bounds: Rectangle,
+        _state: &mut dyn iced_core::widget::operation::TextInput,
+    ) {
+        if id == Some(&SEARCH_INPUT_ID) {
+            self.search_input = Some(bounds);
         }
     }
 

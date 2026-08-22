@@ -27,15 +27,13 @@ use super::{
 pub const SEARCH_INPUT_ID: Id = Id::new("search_input");
 
 pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let input = Container::new(
-        text_input(
-            player.search_provider.search_placeholder(),
-            &player.search_query,
-        )
-        .on_input(Message::SearchInputChanged)
-        .on_submit(Message::SearchExecute)
-        .padding([theme::SPACING_SM, theme::SPACING_MD]),
+    let input = text_input(
+        player.search_provider.search_placeholder(),
+        &player.search_query,
     )
+    .on_input(Message::SearchInputChanged)
+    .on_submit(Message::SearchExecute)
+    .padding([theme::SPACING_SM, theme::SPACING_MD])
     .id(SEARCH_INPUT_ID)
     .width(Length::Fill)
     .into();

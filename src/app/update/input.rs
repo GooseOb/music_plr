@@ -16,6 +16,13 @@ impl MusicPlayer {
             {
                 self.open_track_list_search()
             }
+            iced::keyboard::Key::Character(c)
+                if c == "/" && !modifiers.control() && !modifiers.logo() && !modifiers.alt() =>
+            {
+                self.update_search_history();
+                self.show_search_history = true;
+                operation::focus::<Message>(crate::app::ui::SEARCH_INPUT_ID)
+            }
             iced::keyboard::Key::Named(Named::Space) => {
                 self.toggle_play_pause();
                 Task::none()
