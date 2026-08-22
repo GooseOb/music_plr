@@ -1,5 +1,6 @@
 use super::{BackendResult, ContextMenuState, MusicPlayer, Track};
 use crate::app::interaction::{TrackListKind, TrackPos};
+use crate::app::EditTrackState;
 use crate::{
     app::{PlaylistPicker, ViewKind},
     data::JsonStore,
@@ -178,5 +179,36 @@ impl MusicPlayer {
             in_playlist: matches!(self.view_data_mut().kind, ViewKind::Playlist { .. }),
             track,
         });
+    }
+
+    /// Open the track-editing popup for the track at `pos`, seeding the
+    /// working copy from the live track. Only one track is edited at a time
+    /// (the right-clicked one), so multi-selection is ignored here.
+    pub fn open_edit_track(&mut self, pos: TrackPos) {
+        let Some(track) = self.get_track_at(pos) else {
+            return;
+        };
+        self.edit_track = Some(EditTrackState {
+            title: track.title.clone(),
+            artist: track.artist.clone(),
+            source: track.source,
+            original: track,
+            pos,
+        });
+    }
+
+    /// Apply the edited fields back to the track's source list and close the
+    /// popup. `source` follows the working copy (changed via the provider
+    /// "select" buttons); `title`/`artist` are overwritten from the inputs.
+    pub fn apply_edit_track(&mut self) {
+        let Some(edit) = self.edit_track.take() else {
+            return;
+        };
+        let mut track = edit.original;
+        track.title = edit.title;
+        track.artist = edit.artist;
+        track.source = edit.source;
+        self.set_track_at(edit.pos, track);
+        self.save_session();
     }
 }

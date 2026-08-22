@@ -17,7 +17,10 @@ use crate::{
 
 use super::{
     shared_components::{scope_tab_row, toggle_bookmark_button},
-    styles::{bg_search_hist, bg_secondary, button_style_hist, button_style_primary, fg_secondary},
+    styles::{
+        bg_search_hist, bg_secondary, button_style_hist, button_style_primary, fg_secondary,
+        scroll_padding,
+    },
     theme, track_list, view_track_list, Message, MusicPlayer,
 };
 
@@ -330,15 +333,10 @@ pub(super) fn view_search_history(
             * theme::SEARCH_HISTORY_ITEM_HEIGHT)
             .min(theme::SEARCH_DROPDOWN_MAX_HEIGHT);
 
-        scrollable(Column::with_children(items).padding(iced::Padding {
-            top: 0.0,
-            bottom: 0.0,
-            left: 0.0,
-            right: theme::SPACING_SM,
-        }))
-        .id(iced::widget::Id::new("search_history_list"))
-        .height(dropdown_height)
-        .into()
+        scrollable(Column::with_children(items).padding(scroll_padding()))
+            .id(iced::widget::Id::new("search_history_list"))
+            .height(dropdown_height)
+            .into()
     };
 
     let dropdown = Container::new(content)

@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{text, Button, Row},
+    widget::{text, text_input, Button, Column, Container, Row},
     Color, Element,
 };
 
@@ -75,4 +75,36 @@ pub fn subtitle_artist(
     } else {
         artist.style(fg_secondary()).into()
     }
+}
+
+pub fn disabled_text_input_row<'a>(label: &'a str, value: &str) -> Element<'a, Message, AppTheme> {
+    Column::with_children([
+        Container::new(text(label))
+            .padding([0.0, theme::SPACING_XS])
+            .into(),
+        text_input("", value)
+            .padding([theme::SPACING_SM, theme::SPACING_MD])
+            .into(),
+    ])
+    .spacing(theme::SPACING_XS)
+    .into()
+}
+
+pub fn text_input_row<'a>(
+    label: &'a str,
+    value: &str,
+    placeholder: &'a str,
+    on_input: fn(String) -> Message,
+) -> Element<'a, Message, AppTheme> {
+    Column::with_children([
+        Container::new(text(label))
+            .padding([0.0, theme::SPACING_XS])
+            .into(),
+        text_input(placeholder, value)
+            .on_input(on_input)
+            .padding([theme::SPACING_SM, theme::SPACING_MD])
+            .into(),
+    ])
+    .spacing(theme::SPACING_XS)
+    .into()
 }

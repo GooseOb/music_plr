@@ -1,23 +1,19 @@
 use iced::{
     alignment,
-    widget::{checkbox, scrollable, text, text_input, Button, Column, Container},
-    Element, Length,
+    widget::{checkbox, scrollable, text, Button, Column, Container},
+    Element,
 };
 
-use crate::providers::ProviderId;
-use crate::theme::{self, AppTheme};
+use crate::{
+    app::ui::styles::fg_accent,
+    providers::ProviderId,
+    theme::{self, AppTheme},
+};
 
-use super::{shared_components::scope_tab_row, Message, MusicPlayer};
-
-fn section_header<'a>(player: &'a MusicPlayer, label: &'a str) -> Element<'a, Message, AppTheme> {
-    Container::new(
-        text(label)
-            .size(theme::TEXT_SIZE_LG)
-            .color(player.app_theme.palette.accent),
-    )
-    .padding([theme::SPACING_MD, theme::SPACING_XL])
-    .into()
-}
+use super::{
+    shared_components::{scope_tab_row, text_input_row},
+    Message, MusicPlayer,
+};
 
 fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let row = scope_tab_row(ProviderId::defaultable().iter().map(|&provider| {
@@ -27,46 +23,37 @@ fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppThe
             Message::SettingsDefaultProviderChanged(provider),
         )
     }));
-    Container::new(
-        Column::with_children([text("Default stream & download provider").into(), row])
-            .spacing(theme::SPACING_XS)
-            .align_x(alignment::Horizontal::Left),
-    )
-    .width(Length::Fill)
-    .padding([theme::SPACING_MD, theme::SPACING_XL])
-    .into()
+    Column::with_children([text("Default stream & download provider").into(), row])
+        .spacing(theme::SPACING_SM)
+        .align_x(alignment::Horizontal::Left)
+        .into()
 }
-fn text_input_row<'a>(
+
+fn section<'a>(
     label: &'a str,
-    value: &str,
-    placeholder: &'a str,
-    on_input: fn(String) -> Message,
+    children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
-    Container::new(
-        Column::with_children([
-            text(label).into(),
-            text_input(placeholder, value)
-                .on_input(on_input)
-                .padding([theme::SPACING_SM, theme::SPACING_MD])
-                .into(),
-        ])
-        .spacing(theme::SPACING_XS),
-    )
-    .padding([theme::SPACING_MD, theme::SPACING_XL])
+    Column::with_children([
+        text(label)
+            .size(theme::TEXT_SIZE_LG)
+            .style(fg_accent())
+            .into(),
+        Column::with_children(children)
+            .spacing(theme::SPACING_SM)
+            .into(),
+    ])
+    .spacing(theme::SPACING_MD)
     .into()
 }
 
 pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let cfg = &player.config;
 
-    let normalize = Container::new(
-        checkbox(cfg.volume_normalization)
-            .label("Normalize volume across tracks")
-            .on_toggle(Message::SettingsVolumeNormalizationToggled)
-            .spacing(theme::SPACING_MD),
-    )
-    .padding([theme::SPACING_MD, theme::SPACING_XL])
-    .into();
+    let normalize = checkbox(cfg.volume_normalization)
+        .label("Normalize volume across tracks")
+        .on_toggle(Message::SettingsVolumeNormalizationToggled)
+        .spacing(theme::SPACING_MD)
+        .into();
 
     let download_dir = text_input_row(
         "Download directory",
@@ -104,27 +91,17 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
     );
 
     let content = Column::with_children([
-        section_header(player, "Playback"),
-        normalize,
-        default_provider_section(player),
-        section_header(player, "Storage"),
-        download_dir,
-        cache_size,
-        section_header(player, "History"),
-        hist_visible,
-        hist_stored,
-        recent,
-        Container::new(
-            Button::new(text("Reset to defaults"))
-                .padding([theme::SPACING_SM, theme::SPACING_MD])
-                .on_press(Message::SettingsResetDefaults),
-        )
-        .padding([theme::SPACING_MD, theme::SPACING_XL])
-        .into(),
+        section("Playback", [normalize, default_provider_section(player)]),
+        section("Storage", [download_dir, cache_size]),
+        section("History", [hist_visible, hist_stored, recent]),
+        Button::new(text("Reset to defaults"))
+            .padding([theme::SPACING_SM, theme::SPACING_MD])
+            .on_press(Message::SettingsResetDefaults)
+            .into(),
     ])
-    .spacing(theme::SPACING_XS);
+    .spacing(theme::SPACING_XL);
 
-    scrollable(content)
+    scrollable(Container::new(content).padding([theme::SPACING_MD, theme::SPACING_XL]))
         .id(iced::widget::Id::new("settings_scroll"))
         .into()
 }

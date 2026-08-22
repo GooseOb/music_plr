@@ -140,5 +140,19 @@ pub enum Message {
     ContextMenuArtistRadioProvider(ProviderId),
     ContextMenuRemoveFromPlaylist(Vec<usize>),
     ContextMenuRemoveFromQueue(Vec<usize>),
+    ContextMenuEditTrack,
+    EditTrackField(EditTrackField, String),
+    EditTrackSelectProvider(ProviderId),
+    SaveEditTrack,
+    CloseEditTrack,
     CloseContextMenu,
+}
+
+/// Editable text fields of a [`Track`](crate::types::Track) in the track
+/// editing popup. `source` is excluded: it is changed only via the provider
+/// "select" buttons, never a text input.
+#[derive(Debug, Clone, Copy)]
+pub enum EditTrackField {
+    Title,
+    Artist,
 }

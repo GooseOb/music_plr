@@ -49,6 +49,12 @@ pub fn fg_secondary() -> impl Fn(&AppTheme) -> text::Style + 'static {
     }
 }
 
+pub fn fg_accent() -> impl Fn(&AppTheme) -> text::Style + 'static {
+    |theme| text::Style {
+        color: theme.palette.accent.into(),
+    }
+}
+
 pub fn button_style_primary() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
     move |theme, status| {
         let p = &theme.palette;
@@ -279,5 +285,14 @@ pub fn button_style_album() -> impl Fn(&AppTheme, button::Status) -> button::Sty
             text_color: fg,
             ..Default::default()
         }
+    }
+}
+
+pub fn scroll_padding() -> iced::Padding {
+    iced::Padding {
+        top: 0.0,
+        bottom: 0.0,
+        left: 0.0,
+        right: theme::SPACING_MD,
     }
 }

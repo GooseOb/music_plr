@@ -2,25 +2,83 @@ use std::borrow::Cow;
 
 use iced::{
     alignment,
-    widget::{column, container, row, text, Button, Column, Container, MouseArea, Row, Space},
+    widget::{
+        column, container, row, scrollable, text, Button, Column, Container, MouseArea, Row, Space,
+    },
     Element, Length, Rectangle,
 };
 
 use crate::{
-    app::interaction::TrackListKind,
+    app::{
+        interaction::TrackListKind,
+        ui::{styles::scroll_padding, track_list::thumbnail},
+        EditTrackField,
+    },
     icons,
+    providers::{ProviderId, ProviderTrack},
     theme::{AppTheme, Palette},
 };
 
 use super::{
-    styles::{bg_overlay, bg_popup, button_style_danger, button_style_popup_item, fg_secondary},
+    shared_components::{disabled_text_input_row, text_input_row},
+    styles::{
+        bg_overlay, bg_popup, button_style_danger, button_style_popup_item, button_style_primary,
+        fg_accent, fg_secondary,
+    },
     theme, ContextMenuState, Message, MusicPlayer,
 };
 
-/// A drop-indicator line drawn on top of the UI at the given screen-space
-/// rectangle (computed from captured row geometry), so it never perturbs the
-/// list layout it marks.
-pub(super) fn view_drop_indicator(rect: Rectangle, p: &Palette) -> Element<'_, Message, AppTheme> {
+fn provider_row<'a>(
+    player: &'a MusicPlayer,
+    provider: ProviderId,
+    pt: &'a ProviderTrack,
+    source: ProviderId,
+) -> Element<'a, Message, AppTheme> {
+    let album = pt
+        .album
+        .as_ref()
+        .map(|a| a.name.clone())
+        .unwrap_or_default();
+
+    let header = Row::with_children([
+        text(provider.label()).into(),
+        if provider == source {
+            text("(current)").style(fg_secondary()).into()
+        } else {
+            Button::new(text("select"))
+                .padding([theme::SPACING_XS, theme::SPACING_MD])
+                .on_press(Message::EditTrackSelectProvider(provider))
+                .into()
+        },
+    ])
+    .spacing(theme::SPACING_SM)
+    .align_y(alignment::Vertical::Center);
+
+    let props = Column::with_children([
+        disabled_text_input_row("Id", &pt.id),
+        disabled_text_input_row("Url", &pt.url),
+        disabled_text_input_row("Artist ID", &pt.artist_id.clone().unwrap_or_default()),
+        disabled_text_input_row("Duration (in seconds)", &pt.duration.to_string()),
+        Row::with_children([
+            thumbnail(
+                &player.app_theme.palette,
+                theme::PLAYBAR_THUMBNAIL_SIZE,
+                player.thumbnail_index.get(&pt.id),
+            ),
+            disabled_text_input_row("Thumbnail", &pt.thumbnail),
+        ])
+        .spacing(theme::SPACING_SM)
+        .into(),
+        disabled_text_input_row("Album", &album),
+    ])
+    .spacing(theme::SPACING_XS);
+
+    Column::with_children([header.into(), props.into()])
+        .spacing(theme::SPACING_SM)
+        .into()
+}
+
+pub(super) fn view_drop_indicator(rect: Rectangle) -> Element<'static, Message, AppTheme> {
     column![
         Space::new().height(rect.y),
         row![
@@ -30,8 +88,8 @@ pub(super) fn view_drop_indicator(rect: Rectangle, p: &Palette) -> Element<'_, M
                     .width(rect.width)
                     .height(crate::theme::DROP_LINE_HEIGHT),
             )
-            .style(move |_: &AppTheme| container::Style {
-                background: Some(p.accent.into()),
+            .style(|theme: &AppTheme| container::Style {
+                background: Some(theme.palette.accent.into()),
                 ..Default::default()
             })
         ]
@@ -54,6 +112,16 @@ pub(super) fn view_context_menu<'a>(
             Message::ContextMenuPlayTrack(menu.pos),
         )
         .into()];
+
+        v.push(
+            menu_item(
+                Cow::Borrowed("Edit"),
+                icons::EDIT_ICON,
+                p,
+                Message::ContextMenuEditTrack,
+            )
+            .into(),
+        );
 
         if menu.track.provider_artist_id(menu.track.source).is_some() {
             v.push(
@@ -220,6 +288,83 @@ pub(super) fn view_context_menu<'a>(
     MouseArea::new(overlay)
         .on_press(Message::CloseContextMenu)
         .into()
+}
+
+pub(super) fn view_edit_track(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let edit = player.edit_track.as_ref().expect("edit_track present");
+    // Providers the track carries an id for, in a stable order.
+    let mut provider_ids: Vec<ProviderId> = edit.original.providers.keys().copied().collect();
+    provider_ids.sort_by_key(|p| p.label());
+
+    let provider_rows: Vec<Element<'_, Message, AppTheme>> = provider_ids
+        .iter()
+        .map(|&provider| {
+            provider_row(
+                player,
+                provider,
+                &edit.original.providers[&provider],
+                edit.source,
+            )
+        })
+        .collect();
+
+    let providers_block = Column::with_children([
+        text("Providers")
+            .style(fg_accent())
+            .size(theme::TEXT_SIZE_LG)
+            .into(),
+        if provider_rows.is_empty() {
+            text("This track has no provider data.")
+                .style(fg_secondary())
+                .into()
+        } else {
+            Column::with_children(provider_rows)
+                .spacing(theme::SPACING_SM)
+                .into()
+        },
+    ])
+    .spacing(theme::SPACING_SM)
+    .into();
+
+    let save_btn = Button::new(Container::new(text("Save")).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .style(button_style_primary())
+        .on_press(Message::SaveEditTrack);
+
+    let cancel_btn = Button::new(Container::new(text("Cancel")).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .on_press(Message::CloseEditTrack);
+
+    let body = Column::with_children([
+        Column::with_children([
+            text_input_row("Title", &edit.title, "Track title", |v| {
+                Message::EditTrackField(EditTrackField::Title, v)
+            }),
+            text_input_row("Artist", &edit.artist, "Track artist", |v| {
+                Message::EditTrackField(EditTrackField::Artist, v)
+            }),
+        ])
+        .spacing(theme::SPACING_SM)
+        .into(),
+        providers_block,
+    ])
+    .spacing(theme::SPACING_MD)
+    .padding(scroll_padding());
+
+    let dialog = Column::with_children([
+        text("Edit Track").size(theme::TEXT_SIZE_LG).into(),
+        scrollable(body).height(Length::Fill).into(),
+        Row::with_children([cancel_btn.into(), save_btn.into()])
+            .spacing(theme::SPACING_SM)
+            .align_y(alignment::Vertical::Center)
+            .into(),
+    ])
+    .spacing(theme::SPACING_MD)
+    .padding(theme::SPACING_MD)
+    .width(theme::DIALOG_WIDTH * 2.5)
+    .height(player.window_size.height * 0.7);
+
+    view_dialog(dialog.into(), Message::CloseEditTrack)
 }
 
 pub fn pos_absolute(

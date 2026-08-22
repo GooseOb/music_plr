@@ -121,7 +121,7 @@ where
 }
 
 pub(super) fn row_spacer<'a>(height: f32) -> Element<'a, Message, AppTheme> {
-    Space::new().height(Length::Fixed(height)).into()
+    Space::new().height(height).into()
 }
 
 pub(super) fn leading_control<'a>(

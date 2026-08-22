@@ -11,6 +11,7 @@ pub const CHEVRON_DOWN_ICON: &[u8] = include_bytes!("../icons/chevron-down.svg")
 pub const CLOSE_ICON: &[u8] = include_bytes!("../icons/close.svg");
 pub const DELETE_ICON: &[u8] = include_bytes!("../icons/delete.svg");
 pub const DOWNLOAD_ICON: &[u8] = include_bytes!("../icons/download.svg");
+pub const EDIT_ICON: &[u8] = include_bytes!("../icons/edit.svg");
 pub const FOLDER_ICON: &[u8] = include_bytes!("../icons/folder.svg");
 pub const FORWARD_ICON: &[u8] = include_bytes!("../icons/forward.svg");
 pub const LYRICS_ICON: &[u8] = include_bytes!("../icons/lyrics.svg");

@@ -184,6 +184,10 @@ impl widget::text_input::Catalog for AppTheme {
                 widget::text_input::Status::Focused { .. } => p.accent,
                 _ => Color::TRANSPARENT,
             };
+            let value = match status {
+                widget::text_input::Status::Disabled => p.fg_muted,
+                _ => p.fg,
+            };
             widget::text_input::Style {
                 background: p.bg_tertiary.into(),
                 border: iced::border::rounded(RADIUS_MD)
@@ -191,7 +195,7 @@ impl widget::text_input::Catalog for AppTheme {
                     .width(1),
                 icon: p.fg_muted,
                 placeholder: p.fg_muted,
-                value: p.fg,
+                value,
                 selection: p.bg_current,
             }
         })

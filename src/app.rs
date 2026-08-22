@@ -19,7 +19,7 @@ mod update;
 mod view_data;
 
 pub use interaction::{ContextMenuState, DragState, FloatingSearch, TrackListKind, TrackPos};
-pub use message::{BackendResult, Message};
+pub use message::{BackendResult, EditTrackField, Message};
 pub use view_data::{RequestIdGenerator, ViewData, ViewKind};
 
 #[derive(Debug, Clone)]
@@ -30,6 +30,19 @@ pub struct LyricsState {
     pub not_found: bool,
     pub select_mode: bool,
     pub editor: Option<iced::widget::text_editor::Content>,
+}
+
+/// Mutable working copy of a track being edited in the track-editing popup.
+/// Holds only the text-editable fields (`source` is changed via the provider
+/// "select" buttons) plus the original position so the edit can be written
+/// back to the correct list.
+#[derive(Debug, Clone)]
+pub struct EditTrackState {
+    pub title: String,
+    pub artist: String,
+    pub source: crate::providers::ProviderId,
+    pub original: Track,
+    pub pos: TrackPos,
 }
 
 impl LyricsState {
@@ -120,6 +133,7 @@ pub struct MusicPlayer {
     pub drag: DragState,
 
     pub context_menu: Option<ContextMenuState>,
+    pub edit_track: Option<EditTrackState>,
 
     pub queue_selected_indices: Vec<usize>,
 
@@ -128,7 +142,7 @@ pub struct MusicPlayer {
     pub app_theme: AppTheme,
 
     pub bounds: crate::app::update::operation::CaptureBounds,
-    pub window_width: f32,
+    pub window_size: iced::Size,
 }
 
 pub struct PlaylistPicker {
@@ -210,11 +224,12 @@ impl MusicPlayer {
                 .unwrap_or_else(std::time::Instant::now),
             drag: DragState::default(),
             context_menu: None,
+            edit_track: None,
             queue_selected_indices: Vec::new(),
             floating_search: None,
             app_theme: AppTheme::new(Palette::dark()),
             bounds: crate::app::update::operation::CaptureBounds::default(),
-            window_width: 1280.0,
+            window_size: iced::Size::default(),
             clipboard: Vec::new(),
             last_click: None,
         };
@@ -294,7 +309,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::WindowResized(size) => {
-                self.window_width = size.width;
+                self.window_size = size;
                 iced_runtime::task::widget(update::operation::CaptureBounds::new())
             }
             Message::WindowClose => {
@@ -660,6 +675,38 @@ impl MusicPlayer {
             Message::ContextMenuRemoveFromQueue(indices) => {
                 self.context_menu = None;
                 self.handle_remove_from_queue_batch(&indices);
+                Task::none()
+            }
+            Message::ContextMenuEditTrack => {
+                let pos = match self.context_menu.as_ref() {
+                    Some(menu) => menu.pos,
+                    None => return Task::none(),
+                };
+                self.context_menu = None;
+                self.open_edit_track(pos);
+                Task::none()
+            }
+            Message::EditTrackField(field, value) => {
+                if let Some(edit) = &mut self.edit_track {
+                    match field {
+                        EditTrackField::Title => edit.title = value,
+                        EditTrackField::Artist => edit.artist = value,
+                    }
+                }
+                Task::none()
+            }
+            Message::EditTrackSelectProvider(provider) => {
+                if let Some(edit) = &mut self.edit_track {
+                    edit.source = provider;
+                }
+                Task::none()
+            }
+            Message::CloseEditTrack => {
+                self.edit_track = None;
+                Task::none()
+            }
+            Message::SaveEditTrack => {
+                self.apply_edit_track();
                 Task::none()
             }
             Message::CloseContextMenu => {

@@ -24,7 +24,8 @@ pub const QUEUE_LIST_ID: Id = Id::new("queue_list");
 pub const QUEUE_RECENT_LIST_ID: Id = Id::new("queue_recent_list");
 
 pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let queue_width = (player.window_width * theme::QUEUE_WIDTH_RATIO).max(theme::QUEUE_MIN_WIDTH);
+    let queue_width =
+        (player.window_size.width * theme::QUEUE_WIDTH_RATIO).max(theme::QUEUE_MIN_WIDTH);
 
     let tab_bar = Container::new(view_queue_tabs(player))
         .width(Length::Fill)

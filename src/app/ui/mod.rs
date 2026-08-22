@@ -47,13 +47,12 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         stack = stack.push(overlays::view_playlist_picker(player));
     } else if player.delete_confirm_index.is_some() {
         stack = stack.push(overlays::view_delete_confirm());
+    } else if player.edit_track.is_some() {
+        stack = stack.push(overlays::view_edit_track(player));
     } else if let Some(menu) = &player.context_menu {
         stack = stack.push(overlays::view_context_menu(menu, &player.app_theme.palette));
     } else if let Some(rect) = player.drop_indicator_rect() {
-        stack = stack.push(overlays::view_drop_indicator(
-            rect,
-            &player.app_theme.palette,
-        ));
+        stack = stack.push(overlays::view_drop_indicator(rect));
     }
     if player.show_search_history {
         if let Some(input_rect) = player.bounds.search_input {
