@@ -10,7 +10,7 @@ use crate::{
     theme::{self, AppTheme, Palette},
 };
 
-use super::styles::{button_style_primary, button_style_scope};
+use super::styles::{button_style_primary, button_style_scope, fg_secondary};
 
 /// Build a segmented row of scope/provider chips. Each item is
 /// `(label, selected, on_press)`; `pad_x`/`pad_y` set the button padding.
@@ -52,4 +52,27 @@ pub fn toggle_bookmark_button(p: &Palette, is_saved: bool) -> Button<'static, Me
     ))
     .padding(theme::SPACING_SM)
     .style(button_style_scope(is_saved))
+}
+
+pub fn subtitle_artist(
+    name: &str,
+    size: u32,
+    artist_target: Option<(String, crate::providers::ProviderId)>,
+) -> Element<'_, Message, AppTheme> {
+    let artist = text(name).size(size);
+    if let Some((id, source)) = artist_target {
+        Button::new(artist)
+            .padding(0)
+            .style(super::styles::button_style_album())
+            .on_press(Message::Browse(
+                crate::app::ViewKind::Artist {
+                    id,
+                    name: name.to_string(),
+                },
+                source,
+            ))
+            .into()
+    } else {
+        artist.style(fg_secondary()).into()
+    }
 }

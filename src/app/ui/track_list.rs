@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::{
-    shared_components::play_pause_button,
+    shared_components::{play_pause_button, subtitle_artist},
     styles::{button_style_album, button_style_primary, fg_secondary},
     theme, Message, MusicPlayer,
 };
@@ -306,29 +306,12 @@ pub(super) fn track_row_layout<'a>(
         .into(),
     );
 
-    let artist_name = track.artist.clone();
-    let artist_id = track.provider_artist_id(track.source).map(str::to_string);
-    let artist_subtitle: Element<'a, Message, AppTheme> = match artist_id {
-        Some(artist_id) => Button::new(
-            text(artist_name.clone())
-                .size(theme::TEXT_SIZE_SM)
-                .style(fg_secondary()),
-        )
-        .padding(0)
-        .style(button_style_album())
-        .on_press(Message::Browse(
-            crate::app::ViewKind::Artist {
-                id: artist_id.clone(),
-                name: artist_name,
-            },
-            track.source,
-        ))
-        .into(),
-        None => text(artist_name)
-            .size(theme::TEXT_SIZE_SM)
-            .style(fg_secondary())
-            .into(),
-    };
+    let artist_id = track.provider_artist_id(track.source);
+    let artist_subtitle = subtitle_artist(
+        &track.artist,
+        theme::TEXT_SIZE_SM,
+        artist_id.map(|id| (id.to_string(), track.source)),
+    );
 
     inner_row_layout(
         leading,

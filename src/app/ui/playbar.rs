@@ -7,7 +7,7 @@ use iced::{
 use crate::{icons, theme::AppTheme, util::format_duration};
 
 use super::{
-    shared_components::play_pause_button,
+    shared_components::{play_pause_button, subtitle_artist},
     styles::{bg_tertiary, button_style_queue, fg_secondary},
     theme,
     track_list::thumbnail,
@@ -39,14 +39,14 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         icons::icon(icons::MUSIC_ICON, p.fg_muted, theme::PLAYBAR_THUMBNAIL_SIZE).into()
     };
 
-    let track_info = Column::with_children([
-        text(title).into(),
-        text(artist)
-            .size(theme::TEXT_SIZE_SM)
-            .style(fg_secondary())
-            .into(),
-    ])
-    .spacing(2);
+    let artist_target = track.and_then(|t| {
+        t.provider_artist_id(t.source)
+            .map(|id| (id.to_string(), t.source))
+    });
+
+    let artist_el = subtitle_artist(artist, theme::TEXT_SIZE_SM, artist_target);
+
+    let track_info = Column::with_children([text(title).into(), artist_el]).spacing(2);
 
     let elapsed_text = time_text((player.progress * player.duration) as u32);
     let total_text = time_text(player.duration as u32);
