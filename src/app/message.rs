@@ -56,7 +56,6 @@ pub enum BackendResult {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    Noop,
     Tick,
     WindowClose,
     WindowResized(iced::Size),

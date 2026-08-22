@@ -3,7 +3,8 @@ use std::borrow::Cow;
 use iced::{
     alignment,
     widget::{
-        column, container, row, scrollable, text, Button, Column, Container, MouseArea, Row, Space,
+        column, container, opaque, row, scrollable, text, Button, Column, Container, MouseArea,
+        Row, Space,
     },
     Element, Length, Rectangle,
 };
@@ -281,13 +282,11 @@ pub(super) fn view_context_menu<'a>(
     .width(theme::CONTEXT_MENU_WIDTH)
     .style(bg_popup());
 
-    let overlay = Container::new(pos_absolute(menu_content.into(), pos_x, pos_y))
+    let overlay = Container::new(pos_absolute(opaque(menu_content), pos_x, pos_y))
         .width(Length::Fill)
         .height(Length::Fill);
 
-    MouseArea::new(overlay)
-        .on_press(Message::CloseContextMenu)
-        .into()
+    opaque(MouseArea::new(overlay).on_press(Message::CloseContextMenu))
 }
 
 pub(super) fn view_edit_track(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
@@ -442,21 +441,15 @@ pub(super) fn view_playlist_picker(player: &MusicPlayer) -> Element<'_, Message,
     )
 }
 
-pub fn no_click_propagation(
-    content: Element<'_, Message, AppTheme>,
-) -> Element<'_, Message, AppTheme> {
-    MouseArea::new(content).on_press(Message::Noop).into()
-}
-
 fn view_dialog(
     dialog: Element<'_, Message, AppTheme>,
     close_msg: Message,
 ) -> Element<'_, Message, AppTheme> {
-    let dialog = no_click_propagation(Container::new(dialog).style(bg_popup()).into());
+    let dialog = opaque(Container::new(dialog).style(bg_popup()));
 
-    Container::new(MouseArea::new(Container::new(dialog).center(Length::Fill)).on_press(close_msg))
-        .style(bg_overlay())
-        .into()
+    let backdrop = MouseArea::new(Container::new(dialog).center(Length::Fill)).on_press(close_msg);
+
+    Container::new(opaque(backdrop)).style(bg_overlay()).into()
 }
 
 pub(super) fn view_delete_confirm() -> Element<'static, Message, AppTheme> {

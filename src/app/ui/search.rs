@@ -1,13 +1,15 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, text_input, Button, Column, Container, Id, MouseArea, Row, Space},
+    widget::{
+        opaque, scrollable, text, text_input, Button, Column, Container, Id, MouseArea, Row, Space,
+    },
     Color, Element, Length, Rectangle,
 };
 
 use crate::{
     app::{
         interaction::{HoverTarget, Pressed, TrackListKind},
-        ui::overlays::{no_click_propagation, pos_absolute},
+        ui::overlays::pos_absolute,
     },
     data::library::LibraryKind,
     icons,
@@ -343,7 +345,7 @@ pub(super) fn view_search_history(
         .width(input_rect.width);
 
     pos_absolute(
-        no_click_propagation(dropdown.into()),
+        opaque(dropdown),
         input_rect.x,
         input_rect.y + input_rect.height,
     )
