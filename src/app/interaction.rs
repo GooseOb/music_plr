@@ -75,7 +75,7 @@ impl TrackPos {
 }
 
 #[derive(Debug, Clone)]
-pub struct FloatingSearch {
+pub struct TrackListSearch {
     pub list: TrackListKind,
     pub query: String,
     pub matches: Vec<usize>,

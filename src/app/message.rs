@@ -105,10 +105,10 @@ pub enum Message {
     HideDeleteConfirm,
     OpenAndPlayPlaylist(usize),
 
-    FloatingSearchInput(String),
-    FloatingSearchNext,
-    FloatingSearchPrev,
-    FloatingSearchClose,
+    TrackListSearchInput(String),
+    TrackListSearchNext,
+    TrackListSearchPrev,
+    TrackListSearchClose,
 
     ToggleQueue,
     SwitchQueueTab(QueueTab),

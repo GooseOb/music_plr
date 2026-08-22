@@ -84,17 +84,17 @@ impl MusicPlayer {
         }
     }
 
-    /// Whether `pos` is a match in the active floating search (any occurrence).
-    pub fn is_floating_match(&self, pos: TrackPos) -> bool {
-        match &self.floating_search {
+    /// Whether `pos` is a match in the active track list search (any occurrence).
+    pub fn is_track_list_match(&self, pos: TrackPos) -> bool {
+        match &self.track_list_search {
             Some(fs) if fs.list == pos.list => fs.matches.contains(&pos.index),
             _ => false,
         }
     }
 
-    pub fn floating_match_position(&self) -> Option<usize> {
+    pub fn track_list_match_position(&self) -> Option<usize> {
         let current_idx = self.drag.hovered_track()?.index;
-        self.floating_search
+        self.track_list_search
             .as_ref()?
             .matches
             .iter()

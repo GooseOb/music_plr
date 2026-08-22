@@ -8,7 +8,6 @@ use iced::{
 use super::{ContextMenuState, Message, MusicPlayer};
 
 mod content;
-pub(super) mod floating_search;
 mod lyrics;
 mod overlays;
 mod playbar;
@@ -20,6 +19,7 @@ mod shared_components;
 mod sidebar;
 mod styles;
 mod track_list;
+pub(super) mod track_list_search;
 
 pub use queue::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID};
 pub use search::SEARCH_INPUT_ID;
@@ -60,10 +60,9 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         }
     }
 
-    match player.drag.cursor_interaction() {
-        Some(interaction) => widget::MouseArea::new(stack)
-            .interaction(interaction)
-            .into(),
-        None => stack.into(),
-    }
+    let cursor = player
+        .drag
+        .cursor_interaction()
+        .unwrap_or(iced::mouse::Interaction::None);
+    widget::MouseArea::new(stack).interaction(cursor).into()
 }

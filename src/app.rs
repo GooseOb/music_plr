@@ -18,7 +18,7 @@ mod ui;
 mod update;
 mod view_data;
 
-pub use interaction::{ContextMenuState, DragState, FloatingSearch, TrackListKind, TrackPos};
+pub use interaction::{ContextMenuState, DragState, TrackListKind, TrackListSearch, TrackPos};
 pub use message::{BackendResult, EditTrackField, Message};
 pub use view_data::{RequestIdGenerator, ViewData, ViewKind};
 
@@ -137,7 +137,7 @@ pub struct MusicPlayer {
 
     pub queue_selected_indices: Vec<usize>,
 
-    pub floating_search: Option<FloatingSearch>,
+    pub track_list_search: Option<TrackListSearch>,
 
     pub app_theme: AppTheme,
 
@@ -226,7 +226,7 @@ impl MusicPlayer {
             context_menu: None,
             edit_track: None,
             queue_selected_indices: Vec::new(),
-            floating_search: None,
+            track_list_search: None,
             app_theme: AppTheme::new(Palette::dark()),
             bounds: crate::app::update::operation::CaptureBounds::default(),
             window_size: iced::Size::default(),
@@ -536,11 +536,11 @@ impl MusicPlayer {
                 self.handle_open_and_play_playlist(index);
                 Task::none()
             }
-            Message::FloatingSearchInput(query) => self.handle_floating_search_input(&query),
-            Message::FloatingSearchNext => self.handle_floating_search_step(1),
-            Message::FloatingSearchPrev => self.handle_floating_search_step(-1),
-            Message::FloatingSearchClose => {
-                self.floating_search = None;
+            Message::TrackListSearchInput(query) => self.handle_track_list_search_input(&query),
+            Message::TrackListSearchNext => self.handle_track_list_search_step(1),
+            Message::TrackListSearchPrev => self.handle_track_list_search_step(-1),
+            Message::TrackListSearchClose => {
+                self.track_list_search = None;
                 Task::none()
             }
             Message::ToggleQueue => {

@@ -75,7 +75,7 @@ src/
 - **`MusicPlayer`** (`app.rs`): the single source of truth. Holds audio/queue/playlists/config,
   mpsc channels, `DragState`, context menu, `nav_history`, `download_registry`, `stream_cache`,
   `thumbnail_cache`, `picker` (resolved target indices for the playlist-picker overlay),
-  `lyrics`/`lyrics_track_id`/`lyrics_loading`, and `floating_search` (the in-list Ctrl+F overlay:
+  `lyrics`/`lyrics_track_id`/`lyrics_loading`, and `track_list_search` (the in-list Ctrl+F overlay:
   the active `TrackListKind`, live query, matched indices; the current match is just
   `drag.hovered` when it is among the matches). **All per-view state** lives in `view_data`
   (search `exhausted`, radio label, selected playlist); no separate `View`/`RadioKind` enum.

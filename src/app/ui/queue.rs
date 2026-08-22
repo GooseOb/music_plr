@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{rule, text, Button, Column, Container, Id, Row},
+    widget::{rule, text, Button, Column, Container, Id, Row, Space},
     Element, Length,
 };
 
@@ -36,13 +36,17 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
         QueueTab::RecentlyPlayed => view_recently_played_tab(player),
     };
 
-    let mut children: Vec<Element<'_, Message, AppTheme>> = vec![tab_bar.into(), body];
-    if matches!(
-        player.floating_search.as_ref().map(|fs| fs.list),
+    let track_list_search: Element<'_, Message, AppTheme> = if matches!(
+        player.track_list_search.as_ref().map(|fs| fs.list),
         Some(crate::app::TrackListKind::Queue)
     ) {
-        children.insert(1, super::floating_search::view_floating_search(player));
-    }
+        super::track_list_search::view_track_list_search(player)
+    } else {
+        Space::new().into()
+    };
+
+    let children: Vec<Element<'_, Message, AppTheme>> =
+        vec![tab_bar.into(), track_list_search, body];
 
     Container::new(Column::with_children(children))
         .width(queue_width)

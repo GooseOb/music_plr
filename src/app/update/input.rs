@@ -1,7 +1,7 @@
 use iced::widget::operation;
 
 use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData};
-use crate::app::FloatingSearch;
+use crate::app::TrackListSearch;
 
 impl MusicPlayer {
     pub fn handle_key_press(
@@ -14,15 +14,15 @@ impl MusicPlayer {
             iced::keyboard::Key::Character(c)
                 if c.eq_ignore_ascii_case("f") && (modifiers.control() || modifiers.logo()) =>
             {
-                self.open_floating_search()
+                self.open_track_list_search()
             }
             iced::keyboard::Key::Named(Named::Space) => {
                 self.toggle_play_pause();
                 Task::none()
             }
             iced::keyboard::Key::Named(Named::Escape) => {
-                if self.floating_search.is_some() {
-                    self.floating_search = None;
+                if self.track_list_search.is_some() {
+                    self.track_list_search = None;
                 } else if self.show_search_history {
                     self.show_search_history = false;
                 } else if let Some(hovered) = self.drag.hovered_track() {
@@ -46,14 +46,14 @@ impl MusicPlayer {
             }
             iced::keyboard::Key::Named(Named::Tab) => self.toggle_keyboard_list(),
             iced::keyboard::Key::Named(Named::ArrowUp) => {
-                if self.floating_search.is_some() {
-                    return self.handle_floating_search_step(-1);
+                if self.track_list_search.is_some() {
+                    return self.handle_track_list_search_step(-1);
                 }
                 self.step_hovered_track(-1)
             }
             iced::keyboard::Key::Named(Named::ArrowDown) => {
-                if self.floating_search.is_some() {
-                    return self.handle_floating_search_step(1);
+                if self.track_list_search.is_some() {
+                    return self.handle_track_list_search_step(1);
                 }
                 self.step_hovered_track(1)
             }
@@ -163,7 +163,7 @@ impl MusicPlayer {
             .map_or(TrackListKind::Active, |h| h.list)
     }
 
-    pub(crate) fn open_floating_search(&mut self) -> Task<Message> {
+    pub(crate) fn open_track_list_search(&mut self) -> Task<Message> {
         let Some(pos) = self.drag.hovered_track() else {
             return Task::none();
         };
@@ -172,7 +172,7 @@ impl MusicPlayer {
         }
         let list = pos.list;
         let matches: Vec<usize> = (0..self.track_count(list)).collect();
-        self.floating_search = Some(FloatingSearch {
+        self.track_list_search = Some(TrackListSearch {
             list,
             query: String::new(),
             matches,
@@ -183,7 +183,7 @@ impl MusicPlayer {
         let anchored = self.closest_match(from).unwrap_or(from);
         Task::batch([
             self.move_hovered(TrackPos::new(anchored, list)),
-            operation::focus::<Message>(crate::app::ui::floating_search::FLOATING_SEARCH_ID),
+            operation::focus::<Message>(crate::app::ui::track_list_search::TRACK_LIST_SEARCH_ID),
         ])
     }
 
@@ -191,7 +191,7 @@ impl MusicPlayer {
     /// ties resolved to the smaller index), or `None` when there are no
     /// matches.
     fn closest_match(&self, from: usize) -> Option<usize> {
-        let fs = self.floating_search.as_ref()?;
+        let fs = self.track_list_search.as_ref()?;
         let mut best: Option<(usize, usize)> = None;
         for &m in &fs.matches {
             let dist = m.abs_diff(from);
@@ -203,12 +203,12 @@ impl MusicPlayer {
         best.map(|(_, idx)| idx)
     }
 
-    /// Recompute the match set for the active floating search against the
+    /// Recompute the match set for the active track list search against the
     /// live query. The hovered track is re-anchored to the closest match
     /// (kept as-is when it still matches) so the current occurrence follows
     /// the query, and the new current is scrolled into view.
-    pub(crate) fn handle_floating_search_input(&mut self, query: &str) -> Task<Message> {
-        let list = match &self.floating_search {
+    pub(crate) fn handle_track_list_search_input(&mut self, query: &str) -> Task<Message> {
+        let list = match &self.track_list_search {
             Some(fs) => fs.list,
             None => return Task::none(),
         };
@@ -226,7 +226,7 @@ impl MusicPlayer {
             })
             .map(|(i, _)| i)
             .collect();
-        let fs = self.floating_search.as_mut().expect("checked above");
+        let fs = self.track_list_search.as_mut().expect("checked above");
         fs.query = query.to_string();
         fs.matches = matches;
         let from = match self.drag.hovered_track() {
@@ -241,8 +241,8 @@ impl MusicPlayer {
     /// match relative to its current row, wrapping around the match list.
     /// The hovered track is the current occurrence, so this is how the user
     /// walks between matches; the new current is scrolled into view.
-    pub(crate) fn handle_floating_search_step(&mut self, dir: isize) -> Task<Message> {
-        let Some(fs) = self.floating_search.as_ref() else {
+    pub(crate) fn handle_track_list_search_step(&mut self, dir: isize) -> Task<Message> {
+        let Some(fs) = self.track_list_search.as_ref() else {
             return Task::none();
         };
         if fs.matches.len() <= 1 {

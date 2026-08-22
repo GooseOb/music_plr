@@ -173,7 +173,7 @@ pub(super) fn view_track_row<'a>(
         .queue
         .current()
         .is_some_and(|t| t.cache_key() == track.cache_key());
-    let is_match = player.is_floating_match(pos);
+    let is_match = player.is_track_list_match(pos);
 
     let row_bg = if is_current {
         if is_selected {
@@ -329,7 +329,7 @@ pub(super) fn track_row_layout<'a>(
 /// Wraps row content in a fixed-height container with a background color.
 /// `id` (when `Some`) tags the container so the bounds `Operation` can capture
 /// its measured geometry for drop-target hit-testing. `border` (when `Some`)
-/// draws a 1px outline in the given color (used by the floating in-list
+/// draws a 1px outline in the given color (used by the track in-list
 /// search to mark matched / current tracks).
 pub(super) fn track_row<'a>(
     content: impl Into<Element<'a, Message, AppTheme>>,
