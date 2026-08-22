@@ -5,6 +5,7 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 ## Features
 
 - **YouTube Music Search** — Scoped search (Songs / Videos / Artists / Albums / Playlists) via ytmusicapi with yt-dlp fallback; click artists/albums/playlists to drill down into their tracks; paginated "Load More"
+- **SoundCloud Search** — Scoped search (Songs / Artists / Albums / Playlists); songs and artists come from the `rsoundcloud` crate, while album/playlist cards and their track drill-downs also use `rsoundcloud` (no API key needed); click an artist to browse their tracks or an album/playlist to browse its tracks
 - **Local Music** — Add local audio files (MP3, FLAC, WAV, OGG, M4A, AAC, OPUS, WMA) to playlists
 - **Streaming + Caching** — Streams audio via yt-dlp with fully native decoding (symphonia, **no ffmpeg**), caching to disk for instant replay
 - **Downloads** — Download tracks to MP3 via yt-dlp, with a Downloads view and on-row indicators

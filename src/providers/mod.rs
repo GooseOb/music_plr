@@ -116,7 +116,12 @@ impl ProviderId {
     pub fn supported_scopes(self) -> &'static [SearchScope] {
         match self {
             ProviderId::YouTube => SearchScope::all(),
-            ProviderId::SoundCloud => &[SearchScope::Songs, SearchScope::Videos],
+            ProviderId::SoundCloud => &[
+                SearchScope::Songs,
+                SearchScope::Artists,
+                SearchScope::Albums,
+                SearchScope::Playlists,
+            ],
             ProviderId::Jamendo | ProviderId::MusicBrainz => &[
                 SearchScope::Songs,
                 SearchScope::Artists,
@@ -286,6 +291,7 @@ pub fn search_more(provider: ProviderId, query: &str, offset: usize) -> Result<V
 pub fn browse(provider: ProviderId, id: &str, kind: &str) -> Result<Vec<Track>> {
     match provider {
         ProviderId::YouTube => youtube::browse(id, kind),
+        ProviderId::SoundCloud => soundcloud::browse(id, kind),
         ProviderId::MusicBrainz => musicbrainz::browse(id, kind),
         _ => Ok(Vec::new()),
     }
