@@ -14,16 +14,13 @@ pub struct TrackAlbum {
     pub id: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TrackArtist {
-    pub name: String,
-    pub id: Option<String>,
-}
-
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Track {
     pub title: String,
-    pub artist: TrackArtist,
+    /// The display artist name. The provider-scoped artist id (when a provider
+    /// exposes one, e.g. `YouTube`/`MusicBrainz`) lives in `providers` via
+    /// [`Track::provider_artist_id`], not here.
+    pub artist: String,
     pub duration: u32,
     #[serde(default)]
     pub thumbnail: String,
@@ -104,16 +101,16 @@ impl Track {
     /// MPRIS metadata. Built from title + artist so the same song played from
     /// different providers collapses to one history entry.
     pub fn dedup_key(&self) -> String {
-        format!("{}|{}", self.title, self.artist.name)
+        format!("{}|{}", self.title, self.artist)
     }
 
     /// The search query used to resolve this track on a provider: the title
     /// alone when there is no artist, otherwise `title artist`.
     pub fn search_query(&self) -> String {
-        if self.artist.name.is_empty() {
+        if self.artist.is_empty() {
             self.title.clone()
         } else {
-            format!("{} {}", self.title, self.artist.name)
+            format!("{} {}", self.title, self.artist)
         }
     }
 
@@ -132,6 +129,36 @@ impl Track {
     pub fn cache_key(&self) -> String {
         let id = self.primary_id();
         format!("{:?}:{}", self.origin, id)
+    }
+
+    /// Build a `Track` owned by `provider`, carrying that provider's id/url in
+    /// `providers` and set as `origin`. Centralizes the invariant that the
+    /// `origin` provider is always present in `providers`. `album`/`artist_id`
+    /// are optional; `duration`/`thumbnail` default to empty when unknown.
+    #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+    pub fn from_provider(
+        provider: ProviderId,
+        id: String,
+        url: String,
+        title: impl Into<String>,
+        artist_name: impl Into<String>,
+        duration: u32,
+        thumbnail: impl Into<String>,
+        album: Option<TrackAlbum>,
+        artist_id: Option<String>,
+    ) -> Self {
+        let mut providers = ProviderMap::new();
+        providers.insert(provider, ProviderTrack { id, url, artist_id });
+        Self {
+            title: title.into(),
+            artist: artist_name.into(),
+            duration,
+            thumbnail: thumbnail.into(),
+            download_path: None,
+            album,
+            origin: provider,
+            providers,
+        }
     }
 }
 
@@ -218,10 +245,7 @@ mod tests {
     fn make_track(id: &str, url: &str) -> Track {
         let mut t = Track {
             title: format!("Track {id}"),
-            artist: TrackArtist {
-                name: "Artist".into(),
-                id: None,
-            },
+            artist: "Artist".into(),
             duration: 10,
             thumbnail: String::new(),
             download_path: None,

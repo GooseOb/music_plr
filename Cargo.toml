@@ -27,6 +27,7 @@ rfd = "0.15"
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+musicbrainz_rs = { version = "0.13", features = ["sync"] }
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

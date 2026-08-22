@@ -55,7 +55,9 @@ impl MusicPlayer {
                 Pressed::Track(pos) => {
                     self.toggle_selection(pos);
                 }
-                Pressed::Card(item) => self.handle_browse(&item.into()),
+                Pressed::Card(item) => {
+                    self.handle_browse(&item.into(), self.view_data().provider())
+                }
                 // A click without a drag selects the playlist (mirrors how a
                 // library card opens on a plain click).
                 Pressed::Playlist(i) => self.handle_select_playlist(i),
@@ -530,9 +532,10 @@ impl MusicPlayer {
         let id = item.id.clone();
         let name_for_thread = name.clone();
         let tx = self.result_tx.clone();
+        let provider = self.view_data().provider();
         self.notify(format!("Creating playlist \"{name}\"..."));
         Self::spawn_backend_thread(
-            move || crate::providers::browse(crate::providers::ProviderId::YouTube, &id, kind_str),
+            move || crate::providers::browse(provider, &id, kind_str),
             move |tracks| BackendResult::CardPlaylistReady(idx, name_for_thread, tracks),
             tx,
         );

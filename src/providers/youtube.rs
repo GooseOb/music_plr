@@ -1,8 +1,7 @@
-use crate::providers::{CardData, ProviderId, ProviderMap, SearchScope, SearchTab};
-use crate::types::{Track, TrackArtist};
+use crate::providers::{CardData, ProviderId, SearchScope, SearchTab};
+use crate::types::Track;
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::{
     io::Write,
     process::{Command, Stdio},
@@ -27,28 +26,17 @@ pub struct YouTubeVideo {
 
 impl From<YouTubeVideo> for Track {
     fn from(v: YouTubeVideo) -> Self {
-        let mut providers: ProviderMap = HashMap::new();
-        providers.insert(
+        Track::from_provider(
             ProviderId::YouTube,
-            crate::providers::ProviderTrack {
-                id: v.id.clone(),
-                url: v.url.clone(),
-                artist_id: v.artist_id.clone(),
-            },
-        );
-        Self {
-            title: v.title,
-            artist: TrackArtist {
-                name: v.channel,
-                id: v.artist_id.clone(),
-            },
-            duration: v.duration,
-            thumbnail: v.thumbnail,
-            download_path: None,
-            album: v.album,
-            origin: ProviderId::YouTube,
-            providers,
-        }
+            v.id,
+            v.url,
+            v.title,
+            v.channel,
+            v.duration,
+            v.thumbnail,
+            v.album,
+            v.artist_id,
+        )
     }
 }
 
@@ -134,7 +122,7 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
         serde_json::from_str(&stdout).context("Failed to parse ytmusicapi output")?;
 
     let mut tracks: Vec<Track> = Vec::new();
-    let mut artists: Vec<CardData> = Vec::new();
+    let mut cards: Vec<CardData> = Vec::new();
     let mut albums: Vec<CardData> = Vec::new();
     let mut playlists: Vec<CardData> = Vec::new();
     for v in raw {
@@ -144,7 +132,7 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
         let subtitle = v["subtitle"].as_str().unwrap_or_default().to_string();
         let thumbnail = v["thumbnail"].as_str().unwrap_or_default().to_string();
         match kind {
-            "artist" => artists.push(CardData {
+            "artist" => cards.push(CardData {
                 id,
                 title,
                 subtitle: String::new(),
@@ -174,7 +162,7 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
     let tab = match scope {
         SearchScope::Songs => SearchTab::Songs,
         SearchScope::Videos => SearchTab::Videos,
-        SearchScope::Artists => SearchTab::Artists(artists),
+        SearchScope::Artists => SearchTab::Artists(cards),
         SearchScope::Albums => SearchTab::Albums(albums),
         SearchScope::Playlists => SearchTab::Playlists(playlists),
     };
@@ -237,7 +225,7 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
         if let Ok(item) = serde_json::from_str::<YTDLPSearchResult>(line) {
             let id = item.id;
             // Skip non-video playlist entries (mixes, channels, etc.).
-            if id.len() > 12 || id.starts_with("MPRE") || id.starts_with("UC") {
+            if !is_video_id(&id) {
                 continue;
             }
             valid_ids.push(id.clone());
@@ -374,7 +362,7 @@ pub fn radio_song(video_id: &str) -> Result<Vec<Track>> {
 }
 
 /// Build an artist radio from a real `YouTube` Music mix seeded by the artist's
-/// `browse_id` (resolved from `track.artist.id`).
+/// `browse_id` (resolved from the track's provider artist id).
 pub fn radio_artist(browse_id: &str) -> Result<Vec<Track>> {
     watch_playlist(None, Some(browse_id))
 }
@@ -432,4 +420,13 @@ pub fn download_audio(video_url: &str, output_path: &str) -> Result<String> {
     }
 
     Ok(output_path.replace("%(ext)s", ext))
+}
+
+/// Whether `id` looks like a real `YouTube` video `id` (11 chars, not a
+/// mix/playlist/channel entry). yt-dlp's flat playlist also returns mixes
+/// (`MPRE` prefix), channel uploads (`UC` prefix), and other non-video
+/// entries whose ids are longer than the 11-character video id; those are
+/// filtered out so the search results stay playable.
+fn is_video_id(id: &str) -> bool {
+    id.len() == 11 && !id.starts_with("MPRE") && !id.starts_with("UC")
 }

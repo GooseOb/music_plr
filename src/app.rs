@@ -393,8 +393,8 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Message::Browse(kind) => {
-                self.handle_browse(&kind);
+            Message::Browse(kind, provider) => {
+                self.handle_browse(&kind, provider);
                 Task::none()
             }
             Message::ToggleLibrarySave(item) => {
@@ -619,11 +619,16 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuGoToArtist => {
-                if let Some(artist) = self.context_menu.take().map(|m| m.track.artist) {
-                    self.handle_browse(&ViewKind::Artist {
-                        id: artist.id.expect("Illegal state: context menu 'Go to artist' was shown for a track with no artist id"),
-                        name: artist.name,
-                    });
+                if let Some(track) = self.context_menu.take().map(|m| m.track) {
+                    if let Some(artist_id) = track.provider_artist_id(track.origin) {
+                        self.handle_browse(
+                            &ViewKind::Artist {
+                                id: artist_id.to_string(),
+                                name: track.artist,
+                            },
+                            track.origin,
+                        );
+                    }
                 }
                 Task::none()
             }
@@ -647,7 +652,7 @@ impl MusicPlayer {
             Message::ContextMenuArtistRadioProvider(provider) => {
                 if let Some(track) = self.context_menu.take().map(|m| m.track) {
                     if let Some(browse_id) = track.provider_artist_id(provider) {
-                        self.start_radio_provider(provider, &track.artist.name, browse_id, true);
+                        self.start_radio_provider(provider, &track.artist, browse_id, true);
                     }
                 }
                 Task::none()

@@ -274,10 +274,13 @@ pub(super) fn track_row_layout<'a>(
             let album_button: Element<'a, Message, AppTheme> = Container::new(
                 Button::new(text(album.name.clone()).size(theme::TEXT_SIZE_SM))
                     .style(button_style_album())
-                    .on_press(Message::Browse(crate::app::ViewKind::Album {
-                        id: album.id.clone(),
-                        name: album.name.clone(),
-                    })),
+                    .on_press(Message::Browse(
+                        crate::app::ViewKind::Album {
+                            id: album.id.clone(),
+                            name: album.name.clone(),
+                        },
+                        track.origin,
+                    )),
             )
             .width(Length::FillPortion(2))
             .into();
@@ -303,8 +306,9 @@ pub(super) fn track_row_layout<'a>(
         .into(),
     );
 
-    let artist_name = track.artist.name.clone();
-    let artist_subtitle: Element<'a, Message, AppTheme> = match &track.artist.id {
+    let artist_name = track.artist.clone();
+    let artist_id = track.provider_artist_id(track.origin).map(str::to_string);
+    let artist_subtitle: Element<'a, Message, AppTheme> = match artist_id {
         Some(artist_id) => Button::new(
             text(artist_name.clone())
                 .size(theme::TEXT_SIZE_SM)
@@ -312,10 +316,13 @@ pub(super) fn track_row_layout<'a>(
         )
         .padding(0)
         .style(button_style_album())
-        .on_press(Message::Browse(crate::app::ViewKind::Artist {
-            id: artist_id.clone(),
-            name: artist_name,
-        }))
+        .on_press(Message::Browse(
+            crate::app::ViewKind::Artist {
+                id: artist_id.clone(),
+                name: artist_name,
+            },
+            track.origin,
+        ))
         .into(),
         None => text(artist_name)
             .size(theme::TEXT_SIZE_SM)

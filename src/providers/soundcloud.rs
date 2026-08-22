@@ -3,8 +3,8 @@
 //! pipeline because both are yt-dlp-backed.
 
 use crate::providers::{ProviderId, SearchScope, SearchTab};
-use crate::types::{ProviderTrack, Track, TrackAlbum, TrackArtist};
-use anyhow::Result;
+use crate::types::{Track, TrackAlbum};
+use anyhow::{Context, Result};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -78,35 +78,25 @@ fn sc_search(query: &str, start: usize, end: usize) -> Vec<SCDirectResult> {
 }
 
 fn to_track(item: &SCDirectResult) -> Track {
-    let mut providers = std::collections::HashMap::new();
-    providers.insert(
+    let url = if item.webpage_url.is_empty() {
+        format!("https://soundcloud.com/{}", item.id)
+    } else {
+        item.webpage_url.clone()
+    };
+    Track::from_provider(
         ProviderId::SoundCloud,
-        ProviderTrack {
-            id: item.id.clone(),
-            url: if item.webpage_url.is_empty() {
-                format!("https://soundcloud.com/{}", item.id)
-            } else {
-                item.webpage_url.clone()
-            },
-            artist_id: None,
-        },
-    );
-    Track {
-        title: item.title.clone(),
-        artist: TrackArtist {
-            name: item.uploader.clone(),
-            id: None,
-        },
-        duration: item.duration as u32,
-        thumbnail: best_thumbnail(item),
-        download_path: None,
-        album: Some(TrackAlbum {
+        item.id.clone(),
+        url,
+        item.title.clone(),
+        item.uploader.clone(),
+        item.duration as u32,
+        best_thumbnail(item),
+        Some(TrackAlbum {
             name: String::new(),
             id: String::new(),
         }),
-        origin: ProviderId::SoundCloud,
-        providers,
-    }
+        None,
+    )
 }
 
 pub fn search(query: &str, _scope: SearchScope, offset: usize) -> (Vec<Track>, SearchTab) {
@@ -120,18 +110,21 @@ pub fn search_more(query: &str, offset: usize) -> Vec<Track> {
     items.into_iter().map(|t| to_track(&t)).collect()
 }
 
-/// Resolve a logical track to a `SoundCloud` id via yt-dlp search.
-pub fn resolve_id(track: &Track) -> Option<(String, String)> {
+/// Resolve a logical track to a `SoundCloud` id via yt-dlp search. Returns
+/// `Ok(None)` when no match is found (not an error).
+#[allow(clippy::unnecessary_wraps)]
+pub fn resolve_id(track: &Track) -> Result<Option<(String, String)>> {
     let query = track.search_query();
     let items = sc_search(&query, 1, 1);
-    items.into_iter().next().map(|i| (i.id, i.webpage_url))
+    Ok(items.into_iter().next().map(|i| (i.id, i.webpage_url)))
 }
 
 /// Download the track's audio. The track must carry a `SoundCloud` id/url.
 pub fn download(track: &Track, download_dir: &str) -> Result<String> {
     let url = track
         .provider_url(ProviderId::SoundCloud)
-        .map_or_else(|| track.primary_url().to_string(), str::to_string);
+        .unwrap_or_else(|| track.primary_url())
+        .to_string();
     let id = track
         .provider_id(ProviderId::SoundCloud)
         .unwrap_or("download");
@@ -152,7 +145,7 @@ pub fn download(track: &Track, download_dir: &str) -> Result<String> {
             &url,
         ])
         .output()
-        .context_or_anyhow("Failed to download audio")?;
+        .context("Failed to download audio")?;
 
     if !out.status.success() {
         anyhow::bail!(
@@ -161,13 +154,4 @@ pub fn download(track: &Track, download_dir: &str) -> Result<String> {
         );
     }
     Ok(output_path.to_string_lossy().replace("%(ext)s", ext))
-}
-
-trait ContextOrAnyhow {
-    fn context_or_anyhow(self, msg: &str) -> Result<std::process::Output>;
-}
-impl ContextOrAnyhow for std::io::Result<std::process::Output> {
-    fn context_or_anyhow(self, msg: &str) -> Result<std::process::Output> {
-        self.map_err(|e| anyhow::anyhow!("{msg}: {e}"))
-    }
 }

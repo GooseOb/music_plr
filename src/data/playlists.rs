@@ -139,10 +139,7 @@ mod tests {
         );
         Track {
             title: id.to_string(),
-            artist: crate::types::TrackArtist {
-                name: String::new(),
-                id: None,
-            },
+            artist: String::new(),
             duration: 0,
             thumbnail: String::new(),
             download_path: None,
@@ -169,10 +166,7 @@ mod tests {
                     );
                     Track {
                         title: s.to_string(),
-                        artist: crate::types::TrackArtist {
-                            name: String::new(),
-                            id: None,
-                        },
+                        artist: String::new(),
                         duration: 0,
                         thumbnail: String::new(),
                         download_path: None,

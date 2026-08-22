@@ -45,6 +45,11 @@ impl SearchHistory {
             .cloned()
             .collect()
     }
+
+    #[cfg(test)]
+    pub fn get(&self) -> &[String] {
+        &self.queries
+    }
 }
 
 #[cfg(test)]

@@ -240,13 +240,14 @@ impl SearchTab {
         matches!(self, SearchTab::Songs | SearchTab::Videos)
     }
 
-    /// Number of results shown by this tab (tracks for track tabs, cards
-    /// otherwise).
-    pub fn len(&self) -> usize {
+    /// Number of card results shown by this tab (artists/albums/playlists).
+    /// Returns `None` for the track tabs (`Songs`/`Videos`), whose result
+    /// count lives in the sibling `Vec<Track>` returned alongside the tab.
+    pub fn card_count(&self) -> Option<usize> {
         match self {
-            SearchTab::Songs | SearchTab::Videos => 0,
+            SearchTab::Songs | SearchTab::Videos => None,
             SearchTab::Artists(items) | SearchTab::Albums(items) | SearchTab::Playlists(items) => {
-                items.len()
+                Some(items.len())
             }
         }
     }
@@ -285,6 +286,7 @@ pub fn search_more(provider: ProviderId, query: &str, offset: usize) -> Result<V
 pub fn browse(provider: ProviderId, id: &str, kind: &str) -> Result<Vec<Track>> {
     match provider {
         ProviderId::YouTube => youtube::browse(id, kind),
+        ProviderId::MusicBrainz => musicbrainz::browse(id, kind),
         _ => Ok(Vec::new()),
     }
 }
@@ -306,23 +308,17 @@ pub fn radio_artist(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
 }
 
 /// Resolve a logical track (title/artist) to this provider's id by searching.
-/// Returns `None` if the provider is search-only with no usable id, or if no
-/// match was found. The tuple is `(id, url)` where `url` is the provider's
-/// stream/download URL for the resolved track (empty when the provider has no
-/// usable URL, e.g. `MusicBrainz`). Drives the "play via / download from
-/// [provider]" flow.
+/// Returns `Ok(None)` if no match was found or the provider cannot resolve
+/// (e.g. `Local`); returns `Err` only on a genuine provider failure. The tuple
+/// is `(id, url)` where `url` is the provider's stream/download URL for the
+/// resolved track (empty when the provider has no usable URL, e.g.
+/// `MusicBrainz`). Drives the "play via / download from [provider]" flow.
 pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<(String, String)>> {
     match provider {
         ProviderId::YouTube => youtube::resolve_id(track),
-        ProviderId::SoundCloud => soundcloud::resolve_id(track)
-            .map(Some)
-            .ok_or_else(|| anyhow::anyhow!("SoundCloud resolve failed")),
-        ProviderId::Jamendo => jamendo::resolve_id(track)
-            .map(Some)
-            .ok_or_else(|| anyhow::anyhow!("Jamendo resolve failed")),
-        ProviderId::MusicBrainz => musicbrainz::resolve_id(track)
-            .map(Some)
-            .ok_or_else(|| anyhow::anyhow!("MusicBrainz resolve failed")),
+        ProviderId::SoundCloud => soundcloud::resolve_id(track),
+        ProviderId::Jamendo => jamendo::resolve_id(track),
+        ProviderId::MusicBrainz => musicbrainz::resolve_id(track),
         ProviderId::Local => Ok(None),
     }
 }

@@ -222,7 +222,7 @@ impl MusicPlayer {
             .enumerate()
             .filter(|(_, t)| {
                 crate::util::fuzzy_match(query, &t.title)
-                    || crate::util::fuzzy_match(query, &t.artist.name)
+                    || crate::util::fuzzy_match(query, &t.artist)
             })
             .map(|(i, _)| i)
             .collect();

@@ -219,10 +219,7 @@ mod tests {
         );
         let track = crate::types::Track {
             title: "Song".into(),
-            artist: crate::types::TrackArtist {
-                name: "Artist".into(),
-                id: None,
-            },
+            artist: "Artist".into(),
             duration: 0,
             thumbnail: String::new(),
             download_path: None,

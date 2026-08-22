@@ -29,7 +29,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
 
     let track = player.queue.current();
     let title = track.map_or("Not playing", |t| t.title.as_str());
-    let artist = track.map_or("", |t| t.artist.name.as_str());
+    let artist = track.map_or("", |t| t.artist.as_str());
 
     let track_thumb: Element<'a, Message, AppTheme> = if let Some(t) = track {
         let thumb = player.thumbnail_index.get(t.primary_id());

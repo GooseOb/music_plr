@@ -272,10 +272,7 @@ mod tests {
                 );
                 Track {
                     title: format!("Track {i}"),
-                    artist: crate::types::TrackArtist {
-                        name: "Artist".into(),
-                        id: None,
-                    },
+                    artist: "Artist".into(),
                     duration: 10,
                     thumbnail: String::new(),
                     download_path: None,

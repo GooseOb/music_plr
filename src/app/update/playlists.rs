@@ -119,10 +119,7 @@ impl MusicPlayer {
                 );
                 new_tracks.push(Track {
                     title: filename.to_string(),
-                    artist: crate::types::TrackArtist {
-                        name: "Unknown Artist".to_string(),
-                        id: None,
-                    },
+                    artist: "Unknown Artist".to_string(),
                     duration,
                     thumbnail: String::new(),
                     download_path: None,

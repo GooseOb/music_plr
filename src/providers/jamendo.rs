@@ -5,15 +5,18 @@
 
 use crate::data::JsonStore;
 use crate::providers::{ProviderId, SearchScope, SearchTab};
-use crate::types::{ProviderTrack, Track, TrackAlbum, TrackArtist};
+use crate::types::{Track, TrackAlbum};
 use crate::util::urlencode;
 use anyhow::Result;
 use serde::Deserialize;
+use std::sync::OnceLock;
 
 /// The client id used for API calls, taken from the app config so the user
-/// can supply their own registered id.
-fn client_id() -> String {
-    crate::data::config::Config::load().jamendo_client_id
+/// can supply their own registered id. Cached after first load: `Config::load`
+/// is a synchronous disk read and `client_id` is called once per API request.
+fn client_id() -> &'static str {
+    static CACHED: OnceLock<String> = OnceLock::new();
+    CACHED.get_or_init(|| crate::data::config::Config::load().jamendo_client_id)
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,31 +59,20 @@ fn to_track(t: &JamendoTrack) -> Track {
     } else {
         t.audio.clone()
     };
-    let mut providers = std::collections::HashMap::new();
-    providers.insert(
+    Track::from_provider(
         ProviderId::Jamendo,
-        ProviderTrack {
-            id: t.id.clone(),
-            url: stream_url.clone(),
-            artist_id: None,
-        },
-    );
-    Track {
-        title: t.name.clone(),
-        artist: TrackArtist {
-            name: t.artist_name.clone(),
-            id: None,
-        },
-        duration: t.duration as u32,
-        thumbnail: t.image.clone(),
-        download_path: None,
-        album: Some(TrackAlbum {
+        t.id.clone(),
+        stream_url,
+        t.name.clone(),
+        t.artist_name.clone(),
+        t.duration as u32,
+        t.image.clone(),
+        Some(TrackAlbum {
             name: t.album_name.clone(),
             id: String::new(),
         }),
-        origin: ProviderId::Jamendo,
-        providers,
-    }
+        None,
+    )
 }
 
 pub fn search(query: &str, scope: SearchScope, offset: usize) -> (Vec<Track>, SearchTab) {
@@ -106,14 +98,16 @@ pub fn search_more(query: &str, offset: usize) -> Vec<Track> {
     search(query, SearchScope::Songs, offset).0
 }
 
-/// Resolve a logical track to a Jamendo id via search.
-pub fn resolve_id(track: &Track) -> Option<(String, String)> {
+/// Resolve a logical track to a Jamendo id via search. Returns `Ok(None)`
+/// when no match is found (not an error).
+#[allow(clippy::unnecessary_wraps)]
+pub fn resolve_id(track: &Track) -> Result<Option<(String, String)>> {
     let q = track.search_query();
     let path = format!(
         "tracks/?format=json&limit=1&track_name={}&include=musicinfo&audioformat=mp32",
         urlencode(&q)
     );
-    api_get(&path)
+    Ok(api_get(&path)
         .and_then(|r| r.results.into_iter().next())
         .map(|t| {
             let url = if t.audio.is_empty() {
@@ -122,14 +116,15 @@ pub fn resolve_id(track: &Track) -> Option<(String, String)> {
                 t.audio.clone()
             };
             (t.id, url)
-        })
+        }))
 }
 
 /// Download the track's audio. The track must carry a Jamendo id/url.
 pub fn download(track: &Track, download_dir: &str) -> Result<String> {
     let url = track
         .provider_url(ProviderId::Jamendo)
-        .map_or_else(|| track.primary_url().to_string(), str::to_string);
+        .unwrap_or_else(|| track.primary_url())
+        .to_string();
     if url.is_empty() {
         anyhow::bail!("no Jamendo audio url for track");
     }

@@ -185,6 +185,17 @@ impl ViewData {
         }
     }
 
+    /// The provider backing the active view. For a `Search` view this is the
+    /// provider that produced the results (and thus the one to browse into
+    /// when a card is clicked); elsewhere it falls back to `YouTube` so callers
+    /// always receive a concrete provider.
+    pub fn provider(&self) -> ProviderId {
+        match &self.kind {
+            ViewKind::Search { provider, .. } => *provider,
+            _ => ProviderId::YouTube,
+        }
+    }
+
     /// The selected playlist index for the Playlist view, or `None`.
     pub fn selected_playlist_id(&self) -> Option<usize> {
         match &self.kind {

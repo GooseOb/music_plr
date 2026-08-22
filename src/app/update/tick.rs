@@ -200,7 +200,7 @@ impl MusicPlayer {
                 let count = if tab.is_track_tab() {
                     tracks.len()
                 } else {
-                    tab.len()
+                    tab.card_count().unwrap_or(0)
                 };
                 *exhausted = count < crate::theme::SEARCH_PAGE_SIZE;
                 *kind_tab = tab;
@@ -284,6 +284,18 @@ impl MusicPlayer {
                 id,
                 pos,
             } => self.apply_provider_resolution(original, provider, id, pos, false),
+            BackendResult::ProviderResolveError {
+                title,
+                provider,
+                message,
+            } => {
+                self.notify_error(format!(
+                    "Failed to resolve \"{}\" on {}: {}",
+                    title,
+                    provider.label(),
+                    message
+                ));
+            }
             BackendResult::ThumbnailsDownloaded(ids) => {
                 for id in &ids {
                     self.thumbnail_index.mark_downloaded(id);
@@ -373,7 +385,7 @@ impl MusicPlayer {
                 }
                 .into(),
                 title: track.map(|t| t.title.clone()).unwrap_or_default(),
-                artist: track.map(|t| t.artist.name.clone()).unwrap_or_default(),
+                artist: track.map(|t| t.artist.clone()).unwrap_or_default(),
                 duration_secs: self.duration,
                 position_us: (self.progress * self.duration * 1_000_000.0) as i64,
                 volume: self.volume,

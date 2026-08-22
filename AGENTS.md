@@ -132,7 +132,7 @@ src/
 
 ## YouTube & Key Files
 
-- `search()`/`browse()`: scoped search via `ytmusicapi` (`youtube_search.py`), `scope` → ytmusicapi `filter=`; pagination (`search_more`) falls back to `yt-dlp --flat-playlist`. `browse()` drills via `get_artist`/`get_album`/`get_playlist`. `SEARCH_PAGE_SIZE = 10`.
+- `search()`/`browse()`: scoped search via `ytmusicapi` (`youtube_search.py`), `scope` → ytmusicapi `filter=`; pagination (`search_more`) falls back to `yt-dlp --flat-playlist`. `browse()` is dispatched by `ProviderId`: YouTube drills via `get_artist`/`get_album`/`get_playlist`; MusicBrainz uses the `musicbrainz_rs` crate (`MbRecording::browse().by_artist()` for artist pages, `MbRelease::fetch().with_recordings()` for albums — the bare `artist/{id}/recordings` and `release/{id}/recordings` endpoints do NOT return recordings). Artists/Albums scopes return `CardData` (`SearchTab::Artists`/`Albums`), not fake `Track` stubs — only `Songs` produces playable tracks. `SEARCH_PAGE_SIZE = 10`.
 - `radio_song()`/`radio_artist()`: query-modified search; `download()`/`download_audio()` → `yt-dlp --extract-audio` MP3.
 - `theme/`: `Palette`+`AppTheme` (`mod.rs`), constants (`layout.rs`, re-exported), `Catalog` impls (`catalog.rs`).
 - `ViewKind` (`app/view_data.rs`): `Search`/`SongRadio`/`ArtistRadio`/`Artist`/`Album`/`PlaylistView`/`Playlist`/`Downloads`/`Settings`/`Lyrics` (active view selector).

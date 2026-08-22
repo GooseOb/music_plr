@@ -158,9 +158,12 @@ impl MusicPlayer {
     }
 
     /// Shared drill-down: switch to the given browse view kind (loading),
-    /// fetch its tracks via ytmusicapi `browse()`, and send `BrowseResults`.
-    /// All browse parameters are derived from `kind` via `ViewKind::browse_params`.
-    pub fn handle_browse(&mut self, kind: &ViewKind) {
+    /// fetch its tracks via the provider's `browse()`, and send
+    /// `BrowseResults`. All browse parameters are derived from `kind` via
+    /// `ViewKind::browse_params`; the originating `provider` selects which
+    /// backend answers the browse (`YouTube` cards vs. `MusicBrainz` `artist`/
+    /// `release` pages).
+    pub fn handle_browse(&mut self, kind: &ViewKind, provider: crate::providers::ProviderId) {
         let (id, kind_str, label) = kind
             .browse_params()
             .expect("start_browse called with a non-browse ViewKind");
@@ -175,7 +178,7 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         let id = id.to_string();
         Self::spawn_backend_thread(
-            move || crate::providers::browse(crate::providers::ProviderId::YouTube, &id, kind_str),
+            move || crate::providers::browse(provider, &id, kind_str),
             move |tracks| BackendResult::BrowseResults(rid, tracks),
             tx,
         );

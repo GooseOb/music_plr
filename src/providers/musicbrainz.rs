@@ -1,224 +1,181 @@
-//! `MusicBrainz` provider. Search-only: it resolves canonical track/artist ids
-//! (MBIDs) and rich metadata but provides no audio streaming or download. A
-//! track found here carries only a `MusicBrainz` id; playing or downloading it
-//! triggers a fallback resolution on the default (stream+download) provider.
+//! `MusicBrainz` provider. It resolves canonical track/artist ids (MBIDs) and
+//! rich metadata but provides no audio streaming or download. A track found
+//! here carries only a `MusicBrainz` id; playing or downloading it triggers a
+//! fallback resolution on the default (stream+download) provider. All requests
+//! go through the `musicbrainz_rs` crate, which builds the correct WS/2
+//! queries (search, `recording?artist=`, `release?inc=recordings`) and
+//! deserializes the typed responses.
 
-use crate::providers::{ProviderId, SearchScope, SearchTab};
-use crate::types::{ProviderTrack, Track, TrackAlbum, TrackArtist};
-use crate::util::urlencode;
-use serde::Deserialize;
+use crate::{
+    providers::{CardData, ProviderId, SearchScope, SearchTab},
+    theme::SEARCH_PAGE_SIZE,
+    types::{Track, TrackAlbum},
+};
+use anyhow::Result;
+use musicbrainz_rs::{
+    entity::{artist::Artist, recording::Recording, release::Release},
+    Browse, Fetch, Search,
+};
 
-#[derive(Debug, Deserialize)]
-struct MBRecording {
-    id: String,
-    title: String,
-    #[serde(default)]
-    artist_credit: Vec<MBArtistCredit>,
-    #[serde(default)]
-    releases: Vec<MBRelease>,
-}
-
-#[derive(Debug, Deserialize)]
-struct MBArtistCredit {
-    name: String,
-    #[serde(default)]
-    artist: Option<MBArtist>,
-}
-
-#[derive(Debug, Deserialize)]
-struct MBArtist {
-    id: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct MBRelease {
-    id: String,
-    title: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct MBResponse {
-    #[serde(default)]
-    recordings: Vec<MBRecording>,
-}
-
-fn api_get_json<T: serde::de::DeserializeOwned>(url: &str) -> Option<T> {
-    let resp = ureq::get(url)
-        .header("User-Agent", "music_plr/0.1 (https://example.com)")
-        .call()
-        .ok()?;
-    let body = resp.into_body().read_to_string().ok()?;
-    serde_json::from_str(&body).ok()
-}
-
-fn to_track(rec: &MBRecording) -> Track {
-    let artist = rec
-        .artist_credit
-        .first()
-        .map(|a| a.name.clone())
-        .unwrap_or_default();
-    let artist_id = rec
-        .artist_credit
-        .first()
-        .and_then(|a| a.artist.as_ref())
-        .map(|a| a.id.clone());
-    let album = rec.releases.first().map(|r| TrackAlbum {
+/// Map a `musicbrainz_rs` `Recording` (from a song search or artist browse)
+/// into a `Track`. The crate populates `artist_credit` and `releases` only
+/// when the matching includes are requested, so this reads them defensively.
+fn from_mb_recording(rec: &Recording) -> Track {
+    let release = rec.releases.as_ref().and_then(|rs| rs.first());
+    let album = release.map(|r| TrackAlbum {
         name: r.title.clone(),
         id: r.id.clone(),
     });
-    // Cover Art Archive serves release artwork by MBID; the app's lazy
-    // thumbnail downloader fetches this on demand.
-    let thumbnail = rec
-        .releases
-        .first()
+    let thumbnail = release
         .map(|r| format!("https://coverartarchive.org/release/{}/front", r.id))
         .unwrap_or_default();
-    let mut providers = std::collections::HashMap::new();
-    providers.insert(
+    from_mb_track(rec, album.as_ref(), &thumbnail)
+}
+
+/// Shared mapper from a `musicbrainz_rs` `Recording` to a `Track`. The album
+/// and thumbnail are passed in so the release-browse path can attach the
+/// enclosing release's title/MBID rather than relying on the recording's own
+/// (often empty) `releases` list.
+fn from_mb_track(rec: &Recording, album: Option<&TrackAlbum>, thumbnail: &str) -> Track {
+    let artist_credit = rec.artist_credit.as_ref().and_then(|ac| ac.first());
+    let artist = artist_credit.map(|a| a.name.clone()).unwrap_or_default();
+    let artist_id = artist_credit.map(|a| a.artist.id.clone());
+
+    Track::from_provider(
         ProviderId::MusicBrainz,
-        ProviderTrack {
-            id: rec.id.clone(),
-            url: String::new(),
-            artist_id,
-        },
-    );
-    Track {
-        title: rec.title.clone(),
-        artist: TrackArtist {
-            name: artist,
-            id: None,
-        },
-        duration: 0,
-        thumbnail,
-        download_path: None,
-        album,
-        origin: ProviderId::MusicBrainz,
-        providers,
-    }
+        rec.id.clone(),
+        String::new(),
+        rec.title.clone(),
+        artist,
+        rec.length.unwrap_or(0) / 1000,
+        thumbnail.to_string(),
+        album.cloned(),
+        artist_id,
+    )
 }
 
 pub fn search(query: &str, scope: SearchScope, offset: usize) -> (Vec<Track>, SearchTab) {
-    let (entity, field) = match scope {
-        SearchScope::Artists => ("artist", "artist"),
-        SearchScope::Albums => ("release", "release"),
-        _ => ("recording", "recording"),
-    };
-    let url = format!(
-        "https://musicbrainz.org/ws/2/{entity}/?query={field}:{}&offset={}&fmt=json",
-        urlencode(query),
-        offset
-    );
-    let tracks = if entity == "recording" {
-        api_get_json::<MBResponse>(&url)
-            .map(|r| r.recordings.into_iter().map(|t| to_track(&t)).collect())
-            .unwrap_or_default()
-    } else {
-        // Artist/album scopes: search by name and synthesize track stubs.
-        let resp = api_get_json::<MusicBrainzGeneric>(&url);
-        resp.map(|r| r.into_tracks(scope)).unwrap_or_default()
-    };
-    (tracks, SearchTab::Songs)
+    let limit = SEARCH_PAGE_SIZE as u8;
+    let offset = offset as u16;
+    match scope {
+        SearchScope::Artists => {
+            let cards = Artist::search(format!("artist:{query}"))
+                .limit(limit)
+                .offset(offset)
+                .execute()
+                .map(|r| {
+                    r.entities
+                        .into_iter()
+                        .map(|a| CardData {
+                            id: a.id,
+                            title: a.name,
+                            subtitle: String::new(),
+                            thumbnail: String::new(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            (Vec::new(), SearchTab::Artists(cards))
+        }
+        SearchScope::Albums => {
+            let cards = Release::search(format!("release:{query}"))
+                .limit(limit)
+                .offset(offset)
+                .execute()
+                .map(|r| {
+                    r.entities
+                        .into_iter()
+                        .map(|rel| CardData {
+                            id: rel.id,
+                            title: rel.title,
+                            subtitle: rel
+                                .artist_credit
+                                .map(|credit| {
+                                    credit
+                                        .iter()
+                                        .map(|a| a.name.clone())
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+                                })
+                                .unwrap_or_default(),
+                            thumbnail: String::new(),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            (Vec::new(), SearchTab::Albums(cards))
+        }
+        _ => {
+            let tracks = Recording::search(format!("recording:{query}"))
+                .limit(limit)
+                .offset(offset)
+                .execute()
+                .map(|r| {
+                    r.entities
+                        .into_iter()
+                        .map(|t| from_mb_recording(&t))
+                        .collect()
+                })
+                .unwrap_or_default();
+            (tracks, SearchTab::Songs)
+        }
+    }
+}
+
+pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
+    match kind {
+        "artist" => {
+            let result = Recording::browse()
+                .by_artist(id)
+                .with_artist_credits()
+                .execute()?;
+            Ok(result
+                .entities
+                .into_iter()
+                .map(|r| from_mb_recording(&r))
+                .collect())
+        }
+        "album" => {
+            let release = Release::fetch()
+                .id(id)
+                .with_recordings()
+                .with_artist_credits()
+                .execute()?;
+            let album = TrackAlbum {
+                name: release.title.clone(),
+                id: release.id.clone(),
+            };
+            let thumbnail = format!("https://coverartarchive.org/release/{}/front", release.id);
+            let tracks = release
+                .media
+                .into_iter()
+                .flatten()
+                .flat_map(|medium| medium.tracks.into_iter().flatten())
+                .filter_map(|track| {
+                    track
+                        .recording
+                        .as_ref()
+                        .map(|rec| from_mb_track(rec, Some(&album), &thumbnail))
+                })
+                .collect();
+            Ok(tracks)
+        }
+        _ => anyhow::bail!("unsupported MusicBrainz browse kind: {kind}"),
+    }
 }
 
 pub fn search_more(query: &str, offset: usize) -> Vec<Track> {
     search(query, SearchScope::Songs, offset).0
 }
 
-/// Resolve a logical track to a `MusicBrainz` recording MBID.
-pub fn resolve_id(track: &Track) -> Option<(String, String)> {
+/// Resolve a logical track to a `MusicBrainz` recording MBID. Returns
+/// `Ok(None)` when no match is found (not an error).
+#[allow(clippy::unnecessary_wraps)]
+pub fn resolve_id(track: &Track) -> Result<Option<(String, String)>> {
     let q = track.search_query();
-    let url = format!(
-        "https://musicbrainz.org/ws/2/recording/?query=recording:{}&fmt=json",
-        urlencode(&q)
-    );
-    api_get_json::<MBResponse>(&url)
-        .and_then(|r| r.recordings.into_iter().next())
-        .map(|rec| (rec.id, String::new()))
-}
-
-#[derive(Debug, Deserialize)]
-struct MusicBrainzGeneric {
-    #[serde(default)]
-    artists: Vec<MBArtistName>,
-    #[serde(default)]
-    releases: Vec<MBReleaseName>,
-}
-
-#[derive(Debug, Deserialize)]
-struct MBArtistName {
-    id: String,
-    name: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct MBReleaseName {
-    id: String,
-    title: String,
-}
-
-impl MusicBrainzGeneric {
-    fn into_tracks(self, scope: SearchScope) -> Vec<Track> {
-        match scope {
-            SearchScope::Artists => self
-                .artists
-                .into_iter()
-                .map(|a| {
-                    let mut providers = std::collections::HashMap::new();
-                    providers.insert(
-                        ProviderId::MusicBrainz,
-                        ProviderTrack {
-                            id: a.id,
-                            url: String::new(),
-                            artist_id: None,
-                        },
-                    );
-                    Track {
-                        title: a.name.clone(),
-                        artist: TrackArtist {
-                            name: a.name.clone(),
-                            id: None,
-                        },
-                        duration: 0,
-                        thumbnail: String::new(),
-                        download_path: None,
-                        album: None,
-                        origin: ProviderId::MusicBrainz,
-                        providers,
-                    }
-                })
-                .collect(),
-            _ => self
-                .releases
-                .into_iter()
-                .map(|r| {
-                    let rid = r.id.clone();
-                    let mut providers = std::collections::HashMap::new();
-                    providers.insert(
-                        ProviderId::MusicBrainz,
-                        ProviderTrack {
-                            id: rid.clone(),
-                            url: String::new(),
-                            artist_id: None,
-                        },
-                    );
-                    Track {
-                        title: r.title.clone(),
-                        artist: TrackArtist {
-                            name: String::new(),
-                            id: None,
-                        },
-                        duration: 0,
-                        thumbnail: String::new(),
-                        download_path: None,
-                        album: Some(TrackAlbum {
-                            name: r.title,
-                            id: rid,
-                        }),
-                        origin: ProviderId::MusicBrainz,
-                        providers,
-                    }
-                })
-                .collect(),
-        }
-    }
+    Ok(Recording::search(format!("recording:{q}"))
+        .execute()
+        .ok()
+        .and_then(|r| r.entities.into_iter().next())
+        .map(|rec| (rec.id, String::new())))
 }

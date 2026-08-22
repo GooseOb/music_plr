@@ -54,6 +54,12 @@ pub enum BackendResult {
         /// be written back into the source list.
         pos: Option<TrackPos>,
     },
+    ProviderResolveError {
+        /// Track title
+        title: String,
+        provider: crate::providers::ProviderId,
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -81,7 +87,7 @@ pub enum Message {
     SearchLoadMore,
     SearchHistorySelected(usize),
     DeleteSearchHistory(usize),
-    Browse(ViewKind),
+    Browse(ViewKind, crate::providers::ProviderId),
     DragPress(interaction::Pressed),
     HoverStart(interaction::HoverTarget),
     ToggleLibrarySave(library::LibraryItem),

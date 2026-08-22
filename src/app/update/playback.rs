@@ -171,9 +171,18 @@ impl MusicPlayer {
         ));
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
-            let id = crate::providers::resolve_id(provider, &track)
-                .ok()
-                .flatten();
+            let resolved = crate::providers::resolve_id(provider, &track);
+            let id = match resolved {
+                Ok(id) => id,
+                Err(e) => {
+                    let _ = tx.send(crate::app::BackendResult::ProviderResolveError {
+                        title: track.title.clone(),
+                        provider,
+                        message: e.to_string(),
+                    });
+                    return;
+                }
+            };
             let result = if play {
                 crate::app::BackendResult::ProviderResolved {
                     original: track,
