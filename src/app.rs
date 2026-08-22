@@ -284,11 +284,11 @@ impl MusicPlayer {
             iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
                 Some(Message::LeftButtonReleased)
             }
-            iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+            iced::Event::Keyboard(iced::keyboard::Event::KeyPressed { physical_key, modifiers, .. }) => {
                 if status == iced::event::Status::Captured {
                     return None;
                 }
-                Some(Message::KeyPressed { key, modifiers })
+                Some(Message::KeyPressed { key: physical_key, modifiers })
             }
             iced::Event::Window(iced::window::Event::CloseRequested) => Some(Message::WindowClose),
             iced::Event::Window(iced::window::Event::Resized(size)) => {
@@ -370,7 +370,9 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Message::KeyPressed { key, modifiers } => self.handle_key_press(&key, modifiers),
+            Message::KeyPressed { key, modifiers } => {
+                self.handle_key_press(key, modifiers)
+            }
             Message::LyricsEditorAction(action) => {
                 if let Some(state) = &mut self.lyrics {
                     if let Some(editor) = &mut state.editor {

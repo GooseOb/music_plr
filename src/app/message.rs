@@ -68,7 +68,7 @@ pub enum Message {
         translation_y: f32,
     },
     KeyPressed {
-        key: iced::keyboard::key::Key,
+        key: iced::keyboard::key::Physical,
         modifiers: iced::keyboard::Modifiers,
     },
 

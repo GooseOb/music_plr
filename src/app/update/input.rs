@@ -6,28 +6,26 @@ use crate::app::TrackListSearch;
 impl MusicPlayer {
     pub fn handle_key_press(
         &mut self,
-        key: &iced::keyboard::key::Key,
+        key: iced::keyboard::key::Physical,
         modifiers: iced::keyboard::Modifiers,
     ) -> Task<Message> {
-        use iced::keyboard::key::Named;
+        use iced::keyboard::key::{Code, Physical};
         let task = match key {
-            iced::keyboard::Key::Character(c)
-                if c.eq_ignore_ascii_case("f") && (modifiers.control() || modifiers.logo()) =>
-            {
+            Physical::Code(Code::KeyF) if modifiers.control() || modifiers.logo() => {
                 self.open_track_list_search()
             }
-            iced::keyboard::Key::Character(c)
-                if c == "/" && !modifiers.control() && !modifiers.logo() && !modifiers.alt() =>
+            Physical::Code(Code::Slash)
+                if !modifiers.control() && !modifiers.logo() && !modifiers.alt() =>
             {
                 self.update_search_history();
                 self.show_search_history = true;
                 operation::focus::<Message>(crate::app::ui::SEARCH_INPUT_ID)
             }
-            iced::keyboard::Key::Named(Named::Space) => {
+            Physical::Code(Code::Space) => {
                 self.toggle_play_pause();
                 Task::none()
             }
-            iced::keyboard::Key::Named(Named::Escape) => {
+            Physical::Code(Code::Escape) => {
                 if self.track_list_search.is_some() {
                     self.track_list_search = None;
                 } else if self.show_search_history {
@@ -45,45 +43,41 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            iced::keyboard::Key::Named(Named::Delete) => {
+            Physical::Code(Code::Delete) => {
                 if self.view_data_mut().selected_playlist_id().is_some() {
                     self.handle_delete_selected();
                 }
                 Task::none()
             }
-            iced::keyboard::Key::Named(Named::Tab) => self.toggle_keyboard_list(),
-            iced::keyboard::Key::Named(Named::ArrowUp) => {
+            Physical::Code(Code::Tab) => self.toggle_keyboard_list(),
+            Physical::Code(Code::ArrowUp) => {
                 if self.track_list_search.is_some() {
                     return self.handle_track_list_search_step(-1);
                 }
                 self.step_hovered_track(-1)
             }
-            iced::keyboard::Key::Named(Named::ArrowDown) => {
+            Physical::Code(Code::ArrowDown) => {
                 if self.track_list_search.is_some() {
                     return self.handle_track_list_search_step(1);
                 }
                 self.step_hovered_track(1)
             }
-            iced::keyboard::Key::Named(Named::Enter) => {
+            Physical::Code(Code::Enter) => {
                 if let Some(hovered) = self.drag.hovered_track() {
                     self.handle_play_track(hovered);
                 }
                 Task::none()
             }
+            Physical::Code(Code::KeyC) if modifiers.control() || modifiers.logo() => {
+                self.handle_copy_selected();
+                Task::none()
+            }
+            Physical::Code(Code::KeyV) if modifiers.control() || modifiers.logo() => {
+                self.handle_paste_clipboard();
+                Task::none()
+            }
             _ => Task::none(),
         };
-
-        if modifiers.control() || modifiers.logo() {
-            match key {
-                iced::keyboard::Key::Character(c) if c.eq_ignore_ascii_case("c") => {
-                    self.handle_copy_selected();
-                }
-                iced::keyboard::Key::Character(c) if c.eq_ignore_ascii_case("v") => {
-                    self.handle_paste_clipboard();
-                }
-                _ => {}
-            }
-        }
         task
     }
 
