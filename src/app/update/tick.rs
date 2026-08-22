@@ -80,7 +80,7 @@ impl MusicPlayer {
             if self.repeat {
                 if let Some(track) = self.queue.current() {
                     let track = track.clone();
-                    self.play_track_internal(&track, track.origin);
+                    self.play_track_internal(&track, track.source);
                 }
                 self.audio.clear_stream_finished();
             } else if self.queue.current().is_some() {
@@ -112,9 +112,9 @@ impl MusicPlayer {
         for track in &view.tracks {
             // Seed thumbnails for any track that carries a thumbnail URL,
             // regardless of provider (YouTube, SoundCloud, MusicBrainz, …).
-            if !track.thumbnail.is_empty() {
+            if !track.thumbnail().is_empty() {
                 self.thumbnail_index
-                    .ensure(track.primary_id(), &track.thumbnail);
+                    .ensure(track.primary_id(), track.thumbnail());
             }
         }
         if let ViewKind::Search {
@@ -274,15 +274,15 @@ impl MusicPlayer {
             BackendResult::ProviderResolved {
                 original,
                 provider,
-                id,
+                resolved,
                 pos,
-            } => self.apply_provider_resolution(original, provider, id, pos, true),
+            } => self.apply_provider_resolution(original, provider, resolved, pos, true),
             BackendResult::ProviderResolvedDownload {
                 original,
                 provider,
-                id,
+                resolved,
                 pos,
-            } => self.apply_provider_resolution(original, provider, id, pos, false),
+            } => self.apply_provider_resolution(original, provider, resolved, pos, false),
             BackendResult::ProviderResolveError {
                 title,
                 provider,
@@ -326,26 +326,23 @@ impl MusicPlayer {
         }
     }
 
-    /// Apply a resolved provider id to `original`: write it back into the
-    /// source list, then either play (replacing the queue) or download.
+    /// Apply a resolved provider track to `original`: write its full provider
+    /// metadata back into the source list, then either play (replacing the
+    /// queue) or download.
     fn apply_provider_resolution(
         &mut self,
         mut original: crate::types::Track,
         provider: crate::providers::ProviderId,
-        id: Option<(String, String)>,
+        resolved: Option<crate::types::Track>,
         pos: Option<crate::app::interaction::TrackPos>,
         play: bool,
     ) {
-        match id {
-            Some((resolved_id, url)) => {
-                original.set_provider(
-                    provider,
-                    crate::types::ProviderTrack {
-                        id: resolved_id,
-                        url,
-                        artist_id: None,
-                    },
-                );
+        match resolved {
+            Some(resolved_track) => {
+                if let Some(pt) = resolved_track.providers.get(&provider) {
+                    original.set_provider(provider, pt.clone());
+                }
+                original.source = provider;
                 if let Some(p) = pos {
                     self.set_track_at(p, original.clone());
                 }

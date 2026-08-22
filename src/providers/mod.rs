@@ -20,7 +20,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Identifies a music provider. Stored on tracks (which provider originated a
+/// Identifies a music provider. Stored on tracks (which provider is the source of a
 /// result) and in configuration (the default stream+download provider).
 ///
 /// `Local` is reserved for user-imported files and is never shown in the
@@ -69,10 +69,7 @@ impl ProviderId {
     /// streaming and downloading (`MusicBrainz` is search-only; Local is
     /// excluded).
     pub fn defaultable() -> &'static [ProviderId] {
-        &[
-            ProviderId::YouTube,
-            ProviderId::SoundCloud,
-        ]
+        &[ProviderId::YouTube, ProviderId::SoundCloud]
     }
 
     /// Capability flags for this provider.
@@ -305,13 +302,13 @@ pub fn radio_artist(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     }
 }
 
-/// Resolve a logical track (title/artist) to this provider's id by searching.
-/// Returns `Ok(None)` if no match was found or the provider cannot resolve
-/// (e.g. `Local`); returns `Err` only on a genuine provider failure. The tuple
-/// is `(id, url)` where `url` is the provider's stream/download URL for the
-/// resolved track (empty when the provider has no usable URL, e.g.
-/// `MusicBrainz`). Drives the "play via / download from [provider]" flow.
-pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<(String, String)>> {
+/// Resolve a logical track (title/artist) to this provider's track by
+/// searching. Returns the full resolved `Track` (carrying that provider's
+/// id/url plus its duration/thumbnail/album) so the rich metadata survives
+/// the resolution; returns `Ok(None)` if no match was found or the provider
+/// cannot resolve (e.g. `Local`), and `Err` only on a genuine provider
+/// failure. Drives the "play via / download from [provider]" flow.
+pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<Track>> {
     match provider {
         ProviderId::YouTube => youtube::resolve_id(track),
         ProviderId::SoundCloud => soundcloud::resolve_id(track),
@@ -336,13 +333,21 @@ pub fn download(provider: ProviderId, track: &Track, download_dir: &str) -> Resu
 }
 
 /// Per-provider identifier/url for a track. A single logical track may carry
-/// several of these (one per provider that has resolved it).
+/// several of these (one per provider that has resolved it). Provider-specific
+/// display metadata (`duration`/`thumbnail`/`album`) lives here so each
+/// provider's view of a track is self-contained.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderTrack {
     pub id: String,
     pub url: String,
     #[serde(default)]
     pub artist_id: Option<String>,
+    #[serde(default)]
+    pub duration: u32,
+    #[serde(default)]
+    pub thumbnail: String,
+    #[serde(default)]
+    pub album: Option<crate::types::TrackAlbum>,
 }
 
 /// Map of provider id -> that provider's identifier/url for a track.

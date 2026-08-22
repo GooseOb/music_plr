@@ -18,17 +18,52 @@ pub struct TrackAlbum {
 pub struct Track {
     pub title: String,
     pub artist: String,
-    pub duration: u32,
-    #[serde(default)]
-    pub thumbnail: String,
     #[serde(default)]
     pub download_path: Option<String>,
-    #[serde(default)]
-    pub album: Option<TrackAlbum>,
-    #[serde(default)]
-    pub origin: ProviderId,
-    #[serde(default)]
+    pub source: ProviderId,
     pub providers: ProviderMap,
+}
+
+impl Track {
+    /// Source-provider metadata, used for display. Falls back to the first
+    /// carrier when the source entry is missing (e.g. a `Local` track).
+    fn source_provider(&self) -> Option<&ProviderTrack> {
+        if let Some(pt) = self.providers.get(&self.source) {
+            return Some(pt);
+        }
+        self.providers.values().next()
+    }
+
+    /// The track duration in seconds, taken from the source provider's data.
+    pub fn duration(&self) -> u32 {
+        self.source_provider()
+            .map(|p| p.duration)
+            .or_else(|| {
+                self.providers
+                    .values()
+                    .find_map(|p| (p.duration > 0).then_some(p.duration))
+            })
+            .unwrap_or(0)
+    }
+
+    /// The thumbnail URL, taken from the source provider's data.
+    pub fn thumbnail(&self) -> &str {
+        self.source_provider()
+            .and_then(|p| (!p.thumbnail.is_empty()).then_some(p.thumbnail.as_str()))
+            .or_else(|| {
+                self.providers
+                    .values()
+                    .find_map(|p| (!p.thumbnail.is_empty()).then_some(p.thumbnail.as_str()))
+            })
+            .unwrap_or("")
+    }
+
+    /// The album metadata, taken from the source provider's data.
+    pub fn album(&self) -> Option<&TrackAlbum> {
+        self.source_provider()
+            .and_then(|p| p.album.as_ref())
+            .or_else(|| self.providers.values().find_map(|p| p.album.as_ref()))
+    }
 }
 
 impl Track {
@@ -55,11 +90,11 @@ impl Track {
     }
 
     /// Insert or replace the provider-specific data on this track. Updates
-    /// `origin` to the first non-`Local` provider seen.
+    /// `source` to the first non-`Local` provider seen.
     pub fn set_provider(&mut self, provider: ProviderId, pt: ProviderTrack) {
         self.providers.insert(provider, pt);
-        if self.origin == ProviderId::Local && provider != ProviderId::Local {
-            self.origin = provider;
+        if self.source == ProviderId::Local && provider != ProviderId::Local {
+            self.source = provider;
         }
     }
 
@@ -69,7 +104,7 @@ impl Track {
     }
 
     /// Pick the best stream+download provider for playback, preferring
-    /// `preferred` (e.g. the default provider) then the origin, then any
+    /// `preferred` (e.g. the default provider) then the source, then any
     /// stream-capable provider.
     pub fn best_stream_provider(&self, preferred: ProviderId) -> Option<ProviderId> {
         let candidates: Vec<ProviderId> = self
@@ -81,8 +116,8 @@ impl Track {
         if candidates.contains(&preferred) {
             return Some(preferred);
         }
-        if candidates.contains(&self.origin) {
-            return Some(self.origin);
+        if candidates.contains(&self.source) {
+            return Some(self.source);
         }
         candidates.first().copied()
     }
@@ -104,27 +139,28 @@ impl Track {
         }
     }
 
-    /// The id for this track's origin provider (display/identity key).
+    /// The id for this track's source provider (display/identity key).
     pub fn primary_id(&self) -> &str {
-        self.provider_id(self.origin).unwrap_or("")
+        self.provider_id(self.source).unwrap_or("")
     }
 
-    /// The url for this track's origin provider.
+    /// The url for this track's source provider.
     pub fn primary_url(&self) -> &str {
-        self.provider_url(self.origin).unwrap_or("")
+        self.provider_url(self.source).unwrap_or("")
     }
 
-    /// A stable cache key namespacing the origin provider with its id, used to
+    /// A stable cache key namespacing the source provider with its id, used to
     /// key the on-disk stream cache and download registry.
     pub fn cache_key(&self) -> String {
         let id = self.primary_id();
-        format!("{:?}:{}", self.origin, id)
+        format!("{:?}:{}", self.source, id)
     }
 
     /// Build a `Track` owned by `provider`, carrying that provider's id/url in
-    /// `providers` and set as `origin`. Centralizes the invariant that the
-    /// `origin` provider is always present in `providers`. `album`/`artist_id`
-    /// are optional; `duration`/`thumbnail` default to empty when unknown.
+    /// `providers` and set as `source`. Centralizes the invariant that the
+    /// `source` provider is always present in `providers`. Provider-specific
+    /// display metadata (`duration`/`thumbnail`/`album`) lives on the
+    /// `ProviderTrack`.
     #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
     pub fn from_provider(
         provider: ProviderId,
@@ -138,15 +174,22 @@ impl Track {
         artist_id: Option<String>,
     ) -> Self {
         let mut providers = ProviderMap::new();
-        providers.insert(provider, ProviderTrack { id, url, artist_id });
+        providers.insert(
+            provider,
+            ProviderTrack {
+                id,
+                url,
+                artist_id,
+                duration,
+                thumbnail: thumbnail.into(),
+                album,
+            },
+        );
         Self {
             title: title.into(),
             artist: artist_name.into(),
-            duration,
-            thumbnail: thumbnail.into(),
             download_path: None,
-            album,
-            origin: provider,
+            source: provider,
             providers,
         }
     }
@@ -236,11 +279,8 @@ mod tests {
         let mut t = Track {
             title: format!("Track {id}"),
             artist: "Artist".into(),
-            duration: 10,
-            thumbnail: String::new(),
             download_path: None,
-            album: None,
-            origin: ProviderId::YouTube,
+            source: ProviderId::YouTube,
             providers: HashMap::new(),
         };
         t.set_provider(
@@ -249,6 +289,9 @@ mod tests {
                 id: id.into(),
                 url: url.into(),
                 artist_id: None,
+                duration: 10,
+                thumbnail: String::new(),
+                album: None,
             },
         );
         t

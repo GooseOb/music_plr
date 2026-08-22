@@ -54,7 +54,7 @@ impl MusicPlayer {
         if self.is_playing {
             if let Some(track) = self.queue.current() {
                 let track = track.clone();
-                self.play_track_internal(&track, track.origin);
+                self.play_track_internal(&track, track.source);
             } else {
                 self.is_playing = false;
             }

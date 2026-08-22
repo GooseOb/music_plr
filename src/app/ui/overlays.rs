@@ -55,7 +55,7 @@ pub(super) fn view_context_menu<'a>(
         )
         .into()];
 
-        if menu.track.provider_artist_id(menu.track.origin).is_some() {
+        if menu.track.provider_artist_id(menu.track.source).is_some() {
             v.push(
                 menu_item(
                     Cow::Borrowed("Go to artist"),

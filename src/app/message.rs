@@ -9,6 +9,7 @@ use crate::{
     },
     data::library,
     lyrics::Lyrics,
+    providers::ProviderId,
     types::{QueueTab, Track},
 };
 use iced::Point;
@@ -24,20 +25,12 @@ pub enum BackendResult {
     SearchError(String),
     ThumbnailsDownloaded(Vec<String>),
     LyricsFetched(Option<Lyrics>, String),
-    /// A per-track volume-normalization gain computed in the background.
     NormalizationComputed(String, f32),
-    /// Result of browsing a card (artist/album/playlist) to populate a newly
-    /// created local playlist. Carries the playlist index, its (possibly
-    /// de-duplicated) name, and the fetched tracks.
     CardPlaylistReady(usize, String, Vec<Track>),
-    /// A track resolved on `provider` (its id discovered via search) for a
-    /// track that lacked a streamable provider. `id` is `None` if no match
-    /// was found. Drives the "play via / download from [provider]" flow.
     ProviderResolved {
         original: Track,
-        provider: crate::providers::ProviderId,
-        /// Resolved `(id, url)` for the provider.
-        id: Option<(String, String)>,
+        provider: ProviderId,
+        resolved: Option<Track>,
         /// Where the track was selected from, so the resolved provider id can
         /// be written back into the source list (search/playlist/queue). `None`
         /// when the resolve was triggered automatically (no source row).
@@ -47,9 +40,8 @@ pub enum BackendResult {
     /// be downloaded (not played) once its id is known.
     ProviderResolvedDownload {
         original: Track,
-        provider: crate::providers::ProviderId,
-        /// Resolved `(id, url)` for the provider.
-        id: Option<(String, String)>,
+        provider: ProviderId,
+        resolved: Option<Track>,
         /// Where the track was selected from, so the resolved provider id can
         /// be written back into the source list.
         pos: Option<TrackPos>,
@@ -57,7 +49,7 @@ pub enum BackendResult {
     ProviderResolveError {
         /// Track title
         title: String,
-        provider: crate::providers::ProviderId,
+        provider: ProviderId,
         message: String,
     },
 }
@@ -83,11 +75,11 @@ pub enum Message {
     SearchInputChanged(String),
     SearchExecute,
     SearchScopeChanged(crate::providers::SearchScope),
-    SearchProviderChanged(crate::providers::ProviderId),
+    SearchProviderChanged(ProviderId),
     SearchLoadMore,
     SearchHistorySelected(usize),
     DeleteSearchHistory(usize),
-    Browse(ViewKind, crate::providers::ProviderId),
+    Browse(ViewKind, ProviderId),
     DragPress(interaction::Pressed),
     HoverStart(interaction::HoverTarget),
     ToggleLibrarySave(library::LibraryItem),
@@ -137,22 +129,15 @@ pub enum Message {
     SettingsCacheMaxSizeChanged(String),
     SettingsMaxRecentlyPlayedChanged(String),
     SettingsVolumeNormalizationToggled(bool),
-    SettingsDefaultProviderChanged(crate::providers::ProviderId),
+    SettingsDefaultProviderChanged(ProviderId),
     SettingsResetDefaults,
 
     ContextMenuPlayTrack(TrackPos),
     ContextMenuGoToArtist,
-    /// Play the track via the given provider. If the track already carries
-    /// that provider's id, play directly; otherwise resolve its id first.
-    ContextMenuPlayViaProvider(crate::providers::ProviderId, TrackPos),
-    /// Download the track from the given provider (resolving its id first if
-    /// needed).
-    ContextMenuDownloadViaProvider(crate::providers::ProviderId, Vec<usize>),
-    /// Start a song radio seeded by the given provider (only providers that
-    /// support similarity search offer this).
-    ContextMenuSongRadioProvider(crate::providers::ProviderId),
-    /// Start an artist radio seeded by the given provider.
-    ContextMenuArtistRadioProvider(crate::providers::ProviderId),
+    ContextMenuPlayViaProvider(ProviderId, TrackPos),
+    ContextMenuDownloadViaProvider(ProviderId, Vec<usize>),
+    ContextMenuSongRadioProvider(ProviderId),
+    ContextMenuArtistRadioProvider(ProviderId),
     ContextMenuRemoveFromPlaylist(Vec<usize>),
     ContextMenuRemoveFromQueue(Vec<usize>),
     CloseContextMenu,

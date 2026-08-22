@@ -215,16 +215,16 @@ mod tests {
                 id: "t1".into(),
                 url: String::new(),
                 artist_id: None,
+                duration: 0,
+                thumbnail: String::new(),
+                album: None,
             },
         );
         let track = crate::types::Track {
             title: "Song".into(),
             artist: "Artist".into(),
-            duration: 0,
-            thumbnail: String::new(),
             download_path: None,
-            album: None,
-            origin: crate::providers::ProviderId::YouTube,
+            source: crate::providers::ProviderId::YouTube,
             providers,
         };
         p.process_result(BackendResult::SearchResults(

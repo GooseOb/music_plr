@@ -10,7 +10,7 @@
 //! playback/download path can hand that URL to `yt-dlp`.
 
 use crate::providers::{CardData, ProviderId, SearchScope, SearchTab};
-use crate::types::{Track, TrackAlbum};
+use crate::types::Track;
 use anyhow::{Context, Result};
 use rsoundcloud::{
     models::playlist::AlbumPlaylist, models::track::BasicTrack, models::track::Track as SCTrack,
@@ -42,11 +42,8 @@ fn sc_track_to_track(t: &SCTrack) -> Track {
             .artwork_url
             .clone()
             .unwrap_or_else(|| t.user.avatar_url.clone()),
-        Some(TrackAlbum {
-            name: String::new(),
-            id: String::new(),
-        }),
         None,
+        Some(t.user.id.to_string()),
     )
 }
 
@@ -71,11 +68,8 @@ fn sc_basic_track_to_track(t: &BasicTrack) -> Track {
         t.user.username.clone(),
         (t.track.duration.max(0) as u64 / 1000) as u32,
         t.track.artwork_url.clone().unwrap_or_default(),
-        Some(TrackAlbum {
-            name: String::new(),
-            id: String::new(),
-        }),
         None,
+        Some(t.user.id.to_string()),
     )
 }
 
@@ -214,19 +208,14 @@ pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
     }
 }
 
-/// Resolve a logical track to a `SoundCloud` id via search. Returns
-/// `Ok(None)` when no match is found (not an error).
-pub fn resolve_id(track: &Track) -> Result<Option<(String, String)>> {
+/// Resolve a logical track to a `SoundCloud` track via search. Returns the
+/// full resolved `Track` (carrying id/url plus duration/thumbnail/album) so
+/// the rich metadata survives the resolution, or `Ok(None)` when no match is
+/// found (not an error).
+pub fn resolve_id(track: &Track) -> Result<Option<Track>> {
     let query = track.search_query();
     let items = search_tracks(&query, 0)?;
-    Ok(items.into_iter().next().map(|t| {
-        (
-            t.provider_id(ProviderId::SoundCloud)
-                .unwrap_or_default()
-                .to_string(),
-            t.primary_url().to_string(),
-        )
-    }))
+    Ok(items.into_iter().next())
 }
 
 /// Download the track's audio. The track must carry a `SoundCloud` id/url.

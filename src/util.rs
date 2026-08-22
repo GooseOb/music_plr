@@ -268,16 +268,16 @@ mod tests {
                         id: format!("id{i}"),
                         url: format!("url{i}"),
                         artist_id: None,
+                        duration: 10,
+                        thumbnail: String::new(),
+                        album: None,
                     },
                 );
                 Track {
                     title: format!("Track {i}"),
                     artist: "Artist".into(),
-                    duration: 10,
-                    thumbnail: String::new(),
                     download_path: None,
-                    album: None,
-                    origin: crate::providers::ProviderId::YouTube,
+                    source: crate::providers::ProviderId::YouTube,
                     providers,
                 }
             })

@@ -100,8 +100,8 @@ impl MusicPlayer {
         let current_id = track.primary_id().to_string();
         let artist = track.artist.clone();
         let title = track.title.clone();
-        let album = track.album.as_ref().map(|a| a.name.clone());
-        let duration = track.duration;
+        let album = track.album().map(|a| a.name.clone());
+        let duration = track.duration();
 
         if state.track_id.as_deref() == Some(current_id.as_str())
             && (state.lyrics.is_some() || state.loading || state.not_found)

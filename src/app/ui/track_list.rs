@@ -265,12 +265,12 @@ pub(super) fn track_row_layout<'a>(
     let is_downloaded = player.download_registry.contains(&track.cache_key());
     let is_cached = player
         .stream_cache
-        .index_contains(track.origin, track.primary_id());
+        .index_contains(track.source, track.primary_id());
 
     let mut trailing_children = Vec::with_capacity(2);
 
     if show_album {
-        if let Some(album) = &track.album {
+        if let Some(album) = track.album() {
             let album_button: Element<'a, Message, AppTheme> = Container::new(
                 Button::new(text(album.name.clone()).size(theme::TEXT_SIZE_SM))
                     .style(button_style_album())
@@ -279,7 +279,7 @@ pub(super) fn track_row_layout<'a>(
                             id: album.id.clone(),
                             name: album.name.clone(),
                         },
-                        track.origin,
+                        track.source,
                     )),
             )
             .width(Length::FillPortion(2))
@@ -298,7 +298,7 @@ pub(super) fn track_row_layout<'a>(
 
     trailing_children.push(
         Container::new(
-            text(crate::util::format_duration(track.duration))
+            text(crate::util::format_duration(track.duration()))
                 .size(theme::TEXT_SIZE_SM)
                 .style(fg_secondary()),
         )
@@ -307,7 +307,7 @@ pub(super) fn track_row_layout<'a>(
     );
 
     let artist_name = track.artist.clone();
-    let artist_id = track.provider_artist_id(track.origin).map(str::to_string);
+    let artist_id = track.provider_artist_id(track.source).map(str::to_string);
     let artist_subtitle: Element<'a, Message, AppTheme> = match artist_id {
         Some(artist_id) => Button::new(
             text(artist_name.clone())
@@ -321,7 +321,7 @@ pub(super) fn track_row_layout<'a>(
                 id: artist_id.clone(),
                 name: artist_name,
             },
-            track.origin,
+            track.source,
         ))
         .into(),
         None => text(artist_name)

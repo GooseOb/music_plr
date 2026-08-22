@@ -171,11 +171,11 @@ pub fn search_more(query: &str, offset: usize) -> Vec<Track> {
 /// Resolve a logical track to a `MusicBrainz` recording MBID. Returns
 /// `Ok(None)` when no match is found (not an error).
 #[allow(clippy::unnecessary_wraps)]
-pub fn resolve_id(track: &Track) -> Result<Option<(String, String)>> {
+pub fn resolve_id(track: &Track) -> Result<Option<Track>> {
     let q = track.search_query();
     Ok(Recording::search(format!("recording:{q}"))
         .execute()
         .ok()
         .and_then(|r| r.entities.into_iter().next())
-        .map(|rec| (rec.id, String::new())))
+        .map(|rec| from_mb_recording(&rec)))
 }

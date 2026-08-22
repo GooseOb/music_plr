@@ -114,17 +114,21 @@ impl MusicPlayer {
     }
 
     /// Play `pos` through `provider`. If the track already carries that
-    /// provider's id, switch its origin and play directly; otherwise resolve
-    /// the id on `provider` in the background, then stream.
+    /// provider's id, switch its source and play directly; otherwise resolve
+    /// the id on `provider` in the background, then stream. Either way the
+    /// track's `source` becomes `provider` so the chosen provider's metadata
+    /// is what displays and drives playback.
     pub fn play_track_via_provider(&mut self, provider: ProviderId, pos: TrackPos) {
         let Some(track) = self.get_track_at(pos) else {
             return;
         };
         if track.has_provider(provider) {
             let mut t = track;
-            if provider.capabilities().stream && provider.capabilities().download {
-                t.origin = provider;
-            }
+            t.source = provider;
+            // Persist the source switch back into the list it came from (a
+            // playlist is written to disk; the queue is saved via the session)
+            // so the chosen provider survives a restart.
+            self.set_track_at(pos, t.clone());
             self.play_and_queue_rest(t, provider, pos.index);
         } else {
             self.resolve_provider(provider, track, Some(pos), true);
@@ -174,8 +178,8 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
             let resolved = crate::providers::resolve_id(provider, &track);
-            let id = match resolved {
-                Ok(id) => id,
+            let resolved = match resolved {
+                Ok(resolved) => resolved,
                 Err(e) => {
                     let _ = tx.send(crate::app::BackendResult::ProviderResolveError {
                         title: track.title.clone(),
@@ -189,14 +193,14 @@ impl MusicPlayer {
                 crate::app::BackendResult::ProviderResolved {
                     original: track,
                     provider,
-                    id,
+                    resolved,
                     pos,
                 }
             } else {
                 crate::app::BackendResult::ProviderResolvedDownload {
                     original: track,
                     provider,
-                    id,
+                    resolved,
                     pos,
                 }
             };
@@ -239,7 +243,7 @@ impl MusicPlayer {
                     if path.exists() {
                         debug!("Playing downloaded file: {}", path.display());
                         self.audio
-                            .play_cached(path.clone(), track.duration as f32, gain);
+                            .play_cached(path.clone(), track.duration() as f32, gain);
                         self.pending_cache_id = None;
                         analysis_path = Some(path);
                     }
@@ -250,7 +254,7 @@ impl MusicPlayer {
                         let path = StreamCache::path_for(provider, &id);
                         debug!("Playing from cache: {}", path.display());
                         self.audio
-                            .play_cached(path.clone(), track.duration as f32, gain);
+                            .play_cached(path.clone(), track.duration() as f32, gain);
                         self.pending_cache_id = None;
                         analysis_path = Some(path);
                     } else {
@@ -261,14 +265,14 @@ impl MusicPlayer {
                         if provider.uses_ytdlp() {
                             self.audio.play_stream_cache(
                                 &url,
-                                track.duration as f32,
+                                track.duration() as f32,
                                 cache_path.clone(),
                                 gain,
                             );
                         } else {
                             self.audio.play_stream_http(
                                 &url,
-                                track.duration as f32,
+                                track.duration() as f32,
                                 cache_path.clone(),
                                 gain,
                             );
@@ -346,7 +350,7 @@ impl MusicPlayer {
             } else if self.audio.has_output() {
                 self.audio.resume();
             } else {
-                self.play_track_internal(&track, track.origin);
+                self.play_track_internal(&track, track.source);
             }
         }
         self.mpris_dirty = true;
@@ -362,7 +366,7 @@ impl MusicPlayer {
         if let Some(t) = self.queue.current() {
             self.track_loading = true;
             let t = t.clone();
-            self.play_track_internal(&t, t.origin);
+            self.play_track_internal(&t, t.source);
             self.save_session();
             self.mpris_dirty = true;
         }
@@ -373,7 +377,7 @@ impl MusicPlayer {
             self.track_loading = true;
             if let Some(t) = self.queue.current() {
                 let t = t.clone();
-                self.play_track_internal(&t, t.origin);
+                self.play_track_internal(&t, t.source);
             }
             self.save_session();
             self.mpris_dirty = true;

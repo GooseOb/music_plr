@@ -370,16 +370,14 @@ pub fn radio_artist(browse_id: &str) -> Result<Vec<Track>> {
 /// Resolve a logical track (title + artist) to a `YouTube` video id by running a
 /// yt-dlp search and returning the first result's id. Used by the "play via /
 /// download from `YouTube`" flow when a track lacks a `YouTube` id.
-pub fn resolve_id(track: &Track) -> Result<Option<(String, String)>> {
+pub fn resolve_id(track: &Track) -> Result<Option<Track>> {
     let query = track.search_query();
     let (videos, _) = flat_search(&query, 1, 1)?;
-    Ok(videos.into_iter().next().map(|v| {
-        let url = if v.url.is_empty() {
-            format!("https://www.youtube.com/watch?v={}", v.id)
-        } else {
-            v.url
-        };
-        (v.id, url)
+    Ok(videos.into_iter().next().map(|mut v| {
+        if v.url.is_empty() {
+            v.url = format!("https://www.youtube.com/watch?v={}", v.id);
+        }
+        Track::from(v)
     }))
 }
 

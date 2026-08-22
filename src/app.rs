@@ -615,13 +615,13 @@ impl MusicPlayer {
             }
             Message::ContextMenuGoToArtist => {
                 if let Some(track) = self.context_menu.take().map(|m| m.track) {
-                    if let Some(artist_id) = track.provider_artist_id(track.origin) {
+                    if let Some(artist_id) = track.provider_artist_id(track.source) {
                         self.handle_browse(
                             &ViewKind::Artist {
                                 id: artist_id.to_string(),
                                 name: track.artist,
                             },
-                            track.origin,
+                            track.source,
                         );
                     }
                 }

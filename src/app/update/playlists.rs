@@ -38,7 +38,7 @@ impl MusicPlayer {
             let first = tracks[0].clone();
             self.queue
                 .set_queue(tracks, self.config.max_recently_played);
-            self.play_track_internal(&first, first.origin);
+            self.play_track_internal(&first, first.source);
             self.save_session();
             self.mpris_dirty = true;
         }
@@ -115,16 +115,16 @@ impl MusicPlayer {
                         id: filename.to_string(),
                         url: path_str.clone(),
                         artist_id: None,
+                        duration,
+                        thumbnail: String::new(),
+                        album: None,
                     },
                 );
                 new_tracks.push(Track {
                     title: filename.to_string(),
                     artist: "Unknown Artist".to_string(),
-                    duration,
-                    thumbnail: String::new(),
                     download_path: None,
-                    album: None,
-                    origin: crate::providers::ProviderId::Local,
+                    source: crate::providers::ProviderId::Local,
                     providers,
                 });
             }

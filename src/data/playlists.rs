@@ -126,7 +126,7 @@ mod tests {
     use crate::providers::ProviderId;
     use crate::types::ProviderTrack;
 
-    /// Build a YouTube-origin test track from an id (url mirrors id).
+    /// Build a YouTube-source test track from an id (url mirrors id).
     fn mk(id: &str) -> Track {
         let mut providers = std::collections::HashMap::new();
         providers.insert(
@@ -135,16 +135,16 @@ mod tests {
                 id: id.to_string(),
                 url: id.to_string(),
                 artist_id: None,
+                duration: 0,
+                thumbnail: String::new(),
+                album: None,
             },
         );
         Track {
             title: id.to_string(),
             artist: String::new(),
-            duration: 0,
-            thumbnail: String::new(),
             download_path: None,
-            album: None,
-            origin: ProviderId::YouTube,
+            source: ProviderId::YouTube,
             providers,
         }
     }
@@ -162,16 +162,16 @@ mod tests {
                             id: s.to_string(),
                             url: s.to_string(),
                             artist_id: None,
+                            duration: 0,
+                            thumbnail: String::new(),
+                            album: None,
                         },
                     );
                     Track {
                         title: s.to_string(),
                         artist: String::new(),
-                        duration: 0,
-                        thumbnail: String::new(),
                         download_path: None,
-                        album: None,
-                        origin: crate::providers::ProviderId::YouTube,
+                        source: crate::providers::ProviderId::YouTube,
                         providers,
                     }
                 })
