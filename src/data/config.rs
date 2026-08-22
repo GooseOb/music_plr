@@ -16,15 +16,6 @@ pub struct Config {
     /// downloading.
     #[serde(default)]
     pub default_provider: ProviderId,
-    /// Jamendo API client id. Jamendo requires a registered id from their
-    /// Developer Portal; the default is a legacy demo id that may be revoked,
-    /// so users should set their own in Settings for reliable search.
-    #[serde(default = "default_jamendo_client_id")]
-    pub jamendo_client_id: String,
-}
-
-fn default_jamendo_client_id() -> String {
-    "96b38aef".to_string()
 }
 
 impl Default for Config {
@@ -37,7 +28,6 @@ impl Default for Config {
             max_recently_played: 50,
             volume_normalization: false,
             default_provider: ProviderId::YouTube,
-            jamendo_client_id: default_jamendo_client_id(),
         }
     }
 }

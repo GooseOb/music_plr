@@ -1,17 +1,16 @@
 //! Pluggable music search/stream/download providers.
 //!
-//! Every source of music (`YouTube`, `SoundCloud`, Jamendo, `MusicBrainz`, …)
+//! Every source of music (`YouTube`, `SoundCloud`, `MusicBrainz`, …)
 //! is described by a [`ProviderId`] plus a small set of capability flags and
 //! per-provider operations. Tracks keep a `crate::types::ProviderMap`-scoped
 //! set of provider-specific identifiers, so a single logical track can be
 //! played/downloaded from any provider that carries it.
 //!
 //! The shared types and the dispatch entry points live in this module; the
-//! per-provider backends (`jamendo`, `musicbrainz`, `soundcloud`, `youtube`)
+//! per-provider backends (`musicbrainz`, `soundcloud`, `youtube`)
 //! implement the provider-specific search/resolve/download logic and return
 //! [`crate::types::Track`]s carrying that provider's id.
 
-mod jamendo;
 mod musicbrainz;
 mod soundcloud;
 mod youtube;
@@ -31,7 +30,6 @@ pub enum ProviderId {
     #[default]
     YouTube,
     SoundCloud,
-    Jamendo,
     MusicBrainz,
     Local,
 }
@@ -52,7 +50,6 @@ impl ProviderId {
         match self {
             ProviderId::YouTube => "YouTube",
             ProviderId::SoundCloud => "SoundCloud",
-            ProviderId::Jamendo => "Jamendo",
             ProviderId::MusicBrainz => "MusicBrainz",
             ProviderId::Local => "Local",
         }
@@ -64,7 +61,6 @@ impl ProviderId {
         &[
             ProviderId::YouTube,
             ProviderId::SoundCloud,
-            ProviderId::Jamendo,
             ProviderId::MusicBrainz,
         ]
     }
@@ -76,7 +72,6 @@ impl ProviderId {
         &[
             ProviderId::YouTube,
             ProviderId::SoundCloud,
-            ProviderId::Jamendo,
         ]
     }
 
@@ -89,7 +84,7 @@ impl ProviderId {
                 download: true,
                 radio: true,
             },
-            ProviderId::SoundCloud | ProviderId::Jamendo => ProviderCaps {
+            ProviderId::SoundCloud => ProviderCaps {
                 search: true,
                 stream: true,
                 download: true,
@@ -122,7 +117,7 @@ impl ProviderId {
                 SearchScope::Albums,
                 SearchScope::Playlists,
             ],
-            ProviderId::Jamendo | ProviderId::MusicBrainz => &[
+            ProviderId::MusicBrainz => &[
                 SearchScope::Songs,
                 SearchScope::Artists,
                 SearchScope::Albums,
@@ -136,14 +131,13 @@ impl ProviderId {
         match self {
             ProviderId::YouTube => "Search YouTube Music...",
             ProviderId::SoundCloud => "Search SoundCloud...",
-            ProviderId::Jamendo => "Search Jamendo...",
             ProviderId::MusicBrainz => "Search MusicBrainz...",
             ProviderId::Local => "Search...",
         }
     }
 
     /// Whether this provider streams/ downloads via yt-dlp (`YouTube`,
-    /// `SoundCloud`) rather than a direct HTTP file URL (Jamendo, IA).
+    /// `SoundCloud`) rather than a direct HTTP file URL.
     pub fn uses_ytdlp(self) -> bool {
         matches!(self, ProviderId::YouTube | ProviderId::SoundCloud)
     }
@@ -269,7 +263,6 @@ pub fn search(
     match provider {
         ProviderId::YouTube => youtube::search(query, scope, offset),
         ProviderId::SoundCloud => Ok(soundcloud::search(query, scope, offset)),
-        ProviderId::Jamendo => Ok(jamendo::search(query, scope, offset)),
         ProviderId::MusicBrainz => Ok(musicbrainz::search(query, scope, offset)),
         ProviderId::Local => Ok((Vec::new(), SearchTab::Songs)),
     }
@@ -280,7 +273,6 @@ pub fn search_more(provider: ProviderId, query: &str, offset: usize) -> Result<V
     match provider {
         ProviderId::YouTube => youtube::search_more(query, offset),
         ProviderId::SoundCloud => Ok(soundcloud::search_more(query, offset)),
-        ProviderId::Jamendo => Ok(jamendo::search_more(query, offset)),
         ProviderId::MusicBrainz => Ok(musicbrainz::search_more(query, offset)),
         ProviderId::Local => Ok(Vec::new()),
     }
@@ -323,7 +315,6 @@ pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<(String,
     match provider {
         ProviderId::YouTube => youtube::resolve_id(track),
         ProviderId::SoundCloud => soundcloud::resolve_id(track),
-        ProviderId::Jamendo => jamendo::resolve_id(track),
         ProviderId::MusicBrainz => musicbrainz::resolve_id(track),
         ProviderId::Local => Ok(None),
     }
@@ -340,7 +331,6 @@ pub fn download(provider: ProviderId, track: &Track, download_dir: &str) -> Resu
             youtube::download(url, download_dir)
         }
         ProviderId::SoundCloud => soundcloud::download(track, download_dir),
-        ProviderId::Jamendo => jamendo::download(track, download_dir),
         _ => anyhow::bail!("provider does not support downloading"),
     }
 }

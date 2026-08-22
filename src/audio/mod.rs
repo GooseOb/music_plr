@@ -470,7 +470,7 @@ impl AudioPlayer {
 }
 
 /// Spawn a direct HTTP stream of `url` into `cache_path` (used by non-yt-dlp
-/// providers such as Jamendo). The response body is
+/// providers). The response body is
 /// written straight to the cache file; symphonia decodes the growing file
 /// during playback, so there is no transmux step.
 fn spawn_http_stream_to_cache(url: &str, cache_path: &std::path::Path) -> Option<Arc<AtomicBool>> {

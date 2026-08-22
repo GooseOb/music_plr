@@ -138,7 +138,6 @@ pub enum Message {
     SettingsMaxRecentlyPlayedChanged(String),
     SettingsVolumeNormalizationToggled(bool),
     SettingsDefaultProviderChanged(crate::providers::ProviderId),
-    SettingsJamendoClientIdChanged(String),
     SettingsResetDefaults,
 
     ContextMenuPlayTrack(TrackPos),

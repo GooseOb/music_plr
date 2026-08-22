@@ -103,13 +103,6 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         Message::SettingsMaxRecentlyPlayedChanged,
     );
 
-    let jamendo = text_input_row(
-        "Jamendo client ID (required for Jamendo search)",
-        &cfg.jamendo_client_id,
-        "get one at devportal.jamendo.com",
-        Message::SettingsJamendoClientIdChanged,
-    );
-
     let content = Column::with_children([
         section_header(player, "Playback"),
         normalize,
@@ -121,8 +114,6 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         hist_visible,
         hist_stored,
         recent,
-        section_header(player, "Providers"),
-        jamendo,
         Container::new(
             Button::new(text("Reset to defaults"))
                 .padding([theme::SPACING_SM, theme::SPACING_MD])

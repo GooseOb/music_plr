@@ -17,26 +17,16 @@ pub struct TrackAlbum {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Track {
     pub title: String,
-    /// The display artist name. The provider-scoped artist id (when a provider
-    /// exposes one, e.g. `YouTube`/`MusicBrainz`) lives in `providers` via
-    /// [`Track::provider_artist_id`], not here.
     pub artist: String,
     pub duration: u32,
     #[serde(default)]
     pub thumbnail: String,
-    /// Absolute path to the downloaded audio file on disk, if this track has
-    /// been downloaded. `None` for streamed/cached-only or local tracks.
     #[serde(default)]
     pub download_path: Option<String>,
     #[serde(default)]
     pub album: Option<TrackAlbum>,
-    /// The provider that produced this track (its display source and the
-    /// default provider to stream/download from when multiple are present).
     #[serde(default)]
     pub origin: ProviderId,
-    /// Per-provider identifiers/urls. Keyed by [`ProviderId`]; at least the
-    /// `origin` provider is always present. A single logical track may carry
-    /// several (e.g. a `YouTube` result later resolved on `SoundCloud`).
     #[serde(default)]
     pub providers: ProviderMap,
 }

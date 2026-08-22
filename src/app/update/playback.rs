@@ -1,6 +1,7 @@
 use super::{MusicPlayer, Track, TrackListKind, TrackPos};
 use crate::app::ViewKind;
 use crate::data::cache::StreamCache;
+use crate::data::JsonStore;
 use crate::providers::ProviderId;
 use std::path::PathBuf;
 use tracing::debug;
@@ -84,6 +85,7 @@ impl MusicPlayer {
                                 *t = track;
                             }
                         }
+                        self.playlists.save();
                     }
                     None => {
                         if let Some(t) = self.view_data_mut().tracks.get_mut(index) {

@@ -14,7 +14,6 @@ fn parse_cache_key(key: &str) -> (ProviderId, String) {
         let provider = match p {
             "YouTube" => ProviderId::YouTube,
             "SoundCloud" => ProviderId::SoundCloud,
-            "Jamendo" => ProviderId::Jamendo,
             "MusicBrainz" => ProviderId::MusicBrainz,
             _ => ProviderId::Local,
         };

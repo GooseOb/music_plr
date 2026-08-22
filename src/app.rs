@@ -604,11 +604,6 @@ impl MusicPlayer {
                 self.handle_settings_default_provider(provider);
                 Task::none()
             }
-            Message::SettingsJamendoClientIdChanged(id) => {
-                self.config.jamendo_client_id = id;
-                self.config.save();
-                Task::none()
-            }
             Message::SettingsResetDefaults => {
                 self.handle_settings_reset_defaults();
                 Task::none()
