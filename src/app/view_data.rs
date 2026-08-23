@@ -58,7 +58,7 @@ pub enum ViewKind {
         name: String,
     },
     Playlist {
-        index: Option<usize>,
+        index: usize,
         name: String,
     },
     Downloads,
@@ -219,7 +219,7 @@ impl ViewData {
     /// The selected playlist index for the Playlist view, or `None`.
     pub fn selected_playlist_id(&self) -> Option<usize> {
         match &self.kind {
-            ViewKind::Playlist { index, .. } => *index,
+            ViewKind::Playlist { index, .. } => Some(*index),
             _ => None,
         }
     }
@@ -262,7 +262,7 @@ impl ViewData {
     }
 
     /// Create a `Playlist` view.
-    pub fn new_playlist(index: Option<usize>, name: String) -> Self {
+    pub fn new_playlist(index: usize, name: String) -> Self {
         Self {
             kind: ViewKind::Playlist { index, name },
             ..Default::default()

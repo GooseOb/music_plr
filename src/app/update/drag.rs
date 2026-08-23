@@ -459,14 +459,14 @@ impl MusicPlayer {
         let removed_before = usize::from(from < to);
         let landed = to - removed_before;
         if let ViewKind::Playlist { index, .. } = &mut self.view_data_mut().kind {
-            if *index == Some(from) {
-                *index = Some(landed);
-            } else if let Some(sp) = index {
-                let mut new_sp = *sp - usize::from(from < *sp);
+            if *index == from {
+                *index = landed;
+            } else {
+                let mut new_sp = *index - usize::from(from < *index);
                 if landed <= new_sp {
                     new_sp += 1;
                 }
-                *sp = new_sp;
+                *index = new_sp;
             }
         }
         self.notify("Reordered playlist");
@@ -525,7 +525,7 @@ impl MusicPlayer {
         // stream in as the browse result arrives. Select it directly (rather
         // than `handle_select_playlist`) so it activates even when the drop
         // index coincides with the currently selected playlist.
-        self.push_new_view(ViewData::new_playlist(Some(idx), name));
+        self.push_new_view(ViewData::new_playlist(idx, name));
         self.save_session();
     }
 

@@ -130,7 +130,7 @@ mod tests {
         // reset to a deterministic Playlist view so the navigation tests
         // don't depend on on-disk session state.
         let mut p = MusicPlayer::new_with(config::Config::default());
-        p.nav_history = vec![ViewData::new_playlist(None, String::new())];
+        p.nav_history = vec![ViewData::new_playlist(0, String::new())];
         p.nav_history_pos = 0;
         p
     }
@@ -141,7 +141,7 @@ mod tests {
         let first = p.request_ids.next();
         p.view_data_mut().request_id = first;
 
-        p.handle_navigate_to(ViewData::new_playlist(Some(1), "Other".into()));
+        p.handle_navigate_to(ViewData::new_playlist(1, "Other".into()));
         let second = p.request_ids.next();
         p.view_data_mut().request_id = second;
 
@@ -153,7 +153,7 @@ mod tests {
     fn navigate_back_restores_outgoing_view() {
         let mut p = player();
         // Default view is Search. Navigate to a Playlist as the outgoing view.
-        p.handle_navigate_to(ViewData::new_playlist(Some(2), "My List".into()));
+        p.handle_navigate_to(ViewData::new_playlist(2, "My List".into()));
         assert_eq!(p.nav_history.len(), 2);
         assert!(p.can_navigate_back());
 
@@ -177,8 +177,8 @@ mod tests {
     #[test]
     fn replacing_view_keeps_outgoing_slot() {
         let mut p = player();
-        p.handle_navigate_to(ViewData::new_playlist(Some(0), "A".into()));
-        p.handle_navigate_to(ViewData::new_playlist(Some(1), "B".into()));
+        p.handle_navigate_to(ViewData::new_playlist(0, "A".into()));
+        p.handle_navigate_to(ViewData::new_playlist(1, "B".into()));
         // Three slots: initial Playlist (from PlaylistStore), Playlist(0), Playlist(1).
         assert_eq!(p.nav_history.len(), 3);
         let _ = p.handle_navigate_back();
@@ -203,7 +203,7 @@ mod tests {
         p.view_data_mut().request_id = rid;
 
         // Navigate away to a different view before results arrive.
-        p.handle_navigate_to(ViewData::new_playlist(Some(5), "Other".into()));
+        p.handle_navigate_to(ViewData::new_playlist(5, "Other".into()));
         assert!(matches!(p.view_data().kind, ViewKind::Playlist { .. }));
         assert_eq!(p.view_data().request_id, 0);
 
