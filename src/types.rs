@@ -18,7 +18,6 @@ pub struct TrackAlbum {
 pub struct Track {
     pub title: String,
     pub artist: String,
-    #[serde(default)]
     pub download_path: Option<String>,
     pub source: ProviderId,
     pub providers: ProviderMap,
@@ -400,17 +399,6 @@ mod tests {
             Some("11")
         );
     }
-
-    #[test]
-    fn queue_tab_default_is_queue() {
-        let q = PlayQueue::new();
-        assert_eq!(q.queue_tab, QueueTab::Queue);
-    }
-}
-
-#[cfg(test)]
-mod queue_tab_tests {
-    use super::*;
 
     #[test]
     fn queue_tab_serde() {

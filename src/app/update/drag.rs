@@ -117,13 +117,10 @@ impl MusicPlayer {
         if from >= count {
             return None;
         }
-        let mut to = self.sidebar_insertion_index(geo, count);
+        let to = self.sidebar_insertion_index(geo, count);
         // Dragging a row onto its own slot (or the gap just below it) is a
-        // no-op, so collapse that into the current position.
+        // no-op.
         if to == from || to == from + 1 {
-            to = from;
-        }
-        if to == from {
             return None;
         }
         Some(DropTarget::PlaylistReorder { from, to })
@@ -144,14 +141,7 @@ impl MusicPlayer {
         } else if *id == SIDEBAR_LIST_ID {
             let count = self.playlists.playlists.len();
             let cursor_y = self.drag.cursor_pos.y + geo.translation_y;
-            let mut best: Option<(f32, usize)> = None;
-            for (i, row) in geo.rows.iter().enumerate() {
-                let d = (cursor_y - (row.y + row.height / 2.0)).abs();
-                if best.is_none_or(|(bd, _)| d < bd) {
-                    best = Some((d, i));
-                }
-            }
-            let idx = best.map(|(_, idx)| idx).filter(|&idx| idx < count)?;
+            let idx = nearest_row_index(&geo.rows, cursor_y).filter(|&idx| idx < count)?;
             return Some(DropTarget::PlaylistAdd(idx));
         } else {
             return None;
@@ -174,11 +164,6 @@ impl MusicPlayer {
         Some(DropTarget::Track(TrackPos::new(drop_idx, list)))
     }
 
-    /// Returns a drop index in `list`'s own space (the queue's now-playing
-    /// offset folded back in), found from the cursor position in the
-    /// scrollable's content space. Rows are uniform `ROW_HEIGHT`, so the
-    /// insertion index is the nearest row boundary — this stays correct even
-    /// though the list is virtualized and `geo.rows` only holds visible rows.
     fn compute_drop_idx(&self, list: TrackListKind) -> usize {
         let geo = match list {
             TrackListKind::Queue | TrackListKind::Recent => &self.bounds.queue,
@@ -192,9 +177,7 @@ impl MusicPlayer {
         // Cursor position in the scrollable's content space (y = 0 at the top
         // of the first row).
         let cursor_y = (self.drag.cursor_pos.y - geo.bounds.y) + geo.translation_y;
-        let row_f = (cursor_y / crate::theme::ROW_HEIGHT).max(0.0);
-        let idx = (row_f + 0.5).floor() as usize + first;
-        idx.clamp(first, count)
+        drop_index_from_cursor(cursor_y, first, count)
     }
 
     fn handle_drag_autoscroll(
@@ -244,15 +227,10 @@ impl MusicPlayer {
     }
 
     /// Screen-space rectangle of the single drop indicator, derived from
-    /// captured row geometry (rather than an injected row, so the list layout
-    /// is never perturbed). `None` when there is no active drop target or it
-    /// falls outside the visible viewport. A drag targets at most one list at a
-    /// time. A card drag targets a sidebar list (`DropTarget::Playlist` /
-    /// `DropTarget::Library`) and a track drag targets the queue/active list
-    /// (`DropTarget::Track`); both draw their insertion line here. A track
-    /// dropped on the playlist list (`DropTarget::PlaylistAdd`) instead
-    /// highlights the target playlist row and therefore returns no line. There
-    /// is never more than one indicator.
+    /// captured row geometry rather than an injected row (so the list layout
+    /// is never perturbed). `None` when there is no drop target drawing an
+    /// insertion line (`PlaylistAdd` highlights a row instead) or when the
+    /// boundary falls outside the visible viewport.
     pub fn drop_indicator_rect(&self) -> Option<iced::Rectangle> {
         // Resolve to the targeted geometry and the 0-based insertion index
         // within its captured rows.
@@ -575,5 +553,67 @@ impl MusicPlayer {
         }
         self.drag.drag_origin = Some(self.drag.cursor_pos);
         self.drag.drag_active = false;
+    }
+}
+
+/// Insertion index for a uniform-height virtualized list, from a cursor
+/// position in the scrollable's content space (y = 0 at the top of the first
+/// row). Snaps to the nearest row boundary, clamped into `[first, count]` —
+/// correct even though only visible rows are laid out.
+fn drop_index_from_cursor(cursor_y: f32, first: usize, count: usize) -> usize {
+    let row_f = (cursor_y / crate::theme::ROW_HEIGHT).max(0.0);
+    let idx = (row_f + 0.5).floor() as usize + first;
+    idx.clamp(first, count)
+}
+
+/// Index of the row whose center is nearest to `cursor_y`, in the same space
+/// as the row rectangles.
+fn nearest_row_index(rows: &[iced::Rectangle], cursor_y: f32) -> Option<usize> {
+    let mut best: Option<(f32, usize)> = None;
+    for (i, row) in rows.iter().enumerate() {
+        let d = (cursor_y - (row.y + row.height / 2.0)).abs();
+        if best.is_none_or(|(bd, _)| d < bd) {
+            best = Some((d, i));
+        }
+    }
+    best.map(|(_, idx)| idx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ROW: f32 = crate::theme::ROW_HEIGHT;
+
+    #[test]
+    fn drop_index_snaps_to_nearest_boundary() {
+        assert_eq!(drop_index_from_cursor(0.0, 1, 10), 1);
+        assert_eq!(drop_index_from_cursor(ROW * 0.49, 1, 10), 1);
+        assert_eq!(drop_index_from_cursor(ROW * 0.51, 1, 10), 2);
+        assert_eq!(drop_index_from_cursor(ROW * 3.5 - 0.01, 1, 10), 4);
+    }
+
+    #[test]
+    fn drop_index_clamps_to_range() {
+        assert_eq!(drop_index_from_cursor(-100.0, 1, 5), 1);
+        assert_eq!(drop_index_from_cursor(100_000.0, 1, 5), 5);
+        assert_eq!(drop_index_from_cursor(ROW * 9.9, 1, 10), 10);
+    }
+
+    #[test]
+    fn nearest_row_picks_closest_center() {
+        let rows: Vec<iced::Rectangle> = (0..3)
+            .map(|i| iced::Rectangle {
+                x: 0.0,
+                y: i as f32 * ROW,
+                width: 100.0,
+                height: ROW,
+            })
+            .collect();
+        assert_eq!(nearest_row_index(&rows, ROW * 0.4), Some(0));
+        assert_eq!(nearest_row_index(&rows, ROW * 1.6), Some(1));
+        assert_eq!(nearest_row_index(&rows, ROW * 2.4), Some(2));
+        assert_eq!(nearest_row_index(&rows, ROW), Some(0));
+        assert_eq!(nearest_row_index(&[], 0.0), None);
     }
 }

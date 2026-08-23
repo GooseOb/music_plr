@@ -2,7 +2,7 @@ use crate::data::JsonStore;
 use crate::providers::ProviderId;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub download_dir: String,
     pub max_search_history_visible: usize,
@@ -14,7 +14,6 @@ pub struct Config {
     /// id or when playing a search-only (e.g. `MusicBrainz`) result. Constrained
     /// at the UI level to providers that support both streaming and
     /// downloading.
-    #[serde(default)]
     pub default_provider: ProviderId,
 }
 
@@ -63,12 +62,17 @@ mod tests {
 
     #[test]
     fn config_round_trip() {
-        let cfg = Config::default();
+        let cfg = Config {
+            download_dir: "/tmp/music".into(),
+            max_search_history_visible: 3,
+            max_search_history_stored: 7,
+            cache_max_size_mb: 42,
+            max_recently_played: 9,
+            volume_normalization: true,
+            default_provider: ProviderId::SoundCloud,
+        };
+
         let json = serde_json::to_string(&cfg).unwrap();
-        let restored: Config = serde_json::from_str(&json).unwrap();
-        assert_eq!(
-            restored.max_search_history_stored,
-            cfg.max_search_history_stored
-        );
+        assert_eq!(serde_json::from_str::<Config>(&json).unwrap(), cfg);
     }
 }

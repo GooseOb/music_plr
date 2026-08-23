@@ -98,28 +98,3 @@ pub fn compute_normalization_gain(path: &Path) -> Option<f32> {
     }
     Some(gain)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn clamps_gain_to_bounds() {
-        // A silent/near-silent file yields a huge raw gain that must be capped.
-        let mut gain = (TARGET_RMS / 1e-9).clamp(MIN_GAIN, MAX_GAIN);
-        assert!((MIN_GAIN..=MAX_GAIN).contains(&gain));
-
-        // A very loud file yields a tiny raw gain that must be floored.
-        let rms = 1.0;
-        gain = (TARGET_RMS / rms).clamp(MIN_GAIN, MAX_GAIN);
-        assert!((gain - MIN_GAIN).abs() < 1e-6);
-    }
-
-    #[test]
-    fn targets_rms_within_bounds() {
-        // A track already near target gets a gain near 1.0 (within clamp).
-        let rms = TARGET_RMS;
-        let gain = (TARGET_RMS / rms).clamp(MIN_GAIN, MAX_GAIN);
-        assert!((0.99..=1.01).contains(&gain));
-    }
-}

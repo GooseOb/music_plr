@@ -112,3 +112,77 @@ impl MusicPlayer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::view_data::ViewData;
+    use crate::data::config;
+    use crate::types::Track;
+
+    fn player() -> MusicPlayer {
+        // Same headless construction as the navigation tests: MPRIS no-ops
+        // without D-Bus, and nav history is reset to a deterministic Search
+        // view (so `view_tracks` reads `view_data.tracks`).
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        p.nav_history = vec![ViewData::new_search(
+            String::new(),
+            crate::providers::ProviderId::YouTube,
+            crate::providers::SearchScope::Songs,
+        )];
+        p.nav_history_pos = 0;
+        p
+    }
+
+    fn track(id: &str) -> Track {
+        Track::from_provider(
+            crate::providers::ProviderId::YouTube,
+            id.into(),
+            format!("https://example.com/{id}"),
+            format!("Track {id}"),
+            "Artist",
+            10,
+            String::new(),
+            None,
+            None,
+        )
+    }
+
+    #[test]
+    fn recent_selection_is_empty_and_mutations_noop() {
+        let mut p = player();
+        p.queue.recently_played.push_back(track("1"));
+        let pos = TrackPos::new(0, TrackListKind::Recent);
+
+        assert!(p.selection(TrackListKind::Recent).is_empty());
+        p.toggle_selection(pos);
+        assert!(p.selection(TrackListKind::Recent).is_empty());
+        p.clear_selection_for(TrackListKind::Recent);
+        assert!(p.selection(TrackListKind::Recent).is_empty());
+    }
+
+    #[test]
+    fn toggle_adds_then_removes_per_list() {
+        let mut p = player();
+        p.queue.tracks = vec![track("1"), track("2")];
+        p.view_data_mut().tracks = vec![track("1")];
+
+        let q = TrackPos::new(0, TrackListKind::Queue);
+        let a = TrackPos::new(0, TrackListKind::Active);
+        p.toggle_selection(q);
+        p.toggle_selection(a);
+        assert_eq!(p.selection(TrackListKind::Queue), &[0]);
+        assert_eq!(p.selection(TrackListKind::Active), &[0]);
+
+        // Selections are scoped per list.
+        assert_eq!(p.get_track_at(q).map(|t| t.title), Some("Track 1".into()));
+        assert_eq!(p.get_track_at(a).map(|t| t.title), Some("Track 1".into()));
+
+        p.toggle_selection(q);
+        assert!(p.selection(TrackListKind::Queue).is_empty());
+        assert_eq!(p.selection(TrackListKind::Active), &[0]);
+
+        p.clear_selection();
+        assert!(p.selection(TrackListKind::Active).is_empty());
+    }
+}

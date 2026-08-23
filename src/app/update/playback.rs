@@ -7,8 +7,6 @@ use std::path::PathBuf;
 use tracing::debug;
 
 impl MusicPlayer {
-    /// `Recent` appends via [`Self::play_recent_track`] rather than
-    /// replacing the queue.
     pub fn handle_play_track(&mut self, pos: TrackPos) {
         let TrackPos { index, list } = pos;
         if list == TrackListKind::Recent {

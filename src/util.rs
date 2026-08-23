@@ -256,8 +256,6 @@ mod tests {
         );
     }
 
-    // ── reorder_tracks ───────────────────────────────────
-
     fn make_tracks(count: usize) -> Vec<Track> {
         (0..count)
             .map(|i| {
@@ -383,5 +381,32 @@ mod tests {
                     .unwrap_or("")
             })
             .collect()
+    }
+
+    #[test]
+    fn urlencode_keeps_unreserved() {
+        assert_eq!(urlencode("abc-XYZ_0189.~"), "abc-XYZ_0189.~");
+    }
+
+    #[test]
+    fn urlencode_space_becomes_plus() {
+        assert_eq!(urlencode("daft punk"), "daft+punk");
+    }
+
+    #[test]
+    fn urlencode_reserved_chars() {
+        assert_eq!(urlencode("a+b&c=d#e"), "a%2Bb%26c%3Dd%23e");
+        assert_eq!(urlencode("?/:"), "%3F%2F%3A");
+        assert_eq!(urlencode("%"), "%25");
+    }
+
+    #[test]
+    fn urlencode_multibyte_utf8() {
+        // U+00E9 é -> UTF-8 C3 A9
+        assert_eq!(urlencode("café"), "caf%C3%A9");
+        assert_eq!(
+            urlencode("初音ミク"),
+            "%E5%88%9D%E9%9F%B3%E3%83%9F%E3%82%AF"
+        );
     }
 }

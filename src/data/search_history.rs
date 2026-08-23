@@ -66,6 +66,14 @@ mod tests {
     }
 
     #[test]
+    fn push_duplicate_at_front_is_noop() {
+        let mut h = SearchHistory::default();
+        h.push("abc".into(), 100);
+        h.push("abc".into(), 100);
+        assert_eq!(h.get(), &["abc"]);
+    }
+
+    #[test]
     fn push_truncates_to_max() {
         let mut h = SearchHistory::default();
         for i in 0..10 {

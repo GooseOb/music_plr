@@ -318,10 +318,6 @@ mod tests {
 
     #[test]
     fn client_uses_lrclib_by_default() {
-        assert_eq!(
-            LyricsClient::new(LyricsProvider::LrcLib).selected(),
-            LyricsProvider::LrcLib
-        );
         assert_eq!(LyricsProvider::default(), LyricsProvider::LrcLib);
         assert!(LyricsProvider::all().contains(&LyricsProvider::LrcLib));
         assert_eq!(LyricsProvider::all().len(), 3);

@@ -105,7 +105,6 @@ pub struct ProviderCaps {
 }
 
 impl ProviderId {
-    /// Human-readable label for UI (picker, menus, settings).
     pub fn label(self) -> &'static str {
         match self {
             ProviderId::YouTube => "YouTube",
@@ -132,7 +131,6 @@ impl ProviderId {
         &[ProviderId::YouTube, ProviderId::SoundCloud]
     }
 
-    /// Capability flags for this provider.
     pub fn capabilities(self) -> ProviderCaps {
         match self {
             ProviderId::YouTube => ProviderCaps {
@@ -183,7 +181,6 @@ impl ProviderId {
         }
     }
 
-    /// Placeholder text for the search bar when this provider is active.
     pub fn search_placeholder(self) -> &'static str {
         match self {
             ProviderId::YouTube => "Search YouTube Music...",
@@ -400,13 +397,9 @@ pub fn download(provider: ProviderId, track: &Track, download_dir: &str) -> Resu
 pub struct ProviderTrack {
     pub id: String,
     pub url: String,
-    #[serde(default)]
     pub artist_id: Option<String>,
-    #[serde(default)]
     pub duration: u32,
-    #[serde(default)]
     pub thumbnail: String,
-    #[serde(default)]
     pub album: Option<crate::types::TrackAlbum>,
 }
 

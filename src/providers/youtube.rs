@@ -171,8 +171,6 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
 }
 
 fn search_ytdlp(query: &str, offset: usize, page_size: usize) -> Result<Vec<YouTubeVideo>> {
-    // yt-dlp --playlist-start/--playlist-end are 1-based, so add 1 to the
-    // 0-based offset to get the 1-based start position.
     let (mut videos, valid_ids) = flat_search(query, offset + 1, offset + page_size)?;
     enrich_with_metadata(&mut videos, &valid_ids);
     Ok(videos)
