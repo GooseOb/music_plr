@@ -189,13 +189,7 @@ impl MusicPlayer {
     pub fn handle_context_menu_go_to_artist(&mut self) {
         if let Some(track) = self.context_menu.take().map(|m| m.track) {
             if let Some(artist_id) = track.provider_artist_id(track.source) {
-                self.handle_browse(
-                    &ViewKind::Artist {
-                        id: artist_id.to_string(),
-                        name: track.artist,
-                    },
-                    track.source,
-                );
+                self.open_artist(artist_id, &track.artist, track.source);
             }
         }
     }

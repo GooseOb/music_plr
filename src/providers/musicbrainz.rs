@@ -7,7 +7,9 @@
 //! deserializes the typed responses.
 
 use crate::{
-    providers::{CardData, ProviderId, SearchScope, SearchTab},
+    providers::{
+        ArtistAlbumCard, ArtistHeader, ArtistPage, CardData, ProviderId, SearchScope, SearchTab,
+    },
     theme::SEARCH_PAGE_SIZE,
     types::{Track, TrackAlbum},
 };
@@ -162,6 +164,102 @@ pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
         }
         _ => anyhow::bail!("unsupported MusicBrainz browse kind: {kind}"),
     }
+}
+
+/// Fetch the rich artist page: header stats (country, life-span, tags) and
+/// the discography as release groups (albums/EPs/singles with real dates and
+/// Cover Art Archive covers). Sections `MusicBrainz` cannot serve (popular
+/// tracks, playlists, related artists) come back empty.
+pub fn fetch_artist_page(
+    id: &str,
+    kinds: &[crate::providers::ArtistDataKind],
+) -> Result<ArtistPage> {
+    use crate::providers::ArtistDataKind as K;
+    use musicbrainz_rs::entity::release_group::ReleaseGroupPrimaryType as PrimaryType;
+
+    // Header and albums come from one fetch; skip it entirely when neither
+    // is requested (MB cannot serve popular/playlists/related anyway).
+    if !K::Header.wanted(kinds) && !K::Albums.wanted(kinds) {
+        return Ok(ArtistPage::default());
+    }
+    let artist = Artist::fetch()
+        .id(id)
+        .with_release_groups()
+        .with_tags()
+        .execute()?;
+    let mut stats = Vec::new();
+    if let Some(country) = &artist.country {
+        if !country.is_empty() {
+            stats.push(("Country".to_string(), country.clone()));
+        }
+    }
+    if let Some(span) = &artist.life_span {
+        let begin = span.begin.as_ref().map(|d| d.0.clone()).unwrap_or_default();
+        let end = span.end.as_ref().map(|d| d.0.clone()).unwrap_or_default();
+        if !begin.is_empty() {
+            let (label, value) = if end.is_empty() {
+                ("Formed", begin)
+            } else {
+                ("Active", format!("{begin}\u{2013}{end}"))
+            };
+            stats.push((label.to_string(), value));
+        }
+    }
+    let top_tags: Vec<String> = artist
+        .tags
+        .as_ref()
+        .map(|ts| {
+            let mut ts: Vec<&musicbrainz_rs::entity::tag::Tag> = ts.iter().collect();
+            ts.sort_by_key(|t| std::cmp::Reverse(t.count));
+            ts.iter().take(5).map(|t| t.name.clone()).collect()
+        })
+        .unwrap_or_default();
+    if !top_tags.is_empty() {
+        stats.push(("Tags".to_string(), top_tags.join(", ")));
+    }
+    let albums = artist
+        .release_groups
+        .unwrap_or_default()
+        .iter()
+        .map(|rg| ArtistAlbumCard {
+            id: rg.id.clone(),
+            title: rg.title.clone(),
+            date: rg
+                .first_release_date
+                .as_ref()
+                .map(|d| d.0.chars().take(4).collect())
+                .unwrap_or_default(),
+            badge: match rg.primary_type.as_ref() {
+                Some(PrimaryType::Album) => "Album".to_string(),
+                Some(PrimaryType::Ep) => "EP".to_string(),
+                Some(PrimaryType::Single) => "Single".to_string(),
+                _ => String::new(),
+            },
+            thumbnail: format!("https://coverartarchive.org/release-group/{}/front", rg.id),
+        })
+        .collect();
+    Ok(ArtistPage {
+        header: Some(ArtistHeader {
+            image: String::new(),
+            stats,
+            description: artist.disambiguation.clone(),
+        }),
+        popular: Vec::new(),
+        albums,
+        playlists: Vec::new(),
+        related: Vec::new(),
+    })
+}
+
+/// Resolve an artist name to an MBID via artist search. Returns `Ok(None)`
+/// when nothing matched.
+#[allow(clippy::unnecessary_wraps)]
+pub fn resolve_artist_id(name: &str) -> Result<Option<String>> {
+    Ok(Artist::search(format!("artist:{name}"))
+        .execute()
+        .ok()
+        .and_then(|r| r.entities.into_iter().next())
+        .map(|a| a.id))
 }
 
 pub fn search_more(query: &str, offset: usize) -> Vec<Track> {

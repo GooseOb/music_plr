@@ -42,6 +42,12 @@ pub enum ViewKind {
     Artist {
         id: String,
         name: String,
+        /// The provider that owns `id` (the page's entry point).
+        source: ProviderId,
+        /// Per-section selected providers, loaded content and known
+        /// per-provider artist ids — all persisted so Back/Forward restores
+        /// the page exactly as it was.
+        page: Box<crate::providers::ArtistPageState>,
     },
     Album {
         id: String,
@@ -63,8 +69,13 @@ impl From<LibraryItem> for ViewKind {
     fn from(item: LibraryItem) -> Self {
         match item.kind {
             LibraryKind::Artist => ViewKind::Artist {
-                id: item.id,
+                id: item.id.clone(),
                 name: item.title,
+                source: item.provider,
+                page: Box::new(crate::providers::ArtistPageState::new(
+                    item.provider,
+                    &item.id,
+                )),
             },
             LibraryKind::Album => ViewKind::Album {
                 id: item.id,
@@ -92,7 +103,8 @@ impl Default for ViewKind {
 impl ViewKind {
     pub fn browse_params(&self) -> Option<(&str, &'static str, &str)> {
         match self {
-            ViewKind::Artist { id, name } => Some((id, "artist", name)),
+            // Artist pages have their own load path (`open_artist`) and are
+            // not served by the generic browse flow.
             ViewKind::Album { id, name } => Some((id, "album", name)),
             ViewKind::PlaylistView { id, name } => Some((id, "playlist", name)),
             _ => None,
@@ -140,6 +152,14 @@ impl ViewData {
             // ArtistRadio with the same label are different views.
             (ViewKind::SongRadio(a), ViewKind::SongRadio(b))
             | (ViewKind::ArtistRadio(a), ViewKind::ArtistRadio(b)) => a == b,
+            (
+                ViewKind::Artist {
+                    id: ia, source: sa, ..
+                },
+                ViewKind::Artist {
+                    id: ib, source: sb, ..
+                },
+            ) => ia == ib && sa == sb,
             (
                 ViewKind::Playlist { index: a, name: c },
                 ViewKind::Playlist { index: b, name: d },

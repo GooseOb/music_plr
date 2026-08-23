@@ -53,7 +53,12 @@ impl MusicPlayer {
                     self.toggle_selection(pos);
                 }
                 Pressed::Card(item) => {
-                    self.handle_browse(&item.into(), self.view_data().provider());
+                    let provider = item.provider;
+                    if item.kind == crate::data::library::LibraryKind::Artist {
+                        self.open_artist(&item.id, &item.title, provider);
+                    } else {
+                        self.handle_browse(&item.into(), provider);
+                    }
                 }
                 // A click without a drag selects the playlist (mirrors how a
                 // library card opens on a plain click).

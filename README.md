@@ -12,7 +12,8 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 - **Playlists** — Create, rename, delete, and organize playlists
 - **Library** — Save albums, artists, and playlists to a persistent Library; toggle save from the card or the view header, and browse saved items from a list in the sidebar
 - **Radio** — Song radio and artist radio based on search results
-- **Go to artist** — Click the artist name on any track row, or pick "Go to artist" from the track's right-click context menu, to drill into that artist's view (when the source supplied a browse id)
+- **Go to artist** — Click the artist name on any track row, or pick "Go to artist" from the track's right-click context menu, to open that artist's page (when the source supplied an artist id)
+- **Artist Page** — Rich artist view: header with picture and stats (monthly listeners/subscribers for YouTube, followers for SoundCloud, country/life-span/tags for MusicBrainz), plus Most popular songs, Albums (incl. EPs/singles), Playlists, and Fans also like sections. Each section has its own "Provided by" provider picker; content is fetched per provider and cached in the navigation history
 - **MPRIS** — Full D-Bus MPRIS interface for media key integration
 - **Queue** — Queue panel with Up Next and Recently Played tabs
 - **Drag & Drop** — Drag tracks between views, into the queue, and onto sidebar playlists. Drag a playlist row in the sidebar to reorder your playlists (a placement bar shows the drop position). Drag an artist/album/playlist card (from search or the Library) onto the playlist list to turn it into a local playlist (its contents are fetched and filled in), or onto the Library to save or reorder it; a placement bar shows the drop position in both lists

@@ -11,6 +11,7 @@
 //! implement the provider-specific search/resolve/download logic and return
 //! [`crate::types::Track`]s carrying that provider's id.
 
+mod artist_page;
 mod musicbrainz;
 mod soundcloud;
 mod youtube;
@@ -85,7 +86,9 @@ pub(crate) fn run_command_with_timeout(cmd: &mut Command, timeout: Duration) -> 
 ///
 /// `Local` is reserved for user-imported files and is never shown in the
 /// provider picker or the default-provider list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 pub enum ProviderId {
     #[default]
     YouTube,
@@ -244,7 +247,8 @@ impl SearchScope {
 }
 
 /// Provider-agnostic card result (artist/album/playlist drill-down).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CardData {
     pub id: String,
     pub title: String,
@@ -340,6 +344,38 @@ pub fn browse(provider: ProviderId, id: &str, kind: &str) -> Result<Vec<Track>> 
         ProviderId::SoundCloud => soundcloud::browse(id, kind),
         ProviderId::MusicBrainz => musicbrainz::browse(id, kind),
         ProviderId::Local => Ok(Vec::new()),
+    }
+}
+
+pub use artist_page::{
+    ArtistAlbumCard, ArtistDataKind, ArtistHeader, ArtistPage, ArtistPageState, ArtistSection,
+    ArtistSectionKind, RelatedArtistCard,
+};
+
+/// Fetch only the requested [`ArtistDataKind`] pieces of an artist page for
+/// `provider`. Backends issue just the requests needed for those kinds.
+pub fn fetch_artist_page(
+    provider: ProviderId,
+    id: &str,
+    kinds: &[artist_page::ArtistDataKind],
+) -> Result<artist_page::ArtistPage> {
+    match provider {
+        ProviderId::YouTube => youtube::fetch_artist_page(id, kinds),
+        ProviderId::SoundCloud => soundcloud::fetch_artist_page(id, kinds),
+        ProviderId::MusicBrainz => musicbrainz::fetch_artist_page(id, kinds),
+        ProviderId::Local => Ok(artist_page::ArtistPage::default()),
+    }
+}
+
+/// Resolve an artist name to that provider's artist id (used to lazily open
+/// a page section on a provider whose id isn't known yet). Returns
+/// `Ok(None)` when no match was found.
+pub fn resolve_artist_id(provider: ProviderId, name: &str) -> Result<Option<String>> {
+    match provider {
+        ProviderId::YouTube => youtube::resolve_artist_id(name),
+        ProviderId::SoundCloud => soundcloud::resolve_artist_id(name),
+        ProviderId::MusicBrainz => musicbrainz::resolve_artist_id(name),
+        ProviderId::Local => Ok(None),
     }
 }
 

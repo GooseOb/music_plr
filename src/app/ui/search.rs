@@ -168,6 +168,7 @@ fn view_search_card_tab<'a>(
             id: c.id.clone(),
             title: c.title.clone(),
             thumbnail: c.thumbnail.clone(),
+            provider: player.view_data().provider(),
         };
         card_row(player, i, &c.id, &c.title, &c.subtitle, &item)
     });

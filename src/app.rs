@@ -274,6 +274,9 @@ impl MusicPlayer {
         Subscription::batch([timer, events])
     }
 
+    // `iced::event::listen_with` hands the event over by value, so the
+    // by-value parameter is mandated by the API.
+    #[allow(clippy::needless_pass_by_value)]
     fn event_to_message(
         event: iced::Event,
         status: iced::event::Status,
@@ -328,7 +331,7 @@ impl MusicPlayer {
             Message::LeftButtonReleased => self.handle_left_release(),
             Message::ListBoundsCaptured(bounds) => {
                 let scroll = bounds.track.as_ref().map_or(0.0, |b| b.translation_y);
-                self.bounds = bounds.clone();
+                self.bounds = *bounds;
                 self.view_data_mut().scroll = scroll;
 
                 Task::none()
@@ -382,6 +385,18 @@ impl MusicPlayer {
             }
             Message::Browse(kind, provider) => {
                 self.handle_browse(&kind, provider);
+                Task::none()
+            }
+            Message::OpenArtist { id, name, source } => {
+                self.open_artist(&id, &name, source);
+                Task::none()
+            }
+            Message::ArtistSectionProviderChanged(section, provider) => {
+                self.handle_artist_section_provider_changed(section, provider);
+                Task::none()
+            }
+            Message::ArtistHeaderProviderChanged(provider) => {
+                self.handle_artist_header_provider_changed(provider);
                 Task::none()
             }
             Message::ToggleLibrarySave(item) => {

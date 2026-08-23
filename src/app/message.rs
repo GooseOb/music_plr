@@ -27,6 +27,17 @@ pub enum BackendResult {
     LyricsFetched(Option<Lyrics>, String),
     NormalizationComputed(String, f32),
     CardPlaylistReady(usize, String, Vec<Track>),
+    /// A full artist-page fetch finished for `provider`. `resolved_id` is the
+    /// provider artist id when the thread had to resolve it by name (so the
+    /// caller can cache it). `page` is the error on failure.
+    ArtistPageLoaded {
+        rid: u64,
+        provider: ProviderId,
+        resolved_id: Option<String>,
+        /// Which data kinds this fetch asked for; only these are merged.
+        kinds: &'static [crate::providers::ArtistDataKind],
+        page: Box<Result<crate::providers::ArtistPage, String>>,
+    },
     LocalFilesPicked(Vec<std::path::PathBuf>),
     ProviderResolved {
         original: Track,
@@ -55,7 +66,7 @@ pub enum Message {
     WindowResized(iced::Size),
     CursorMoved(Point),
     LeftButtonReleased,
-    ListBoundsCaptured(CaptureBounds),
+    ListBoundsCaptured(Box<CaptureBounds>),
     SearchHistoryBoundsCaptured(crate::app::update::operation::ListGeometry),
     ListScrolled {
         list: TrackListKind,
@@ -74,6 +85,13 @@ pub enum Message {
     SearchHistorySelected(usize),
     DeleteSearchHistory(usize),
     Browse(ViewKind, ProviderId),
+    OpenArtist {
+        id: String,
+        name: String,
+        source: ProviderId,
+    },
+    ArtistSectionProviderChanged(crate::providers::ArtistSectionKind, ProviderId),
+    ArtistHeaderProviderChanged(ProviderId),
     DragPress(interaction::Pressed),
     HoverStart(interaction::HoverTarget),
     ToggleLibrarySave(library::LibraryItem),

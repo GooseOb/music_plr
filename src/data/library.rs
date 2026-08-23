@@ -1,4 +1,5 @@
 use super::{JsonStore, StoreLocation};
+use crate::providers::ProviderId;
 use serde::{Deserialize, Serialize};
 
 /// What kind of thing a [`LibraryItem`] represents. Distinguishes the three
@@ -12,13 +13,16 @@ pub enum LibraryKind {
 
 /// A single saved library entry. Mirrors the fields of a `CardData` plus the
 /// kind, so a saved item can be dragged (onto the playlist list or library)
-/// or opened via the card-press mechanism.
+/// or opened via the card-press mechanism. `provider` records which provider
+/// supplied `id`, so reopening the item hits the right backend.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LibraryItem {
     pub kind: LibraryKind,
     pub id: String,
     pub title: String,
     pub thumbnail: String,
+    #[serde(default)]
+    pub provider: ProviderId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -95,6 +99,7 @@ mod tests {
             id: id.to_string(),
             title: format!("Title {id}"),
             thumbnail: String::new(),
+            provider: ProviderId::default(),
         }
     }
 

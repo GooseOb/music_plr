@@ -5,6 +5,7 @@ use super::{
 use std::thread;
 
 mod actions;
+mod artist;
 mod drag;
 mod input;
 mod navigation;

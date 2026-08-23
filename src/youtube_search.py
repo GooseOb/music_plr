@@ -18,7 +18,15 @@ SCOPE_FILTER = {
     "playlists": "playlists",
 }
 
-SINGULAR = {"songs": "song", "videos": "video"}
+# The resultType ytmusicapi reports for each filtered scope (always singular,
+# even though the scope names are plural).
+EXPECTED_TYPE = {
+    "songs": "song",
+    "videos": "video",
+    "artists": "artist",
+    "albums": "album",
+    "playlists": "playlist",
+}
 
 
 def _make_track(vid, title, artist, *, duration=0, thumbnail="",
@@ -56,7 +64,7 @@ def search(query, scope="all", limit=20):
         rt = r.get("resultType")
         # Paranoia guard: if the endpoint ever returns mixed types, drop
         # anything that doesn't match the requested scope.
-        if scope != "all" and rt != SINGULAR.get(scope, scope):
+        if scope != "all" and rt != EXPECTED_TYPE.get(scope):
             continue
         item = result_to_item(r, rt)
         if item is not None:
@@ -221,6 +229,97 @@ def browse(browse_id, limit=50, kind=None):
     return out
 
 
+def artist_page(browse_id):
+    """Return the full artist page: header stats, popular tracks and the
+    albums/singles/playlists/related-artists shelves."""
+    yt = _yt()
+    a = yt.get_artist(browse_id)
+
+    def thumb(e):
+        return (e.get("thumbnails") or [{}])[-1].get("url", "")
+
+    header = {
+        "image": thumb(a),
+        "stats": [],
+        "description": a.get("description", "") or "",
+    }
+    if a.get("monthlyListeners"):
+        header["stats"].append(["Monthly listeners", a["monthlyListeners"]])
+    if a.get("subscribers"):
+        header["stats"].append(["YouTube Subscribers", a["subscribers"]])
+
+    popular = []
+    for e in a.get("songs", {}).get("results", []):
+        vid = e.get("videoId") or ""
+        if not vid:
+            continue
+        artists = e.get("artists") or []
+        # The songs shelf carries the track's album; keep it so rows and
+        # drill-downs can show it.
+        album = e.get("album") or {}
+        album_obj = (
+            {"name": album.get("name", ""), "id": album.get("id", "")}
+            if album.get("name") and album.get("id")
+            else None
+        )
+        t = _make_track(
+            vid, e.get("title", ""),
+            artists[0].get("name", "") if artists else "",
+            duration=_dur(e.get("duration")), thumbnail=thumb(e),
+            album=album_obj,
+            artist_id=browse_id,
+        )
+        popular.append(t)
+
+    albums = []
+    for badge in (None, "Single"):
+        shelf = a.get("albums" if badge is None else "singles", {})
+        for e in shelf.get("results", []):
+            bid = e.get("browseId") or ""
+            if not bid:
+                continue
+            label = e.get("type", "") or badge or ""
+            albums.append({
+                "id": bid,
+                "title": e.get("title", ""),
+                "date": e.get("year", "") or "",
+                "badge": label,
+                "thumbnail": thumb(e),
+            })
+
+    playlists = []
+    for e in a.get("playlists", {}).get("results", []):
+        pid = e.get("playlistId") or e.get("browseId") or ""
+        if not pid:
+            continue
+        playlists.append({
+            "id": pid,
+            "title": e.get("title", ""),
+            "subtitle": "",
+            "thumbnail": thumb(e),
+        })
+
+    related = []
+    for e in a.get("related", {}).get("results", []):
+        rid = e.get("browseId") or ""
+        if not rid:
+            continue
+        related.append({
+            "id": rid,
+            "name": e.get("title", ""),
+            "stat": e.get("subscribers", "") or "",
+            "thumbnail": thumb(e),
+        })
+
+    return {
+        "header": header,
+        "popular": popular,
+        "albums": albums,
+        "playlists": playlists,
+        "related": related,
+    }
+
+
 def watch_playlist(video_id=None, playlist_id=None, radio=True, limit=50):
     """Return the tracks of a YouTube Music radio/mix playlist.
 
@@ -284,6 +383,10 @@ def main():
         limit = int(sys.argv[3]) if len(sys.argv) > 3 else 50
         kind = sys.argv[4] if len(sys.argv) > 4 else None
         print(json.dumps(browse(bid, limit, kind)))
+        return
+    if cmd == "artist_page":
+        bid = sys.argv[2] if len(sys.argv) > 2 else ""
+        print(json.dumps(artist_page(bid)))
         return
     if cmd == "watch":
         # watch <videoId|''> <playlistId|''> [limit]

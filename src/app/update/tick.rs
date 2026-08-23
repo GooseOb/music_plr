@@ -176,7 +176,7 @@ impl MusicPlayer {
         self.finalize_view(idx);
     }
 
-    fn finalize_view(&mut self, idx: usize) {
+    pub(crate) fn finalize_view(&mut self, idx: usize) {
         self.save_session();
         self.seed_view_thumbnails(&self.nav_history[idx].clone());
         self.clear_notification();
@@ -229,6 +229,13 @@ impl MusicPlayer {
                     self.install_results(idx, tracks);
                 }
             }
+            BackendResult::ArtistPageLoaded {
+                rid,
+                provider,
+                resolved_id,
+                kinds,
+                page,
+            } => self.apply_artist_page(rid, provider, resolved_id, kinds, *page),
             BackendResult::CardPlaylistReady(idx, name, tracks) => {
                 // A dragged card turned into a playlist; the browse result
                 // fills it. The playlist view reads tracks from the store, so

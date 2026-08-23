@@ -220,24 +220,30 @@ impl MusicPlayer {
     }
 
     pub fn current_library_item(&self) -> Option<LibraryItem> {
+        let view_provider = self.view_data().provider();
         match &self.view_data().kind {
-            ViewKind::Artist { id, name } => Some(LibraryItem {
+            ViewKind::Artist {
+                id, name, source, ..
+            } => Some(LibraryItem {
                 kind: LibraryKind::Artist,
                 id: id.clone(),
                 title: name.clone(),
                 thumbnail: String::new(),
+                provider: *source,
             }),
             ViewKind::Album { id, name } => Some(LibraryItem {
                 kind: LibraryKind::Album,
                 id: id.clone(),
                 title: name.clone(),
                 thumbnail: String::new(),
+                provider: view_provider,
             }),
             ViewKind::PlaylistView { id, name } => Some(LibraryItem {
                 kind: LibraryKind::Playlist,
                 id: id.clone(),
                 title: name.clone(),
                 thumbnail: String::new(),
+                provider: view_provider,
             }),
             _ => None,
         }

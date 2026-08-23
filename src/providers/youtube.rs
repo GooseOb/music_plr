@@ -1,5 +1,7 @@
 use super::{run_command_with_timeout, ytdlp};
-use crate::providers::{CardData, ProviderId, SearchScope, SearchTab};
+use crate::providers::{
+    ArtistAlbumCard, ArtistHeader, CardData, ProviderId, RelatedArtistCard, SearchScope, SearchTab,
+};
 use crate::types::Track;
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -111,6 +113,79 @@ pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
     let items: Vec<YouTubeVideo> =
         serde_json::from_str(&stdout).context("Failed to parse ytmusicapi browse output")?;
     Ok(items.into_iter().map(Track::from).collect())
+}
+
+/// Raw JSON shape returned by the python helper's `artist_page` mode. The
+/// card lists deserialize straight into the shared provider types.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct YtArtistPageRaw {
+    header: ArtistHeader,
+    popular: Vec<YouTubeVideo>,
+    albums: Vec<ArtistAlbumCard>,
+    playlists: Vec<CardData>,
+    related: Vec<RelatedArtistCard>,
+}
+
+/// Fetch the full artist page (header, popular songs, album/single/playlist
+/// shelves, related artists) via the python helper.
+pub fn fetch_artist_page(
+    id: &str,
+    kinds: &[crate::providers::ArtistDataKind],
+) -> Result<crate::providers::ArtistPage> {
+    use crate::providers::{ArtistDataKind as K, ArtistPage};
+
+    // YouTube serves the whole page in a single request regardless of which
+    // kinds are asked; unrequested kinds are filtered out of the result.
+    let stdout = run_python("artist_page", &[id])?;
+    let mut raw: YtArtistPageRaw =
+        serde_json::from_str(&stdout).context("Failed to parse ytmusicapi artist_page output")?;
+    // The songs shelf carries no durations; fill them with one batched
+    // yt-dlp metadata pass so playback/seeking works immediately.
+    if K::Popular.wanted(kinds) {
+        let ids: Vec<String> = raw.popular.iter().map(|v| v.id.clone()).collect();
+        let metadata = fetch_batch_metadata(&ids);
+        for video in &mut raw.popular {
+            if video.duration == 0 {
+                if let Some(item) = metadata.get(&video.id) {
+                    video.duration = item.duration;
+                }
+            }
+        }
+    } else {
+        raw.popular.clear();
+    }
+    if !K::Header.wanted(kinds) {
+        raw.header.stats.clear();
+        raw.header.description.clear();
+        raw.header.image.clear();
+    }
+    if !K::Albums.wanted(kinds) {
+        raw.albums.clear();
+    }
+    if !K::Playlists.wanted(kinds) {
+        raw.playlists.clear();
+    }
+    if !K::Related.wanted(kinds) {
+        raw.related.clear();
+    }
+    Ok(ArtistPage {
+        header: Some(raw.header),
+        popular: raw.popular.into_iter().map(Track::from).collect(),
+        albums: raw.albums,
+        playlists: raw.playlists,
+        related: raw.related,
+    })
+}
+
+/// Resolve an artist name to a `YouTube` channel browseId via the Artists
+/// search scope. Returns `Ok(None)` when nothing matched.
+pub fn resolve_artist_id(name: &str) -> Result<Option<String>> {
+    let (_, tab) = search_ytmusic(name, SearchScope::Artists)?;
+    Ok(match tab {
+        SearchTab::Artists(cards) => cards.into_iter().next().map(|c| c.id),
+        _ => None,
+    })
 }
 
 fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, SearchTab)> {

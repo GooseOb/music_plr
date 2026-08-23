@@ -212,6 +212,148 @@ pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
     }
 }
 
+/// One artist-page request slot: runs its endpoint (with retries) when
+/// `wanted`, otherwise resolves to `None` without any request.
+async fn opt<T, Fut>(
+    wanted: bool,
+    mut f: impl FnMut() -> Fut,
+) -> rsoundcloud::ClientResult<Option<T>>
+where
+    Fut: std::future::Future<Output = rsoundcloud::ClientResult<T>>,
+{
+    if wanted {
+        retry(3, &mut f).await.map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+/// Fetch only the requested pieces of the artist page. All requested
+/// endpoints run concurrently on one client, each with retries (`SoundCloud`'s
+/// unauthenticated API rate-limits aggressively under burst load).
+pub fn fetch_artist_page(
+    id: &str,
+    kinds: &[crate::providers::ArtistDataKind],
+) -> Result<crate::providers::ArtistPage> {
+    use crate::providers::ArtistDataKind as K;
+    let parsed: u64 = id
+        .parse()
+        .with_context(|| format!("Invalid SoundCloud id: {id}"))?;
+    block_on_sc(async move {
+        let client = sc_client().await?;
+        let (user, popular, albums, playlists, related) = tokio::join!(
+            opt(K::Header.wanted(kinds), || client
+                .get_user(ResourceId::Id(parsed))),
+            opt(K::Popular.wanted(kinds), || client
+                .get_user_popular_tracks(ResourceId::Id(parsed))),
+            opt(K::Albums.wanted(kinds), || client
+                .get_user_albums(ResourceId::Id(parsed))),
+            opt(K::Playlists.wanted(kinds), || client
+                .get_user_playlists(ResourceId::Id(parsed))),
+            opt(K::Related.wanted(kinds), || client
+                .get_user_related_artists(ResourceId::Id(parsed))),
+        );
+        let user = user?;
+        let header = user.map(|u| crate::providers::ArtistHeader {
+            image: u.user.avatar_url.clone(),
+            stats: vec![(
+                "SoundCloud Followers".to_string(),
+                format_count(u.user.followers_count),
+            )],
+            description: u.description.clone().unwrap_or_default(),
+        });
+        let popular = match popular {
+            Ok(tracks) => tracks
+                .iter()
+                .flat_map(|ts| ts.iter())
+                .map(sc_basic_track_to_track)
+                .collect(),
+            Err(e) => {
+                tracing::warn!("SoundCloud popular tracks failed: {e:?}");
+                Vec::new()
+            }
+        };
+        let albums = albums
+            .unwrap_or_default()
+            .unwrap_or_default()
+            .iter()
+            .map(|ap| crate::providers::ArtistAlbumCard {
+                id: ap.album_playlist.id.to_string(),
+                title: ap.album_playlist.title.clone(),
+                date: String::new(),
+                badge: "Album".to_string(),
+                thumbnail: ap.album_playlist.artwork_url.clone().unwrap_or_default(),
+            })
+            .collect();
+        let playlists = playlists
+            .unwrap_or_default()
+            .unwrap_or_default()
+            .iter()
+            .map(|ap| CardData {
+                id: ap.album_playlist.id.to_string(),
+                title: ap.album_playlist.title.clone(),
+                subtitle: String::new(),
+                thumbnail: ap.album_playlist.artwork_url.clone().unwrap_or_default(),
+            })
+            .collect();
+        let related = related
+            .unwrap_or_default()
+            .unwrap_or_default()
+            .iter()
+            .map(|u| crate::providers::RelatedArtistCard {
+                id: u.user.id.to_string(),
+                name: u.user.username.clone(),
+                stat: format_count(u.user.followers_count),
+                thumbnail: u.user.avatar_url.clone(),
+            })
+            .collect();
+        Ok(crate::providers::ArtistPage {
+            header,
+            popular,
+            albums,
+            playlists,
+            related,
+        })
+    })
+}
+
+/// Run one request future with up to `attempts` tries and linear backoff —
+/// `SoundCloud`'s internal API answers 403/429 under bursts.
+async fn retry<T, Fut>(attempts: u32, f: &mut impl FnMut() -> Fut) -> rsoundcloud::ClientResult<T>
+where
+    Fut: std::future::Future<Output = rsoundcloud::ClientResult<T>>,
+{
+    for attempt in 0..attempts {
+        match f().await {
+            Ok(v) => return Ok(v),
+            Err(e) if attempt + 1 < attempts => {
+                tracing::warn!(
+                    "SoundCloud request failed ({e:?}); retrying in {}s",
+                    attempt + 1
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(u64::from(attempt) + 1)).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!()
+}
+
+/// Format a raw count as a compact human string (1234567 -> "1.2M").
+fn format_count(n: i32) -> String {
+    match n {
+        0..=999 => n.to_string(),
+        1_000..=999_999 => format!("{:.1}K", f64::from(n) / 1_000.0),
+        _ => format!("{:.1}M", f64::from(n) / 1_000_000.0),
+    }
+}
+
+/// Resolve an artist name to a `SoundCloud` user id via user search. Returns
+/// `Ok(None)` when nothing matched.
+pub fn resolve_artist_id(name: &str) -> Result<Option<String>> {
+    Ok(search_users(name, 0)?.into_iter().next().map(|c| c.id))
+}
+
 /// Resolve a logical track to a `SoundCloud` track via search. Returns the
 /// full resolved `Track` (carrying id/url plus duration/thumbnail/album) so
 /// the rich metadata survives the resolution, or `Ok(None)` when no match is

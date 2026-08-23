@@ -169,7 +169,7 @@ impl Operation<Message> for CaptureBounds {
     }
 
     fn finish(&self) -> Outcome<Message> {
-        Outcome::Some(Message::ListBoundsCaptured(self.clone()))
+        Outcome::Some(Message::ListBoundsCaptured(Box::new(self.clone())))
     }
 }
 

@@ -2,7 +2,9 @@ use iced::widget::{Column, Space};
 
 use crate::{app::ViewKind, theme::AppTheme};
 
-use super::{lyrics, playlist, search, settings, track_list_search, Element, Message, MusicPlayer};
+use super::{
+    artist, lyrics, playlist, search, settings, track_list_search, Element, Message, MusicPlayer,
+};
 
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let search_bar = search::view_search_bar(player);
@@ -13,9 +15,10 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
         match &player.view_data().kind {
             ViewKind::Search { tab, .. } => search::view_search(player, tab),
             ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_) => search::view_search_radio(player),
-            ViewKind::Artist { name, .. }
-            | ViewKind::Album { name, .. }
-            | ViewKind::PlaylistView { name, .. } => search::view_browse(player, name),
+            ViewKind::Artist { .. } => artist::view_artist(player),
+            ViewKind::Album { name, .. } | ViewKind::PlaylistView { name, .. } => {
+                search::view_browse(player, name)
+            }
             ViewKind::Playlist { .. } | ViewKind::Downloads => playlist::view_playlist(player),
             ViewKind::Settings => settings::view_settings(player),
         }

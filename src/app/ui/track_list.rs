@@ -239,11 +239,17 @@ pub(super) fn track_row_layout<'a>(
             .push(icons::icon(icons::CACHE_ICON, p.accent, theme::ICON_SIZE_MD).into());
     }
 
+    // Unknown durations (0) render blank rather than "--:--".
+    let duration = track.duration();
     trailing_children.push(
         Container::new(
-            text(crate::util::format_duration(track.duration()))
-                .size(theme::TEXT_SIZE_SM)
-                .style(fg_secondary()),
+            text(if duration > 0 {
+                crate::util::format_duration(duration).into_owned()
+            } else {
+                String::new()
+            })
+            .size(theme::TEXT_SIZE_SM)
+            .style(fg_secondary()),
         )
         .padding([0.0, theme::SPACING_2XL])
         .into(),

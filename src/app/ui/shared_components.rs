@@ -151,13 +151,11 @@ pub fn subtitle_artist(
         Button::new(artist)
             .padding(0)
             .style(super::styles::button_style_album())
-            .on_press(Message::Browse(
-                crate::app::ViewKind::Artist {
-                    id,
-                    name: name.to_string(),
-                },
+            .on_press(Message::OpenArtist {
+                id,
+                name: name.to_string(),
                 source,
-            ))
+            })
             .into()
     } else {
         artist.style(fg_secondary()).into()

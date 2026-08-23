@@ -14,7 +14,7 @@ pub struct TrackAlbum {
     pub id: String,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Track {
     pub title: String,
     pub artist: String,

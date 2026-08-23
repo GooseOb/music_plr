@@ -7,6 +7,7 @@ use iced::{
 
 use super::{ContextMenuState, Message, MusicPlayer};
 
+pub(crate) mod artist;
 mod content;
 mod lyrics;
 mod overlays;
@@ -20,7 +21,6 @@ mod sidebar;
 mod styles;
 mod track_list;
 pub(super) mod track_list_search;
-
 pub use queue::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID};
 pub use search::{SEARCH_HISTORY_LIST_ID, SEARCH_INPUT_ID};
 pub use track_list::TRACK_LIST_ID;
