@@ -225,6 +225,51 @@ def browse(browse_id, limit=50, kind=None):
     return out
 
 
+def _playlists_shelf_fallback(browse_id):
+    """Parse the "Playlists by <artist>" and "Featured on" carousels straight
+    from the raw browse response; ytmusicapi matches shelf titles exactly
+    ("playlists") and misses both."""
+    stack = [_yt()._send_request("browse", {"browseId": browse_id})]
+    out = []
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, dict):
+            if "musicCarouselShelfRenderer" in cur:
+                m = cur["musicCarouselShelfRenderer"]
+                header = m.get("header", {}).get("musicCarouselShelfBasicHeaderRenderer", {})
+                title = "".join(r.get("text", "") for r in header.get("title", {}).get("runs", []))
+                lowered = title.lower()
+                if "playlist" not in lowered and "featured on" not in lowered:
+                    continue
+                for c in m.get("contents", []):
+                    item = c.get("musicTwoRowItemRenderer")
+                    if not item:
+                        continue
+                    pid = item.get("navigationEndpoint", {}).get("browseEndpoint", {}).get("browseId", "") or ""
+                    if not pid.startswith(("VL", "PL", "OL")):
+                        continue
+                    if pid.startswith("VL"):
+                        pid = pid[2:]
+                    name = "".join(r.get("text", "") for r in item.get("title", {}).get("runs", []))
+                    thumbs = (
+                        (item.get("thumbnailRenderer") or {})
+                        .get("musicThumbnailRenderer", {})
+                        .get("thumbnail", {})
+                        .get("thumbnails", [])
+                    )
+                    out.append({
+                        "id": pid,
+                        "title": name,
+                        "subtitle": "",
+                        "thumbnail": thumbs[-1].get("url", "") if thumbs else "",
+                    })
+            else:
+                stack.extend(cur.values())
+        elif isinstance(cur, list):
+            stack.extend(cur)
+    return out
+
+
 def artist_page(browse_id):
     """Return the full artist page: header stats, popular tracks and the
     albums/singles/playlists/related-artists shelves."""
@@ -295,6 +340,10 @@ def artist_page(browse_id):
             "subtitle": "",
             "thumbnail": thumb(e),
         })
+    if not playlists:
+        # ytmusicapi matches the shelf title exactly ("playlists"), but YT
+        # titles it "Playlists by <artist>", so the key is often missing.
+        playlists = _playlists_shelf_fallback(browse_id)
 
     related = []
     for e in a.get("related", {}).get("results", []):
