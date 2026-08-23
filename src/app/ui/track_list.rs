@@ -36,13 +36,24 @@ pub(super) fn view_track_list<'a>(
 
     let show_album = list == TrackListKind::Active
         && !matches!(player.view_data().kind, crate::app::ViewKind::Album { .. });
+    let show_plays = list == TrackListKind::Active
+        && matches!(
+            player.view_data().kind,
+            crate::app::ViewKind::Search { .. }
+                | crate::app::ViewKind::SongRadio(_)
+                | crate::app::ViewKind::ArtistRadio(_)
+                | crate::app::ViewKind::Artist { .. }
+                | crate::app::ViewKind::Album { .. }
+                | crate::app::ViewKind::PlaylistView { .. }
+        );
 
     virtual_scrollable(tracks.len(), list, player, |i| {
-        view_track_row(
+        view_track_row_inner(
             &tracks[i],
             TrackPos::new(i + index_offset, list),
             player,
             show_album,
+            show_plays,
         )
     })
 }
@@ -146,6 +157,16 @@ pub(super) fn view_track_row<'a>(
     player: &'a MusicPlayer,
     show_album: bool,
 ) -> Element<'a, Message, AppTheme> {
+    view_track_row_inner(track, pos, player, show_album, false)
+}
+
+fn view_track_row_inner<'a>(
+    track: &'a Track,
+    pos: TrackPos,
+    player: &'a MusicPlayer,
+    show_album: bool,
+    show_plays: bool,
+) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let is_selected = player.selection(pos.list).contains(&pos.index);
     let is_hovered = player.drag.hovered_track() == Some(pos);
@@ -170,7 +191,7 @@ pub(super) fn view_track_row<'a>(
 
     let leading = leading_control(pos, track, player);
 
-    let inner = track_row_layout(leading, track, player, show_album);
+    let inner = track_row_layout_inner(leading, track, player, show_album, show_plays);
 
     let track_area = MouseArea::new(inner)
         .interaction(player.drag.clickable_cursor_interaction())
@@ -203,6 +224,16 @@ pub(super) fn track_row_layout<'a>(
     player: &'a MusicPlayer,
     show_album: bool,
 ) -> Row<'a, Message, AppTheme> {
+    track_row_layout_inner(leading, track, player, show_album, false)
+}
+
+fn track_row_layout_inner<'a>(
+    leading: Element<'a, Message, AppTheme>,
+    track: &'a Track,
+    player: &'a MusicPlayer,
+    show_album: bool,
+    show_plays: bool,
+) -> Row<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let thumb = player.thumbnail_index.get(track.primary_id());
     let is_downloaded = player.download_registry.contains(&track.cache_key());
@@ -231,13 +262,26 @@ pub(super) fn track_row_layout<'a>(
         }
     }
 
-    if is_downloaded {
-        trailing_children
-            .push(icons::icon(icons::DOWNLOAD_ICON, p.accent, theme::ICON_SIZE_MD).into());
-    } else if is_cached {
-        trailing_children
-            .push(icons::icon(icons::CACHE_ICON, p.accent, theme::ICON_SIZE_MD).into());
+    if show_plays {
+        let plays = track.play_count();
+        if plays > 0 {
+            trailing_children.push(
+                text(format!("{} plays", crate::util::format_count(plays)))
+                    .size(theme::TEXT_SIZE_SM)
+                    .width(Length::Fill)
+                    .style(fg_secondary())
+                    .into(),
+            );
+        }
     }
+
+    trailing_children.push(if is_downloaded {
+        icons::icon(icons::DOWNLOAD_ICON, p.accent, theme::ICON_SIZE_MD).into()
+    } else if is_cached {
+        icons::icon(icons::CACHE_ICON, p.accent, theme::ICON_SIZE_MD).into()
+    } else {
+        Space::new().width(theme::ICON_SIZE_MD).into()
+    });
 
     // Unknown durations (0) render blank rather than "--:--".
     let duration = track.duration();

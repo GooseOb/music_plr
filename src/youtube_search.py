@@ -30,7 +30,7 @@ EXPECTED_TYPE = {
 
 
 def _make_track(vid, title, artist, *, duration=0, thumbnail="",
-                album=None, artist_id=None):
+                album=None, artist_id=None, views=""):
     return {
         "kind": "track",
         "resultType": "song",
@@ -38,11 +38,14 @@ def _make_track(vid, title, artist, *, duration=0, thumbnail="",
         "title": title,
         "subtitle": artist,
         "url": f"https://youtube.com/watch?v={vid}",
+        # Either a number (search's duration_seconds) or a raw "M:SS" /
+        # "H:MM:SS" string; the Rust side parses both.
         "duration": duration,
         "thumbnail": thumbnail,
         "channel": artist,
         "artist_id": artist_id,
         "album": album,
+        "views": views,
     }
 
 
@@ -96,7 +99,7 @@ def result_to_item(r, rt):
         return _make_track(
             vid, r.get("title", ""), artist,
             duration=duration, thumbnail=thumb, album=album_obj,
-            artist_id=artist_id,
+            artist_id=artist_id, views=r.get("views") or "",
         )
     if rt == "artist":
         bid = r.get("browseId", "")
@@ -159,21 +162,14 @@ def _track_from_album_entry(e, album=None):
     artist = e.get("artists", [{}])[0].get("name", "") if e.get("artists") \
         else (e.get("artist", "") or "")
     thumb = (e.get("thumbnails") or [{}])[-1].get("url", "")
+    # get_album reports an exact integer view count; normalize to string so
+    # the Rust side can parse it like the abbreviated shelf counts.
+    views = e.get("views")
     return _make_track(
         vid, e.get("title", ""), artist,
-        duration=_dur(e.get("duration")), thumbnail=thumb, album=album,
+        duration=e.get("duration") or 0, thumbnail=thumb, album=album,
+        views=str(views) if views else "",
     )
-
-
-def _dur(d):
-    if not d:
-        return 0
-    parts = [int(x) for x in str(d).split(":")]
-    secs = 0
-    for p in parts:
-        secs = secs * 60 + p
-    return secs
-
 
 def browse(browse_id, limit=50, kind=None):
     """Return the tracks inside an artist/album/playlist.
@@ -218,7 +214,7 @@ def browse(browse_id, limit=50, kind=None):
             out.append(
                 _make_track(
                     vid, e.get("title", ""), e.get("artist", ""),
-                    duration=_dur(e.get("duration")), thumbnail=thumb,
+                    duration=e.get("duration") or 0, thumbnail=thumb,
                     artist_id=browse_id,
                 )
             )
@@ -265,9 +261,10 @@ def artist_page(browse_id):
         t = _make_track(
             vid, e.get("title", ""),
             artists[0].get("name", "") if artists else "",
-            duration=_dur(e.get("duration")), thumbnail=thumb(e),
+            duration=e.get("duration") or 0, thumbnail=thumb(e),
             album=album_obj,
             artist_id=browse_id,
+            views=e.get("views") or "",
         )
         popular.append(t)
 
@@ -358,17 +355,17 @@ def watch_playlist(video_id=None, playlist_id=None, radio=True, limit=50):
         artists = t.get("artists", [])
         artist = artists[0].get("name", "") if artists else ""
         artist_id = artists[0].get("id") if artists else None
-        # watch_playlist omits numeric duration and thumbnails, so derive them
-        # locally: parse the "M:SS" / "H:MM:SS" length string and synthesize
-        # the standard thumbnail URL. This avoids a slow per-track yt-dlp
+        # watch_playlist omits numeric duration and thumbnails, so pass the
+        # raw length string (parsed Rust-side) and synthesize the standard
+        # thumbnail URL. This avoids a slow per-track yt-dlp
         # metadata pass (which added ~100s for a 50-track radio).
-        duration = _dur(t.get("length"))
         thumbs = t.get("thumbnails") or []
         thumbnail = thumbs[-1].get("url", "") if thumbs else f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"
         out.append(
             _make_track(
                 vid, t.get("title", ""), artist,
-                duration=duration, thumbnail=thumbnail, artist_id=artist_id,
+                duration=t.get("length") or 0, thumbnail=thumbnail,
+                artist_id=artist_id,
             )
         )
         if len(out) >= limit:

@@ -57,6 +57,18 @@ impl Track {
             .unwrap_or("")
     }
 
+    /// The play count, taken from the source provider's data when nonzero,
+    /// falling back to any carrier that reports one.
+    pub fn play_count(&self) -> u64 {
+        self.source_provider().map_or(0, |p| p.play_count).max(
+            self.providers
+                .values()
+                .map(|p| p.play_count)
+                .max()
+                .unwrap_or(0),
+        )
+    }
+
     /// The album metadata, taken from the source provider's data.
     pub fn album(&self) -> Option<&TrackAlbum> {
         self.source_provider()
@@ -182,6 +194,7 @@ impl Track {
                 duration,
                 thumbnail: thumbnail.into(),
                 album,
+                play_count: 0,
             },
         );
         Self {
@@ -291,6 +304,7 @@ mod tests {
                 duration: 10,
                 thumbnail: String::new(),
                 album: None,
+                play_count: 0,
             },
         );
         t

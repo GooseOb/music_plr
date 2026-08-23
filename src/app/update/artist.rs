@@ -4,6 +4,19 @@ use crate::{
     providers::{ArtistDataKind, ArtistPage, ArtistPageState, ArtistSectionKind, ProviderId},
 };
 
+/// True when both lists are the same popular-track rows (per `provider`
+/// ids), i.e. the incoming list is a metadata refresh rather than new data.
+fn same_popular_ids(
+    a: &[crate::types::Track],
+    b: &[crate::types::Track],
+    provider: ProviderId,
+) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b).all(|(x, y)| {
+            x.providers.get(&provider).map(|p| &p.id) == y.providers.get(&provider).map(|p| &p.id)
+        })
+}
+
 impl MusicPlayer {
     /// Open an artist page for the artist `id` on `source`. The source
     /// provider serves everything it can in its own request(s); the other
@@ -75,6 +88,25 @@ impl MusicPlayer {
                 Ok((id, page)) => (Some(id), Ok(page)),
                 Err(e) => (None, Err(e.to_string())),
             };
+            // Render the page immediately; for YouTube popular tracks a
+            // second pass backfills durations/view counts once yt-dlp
+            // finishes.
+            let enrich = provider == ProviderId::YouTube && ArtistDataKind::Popular.wanted(kinds);
+            if let (true, Ok(page)) = (enrich, &page) {
+                let _ = tx.send(BackendResult::ArtistPageLoaded {
+                    rid,
+                    provider,
+                    resolved_id: resolved_id.clone(),
+                    kinds,
+                    page: Box::new(Ok(page.clone())),
+                });
+            }
+            let mut page = page;
+            if enrich {
+                if let Ok(page) = &mut page {
+                    crate::providers::enrich_track_metadata(&mut page.popular);
+                }
+            }
             let _ = tx.send(BackendResult::ArtistPageLoaded {
                 rid,
                 provider,
@@ -247,8 +279,23 @@ impl MusicPlayer {
                 let view = self.nav_history[idx].clone();
                 if let Some(tracks) = new_tracks {
                     let slot = &mut self.nav_history[idx];
-                    slot.tracks = tracks;
-                    slot.selection.clear();
+                    if same_popular_ids(&slot.tracks, &tracks, provider) {
+                        // Enrichment resend of the rows already on screen:
+                        // backfill metadata in place so a selection made while
+                        // the fetch ran survives.
+                        for (existing, incoming) in slot.tracks.iter_mut().zip(&tracks) {
+                            if let (Some(e), Some(i)) = (
+                                existing.providers.get_mut(&provider),
+                                incoming.providers.get(&provider),
+                            ) {
+                                e.duration = i.duration;
+                                e.play_count = i.play_count;
+                            }
+                        }
+                    } else {
+                        slot.tracks = tracks;
+                        slot.selection.clear();
+                    }
                 }
                 self.finalize_view(idx);
                 self.seed_artist_thumbnails(&view);

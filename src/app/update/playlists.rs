@@ -117,6 +117,7 @@ impl MusicPlayer {
                         duration,
                         thumbnail: String::new(),
                         album: None,
+                        play_count: 0,
                     },
                 );
                 new_tracks.push(Track {

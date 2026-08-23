@@ -33,7 +33,7 @@ fn album_to_card(ap: &AlbumPlaylist) -> CardData {
 /// numeric `id` let the existing `yt-dlp` stream/download path play it, so we
 /// don't need `SoundCloud`'s (auth-gated) stream URLs.
 fn sc_track_to_track(t: &SCTrack) -> Track {
-    Track::from_provider(
+    let mut track = Track::from_provider(
         ProviderId::SoundCloud,
         t.track.id.to_string(),
         t.track.permalink_url.clone(),
@@ -46,7 +46,11 @@ fn sc_track_to_track(t: &SCTrack) -> Track {
             .unwrap_or_else(|| t.user.avatar_url.clone()),
         None,
         Some(t.user.id.to_string()),
-    )
+    );
+    if let Some(pt) = track.providers.get_mut(&ProviderId::SoundCloud) {
+        pt.play_count = t.track.playback_count.unwrap_or(0).max(0) as u64;
+    }
+    track
 }
 
 /// Map an `rsoundcloud` user (artist) into a card for the Artists search tab.
@@ -62,7 +66,7 @@ fn user_to_card(u: &User) -> CardData {
 /// Map a `rsoundcloud` basic track (from an artist's track list) into a
 /// playable `Track`, carrying the `permalink_url` for `yt-dlp` playback.
 fn sc_basic_track_to_track(t: &BasicTrack) -> Track {
-    Track::from_provider(
+    let mut track = Track::from_provider(
         ProviderId::SoundCloud,
         t.track.id.to_string(),
         t.track.permalink_url.clone(),
@@ -72,7 +76,11 @@ fn sc_basic_track_to_track(t: &BasicTrack) -> Track {
         t.track.artwork_url.clone().unwrap_or_default(),
         None,
         Some(t.user.id.to_string()),
-    )
+    );
+    if let Some(pt) = track.providers.get_mut(&ProviderId::SoundCloud) {
+        pt.play_count = t.track.playback_count.unwrap_or(0).max(0) as u64;
+    }
+    track
 }
 
 /// Run an async `rsoundcloud` call to completion on the shared current-thread
@@ -258,7 +266,7 @@ pub fn fetch_artist_page(
             image: u.user.avatar_url.clone(),
             stats: vec![(
                 "SoundCloud Followers".to_string(),
-                format_count(u.user.followers_count),
+                crate::util::format_count(u.user.followers_count.max(0) as u64),
             )],
             description: u.description.clone().unwrap_or_default(),
         });
@@ -303,7 +311,7 @@ pub fn fetch_artist_page(
             .map(|u| crate::providers::RelatedArtistCard {
                 id: u.user.id.to_string(),
                 name: u.user.username.clone(),
-                stat: format_count(u.user.followers_count),
+                stat: crate::util::format_count(u.user.followers_count.max(0) as u64),
                 thumbnail: u.user.avatar_url.clone(),
             })
             .collect();
@@ -337,15 +345,6 @@ where
         }
     }
     unreachable!()
-}
-
-/// Format a raw count as a compact human string (1234567 -> "1.2M").
-fn format_count(n: i32) -> String {
-    match n {
-        0..=999 => n.to_string(),
-        1_000..=999_999 => format!("{:.1}K", f64::from(n) / 1_000.0),
-        _ => format!("{:.1}M", f64::from(n) / 1_000_000.0),
-    }
 }
 
 /// Resolve an artist name to a `SoundCloud` user id via user search. Returns

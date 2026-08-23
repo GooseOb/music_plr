@@ -1,3 +1,25 @@
+/// Abbreviated count for display (1234 -> "1.2K"). Values that would round
+/// up across a unit boundary (999 500 -> "1000.0K") step to the next unit
+/// instead ("1.0M").
+pub fn format_count(n: u64) -> String {
+    const UNITS: [(u64, char); 4] = [
+        (1_000_000_000_000, 'T'),
+        (1_000_000_000, 'B'),
+        (1_000_000, 'M'),
+        (1_000, 'K'),
+    ];
+    let v = n as f64;
+    let Some(mut i) = UNITS.iter().position(|&(u, _)| v >= u as f64) else {
+        return n.to_string();
+    };
+    let mut scaled = v / UNITS[i].0 as f64;
+    if scaled.round() >= 1000.0 {
+        i = i.saturating_sub(1);
+        scaled = v / UNITS[i].0 as f64;
+    }
+    format!("{scaled:.1}{}", UNITS[i].1)
+}
+
 pub fn format_duration(secs: u32) -> std::borrow::Cow<'static, str> {
     if secs > 0 {
         format!("{}:{:02}", secs / 60, secs % 60).into()
@@ -187,6 +209,22 @@ mod tests {
     use crate::types::Track;
 
     #[test]
+    fn formats_count_boundaries() {
+        assert_eq!(format_count(0), "0");
+        assert_eq!(format_count(999), "999");
+        assert_eq!(format_count(1_234), "1.2K");
+        assert_eq!(format_count(9_999), "10.0K");
+        assert_eq!(format_count(12_345), "12.3K");
+        assert_eq!(format_count(841_000), "841.0K");
+        assert_eq!(format_count(999_499), "999.5K");
+        assert_eq!(format_count(999_500), "1.0M");
+        assert_eq!(format_count(1_234_567), "1.2M");
+        assert_eq!(format_count(949_999_999), "950.0M");
+        assert_eq!(format_count(1_000_000_000), "1.0B");
+        assert_eq!(format_count(1_234_567_891), "1.2B");
+    }
+
+    #[test]
     fn format_duration_seconds() {
         assert_eq!(format_duration(0).as_ref(), "--:--");
         assert_eq!(format_duration(30).as_ref(), "0:30");
@@ -269,6 +307,7 @@ mod tests {
                         duration: 10,
                         thumbnail: String::new(),
                         album: None,
+                        play_count: 0,
                     },
                 );
                 Track {

@@ -17,7 +17,7 @@ pub struct YouTubeVideo {
     pub id: String,
     pub title: String,
     pub url: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_flexible_duration")]
     pub duration: u32,
     #[serde(default)]
     pub channel: String,
@@ -27,11 +27,15 @@ pub struct YouTubeVideo {
     pub album: Option<crate::types::TrackAlbum>,
     #[serde(default)]
     pub artist_id: Option<String>,
+    /// ytmusicapi's abbreviated view count ("1.2M", "841M plays"), parsed
+    /// to an exact number at deserialization; 0 when absent.
+    #[serde(default, deserialize_with = "deserialize_view_count")]
+    pub views: u64,
 }
 
 impl From<YouTubeVideo> for Track {
     fn from(v: YouTubeVideo) -> Self {
-        Track::from_provider(
+        let mut track = Track::from_provider(
             ProviderId::YouTube,
             v.id,
             v.url,
@@ -41,7 +45,11 @@ impl From<YouTubeVideo> for Track {
             v.thumbnail,
             v.album,
             v.artist_id,
-        )
+        );
+        if let Some(pt) = track.providers.get_mut(&ProviderId::YouTube) {
+            pt.play_count = v.views;
+        }
+        track
     }
 }
 
@@ -54,9 +62,70 @@ struct YTDLPSearchResult {
     channel: String,
     #[serde(default)]
     webpage_url: String,
+    #[serde(default)]
+    view_count: Option<u64>,
 }
 
 const YTM_SEARCH_URL: &str = "https://music.youtube.com/search?q=";
+
+/// Durations beyond a week are garbage (e.g. "1e30"), not tracks.
+const MAX_TRACK_SECS: f64 = 7.0 * 24.0 * 3600.0;
+
+/// Accept either an abbreviated string ("1.2M", "841M plays") or a plain
+/// number for view counts.
+fn deserialize_view_count<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde_json::Value;
+    Ok(match Value::deserialize(deserializer)? {
+        Value::Number(n) => n.as_u64().unwrap_or(0),
+        Value::String(s) => parse_abbreviated_count(&s),
+        _ => 0,
+    })
+}
+
+/// ytmusicapi emits durations either as seconds (search) or as a raw
+/// "M:SS"/"H:MM:SS" string (browse/watch shelves); accept both.
+fn deserialize_flexible_duration<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde_json::Value;
+    let secs = match Value::deserialize(deserializer)? {
+        Value::Number(n) => n.as_f64().unwrap_or(0.0),
+        Value::String(s) => s
+            .split(':')
+            .try_fold(0.0_f64, |acc, part| {
+                part.trim().parse::<f64>().map(|p| acc * 60.0 + p)
+            })
+            .unwrap_or(0.0),
+        _ => 0.0,
+    };
+    let secs = if secs.is_finite() && (0.0..MAX_TRACK_SECS).contains(&secs) {
+        secs
+    } else {
+        0.0
+    };
+    Ok(secs as u32)
+}
+
+/// Parse ytmusicapi's view/play counts ("1.2M", "847", "3.4K", "841M plays").
+fn parse_abbreviated_count(s: &str) -> u64 {
+    let s = s
+        .trim()
+        .trim_end_matches("plays")
+        .trim_end_matches("views")
+        .trim()
+        .replace(['\u{a0}', ','], "");
+    let (num, mult) = match s.chars().last() {
+        Some('K' | 'k') => (&s[..s.len() - 1], 1_000u64),
+        Some('M' | 'm') => (&s[..s.len() - 1], 1_000_000),
+        Some('B' | 'b') => (&s[..s.len() - 1], 1_000_000_000),
+        _ => (s.as_str(), 1),
+    };
+    num.parse::<f64>().map_or(0, |n| (n * mult as f64) as u64)
+}
 
 const SEARCH_TIMEOUT: Duration = Duration::from_mins(1);
 const PYTHON_TIMEOUT: Duration = Duration::from_secs(30);
@@ -140,19 +209,10 @@ pub fn fetch_artist_page(
     let stdout = run_python("artist_page", &[id])?;
     let mut raw: YtArtistPageRaw =
         serde_json::from_str(&stdout).context("Failed to parse ytmusicapi artist_page output")?;
-    // The songs shelf carries no durations; fill them with one batched
-    // yt-dlp metadata pass so playback/seeking works immediately.
-    if K::Popular.wanted(kinds) {
-        let ids: Vec<String> = raw.popular.iter().map(|v| v.id.clone()).collect();
-        let metadata = fetch_batch_metadata(&ids);
-        for video in &mut raw.popular {
-            if video.duration == 0 {
-                if let Some(item) = metadata.get(&video.id) {
-                    video.duration = item.duration;
-                }
-            }
-        }
-    } else {
+    // The songs shelf carries no durations or view counts; those arrive
+    // later via [`enrich_track_metadata`] (a batched yt-dlp pass) so the
+    // page can render without waiting for it.
+    if !K::Popular.wanted(kinds) {
         raw.popular.clear();
     }
     if !K::Header.wanted(kinds) {
@@ -316,6 +376,7 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
                 channel: String::new(),
                 thumbnail: format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg"),
                 album: None,
+                views: 0,
                 artist_id: None,
             });
         }
@@ -337,10 +398,45 @@ fn enrich_with_metadata(videos: &mut [YouTubeVideo], valid_ids: &[String]) {
         if let Some(item) = metadata.get(&video.id) {
             video.duration = item.duration;
             video.channel = item.channel.clone();
+            if video.views == 0 {
+                video.views = item.view_count.unwrap_or(0);
+            }
             // Prefer the metadata pass's url (it may correct/normalize the
             // flat pass's url); otherwise keep the already-set flat url.
             if !item.webpage_url.is_empty() {
                 video.url = item.webpage_url.clone();
+            }
+        }
+    }
+}
+
+/// Fill missing duration/view-count data on YouTube-sourced tracks with one
+/// batched yt-dlp metadata pass. Used as a second phase after the artist
+/// page renders, so popular rows don't wait on yt-dlp.
+pub fn enrich_track_metadata(tracks: &mut [crate::types::Track]) {
+    let ids: Vec<String> = tracks
+        .iter()
+        .filter_map(|t| t.provider_id(ProviderId::YouTube).map(str::to_string))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let metadata = fetch_batch_metadata(&ids);
+    for track in tracks.iter_mut() {
+        let Some(id) = track.provider_id(ProviderId::YouTube).map(str::to_string) else {
+            continue;
+        };
+        if let (Some(item), Some(pt)) = (
+            metadata.get(&id),
+            track.providers.get_mut(&ProviderId::YouTube),
+        ) {
+            if pt.duration == 0 {
+                pt.duration = item.duration;
+            }
+            // The songs shelf never carries counts; the yt-dlp pass's
+            // exact view_count is the authoritative fallback.
+            if pt.play_count == 0 {
+                pt.play_count = item.view_count.unwrap_or(0);
             }
         }
     }
@@ -461,4 +557,88 @@ pub fn download_audio(video_url: &str, output_path: &str) -> Result<String> {
 /// filtered out so the search results stay playable.
 fn is_video_id(id: &str) -> bool {
     id.len() == 11 && !id.starts_with("MPRE") && !id.starts_with("UC")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserializes_view_count_shapes() {
+        let v: YouTubeVideo = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "t", "url": "u", "views": "841M plays"
+        }))
+        .unwrap();
+        assert_eq!(v.views, 841_000_000);
+        let v: YouTubeVideo = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "t", "url": "u", "views": null
+        }))
+        .unwrap();
+        assert_eq!(v.views, 0);
+        let v: YouTubeVideo = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "t", "url": "u", "views": 841_234
+        }))
+        .unwrap();
+        assert_eq!(v.views, 841_234);
+        for fractional in [-12.5f64, 841_234.7, u64::MAX as f64 * 2.0] {
+            let v: YouTubeVideo = serde_json::from_value(serde_json::json!({
+                "id": "a", "title": "t", "url": "u", "views": fractional
+            }))
+            .unwrap();
+            assert_eq!(v.views, 0, "non-u64 number {fractional} degrades to 0");
+        }
+    }
+
+    #[test]
+    fn deserializes_mixed_duration_shapes() {
+        let v: YouTubeVideo = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "t", "url": "u",
+            "duration": "4:36"
+        }))
+        .unwrap();
+        assert_eq!(v.duration, 276);
+        let v: YouTubeVideo = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "t", "url": "u", "duration": 321.0
+        }))
+        .unwrap();
+        assert_eq!(v.duration, 321);
+        let v: YouTubeVideo = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "t", "url": "u", "duration": null
+        }))
+        .unwrap();
+        assert_eq!(v.duration, 0);
+        for malformed in ["-1:30", "1e30", "4:xx"] {
+            let v: YouTubeVideo = serde_json::from_value(serde_json::json!({
+                "id": "a", "title": "t", "url": "u", "duration": malformed
+            }))
+            .unwrap();
+            assert_eq!(v.duration, 0, "malformed duration {malformed} -> 0");
+        }
+        let v: YouTubeVideo = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "t", "url": "u", "duration": 1e30
+        }))
+        .unwrap();
+        assert_eq!(v.duration, 0);
+        let v: YouTubeVideo = serde_json::from_value(serde_json::json!({
+            "id": "a", "title": "t", "url": "u", "duration": "2:00:05"
+        }))
+        .unwrap();
+        assert_eq!(v.duration, 7205);
+    }
+    use super::parse_abbreviated_count as p;
+
+    #[test]
+    fn parses_abbreviated_counts() {
+        assert_eq!(p("847"), 847);
+        assert_eq!(p("1.2K"), 1_200);
+        assert_eq!(p("966K"), 966_000);
+        assert_eq!(p("4.9M"), 4_900_000);
+        assert_eq!(p("841M plays"), 841_000_000);
+        assert_eq!(p("614M\u{a0}plays"), 614_000_000);
+        assert_eq!(p("3.4B views"), 3_400_000_000);
+        assert_eq!(p(""), 0);
+        assert_eq!(p("garbage"), 0);
+        assert_eq!(p(" \u{a0}1.2K "), 1_200);
+        assert_eq!(p("-3K"), 0);
+    }
 }

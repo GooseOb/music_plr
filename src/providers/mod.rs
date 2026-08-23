@@ -367,6 +367,9 @@ pub fn fetch_artist_page(
     }
 }
 
+/// Fill missing duration/view counts on `YouTube` tracks (batched yt-dlp pass).
+pub use youtube::enrich_track_metadata;
+
 /// Resolve an artist name to that provider's artist id (used to lazily open
 /// a page section on a provider whose id isn't known yet). Returns
 /// `Ok(None)` when no match was found.
@@ -437,6 +440,8 @@ pub struct ProviderTrack {
     pub duration: u32,
     pub thumbnail: String,
     pub album: Option<crate::types::TrackAlbum>,
+    #[serde(default)]
+    pub play_count: u64,
 }
 
 /// Map of provider id -> that provider's identifier/url for a track.

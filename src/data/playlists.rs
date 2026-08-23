@@ -138,6 +138,7 @@ mod tests {
                 duration: 0,
                 thumbnail: String::new(),
                 album: None,
+                play_count: 0,
             },
         );
         Track {
@@ -165,6 +166,7 @@ mod tests {
                             duration: 0,
                             thumbnail: String::new(),
                             album: None,
+                            play_count: 0,
                         },
                     );
                     Track {

@@ -218,6 +218,7 @@ mod tests {
                 duration: 0,
                 thumbnail: String::new(),
                 album: None,
+                play_count: 0,
             },
         );
         let track = crate::types::Track {
