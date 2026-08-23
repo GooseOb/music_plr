@@ -5,7 +5,7 @@ use iced::{
 };
 
 use crate::{
-    app::{interaction::TrackListKind, ui::track_list::empty_state, ViewKind},
+    app::{interaction::TrackListKind, ui::shared_components::empty_state, ViewKind},
     icons,
     theme::AppTheme,
     types::Track,

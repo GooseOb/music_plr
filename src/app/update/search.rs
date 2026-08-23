@@ -55,6 +55,34 @@ impl MusicPlayer {
         });
     }
 
+    pub fn handle_search_execute(&mut self) {
+        if self.show_search_history {
+            if let Some(i) = self.drag.hovered_search_history() {
+                self.handle_search_history_select(i);
+                return;
+            }
+        }
+        self.run_search();
+    }
+
+    pub fn handle_search_scope_changed(&mut self, scope: crate::providers::SearchScope) {
+        if scope != self.search_scope {
+            self.search_scope = scope;
+            self.run_search();
+        }
+    }
+
+    pub fn handle_search_provider_changed(&mut self, provider: crate::providers::ProviderId) {
+        if provider != self.search_provider {
+            self.search_provider = provider;
+            // Clamp the scope to one the new provider supports.
+            if !provider.supported_scopes().contains(&self.search_scope) {
+                self.search_scope = provider.supported_scopes()[0];
+            }
+            self.run_search();
+        }
+    }
+
     pub fn handle_search_load_more(&mut self) {
         if !matches!(self.view_data_mut().kind, ViewKind::Search { .. }) {
             return;
@@ -118,7 +146,7 @@ impl MusicPlayer {
     pub fn activate_search_input(&mut self) -> iced::Task<crate::app::message::Message> {
         self.update_search_history();
         self.show_search_history = true;
-        return iced_runtime::task::widget(CaptureSearchHistoryRows::new());
+        iced_runtime::task::widget(CaptureSearchHistoryRows::new())
     }
 
     /// Start a song or artist radio seeded by `provider`. Same fallback rules

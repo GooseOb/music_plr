@@ -14,7 +14,7 @@ mod playlists;
 mod search;
 mod selection;
 mod session;
-mod settings;
+pub mod settings;
 mod tick;
 
 const DOUBLE_CLICK_MS: u128 = 300;

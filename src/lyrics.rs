@@ -117,8 +117,22 @@ fn fetch_lrclib_compat(
     search_lrclib(req, base, provider)
 }
 
+/// Shared `ureq` agent with connect + overall timeouts so a dead lyrics
+/// provider can't hang a background thread indefinitely.
+fn agent() -> &'static ureq::Agent {
+    static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::config::Config::builder()
+            .timeout_connect(Some(std::time::Duration::from_secs(15)))
+            .timeout_global(Some(std::time::Duration::from_secs(15)))
+            .build()
+            .new_agent()
+    })
+}
+
 fn get_json_opt<T: serde::de::DeserializeOwned>(url: &str, what: &str) -> Result<Option<T>> {
-    match ureq::get(url)
+    match agent()
+        .get(url)
         .header(
             "User-Agent",
             "music_plr/0.1 (https://github.com/gooseob/music_plr)",

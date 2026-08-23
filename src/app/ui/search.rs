@@ -19,12 +19,14 @@ use crate::{
 };
 
 use super::{
-    shared_components::{scope_tab_row, toggle_bookmark_button},
+    shared_components::{
+        empty_state, inner_row_layout, scope_tab_row, thumbnail, toggle_bookmark_button, track_row,
+    },
     styles::{
         bg_search_hist, bg_secondary, button_style_hist, button_style_primary, fg_secondary,
         scroll_padding,
     },
-    theme, track_list, view_track_list, Message, MusicPlayer,
+    theme, view_track_list, Message, MusicPlayer,
 };
 
 pub const SEARCH_INPUT_ID: Id = Id::new("search_input");
@@ -101,7 +103,7 @@ pub(super) fn view_search<'a>(
     tab: &'a crate::providers::SearchTab,
 ) -> Element<'a, Message, AppTheme> {
     if player.view_data().loading {
-        track_list::empty_state("Searching...")
+        empty_state("Searching...")
     } else if tab.is_track_tab() {
         view_search_track_tab(player)
     } else {
@@ -117,7 +119,7 @@ fn view_search_track_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme>
     let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
 
     if results.is_empty() {
-        children.push(track_list::empty_state("No tracks found"));
+        children.push(empty_state("No tracks found"));
     } else {
         children.push(view_track_list(results, player, TrackListKind::Active, 0));
 
@@ -153,7 +155,7 @@ fn view_search_card_tab<'a>(
     };
 
     if items.is_empty() {
-        return track_list::empty_state(if player.view_data().loading {
+        return empty_state(if player.view_data().loading {
             "Searching..."
         } else {
             "No results found"
@@ -192,7 +194,7 @@ fn card_row<'a>(
         .style(fg_secondary())
         .width(theme::TRACK_LEADING_WIDTH)
         .center();
-    let thumb = track_list::thumbnail(p, theme::THUMBNAIL_SIZE, thumb);
+    let thumb = thumbnail(p, theme::THUMBNAIL_SIZE, thumb);
     let saved = player.library.contains(item.kind, &item.id);
     let toggle = Container::new(
         toggle_bookmark_button(p, saved).on_press(Message::ToggleLibrarySave(item.clone())),
@@ -208,15 +210,15 @@ fn card_row<'a>(
                 .into(),
         )
     };
-    let main = track_list::inner_row_layout(leading.into(), Some(thumb), title, subtitle_el, None)
-        .width(Length::Fill);
+    let main =
+        inner_row_layout(leading.into(), Some(thumb), title, subtitle_el, None).width(Length::Fill);
     let is_hovered = player.drag.is_hovered_card(item);
     let hover_item = item.clone();
     let main = MouseArea::new(main)
         .interaction(player.drag.clickable_cursor_interaction())
         .on_press(Message::DragPress(Pressed::Card(item.clone())))
         .on_move(move |_| Message::HoverStart(HoverTarget::Card(hover_item.clone())));
-    track_list::track_row(
+    track_row(
         Row::with_children([main.into(), toggle.into()]),
         if is_hovered { p.bg_hover } else { p.bg },
         None,
@@ -245,7 +247,7 @@ pub(super) fn view_browse<'a>(
     .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
     let track_list = if loading && tracks.is_empty() {
-        track_list::empty_state("Loading...")
+        empty_state("Loading...")
     } else {
         view_track_list(tracks, player, TrackListKind::Active, 0)
     };
@@ -273,7 +275,7 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
         .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
     let track_list = if loading && tracks.is_empty() {
-        track_list::empty_state("Generating radio...")
+        empty_state("Generating radio...")
     } else {
         view_track_list(tracks, player, TrackListKind::Active, 0)
     };
@@ -356,9 +358,7 @@ pub(super) fn view_search_history(
             .bounds
             .search_history
             .as_ref()
-            .map(|g| g.bounds.height)
-            // used for 1 frame
-            .unwrap_or(0.0);
+            .map_or(0.0, |g| g.bounds.height);
 
         scrollable(Column::with_children(items).padding(scroll_padding()))
             .id(SEARCH_HISTORY_LIST_ID)

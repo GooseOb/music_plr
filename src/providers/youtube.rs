@@ -1,3 +1,4 @@
+use super::{run_command_with_timeout, ytdlp};
 use crate::providers::{CardData, ProviderId, SearchScope, SearchTab};
 use crate::types::Track;
 use anyhow::{Context, Result};
@@ -5,6 +6,8 @@ use serde::Deserialize;
 use std::{
     io::Write,
     process::{Command, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
 };
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -53,6 +56,39 @@ struct YTDLPSearchResult {
 
 const YTM_SEARCH_URL: &str = "https://music.youtube.com/search?q=";
 
+const SEARCH_TIMEOUT: Duration = Duration::from_mins(1);
+const PYTHON_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Write the embedded ytmusicapi script to a unique temp file, run it with
+/// `python3` in the given `mode`, and return its stdout. Unique per pid +
+/// call counter (concurrent searches used to race on one fixed filename) and
+/// removed after the run.
+fn run_python(mode: &str, args: &[&str]) -> Result<String> {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let script_path = std::env::temp_dir().join(format!(
+        "music_plr_search_{}_{}.py",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::write(&script_path, include_str!("../youtube_search.py"))
+        .context("Failed to write ytmusicapi script")?;
+
+    let result = (|| {
+        let mut cmd = Command::new("python3");
+        cmd.arg(&script_path).arg(mode).args(args);
+        let output = run_command_with_timeout(&mut cmd, PYTHON_TIMEOUT)
+            .context("Failed to run python3. Is it installed?")?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("ytmusicapi {mode} failed: {stderr}");
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    })();
+
+    let _ = std::fs::remove_file(&script_path);
+    result
+}
+
 /// Run a search and split the result into the playable `Track` list (for
 /// Songs/Videos) and the `SearchTab` describing which tab is active (carrying
 /// the concrete card lists for Artists/Albums/Playlists). yt-dlp is the
@@ -71,53 +107,18 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
 
 /// Browse the contents of an artist/album/playlist, returning its tracks.
 pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
-    let script_path = std::env::temp_dir().join("music_plr_search.py");
-    std::fs::write(&script_path, include_str!("../youtube_search.py"))
-        .context("Failed to write ytmusicapi script")?;
-
-    let output = Command::new("python3")
-        .arg(&script_path)
-        .arg("browse")
-        .arg(id)
-        .arg("50")
-        .arg(kind)
-        .output()
-        .context("Failed to run python3. Is it installed?")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("ytmusicapi browse failed: {stderr}");
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = run_python("browse", &[id, "50", kind])?;
     let items: Vec<YouTubeVideo> =
         serde_json::from_str(&stdout).context("Failed to parse ytmusicapi browse output")?;
-
     Ok(items.into_iter().map(Track::from).collect())
 }
 
 fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, SearchTab)> {
-    let script_path = std::env::temp_dir().join("music_plr_search.py");
-    std::fs::write(&script_path, include_str!("../youtube_search.py"))
-        .context("Failed to write ytmusicapi script")?;
-
     let limit = 20;
+    let limit_str = limit.to_string();
     let scope_arg = scope.youtube_filter();
-    let output = Command::new("python3")
-        .arg(&script_path)
-        .arg("search")
-        .arg(query)
-        .arg(scope_arg)
-        .arg(limit.to_string())
-        .output()
-        .context("Failed to run python3. Is it installed?")?;
+    let stdout = run_python("search", &[query, scope_arg, &limit_str])?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("ytmusicapi failed: {stderr}");
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
     let raw: Vec<serde_json::Value> =
         serde_json::from_str(&stdout).context("Failed to parse ytmusicapi output")?;
 
@@ -205,9 +206,9 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
         query,
     ];
 
-    let flat_output = Command::new("yt-dlp")
-        .args(&args)
-        .output()
+    let mut cmd = Command::new("yt-dlp");
+    cmd.args(&args);
+    let flat_output = run_command_with_timeout(&mut cmd, SEARCH_TIMEOUT)
         .context("Failed to run yt-dlp. Is it installed?")?;
 
     if !flat_output.status.success() {
@@ -326,33 +327,12 @@ fn fetch_batch_metadata(
 /// locally from the watch-playlist response, so no extra yt-dlp pass is
 /// needed (which keeps radio generation to a couple of seconds).
 pub fn watch_playlist(video_id: Option<&str>, playlist_id: Option<&str>) -> Result<Vec<Track>> {
-    let script_path = std::env::temp_dir().join("music_plr_search.py");
-    std::fs::write(&script_path, include_str!("../youtube_search.py"))
-        .context("Failed to write ytmusicapi script")?;
-
     let video_arg = video_id.unwrap_or("");
     let playlist_arg = playlist_id.unwrap_or("");
-    let output = Command::new("python3")
-        .arg(&script_path)
-        .arg("watch")
-        .arg(video_arg)
-        .arg(playlist_arg)
-        .arg("50")
-        .output()
-        .context("Failed to run python3. Is it installed?")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("ytmusicapi watch_playlist failed: {stderr}");
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = run_python("watch", &[video_arg, playlist_arg, "50"])?;
     let items: Vec<YouTubeVideo> =
         serde_json::from_str(&stdout).context("Failed to parse ytmusicapi watch output")?;
-
-    let videos: Vec<YouTubeVideo> = items;
-
-    Ok(videos.into_iter().map(Track::from).collect())
+    Ok(items.into_iter().map(Track::from).collect())
 }
 
 /// Build a song radio from a real `YouTube` Music mix seeded by the track's
@@ -394,30 +374,11 @@ pub fn download(video_url: &str, download_dir: &str) -> Result<String> {
 }
 
 pub fn download_audio(video_url: &str, output_path: &str) -> Result<String> {
-    let ext = "mp3";
-    let output = Command::new("yt-dlp")
-        .args([
-            "--extract-audio",
-            "--audio-format",
-            ext,
-            "--audio-quality",
-            "0",
-            "--output",
-            output_path,
-            "--no-warnings",
-            "--extractor-args",
-            "youtube:player_client=web_embedded",
-            video_url,
-        ])
-        .output()
-        .context("Failed to download audio")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("yt-dlp download failed: {stderr}");
-    }
-
-    Ok(output_path.replace("%(ext)s", ext))
+    ytdlp::download_audio(
+        video_url,
+        output_path,
+        &["--extractor-args", "youtube:player_client=web_embedded"],
+    )
 }
 
 /// Whether `id` looks like a real `YouTube` video `id` (11 chars, not a

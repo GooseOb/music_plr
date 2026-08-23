@@ -27,6 +27,7 @@ pub enum BackendResult {
     LyricsFetched(Option<Lyrics>, String),
     NormalizationComputed(String, f32),
     CardPlaylistReady(usize, String, Vec<Track>),
+    LocalFilesPicked(Vec<std::path::PathBuf>),
     ProviderResolved {
         original: Track,
         provider: ProviderId,
@@ -35,16 +36,9 @@ pub enum BackendResult {
         /// be written back into the source list (search/playlist/queue). `None`
         /// when the resolve was triggered automatically (no source row).
         pos: Option<TrackPos>,
-    },
-    /// Like [`BackendResult::ProviderResolved`], but the resolved track should
-    /// be downloaded (not played) once its id is known.
-    ProviderResolvedDownload {
-        original: Track,
-        provider: ProviderId,
-        resolved: Option<Track>,
-        /// Where the track was selected from, so the resolved provider id can
-        /// be written back into the source list.
-        pos: Option<TrackPos>,
+        /// Whether the resolved track should be played (true) or downloaded
+        /// (false) once its id is known.
+        play: bool,
     },
     ProviderResolveError {
         /// Track title

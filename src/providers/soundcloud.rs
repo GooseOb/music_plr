@@ -9,6 +9,7 @@
 //! `Track` produced here carries a `SoundCloud` id + `permalink_url` so the
 //! playback/download path can hand that URL to `yt-dlp`.
 
+use super::ytdlp;
 use crate::providers::{CardData, ProviderId, SearchScope, SearchTab};
 use crate::types::Track;
 use anyhow::{Context, Result};
@@ -17,6 +18,7 @@ use rsoundcloud::{
     models::user::User, CollectionParams, PlaylistsApi, ResourceId, SearchApi, SoundCloudClient,
     UsersApi,
 };
+use std::sync::OnceLock;
 /// Map an `rsoundcloud` album/playlist into a card for the search tab.
 fn album_to_card(ap: &AlbumPlaylist) -> CardData {
     CardData {
@@ -73,17 +75,21 @@ fn sc_basic_track_to_track(t: &BasicTrack) -> Track {
     )
 }
 
-/// Build a current-thread tokio runtime and run an async `rsoundcloud` call to
-/// completion. The provider backends run on plain `std::thread`s, but
-/// `rsoundcloud` is async, so we drive it with a throwaway runtime.
+/// Run an async `rsoundcloud` call to completion on the shared current-thread
+/// tokio runtime. The provider backends run on plain `std::thread`s, but
+/// `rsoundcloud` is async, so we drive it with one lazily-built runtime reused
+/// across calls (building a runtime per call is needlessly expensive).
 fn block_on_sc<F, T>(fut: F) -> Result<T>
 where
     F: std::future::Future<Output = rsoundcloud::ClientResult<T>>,
 {
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .context("Failed to build SoundCloud runtime")?;
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    let rt = RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to build SoundCloud runtime")
+    });
     rt.block_on(fut)
         .map_err(|e| anyhow::anyhow!("SoundCloud API error: {e:?}"))
 }
@@ -116,14 +122,14 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> (Vec<Track>, Se
                 (Vec::new(), SearchTab::Artists(Vec::new()))
             }
         },
-        SearchScope::Albums => match search_albums(query, offset) {
+        SearchScope::Albums => match search_sets(query, offset, true) {
             Ok(cards) => (Vec::new(), SearchTab::Albums(cards)),
             Err(e) => {
                 tracing::warn!("SoundCloud album search failed: {e:#}");
                 (Vec::new(), SearchTab::Albums(Vec::new()))
             }
         },
-        SearchScope::Playlists => match search_playlists(query, offset) {
+        SearchScope::Playlists => match search_sets(query, offset, false) {
             Ok(cards) => (Vec::new(), SearchTab::Playlists(cards)),
             Err(e) => {
                 tracing::warn!("SoundCloud playlist search failed: {e:#}");
@@ -162,22 +168,20 @@ fn search_users(query: &str, offset: usize) -> Result<Vec<CardData>> {
     Ok(cards.iter().map(user_to_card).collect())
 }
 
-fn search_albums(query: &str, offset: usize) -> Result<Vec<CardData>> {
+/// Search albums or playlists (both return the same `AlbumPlaylist` shape and
+/// map through `album_to_card`, so they share one body).
+fn search_sets(query: &str, offset: usize, albums: bool) -> Result<Vec<CardData>> {
     let cards = block_on_sc(async {
         let client = sc_client().await?;
-        client
-            .search_albums(query.to_string(), search_page(offset))
-            .await
-    })?;
-    Ok(cards.iter().map(album_to_card).collect())
-}
-
-fn search_playlists(query: &str, offset: usize) -> Result<Vec<CardData>> {
-    let cards = block_on_sc(async {
-        let client = sc_client().await?;
-        client
-            .search_playlists(query.to_string(), search_page(offset))
-            .await
+        if albums {
+            client
+                .search_albums(query.to_string(), search_page(offset))
+                .await
+        } else {
+            client
+                .search_playlists(query.to_string(), search_page(offset))
+                .await
+        }
     })?;
     Ok(cards.iter().map(album_to_card).collect())
 }
@@ -232,27 +236,5 @@ pub fn download(track: &Track, download_dir: &str) -> Result<String> {
     let dir = std::path::Path::new(download_dir);
     let _ = std::fs::create_dir_all(dir);
     let output_path = dir.join(format!("{id}.mp3"));
-    let ext = "mp3";
-    let out = std::process::Command::new("yt-dlp")
-        .args([
-            "--extract-audio",
-            "--audio-format",
-            ext,
-            "--audio-quality",
-            "0",
-            "--output",
-            output_path.to_string_lossy().as_ref(),
-            "--no-warnings",
-            &url,
-        ])
-        .output()
-        .context("Failed to download audio")?;
-
-    if !out.status.success() {
-        anyhow::bail!(
-            "yt-dlp download failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-    }
-    Ok(output_path.to_string_lossy().replace("%(ext)s", ext))
+    ytdlp::download_audio(&url, output_path.to_string_lossy().as_ref(), &[])
 }

@@ -1,63 +1,73 @@
 use super::MusicPlayer;
 use crate::data::{config, JsonStore};
 
+/// One settings change from the Settings view. Every variant applies a field
+/// of [`config::Config`] and persists the store.
+#[derive(Debug, Clone)]
+pub enum SettingsChange {
+    DownloadDir(String),
+    MaxHistoryVisible(String),
+    MaxHistoryStored(String),
+    CacheMaxSize(String),
+    MaxRecentlyPlayed(String),
+    VolumeNormalization(bool),
+    DefaultProvider(crate::providers::ProviderId),
+}
+
 impl MusicPlayer {
-    pub fn handle_settings_download_dir(&mut self, dir: &str) {
-        let dir = dir.trim();
-        if dir.is_empty() {
-            return;
-        }
-        self.config.download_dir = dir.to_string();
-        self.config.save();
-    }
-
-    pub fn handle_settings_max_history_visible(&mut self, v: &str) {
-        if let Ok(n) = v.trim().parse::<usize>() {
-            self.config.max_search_history_visible = n.max(1);
-            self.config.save();
-        }
-    }
-
-    pub fn handle_settings_max_history_stored(&mut self, v: &str) {
-        if let Ok(n) = v.trim().parse::<usize>() {
-            self.config.max_search_history_stored = n.max(1);
-            self.config.save();
-        }
-    }
-
-    pub fn handle_settings_cache_max_size(&mut self, v: &str) {
-        if let Ok(n) = v.trim().parse::<u64>() {
-            self.config.cache_max_size_mb = n;
-            self.stream_cache.set_max_size_mb(n);
-            self.config.save();
-        }
-    }
-
-    pub fn handle_settings_max_recently_played(&mut self, v: &str) {
-        if let Ok(n) = v.trim().parse::<usize>() {
-            self.config.max_recently_played = n.max(1);
-            self.config.save();
-        }
-    }
-
-    pub fn handle_settings_reset_defaults(&mut self) {
-        self.config = config::Config::default();
+    /// Apply `f` to the config, persist it, and keep dependent runtime state
+    /// in sync. The single write path for every settings field.
+    fn set_config(&mut self, f: impl FnOnce(&mut config::Config)) {
+        f(&mut self.config);
         self.stream_cache
             .set_max_size_mb(self.config.cache_max_size_mb);
         self.config.save();
     }
 
-    pub fn handle_settings_volume_normalization(&mut self, enabled: bool) {
-        self.config.volume_normalization = enabled;
-        self.config.save();
+    pub fn handle_settings_change(&mut self, change: SettingsChange) {
+        match change {
+            SettingsChange::DownloadDir(dir) => {
+                let dir = dir.trim();
+                if !dir.is_empty() {
+                    let dir = dir.to_string();
+                    self.set_config(|c| c.download_dir = dir);
+                }
+            }
+            SettingsChange::MaxHistoryVisible(v) => {
+                if let Ok(n) = v.trim().parse::<usize>() {
+                    self.set_config(|c| c.max_search_history_visible = n.max(1));
+                }
+            }
+            SettingsChange::MaxHistoryStored(v) => {
+                if let Ok(n) = v.trim().parse::<usize>() {
+                    self.set_config(|c| c.max_search_history_stored = n.max(1));
+                }
+            }
+            SettingsChange::CacheMaxSize(v) => {
+                if let Ok(n) = v.trim().parse::<u64>() {
+                    self.set_config(|c| c.cache_max_size_mb = n);
+                }
+            }
+            SettingsChange::MaxRecentlyPlayed(v) => {
+                if let Ok(n) = v.trim().parse::<usize>() {
+                    self.set_config(|c| c.max_recently_played = n.max(1));
+                }
+            }
+            SettingsChange::VolumeNormalization(enabled) => {
+                self.set_config(|c| c.volume_normalization = enabled);
+            }
+            SettingsChange::DefaultProvider(provider) => {
+                // Only providers that support both streaming and downloading are
+                // valid defaults; ignore others defensively.
+                if provider.capabilities().stream && provider.capabilities().download {
+                    self.set_config(|c| c.default_provider = provider);
+                }
+            }
+        }
     }
 
-    pub fn handle_settings_default_provider(&mut self, provider: crate::providers::ProviderId) {
-        // Only providers that support both streaming and downloading are valid
-        // defaults; ignore others defensively.
-        if provider.capabilities().stream && provider.capabilities().download {
-            self.config.default_provider = provider;
-            self.config.save();
-        }
+    pub fn handle_settings_reset_defaults(&mut self) {
+        self.config = config::Config::default();
+        self.set_config(|_| {});
     }
 }

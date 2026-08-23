@@ -12,10 +12,10 @@ use crate::{
 };
 
 use super::{
+    shared_components::empty_state,
     styles::{bg_secondary, button_style_panel_item, fg_secondary},
     track_list::{
-        empty_state, section_header, track_row_layout, view_track_list, view_track_row,
-        virtual_scrollable,
+        section_header, track_row_layout, view_track_list, view_track_row, virtual_scrollable,
     },
     Message, MusicPlayer,
 };

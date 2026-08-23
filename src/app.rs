@@ -12,6 +12,8 @@ use iced::{Subscription, Task};
 use std::{sync::mpsc, time::Duration};
 use tracing::{error, warn};
 
+use crate::app::update::settings::SettingsChange;
+
 mod interaction;
 mod message;
 mod ui;
@@ -322,35 +324,7 @@ impl MusicPlayer {
                 self.flush_session();
                 Task::none()
             }
-            Message::CursorMoved(pos) => {
-                self.drag.is_hover_controlled = false;
-                self.drag.cursor_pos = pos;
-                if self.drag.pressed.is_some()
-                    && self.drag.drag_origin.is_some()
-                    && !self.drag.drag_active
-                {
-                    if let Some(origin) = self.drag.drag_origin {
-                        let dx = (pos.x - origin.x).abs();
-                        let dy = (pos.y - origin.y).abs();
-                        if dx > crate::theme::DRAG_THRESHOLD || dy > crate::theme::DRAG_THRESHOLD {
-                            self.drag.drag_active = true;
-                            // Reveal the library so it can receive drops.
-                            if self.drag.is_pressed_card() {
-                                self.library_expanded = true;
-                            }
-                            return Task::batch([
-                                iced_runtime::task::widget(update::operation::CaptureBounds::new()),
-                                self.handle_drag_update(),
-                            ]);
-                        }
-                    }
-                }
-                if self.drag.drag_active {
-                    self.handle_drag_update()
-                } else {
-                    Task::none()
-                }
-            }
+            Message::CursorMoved(pos) => self.handle_cursor_moved(pos),
             Message::LeftButtonReleased => self.handle_left_release(),
             Message::ListBoundsCaptured(bounds) => {
                 let scroll = bounds.track.as_ref().map_or(0.0, |b| b.translation_y);
@@ -395,31 +369,15 @@ impl MusicPlayer {
                 iced_runtime::task::widget(update::operation::CaptureSearchHistoryRows::new())
             }
             Message::SearchExecute => {
-                if self.show_search_history {
-                    if let Some(i) = self.drag.hovered_search_history() {
-                        self.handle_search_history_select(i);
-                        return Task::none();
-                    }
-                }
-                self.run_search();
+                self.handle_search_execute();
                 Task::none()
             }
             Message::SearchScopeChanged(scope) => {
-                if scope != self.search_scope {
-                    self.search_scope = scope;
-                    self.run_search();
-                }
+                self.handle_search_scope_changed(scope);
                 Task::none()
             }
             Message::SearchProviderChanged(provider) => {
-                if provider != self.search_provider {
-                    self.search_provider = provider;
-                    // Clamp the scope to one the new provider supports.
-                    if !provider.supported_scopes().contains(&self.search_scope) {
-                        self.search_scope = provider.supported_scopes()[0];
-                    }
-                    self.run_search();
-                }
+                self.handle_search_provider_changed(provider);
                 Task::none()
             }
             Message::Browse(kind, provider) => {
@@ -502,15 +460,18 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::AddLocalMusic => {
-                let files = rfd::FileDialog::new()
-                    .add_filter(
-                        "Audio",
-                        &["mp3", "flac", "wav", "ogg", "m4a", "aac", "opus", "wma"],
-                    )
-                    .pick_files();
-                if let Some(files) = files {
-                    self.handle_add_local_music(&files);
-                }
+                let tx = self.result_tx.clone();
+                std::thread::spawn(move || {
+                    let files = rfd::FileDialog::new()
+                        .add_filter(
+                            "Audio",
+                            &["mp3", "flac", "wav", "ogg", "m4a", "aac", "opus", "wma"],
+                        )
+                        .pick_files();
+                    if let Some(files) = files.filter(|f| !f.is_empty()) {
+                        let _ = tx.send(BackendResult::LocalFilesPicked(files));
+                    }
+                });
                 Task::none()
             }
             Message::AddToPlaylist(playlist_idx) => {
@@ -606,31 +567,31 @@ impl MusicPlayer {
             }
             Message::NavigateForward => self.handle_navigate_forward(),
             Message::SettingsDownloadDirChanged(dir) => {
-                self.handle_settings_download_dir(&dir);
+                self.handle_settings_change(SettingsChange::DownloadDir(dir));
                 Task::none()
             }
             Message::SettingsMaxHistoryVisibleChanged(v) => {
-                self.handle_settings_max_history_visible(&v);
+                self.handle_settings_change(SettingsChange::MaxHistoryVisible(v));
                 Task::none()
             }
             Message::SettingsMaxHistoryStoredChanged(v) => {
-                self.handle_settings_max_history_stored(&v);
+                self.handle_settings_change(SettingsChange::MaxHistoryStored(v));
                 Task::none()
             }
             Message::SettingsCacheMaxSizeChanged(v) => {
-                self.handle_settings_cache_max_size(&v);
+                self.handle_settings_change(SettingsChange::CacheMaxSize(v));
                 Task::none()
             }
             Message::SettingsMaxRecentlyPlayedChanged(v) => {
-                self.handle_settings_max_recently_played(&v);
+                self.handle_settings_change(SettingsChange::MaxRecentlyPlayed(v));
                 Task::none()
             }
             Message::SettingsVolumeNormalizationToggled(enabled) => {
-                self.handle_settings_volume_normalization(enabled);
+                self.handle_settings_change(SettingsChange::VolumeNormalization(enabled));
                 Task::none()
             }
             Message::SettingsDefaultProviderChanged(provider) => {
-                self.handle_settings_default_provider(provider);
+                self.handle_settings_change(SettingsChange::DefaultProvider(provider));
                 Task::none()
             }
             Message::SettingsResetDefaults => {
@@ -638,56 +599,39 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuPlayTrack(pos) => {
-                self.context_menu = None;
+                self.close_context_menu();
                 self.handle_play_track(pos);
                 Task::none()
             }
             Message::ContextMenuGoToArtist => {
-                if let Some(track) = self.context_menu.take().map(|m| m.track) {
-                    if let Some(artist_id) = track.provider_artist_id(track.source) {
-                        self.handle_browse(
-                            &ViewKind::Artist {
-                                id: artist_id.to_string(),
-                                name: track.artist,
-                            },
-                            track.source,
-                        );
-                    }
-                }
+                self.handle_context_menu_go_to_artist();
                 Task::none()
             }
             Message::ContextMenuPlayViaProvider(provider, pos) => {
-                self.context_menu = None;
+                self.close_context_menu();
                 self.play_track_via_provider(provider, pos);
                 Task::none()
             }
             Message::ContextMenuDownloadViaProvider(provider, indices) => {
-                self.context_menu = None;
+                self.close_context_menu();
                 self.download_track_via_provider(provider, &indices);
                 Task::none()
             }
             Message::ContextMenuSongRadioProvider(provider) => {
-                if let Some(track) = self.context_menu.take().map(|m| m.track) {
-                    let id = track.provider_id(provider).unwrap_or_default().to_string();
-                    self.start_radio_provider(provider, &track.title, &id, false);
-                }
+                self.handle_context_menu_song_radio(provider);
                 Task::none()
             }
             Message::ContextMenuArtistRadioProvider(provider) => {
-                if let Some(track) = self.context_menu.take().map(|m| m.track) {
-                    if let Some(browse_id) = track.provider_artist_id(provider) {
-                        self.start_radio_provider(provider, &track.artist, browse_id, true);
-                    }
-                }
+                self.handle_context_menu_artist_radio(provider);
                 Task::none()
             }
             Message::ContextMenuRemoveFromPlaylist(indices) => {
-                self.context_menu = None;
+                self.close_context_menu();
                 self.handle_remove_from_playlist_batch(&indices);
                 Task::none()
             }
             Message::ContextMenuRemoveFromQueue(indices) => {
-                self.context_menu = None;
+                self.close_context_menu();
                 self.handle_remove_from_queue_batch(&indices);
                 Task::none()
             }
@@ -696,7 +640,7 @@ impl MusicPlayer {
                     Some(menu) => menu.pos,
                     None => return Task::none(),
                 };
-                self.context_menu = None;
+                self.close_context_menu();
                 self.open_edit_track(pos);
                 Task::none()
             }
@@ -724,7 +668,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::CloseContextMenu => {
-                self.context_menu = None;
+                self.close_context_menu();
                 Task::none()
             }
         }

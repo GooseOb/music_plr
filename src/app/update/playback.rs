@@ -189,22 +189,13 @@ impl MusicPlayer {
                     return;
                 }
             };
-            let result = if play {
-                crate::app::BackendResult::ProviderResolved {
-                    original: track,
-                    provider,
-                    resolved,
-                    pos,
-                }
-            } else {
-                crate::app::BackendResult::ProviderResolvedDownload {
-                    original: track,
-                    provider,
-                    resolved,
-                    pos,
-                }
-            };
-            let _ = tx.send(result);
+            let _ = tx.send(crate::app::BackendResult::ProviderResolved {
+                original: track,
+                provider,
+                resolved,
+                pos,
+                play,
+            });
         });
     }
 

@@ -14,11 +14,71 @@
 mod musicbrainz;
 mod soundcloud;
 mod youtube;
+mod ytdlp;
 
 use crate::types::Track;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::io::Read;
+use std::process::{Command, Output, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
+
+/// Run a short-lived child process to completion, killing it when it exceeds
+/// `timeout`. stdout/stderr are drained on helper threads so a chatty child
+/// can't deadlock on a full pipe while we poll `try_wait`.
+pub(crate) fn run_command_with_timeout(cmd: &mut Command, timeout: Duration) -> Result<Output> {
+    fn drain(mut pipe: Option<impl Read>) -> Vec<u8> {
+        pipe.take()
+            .map(|mut p| {
+                let mut buf = Vec::new();
+                let _ = p.read_to_end(&mut buf);
+                buf
+            })
+            .unwrap_or_default()
+    }
+
+    let program = cmd.get_program().to_string_lossy().into_owned();
+    let mut child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("Failed to run {program}"))?;
+
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let stdout_handle = thread::spawn(move || drain(stdout));
+    let stderr_handle = thread::spawn(move || drain(stderr));
+
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if started.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    anyhow::bail!(
+                        "{program} timed out after {}s",
+                        timeout.as_secs_f32().round()
+                    );
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => anyhow::bail!("Failed to wait for {program}: {e}"),
+        }
+    };
+
+    let stdout = stdout_handle.join().unwrap_or_default();
+    let stderr = stderr_handle.join().unwrap_or_default();
+    Ok(Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
 
 /// Identifies a music provider. Stored on tracks (which provider is the source of a
 /// result) and in configuration (the default stream+download provider).
@@ -282,7 +342,7 @@ pub fn browse(provider: ProviderId, id: &str, kind: &str) -> Result<Vec<Track>> 
         ProviderId::YouTube => youtube::browse(id, kind),
         ProviderId::SoundCloud => soundcloud::browse(id, kind),
         ProviderId::MusicBrainz => musicbrainz::browse(id, kind),
-        _ => Ok(Vec::new()),
+        ProviderId::Local => Ok(Vec::new()),
     }
 }
 
@@ -290,7 +350,7 @@ pub fn browse(provider: ProviderId, id: &str, kind: &str) -> Result<Vec<Track>> 
 pub fn radio_song(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     match provider {
         ProviderId::YouTube => youtube::radio_song(id),
-        _ => Ok(Vec::new()),
+        ProviderId::SoundCloud | ProviderId::MusicBrainz | ProviderId::Local => Ok(Vec::new()),
     }
 }
 
@@ -298,7 +358,7 @@ pub fn radio_song(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
 pub fn radio_artist(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     match provider {
         ProviderId::YouTube => youtube::radio_artist(id),
-        _ => Ok(Vec::new()),
+        ProviderId::SoundCloud | ProviderId::MusicBrainz | ProviderId::Local => Ok(Vec::new()),
     }
 }
 

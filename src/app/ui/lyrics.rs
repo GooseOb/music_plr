@@ -7,11 +7,10 @@ use iced::{
 use crate::theme::AppTheme;
 
 use super::{
+    shared_components::empty_state,
     shared_components::scope_tab_row,
     styles::{button_style_panel_item, button_style_scope, fg_secondary},
-    theme,
-    track_list::empty_state,
-    Message, MusicPlayer,
+    theme, Message, MusicPlayer,
 };
 
 pub(super) fn view_lyrics<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {

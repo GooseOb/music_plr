@@ -4,6 +4,7 @@ use crate::app::EditTrackState;
 use crate::{
     app::{PlaylistPicker, ViewKind},
     data::JsonStore,
+    providers::ProviderId,
 };
 
 impl MusicPlayer {
@@ -179,6 +180,39 @@ impl MusicPlayer {
             in_playlist: matches!(self.view_data_mut().kind, ViewKind::Playlist { .. }),
             track,
         });
+    }
+
+    pub fn close_context_menu(&mut self) {
+        self.context_menu = None;
+    }
+
+    pub fn handle_context_menu_go_to_artist(&mut self) {
+        if let Some(track) = self.context_menu.take().map(|m| m.track) {
+            if let Some(artist_id) = track.provider_artist_id(track.source) {
+                self.handle_browse(
+                    &ViewKind::Artist {
+                        id: artist_id.to_string(),
+                        name: track.artist,
+                    },
+                    track.source,
+                );
+            }
+        }
+    }
+
+    pub fn handle_context_menu_song_radio(&mut self, provider: ProviderId) {
+        if let Some(track) = self.context_menu.take().map(|m| m.track) {
+            let id = track.provider_id(provider).unwrap_or_default().to_string();
+            self.start_radio_provider(provider, &track.title, &id, false);
+        }
+    }
+
+    pub fn handle_context_menu_artist_radio(&mut self, provider: ProviderId) {
+        if let Some(track) = self.context_menu.take().map(|m| m.track) {
+            if let Some(browse_id) = track.provider_artist_id(provider) {
+                self.start_radio_provider(provider, &track.artist, browse_id, true);
+            }
+        }
     }
 
     /// Open the track-editing popup for the track at `pos`, seeding the

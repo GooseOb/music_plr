@@ -4,6 +4,19 @@ fn thumbnails_dir() -> PathBuf {
     super::cache_path("thumbnails")
 }
 
+/// Shared `ureq` agent with connect + overall timeouts so a stalled CDN
+/// can't hang a thumbnail thread indefinitely.
+fn http_agent() -> &'static ureq::Agent {
+    static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::config::Config::builder()
+            .timeout_connect(Some(std::time::Duration::from_secs(15)))
+            .timeout_global(Some(std::time::Duration::from_secs(15)))
+            .build()
+            .new_agent()
+    })
+}
+
 pub(crate) fn thumbnail_path(video_id: &str) -> PathBuf {
     thumbnails_dir().join(format!("{video_id}.jpg"))
 }
@@ -23,7 +36,7 @@ pub fn download(video_id: &str, url: &str) {
     } else {
         url
     };
-    match ureq::get(url).call() {
+    match http_agent().get(url).call() {
         Ok(resp) => {
             let mut body = resp.into_body();
             let mut reader = body.as_reader();

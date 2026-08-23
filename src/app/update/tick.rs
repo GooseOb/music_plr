@@ -249,13 +249,7 @@ impl MusicPlayer {
                 }
             }
             BackendResult::DownloadComplete(track, _provider) => {
-                let path = track.download_path.clone().unwrap_or_default();
-                self.download_registry.register(track.clone());
-                self.notify(format!("Download complete! Saved to {path}"));
-                self.thumbnail_index.mark_downloaded(track.primary_id());
-                if matches!(self.view_data().kind, ViewKind::Downloads) {
-                    self.view_data_mut().tracks.push(track);
-                }
+                self.process_download_complete(track);
             }
             BackendResult::DownloadError(msg) => {
                 error!("Download error: {}", msg);
@@ -276,13 +270,8 @@ impl MusicPlayer {
                 provider,
                 resolved,
                 pos,
-            } => self.apply_provider_resolution(original, provider, resolved, pos, true),
-            BackendResult::ProviderResolvedDownload {
-                original,
-                provider,
-                resolved,
-                pos,
-            } => self.apply_provider_resolution(original, provider, resolved, pos, false),
+                play,
+            } => self.apply_provider_resolution(original, provider, resolved, pos, play),
             BackendResult::ProviderResolveError {
                 title,
                 provider,
@@ -303,27 +292,46 @@ impl MusicPlayer {
             BackendResult::NormalizationComputed(id, gain) => {
                 self.normalization_cache.insert(id, gain);
             }
+            BackendResult::LocalFilesPicked(paths) => {
+                if !paths.is_empty() {
+                    self.handle_add_local_music(&paths);
+                }
+            }
             BackendResult::LyricsFetched(lyrics, track_id) => {
-                if track_id.is_empty() {
-                    return;
-                }
-                let Some(state) = &mut self.lyrics else {
-                    return;
-                };
-                if state.track_id.as_deref() != Some(track_id.as_str()) {
-                    return;
-                }
-                state.loading = false;
-                state.lyrics = lyrics;
-                state.track_id = Some(track_id);
-                state.not_found = state.lyrics.is_none();
-                if let Some(lyrics) = &state.lyrics {
-                    let mut cache = crate::data::lyrics_cache::LyricsCache::load();
-                    cache.insert(state.track_id.as_ref().unwrap(), lyrics);
-                }
-                self.sync_lyrics_editor();
+                self.process_lyrics_fetched(lyrics, track_id);
             }
         }
+    }
+
+    fn process_download_complete(&mut self, track: crate::types::Track) {
+        let path = track.download_path.clone().unwrap_or_default();
+        self.download_registry.register(track.clone());
+        self.notify(format!("Download complete! Saved to {path}"));
+        self.thumbnail_index.mark_downloaded(track.primary_id());
+        if matches!(self.view_data().kind, ViewKind::Downloads) {
+            self.view_data_mut().tracks.push(track);
+        }
+    }
+
+    fn process_lyrics_fetched(&mut self, lyrics: Option<crate::lyrics::Lyrics>, track_id: String) {
+        if track_id.is_empty() {
+            return;
+        }
+        let Some(state) = &mut self.lyrics else {
+            return;
+        };
+        if state.track_id.as_deref() != Some(track_id.as_str()) {
+            return;
+        }
+        state.loading = false;
+        state.lyrics = lyrics;
+        state.track_id = Some(track_id);
+        state.not_found = state.lyrics.is_none();
+        if let (Some(lyrics), Some(id)) = (&state.lyrics, state.track_id.as_ref()) {
+            let mut cache = crate::data::lyrics_cache::LyricsCache::load();
+            cache.insert(id, lyrics);
+        }
+        self.sync_lyrics_editor();
     }
 
     /// Apply a resolved provider track to `original`: write its full provider

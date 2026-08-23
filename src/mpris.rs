@@ -107,12 +107,19 @@ impl PlayerInterface {
 
     #[zbus(property)]
     fn playback_status(&self) -> String {
-        self.data.lock().unwrap().playback_status.to_string()
+        self.data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .playback_status
+            .to_string()
     }
 
     #[zbus(property)]
     fn metadata(&self) -> HashMap<String, zvariant::Value<'static>> {
-        let d = self.data.lock().unwrap();
+        let d = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut map = HashMap::new();
         if d.has_track {
             map.insert(
@@ -133,7 +140,10 @@ impl PlayerInterface {
 
     #[zbus(property)]
     fn volume(&self) -> f64 {
-        self.data.lock().unwrap().volume
+        self.data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .volume
     }
 
     #[zbus(property)]
@@ -146,7 +156,10 @@ impl PlayerInterface {
 
     #[zbus(property)]
     fn position(&self) -> i64 {
-        self.data.lock().unwrap().position_us
+        self.data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .position_us
     }
 
     #[zbus(property)]
@@ -264,7 +277,10 @@ pub fn start(cmd_tx: mpsc::Sender<MprisCommand>, update_rx: mpsc::Receiver<Mpris
                         .await
                     {
                         let guard = iface_ref.get_mut().await;
-                        let mut data = guard.data.lock().unwrap();
+                        let mut data = guard
+                            .data
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
                         data.playback_status = update.playback_status;
                         data.title = update.title;
                         data.artist = update.artist;

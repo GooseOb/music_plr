@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::{
-    shared_components::toggle_bookmark_button,
+    shared_components::{thumbnail, toggle_bookmark_button},
     styles::{
         bg_secondary, button_style_list_item, button_style_nav, button_style_panel_item,
         button_style_primary, fg_secondary,
@@ -92,7 +92,7 @@ fn library_row<'a>(
     );
     let text_color = if is_active { p.fg } else { p.fg_secondary };
     let thumb = player.thumbnail_index.get(&item.id);
-    let thumb = super::track_list::thumbnail(p, theme::ICON_SIZE_LG + 4.0, thumb);
+    let thumb = thumbnail(p, theme::ICON_SIZE_LG + 4.0, thumb);
     let is_hovered = player.drag.is_hovered_library_card(item);
     let hover_item = item.clone();
     let row = Row::with_children([thumb, text(&item.title).color(text_color).into()])

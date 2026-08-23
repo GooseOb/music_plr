@@ -1,10 +1,43 @@
-use crate::theme::{self, AppTheme};
+use crate::theme::{self, AppTheme, Palette};
 
 use iced::{
     border,
     widget::{button, container, text},
     Color,
 };
+
+/// Row background for list rows: `current` is `(idle_alpha, hovered_alpha)`
+/// applied to `bg_current` for the current/active row (alpha 1.0 = solid),
+/// otherwise `bg_hover` when hovered, else `base`.
+pub fn row_bg(p: &Palette, current: Option<(f32, f32)>, hovered: bool, base: Color) -> Color {
+    match current {
+        Some((idle, hot)) => p.bg_current.scale_alpha(if hovered { hot } else { idle }),
+        None if hovered => p.bg_hover,
+        None => base,
+    }
+}
+
+/// Button style skeleton: `bg`/`text_color` receive the palette and whether
+/// the button is hovered or pressed; `None` bg means transparent.
+pub fn button_style<B, T>(
+    bg: B,
+    text_color: T,
+    radius: f32,
+) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static
+where
+    B: Fn(&Palette, bool) -> Option<Color> + 'static,
+    T: Fn(&Palette, bool) -> Color + 'static,
+{
+    move |theme, status| {
+        let hot = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        button::Style {
+            background: bg(&theme.palette, hot).map(Into::into),
+            text_color: text_color(&theme.palette, hot),
+            border: border::rounded(radius),
+            ..Default::default()
+        }
+    }
+}
 
 pub fn bg_secondary() -> impl Fn(&AppTheme) -> container::Style + 'static {
     |theme| container::Style {
@@ -56,236 +89,150 @@ pub fn fg_accent() -> impl Fn(&AppTheme) -> text::Style + 'static {
 }
 
 pub fn button_style_primary() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    move |theme, status| {
-        let p = &theme.palette;
-        let bg_color = match status {
-            button::Status::Hovered | button::Status::Pressed => p.accent_hover,
-            _ => p.accent,
-        };
-        button::Style {
-            background: Some(bg_color.into()),
-            text_color: Color::BLACK,
-            border: border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    }
+    button_style(
+        |p, hot| Some(if hot { p.accent_hover } else { p.accent }),
+        |_, _| Color::BLACK,
+        theme::RADIUS_SM,
+    )
 }
 
 pub fn button_style_queue(
     enabled: bool,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    move |theme, status| {
-        let p = &theme.palette;
-        let bg_color = match status {
-            button::Status::Hovered | button::Status::Pressed => {
+    button_style(
+        move |p, hot| {
+            Some(if hot {
                 if enabled {
                     p.accent_hover
                 } else {
                     p.button_hover
                 }
-            }
-            _ => {
-                if enabled {
-                    p.accent
-                } else {
-                    p.button
-                }
-            }
-        };
-        button::Style {
-            background: Some(bg_color.into()),
-            text_color: if enabled { Color::BLACK } else { p.fg },
-            border: border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    }
+            } else if enabled {
+                p.accent
+            } else {
+                p.button
+            })
+        },
+        move |p, _| if enabled { Color::BLACK } else { p.fg },
+        theme::RADIUS_SM,
+    )
 }
 
 pub fn button_style_danger() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    move |theme, status| {
-        let p = &theme.palette;
-        let bg_color = match status {
-            button::Status::Hovered | button::Status::Pressed => p.danger_hover,
-            _ => p.danger,
-        };
-        button::Style {
-            background: Some(bg_color.into()),
-            text_color: Color::WHITE,
-            border: border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    }
+    button_style(
+        |p, hot| Some(if hot { p.danger_hover } else { p.danger }),
+        |_, _| Color::WHITE,
+        theme::RADIUS_SM,
+    )
 }
 
 pub fn button_style_nav(
     enabled: bool,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    move |theme, status| {
-        let p = &theme.palette;
-        let bg_color = match status {
-            button::Status::Hovered | button::Status::Pressed => {
-                if enabled {
+    button_style(
+        move |p, hot| {
+            Some(if enabled {
+                if hot {
                     p.button_hover
                 } else {
-                    p.bg
-                }
-            }
-            _ => {
-                if enabled {
                     p.button
-                } else {
-                    p.bg
                 }
-            }
-        };
-        let text_color = if enabled { p.fg } else { p.fg_muted };
-        button::Style {
-            background: Some(bg_color.into()),
-            text_color,
-            border: border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    }
+            } else {
+                p.bg
+            })
+        },
+        move |p, _| if enabled { p.fg } else { p.fg_muted },
+        theme::RADIUS_SM,
+    )
 }
 
 pub fn button_style_list_item(
     active: bool,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    move |theme, status| {
-        let p = &theme.palette;
-        let bg_color = match status {
-            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-            _ => {
-                if active {
-                    p.bg_current
-                } else {
-                    p.bg_secondary
-                }
-            }
-        };
-        let text_color = if active { p.fg } else { p.fg_secondary };
-        button::Style {
-            background: Some(bg_color.into()),
-            text_color,
-            border: border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    }
+    button_style(
+        move |p, hot| {
+            Some(if hot {
+                p.bg_hover
+            } else if active {
+                p.bg_current
+            } else {
+                p.bg_secondary
+            })
+        },
+        move |p, _| if active { p.fg } else { p.fg_secondary },
+        theme::RADIUS_SM,
+    )
 }
 
 pub fn button_style_scope(
     selected: bool,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    move |theme, status| {
-        let p = &theme.palette;
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => {
+    button_style(
+        move |p, hot| {
+            Some(if hot {
                 if selected {
                     p.accent_hover
                 } else {
                     p.bg_hover
                 }
+            } else if selected {
+                p.accent
+            } else {
+                p.bg_tertiary
+            })
+        },
+        move |p, _| {
+            if selected {
+                Color::BLACK
+            } else {
+                p.fg_secondary
             }
-            _ => {
-                if selected {
-                    p.accent
-                } else {
-                    p.bg_tertiary
-                }
-            }
-        };
-        let text_color = if selected {
-            Color::BLACK
-        } else {
-            p.fg_secondary
-        };
-        button::Style {
-            background: Some(bg.into()),
-            text_color,
-            border: border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    }
+        },
+        theme::RADIUS_SM,
+    )
 }
 
 pub fn button_style_popup_item() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    move |theme, status| {
-        let p = &theme.palette;
-        let bg = match status {
-            button::Status::Hovered | button::Status::Pressed => p.bg_hover,
-            _ => p.bg_secondary,
-        };
-        button::Style {
-            background: Some(bg.into()),
-            text_color: p.fg,
-            border: border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    }
+    button_style(
+        |p, hot| Some(if hot { p.bg_hover } else { p.bg_secondary }),
+        |p, _| p.fg,
+        theme::RADIUS_SM,
+    )
 }
 
 pub fn button_style_panel_item(
     active: bool,
     text_color: Color,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    move |theme, status| {
-        let p = &theme.palette;
-        let background = match status {
-            button::Status::Hovered | button::Status::Pressed => {
-                Some((if active { p.bg_current } else { p.bg_hover }).into())
+    button_style(
+        move |p, hot| {
+            if hot {
+                Some(if active { p.bg_current } else { p.bg_hover })
+            } else if active {
+                Some(p.bg_current.scale_alpha(0.7))
+            } else {
+                None
             }
-            _ => {
-                if active {
-                    Some(p.bg_current.scale_alpha(0.7).into())
-                } else {
-                    None
-                }
-            }
-        };
-        button::Style {
-            background,
-            text_color,
-            border: border::rounded(theme::RADIUS_MD),
-            ..Default::default()
-        }
-    }
+        },
+        move |_, _| text_color,
+        theme::RADIUS_MD,
+    )
 }
 
 pub fn button_style_hist() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    |theme, status| {
-        let p = &theme.palette;
-        let background = match status {
-            button::Status::Hovered | button::Status::Pressed => {
-                Some(p.fg.scale_alpha(0.15).into())
-            }
-            _ => None,
-        };
-        let text_color = match status {
-            button::Status::Hovered | button::Status::Pressed => p.fg,
-            _ => p.fg_secondary,
-        };
-        button::Style {
-            background,
-            text_color,
-            border: border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
-    }
+    button_style(
+        |p, hot| hot.then(|| p.fg.scale_alpha(0.15)),
+        |p, hot| if hot { p.fg } else { p.fg_secondary },
+        theme::RADIUS_SM,
+    )
 }
 
 pub fn button_style_album() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    |theme, status| {
-        let p = &theme.palette;
-        let fg = match status {
-            button::Status::Hovered | button::Status::Pressed => p.fg,
-            _ => p.fg_secondary,
-        };
-        button::Style {
-            background: None,
-            text_color: fg,
-            ..Default::default()
-        }
-    }
+    button_style(
+        |_, _| None,
+        |p, hot| if hot { p.fg } else { p.fg_secondary },
+        0.0,
+    )
 }
 
 pub fn scroll_padding() -> iced::Padding {

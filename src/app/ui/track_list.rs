@@ -1,8 +1,6 @@
 use iced::{
     alignment,
-    widget::{
-        container, image, scrollable, text, Button, Column, Container, Id, MouseArea, Row, Space,
-    },
+    widget::{scrollable, text, Button, Column, Container, Id, MouseArea, Row, Space},
     Color, Element, Length,
 };
 
@@ -19,30 +17,12 @@ use crate::{
 };
 
 use super::{
-    shared_components::{play_pause_button, subtitle_artist},
-    styles::{button_style_album, button_style_primary, fg_secondary},
+    shared_components::{
+        empty_state, inner_row_layout, play_pause_button, subtitle_artist, thumbnail, track_row,
+    },
+    styles::{button_style_album, button_style_primary, fg_secondary, row_bg},
     theme, Message, MusicPlayer,
 };
-
-/// Render a thumbnail image if it exists on disk, otherwise a music-note
-/// placeholder. `thumb` is the resolved path from the thumbnail index
-/// (`Some`) or `None` when not yet downloaded.
-pub fn thumbnail<'a>(
-    p: &'a Palette,
-    size: f32,
-    thumb: Option<&'a std::path::PathBuf>,
-) -> Element<'a, Message, AppTheme> {
-    if let Some(path) = thumb {
-        image(image::Handle::from_path(path))
-            .width(size)
-            .height(size)
-            .border_radius(size / 4.0)
-            .content_fit(iced::ContentFit::Cover)
-            .into()
-    } else {
-        icons::icon(icons::MUSIC_ICON, p.fg_muted, size).into()
-    }
-}
 
 pub(super) fn view_track_list<'a>(
     tracks: &'a [Track],
@@ -175,23 +155,18 @@ pub(super) fn view_track_row<'a>(
         .is_some_and(|t| t.cache_key() == track.cache_key());
     let is_match = player.is_track_list_match(pos);
 
-    let row_bg = if is_current {
+    let row_bg = row_bg(
+        p,
         if is_selected {
-            p.bg_current
-        } else if is_hovered {
-            p.bg_current.scale_alpha(0.8)
+            Some((1.0, 1.0))
+        } else if is_current {
+            Some((0.6, 0.8))
         } else {
-            p.bg_current.scale_alpha(0.6)
-        }
-    } else {
-        if is_selected {
-            p.bg_current
-        } else if is_hovered {
-            p.bg_hover
-        } else {
-            p.bg
-        }
-    };
+            None
+        },
+        is_hovered,
+        p.bg,
+    );
 
     let leading = leading_control(pos, track, player);
 
@@ -219,38 +194,6 @@ pub(super) fn view_track_row<'a>(
 }
 
 // ── shared helpers ─────────────────────────────────────────────
-
-/// The shared inner row layout used by both track rows and the non-track
-/// card rows (artists/albums/playlists): leading | optional thumbnail |
-/// title(+subtitle) | optional trailing. `subtitle`/`trailing` are `None`
-/// when not needed.
-pub(super) fn inner_row_layout<'a>(
-    leading: Element<'a, Message, AppTheme>,
-    thumbnail: Option<Element<'a, Message, AppTheme>>,
-    title: &'a str,
-    subtitle: Option<Element<'a, Message, AppTheme>>,
-    trailing: Option<Element<'a, Message, AppTheme>>,
-) -> Row<'a, Message, AppTheme> {
-    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(5);
-    children.push(leading);
-    if let Some(thumbnail) = thumbnail {
-        children.push(thumbnail);
-    }
-    let title_el = text(title).size(theme::TEXT_SIZE_MD).width(Length::Fill);
-    children.push(match subtitle {
-        Some(sub) => Column::with_children([title_el.into(), sub])
-            .spacing(theme::SPACING_2XS)
-            .into(),
-        None => title_el.into(),
-    });
-    if let Some(trailing) = trailing {
-        children.push(trailing);
-    }
-    Row::with_children(children)
-        .spacing(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center)
-        .padding([theme::SPACING_XS, theme::SPACING_SM])
-}
 
 /// The inner row layout for a track: leading | thumbnail | title/artist |
 /// status icon | duration. Delegates to [`inner_row_layout`].
@@ -324,40 +267,6 @@ pub(super) fn track_row_layout<'a>(
                 .into(),
         ),
     )
-}
-
-/// Wraps row content in a fixed-height container with a background color.
-/// `id` (when `Some`) tags the container so the bounds `Operation` can capture
-/// its measured geometry for drop-target hit-testing. `border` (when `Some`)
-/// draws a 1px outline in the given color (used by the track in-list
-/// search to mark matched / current tracks).
-pub(super) fn track_row<'a>(
-    content: impl Into<Element<'a, Message, AppTheme>>,
-    bg: Color,
-    id: Option<Id>,
-    border: Option<Color>,
-) -> Container<'a, Message, AppTheme> {
-    let container = Container::new(content)
-        .height(theme::ROW_HEIGHT)
-        .style(move |_: &AppTheme| container::Style {
-            background: Some(bg.into()),
-            border: border.map_or(iced::border::Border::default(), |c| iced::border::Border {
-                width: 1.0,
-                color: c,
-                radius: 0.0.into(),
-            }),
-            ..Default::default()
-        });
-    match id {
-        Some(id) => container.id(id),
-        None => container,
-    }
-}
-
-pub(super) fn empty_state<'a>(msg: impl text::IntoFragment<'a>) -> Element<'a, Message, AppTheme> {
-    Container::new(text(msg).style(fg_secondary()).center())
-        .padding(theme::SPACING_XL)
-        .into()
 }
 
 /// A centered section header (e.g. "NOW PLAYING", "UP NEXT").

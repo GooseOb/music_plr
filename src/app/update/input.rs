@@ -4,6 +4,33 @@ use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData
 use crate::app::{ui::SEARCH_HISTORY_LIST_ID, TrackListSearch};
 
 impl MusicPlayer {
+    pub fn handle_cursor_moved(&mut self, pos: iced::Point) -> Task<Message> {
+        self.drag.is_hover_controlled = false;
+        self.drag.cursor_pos = pos;
+        if !self.drag.drag_active && self.drag.drag_origin.is_some() && self.drag.pressed.is_some()
+        {
+            let origin = self.drag.drag_origin.unwrap();
+            let dx = (pos.x - origin.x).abs();
+            let dy = (pos.y - origin.y).abs();
+            if dx > crate::theme::DRAG_THRESHOLD || dy > crate::theme::DRAG_THRESHOLD {
+                self.drag.drag_active = true;
+                // Reveal the library so it can receive drops.
+                if self.drag.is_pressed_card() {
+                    self.library_expanded = true;
+                }
+                return Task::batch([
+                    iced_runtime::task::widget(super::operation::CaptureBounds::new()),
+                    self.handle_drag_update(),
+                ]);
+            }
+        }
+        if self.drag.drag_active {
+            self.handle_drag_update()
+        } else {
+            Task::none()
+        }
+    }
+
     pub fn handle_key_press(
         &mut self,
         key: iced::keyboard::key::Physical,
@@ -187,14 +214,12 @@ impl MusicPlayer {
             .bounds
             .search_history
             .as_ref()
-            .and_then(|g| g.rows.get(new_idx))
-            .map(|row| {
-                let g = self.bounds.search_history.as_ref().unwrap();
+            .and_then(|g| g.rows.get(new_idx).map(|row| (g, row)))
+            .map_or(0.0, |(g, row)| {
                 // Center the row in the viewport, like `scroll_track_into_view`.
                 let row_center = row.y + row.height / 2.0;
                 (row_center - g.bounds.y + g.translation_y - g.bounds.height / 2.0).max(0.0)
-            })
-            .unwrap_or(0.0);
+            });
         operation::scroll_to::<Message>(
             SEARCH_HISTORY_LIST_ID,
             iced::widget::operation::AbsoluteOffset { x: 0.0, y },

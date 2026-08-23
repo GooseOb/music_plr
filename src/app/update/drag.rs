@@ -26,10 +26,8 @@ impl MusicPlayer {
                 self.show_search_history = false;
                 self.drag.clear_hovered_search_history();
             }
-        } else {
-            if is_cursor_in_search_input {
-                return self.activate_search_input();
-            }
+        } else if is_cursor_in_search_input {
+            return self.activate_search_input();
         }
 
         let Some(pressed) = self.drag.pressed.take() else {
@@ -55,7 +53,7 @@ impl MusicPlayer {
                     self.toggle_selection(pos);
                 }
                 Pressed::Card(item) => {
-                    self.handle_browse(&item.into(), self.view_data().provider())
+                    self.handle_browse(&item.into(), self.view_data().provider());
                 }
                 // A click without a drag selects the playlist (mirrors how a
                 // library card opens on a plain click).

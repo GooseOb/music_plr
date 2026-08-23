@@ -7,11 +7,10 @@ use iced::{
 use crate::{icons, theme::AppTheme, util::format_duration};
 
 use super::{
+    shared_components::thumbnail,
     shared_components::{play_pause_button, subtitle_artist},
     styles::{bg_tertiary, button_style_queue, fg_secondary},
-    theme,
-    track_list::thumbnail,
-    Message, MusicPlayer,
+    theme, Message, MusicPlayer,
 };
 
 fn time_text(time: u32) -> Element<'static, Message, AppTheme> {

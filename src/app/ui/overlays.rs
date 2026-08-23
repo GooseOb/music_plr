@@ -12,7 +12,7 @@ use iced::{
 use crate::{
     app::{
         interaction::TrackListKind,
-        ui::{styles::scroll_padding, track_list::thumbnail},
+        ui::{shared_components::thumbnail, styles::scroll_padding},
         EditTrackField,
     },
     icons,
