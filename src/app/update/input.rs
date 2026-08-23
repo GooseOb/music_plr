@@ -1,7 +1,7 @@
 use iced::widget::operation;
 
 use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData};
-use crate::app::TrackListSearch;
+use crate::app::{ui::SEARCH_HISTORY_LIST_ID, TrackListSearch};
 
 impl MusicPlayer {
     pub fn handle_key_press(
@@ -17,9 +17,10 @@ impl MusicPlayer {
             Physical::Code(Code::Slash)
                 if !modifiers.control() && !modifiers.logo() && !modifiers.alt() =>
             {
-                self.update_search_history();
-                self.show_search_history = true;
-                operation::focus::<Message>(crate::app::ui::SEARCH_INPUT_ID)
+                Task::batch([
+                    operation::focus::<Message>(crate::app::ui::SEARCH_INPUT_ID),
+                    self.activate_search_input(),
+                ])
             }
             Physical::Code(Code::Space) => {
                 self.toggle_play_pause();
@@ -30,6 +31,7 @@ impl MusicPlayer {
                     self.track_list_search = None;
                 } else if self.show_search_history {
                     self.show_search_history = false;
+                    self.drag.clear_hovered_search_history();
                 } else if let Some(hovered) = self.drag.hovered_track() {
                     self.clear_selection_for(hovered.list);
                 } else if self.has_selection() {
@@ -54,16 +56,24 @@ impl MusicPlayer {
                 if self.track_list_search.is_some() {
                     return self.handle_track_list_search_step(-1);
                 }
+                if self.show_search_history {
+                    return self.step_search_history_hover(-1);
+                }
                 self.step_hovered_track(-1)
             }
             Physical::Code(Code::ArrowDown) => {
                 if self.track_list_search.is_some() {
                     return self.handle_track_list_search_step(1);
                 }
+                if self.show_search_history {
+                    return self.step_search_history_hover(1);
+                }
                 self.step_hovered_track(1)
             }
             Physical::Code(Code::Enter) => {
-                if let Some(hovered) = self.drag.hovered_track() {
+                if let Some(i) = self.drag.hovered_search_history() {
+                    self.handle_search_history_select(i);
+                } else if let Some(hovered) = self.drag.hovered_track() {
                     self.handle_play_track(hovered);
                 }
                 Task::none()
@@ -141,9 +151,9 @@ impl MusicPlayer {
         }
         let first = list.first_index();
         let new_idx = match self.drag.hovered_track() {
-            Some(h) if h.list == list => {
+            Some(pos) if pos.list == list => {
                 let span = count - first;
-                ((h.index - first).cast_signed() + dir).rem_euclid(span.cast_signed()) as usize
+                ((pos.index - first).cast_signed() + dir).rem_euclid(span.cast_signed()) as usize
                     + first
             }
             _ => first,
@@ -156,6 +166,39 @@ impl MusicPlayer {
         self.drag.is_hover_controlled = true;
         self.drag.set_hovered_track(pos);
         self.scroll_track_into_view(pos)
+    }
+
+    /// Move the hovered search-history entry by `dir` (-1 up, +1 down),
+    /// looping at both edges (last+1 → first, first-1 → last), and center it
+    /// in the dropdown viewport — mirroring track-list keyboard nav. Starts
+    /// from the first entry when nothing is hovered yet.
+    fn step_search_history_hover(&mut self, dir: isize) -> Task<Message> {
+        let count = self.last_filtered_history.len();
+        if count == 0 {
+            return Task::none();
+        }
+        let new_idx = match self.drag.hovered_search_history() {
+            Some(i) => (i.cast_signed() + dir).rem_euclid(count.cast_signed()) as usize,
+            None => 0,
+        };
+        self.drag.is_hover_controlled = true;
+        self.drag.set_hovered_search_history(new_idx);
+        let y = self
+            .bounds
+            .search_history
+            .as_ref()
+            .and_then(|g| g.rows.get(new_idx))
+            .map(|row| {
+                let g = self.bounds.search_history.as_ref().unwrap();
+                // Center the row in the viewport, like `scroll_track_into_view`.
+                let row_center = row.y + row.height / 2.0;
+                (row_center - g.bounds.y + g.translation_y - g.bounds.height / 2.0).max(0.0)
+            })
+            .unwrap_or(0.0);
+        operation::scroll_to::<Message>(
+            SEARCH_HISTORY_LIST_ID,
+            iced::widget::operation::AbsoluteOffset { x: 0.0, y },
+        )
     }
 
     fn hovered_list(&self) -> TrackListKind {

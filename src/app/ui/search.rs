@@ -1,7 +1,8 @@
 use iced::{
     alignment,
     widget::{
-        opaque, scrollable, text, text_input, Button, Column, Container, Id, MouseArea, Row, Space,
+        button, container, opaque, scrollable, text, text_input, Button, Column, Container, Id,
+        MouseArea, Row, Space,
     },
     Color, Element, Length, Rectangle,
 };
@@ -280,6 +281,8 @@ pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, Ap
     Column::with_children([header.into(), track_list]).into()
 }
 
+pub const SEARCH_HISTORY_LIST_ID: Id = Id::new("search_history_list");
+
 pub(super) fn view_search_history(
     player: &MusicPlayer,
     input_rect: Rectangle,
@@ -287,21 +290,26 @@ pub(super) fn view_search_history(
     let p = &player.app_theme.palette;
 
     let content: Element<'_, Message, AppTheme> = if player.last_filtered_history.is_empty() {
-        text("No recent searches")
-            .style(fg_secondary())
-            .width(Length::Fill)
-            .into()
+        Container::new(
+            text("No recent searches")
+                .style(fg_secondary())
+                .width(Length::Fill),
+        )
+        .padding([theme::SPACING_XS, theme::SPACING_MD])
+        .into()
     } else {
         let items = player
             .last_filtered_history
             .iter()
             .enumerate()
             .map(|(i, q)| {
-                Container::new(
+                let is_hovered = player.drag.hovered_search_history() == Some(i);
+                let text_color = if is_hovered { p.fg } else { p.fg_muted };
+                let row = Container::new(
                     Row::with_children([
                         Button::new(
                             Row::with_children([
-                                icons::icon(icons::SEARCH_ICON, p.fg_muted, theme::ICON_SIZE_SM)
+                                icons::icon(icons::SEARCH_ICON, text_color, theme::ICON_SIZE_SM)
                                     .into(),
                                 text(q).size(theme::TEXT_SIZE_SM).into(),
                             ])
@@ -311,12 +319,16 @@ pub(super) fn view_search_history(
                         )
                         .width(Length::Fill)
                         .padding(0)
-                        .style(button_style_hist())
+                        .style(move |_, _| button::Style {
+                            background: None,
+                            text_color,
+                            ..Default::default()
+                        })
                         .on_press(Message::SearchHistorySelected(i))
                         .into(),
                         Button::new(icons::icon(
                             icons::DELETE_ICON,
-                            p.fg_muted,
+                            p.fg_secondary,
                             theme::ICON_SIZE_SM,
                         ))
                         .padding(theme::SPACING_XS)
@@ -326,15 +338,30 @@ pub(super) fn view_search_history(
                     ])
                     .align_y(alignment::Vertical::Center),
                 )
-                .into()
+                .style(move |theme: &AppTheme| container::Style {
+                    background: if is_hovered {
+                        Some(theme.palette.bg_secondary.into())
+                    } else {
+                        None
+                    },
+                    ..Default::default()
+                })
+                .id(iced::widget::Id::from(format!("search_history:{i}")));
+                MouseArea::new(row)
+                    .on_move(move |_| Message::HoverStart(HoverTarget::SearchHistory(i)))
+                    .into()
             });
 
-        let dropdown_height = (player.last_filtered_history.len() as f32
-            * theme::SEARCH_HISTORY_ITEM_HEIGHT)
-            .min(theme::SEARCH_DROPDOWN_MAX_HEIGHT);
+        let dropdown_height = player
+            .bounds
+            .search_history
+            .as_ref()
+            .map(|g| g.bounds.height)
+            // used for 1 frame
+            .unwrap_or(0.0);
 
         scrollable(Column::with_children(items).padding(scroll_padding()))
-            .id(iced::widget::Id::new("search_history_list"))
+            .id(SEARCH_HISTORY_LIST_ID)
             .height(dropdown_height)
             .into()
     };

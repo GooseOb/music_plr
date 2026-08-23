@@ -1,5 +1,5 @@
 use super::{mpsc, thread, BackendResult, MusicPlayer, ViewData};
-use crate::app::ViewKind;
+use crate::app::{update::operation::CaptureSearchHistoryRows, ViewKind};
 use crate::data::library::{LibraryItem, LibraryKind};
 
 impl MusicPlayer {
@@ -93,6 +93,7 @@ impl MusicPlayer {
         if index < self.last_filtered_history.len() {
             self.search_query = self.last_filtered_history[index].clone();
             self.show_search_history = false;
+            self.drag.clear_hovered_search_history();
             self.run_search();
         }
     }
@@ -112,6 +113,12 @@ impl MusicPlayer {
             self.last_filtered_history
                 .truncate(self.config.max_search_history_visible);
         }
+    }
+
+    pub fn activate_search_input(&mut self) -> iced::Task<crate::app::message::Message> {
+        self.update_search_history();
+        self.show_search_history = true;
+        return iced_runtime::task::widget(CaptureSearchHistoryRows::new());
     }
 
     /// Start a song or artist radio seeded by `provider`. Same fallback rules

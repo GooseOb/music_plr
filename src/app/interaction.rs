@@ -106,6 +106,7 @@ pub enum HoverTarget {
     Card(LibraryItem),
     LibraryCard(LibraryItem),
     Playlist(usize),
+    SearchHistory(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,6 +157,27 @@ impl DragState {
     /// Clear a hovered track without disturbing an unrelated card hover.
     pub fn clear_hovered_track(&mut self) {
         if matches!(self.hovered, Some(HoverTarget::Track(_))) {
+            self.hovered = None;
+        }
+    }
+
+    /// The hovered search-history entry index, if any — the keyboard-
+    /// navigation focus while the search-history dropdown is open.
+    pub fn hovered_search_history(&self) -> Option<usize> {
+        match self.hovered {
+            Some(HoverTarget::SearchHistory(i)) => Some(i),
+            _ => None,
+        }
+    }
+
+    /// Set the hovered search-history entry (keyboard-navigation focus).
+    pub fn set_hovered_search_history(&mut self, index: usize) {
+        self.hovered = Some(HoverTarget::SearchHistory(index));
+    }
+
+    /// Clear a hovered search-history entry without disturbing another hover.
+    pub fn clear_hovered_search_history(&mut self) {
+        if matches!(self.hovered, Some(HoverTarget::SearchHistory(_))) {
             self.hovered = None;
         }
     }

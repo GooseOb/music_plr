@@ -27,8 +27,7 @@ pub const RADIUS_SM: f32 = 8.0;
 pub const RADIUS_MD: f32 = 12.0;
 // pub const RADIUS_LG: f32 = 16.0;
 pub const SEARCH_BTN_SIZE: f32 = 35.0;
-pub const SEARCH_HISTORY_ITEM_HEIGHT: f32 = ICON_SIZE_SM + 2.0 * SPACING_XS + SPACING_SM / 2.0;
-pub const SEARCH_DROPDOWN_MAX_HEIGHT: f32 = 240.0;
+pub const SEARCH_DROPDOWN_MAX_ITEMS: usize = 5;
 
 pub const ICON_SIZE_SM: f32 = 14.0;
 pub const ICON_SIZE_MD: f32 = 16.0;

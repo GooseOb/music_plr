@@ -62,6 +62,7 @@ pub enum Message {
     CursorMoved(Point),
     LeftButtonReleased,
     ListBoundsCaptured(CaptureBounds),
+    SearchHistoryBoundsCaptured(crate::app::update::operation::ListGeometry),
     ListScrolled {
         list: TrackListKind,
         translation_y: f32,

@@ -351,15 +351,16 @@ impl MusicPlayer {
                     Task::none()
                 }
             }
-            Message::LeftButtonReleased => {
-                self.handle_left_release();
-                Task::none()
-            }
+            Message::LeftButtonReleased => self.handle_left_release(),
             Message::ListBoundsCaptured(bounds) => {
                 let scroll = bounds.track.as_ref().map_or(0.0, |b| b.translation_y);
                 self.bounds = bounds.clone();
                 self.view_data_mut().scroll = scroll;
 
+                Task::none()
+            }
+            Message::SearchHistoryBoundsCaptured(geo) => {
+                self.bounds.search_history = Some(geo);
                 Task::none()
             }
             Message::ListScrolled {
@@ -390,9 +391,16 @@ impl MusicPlayer {
             Message::SearchInputChanged(query) => {
                 self.search_query = query;
                 self.update_search_history();
-                Task::none()
+                self.drag.clear_hovered_search_history();
+                iced_runtime::task::widget(update::operation::CaptureSearchHistoryRows::new())
             }
             Message::SearchExecute => {
+                if self.show_search_history {
+                    if let Some(i) = self.drag.hovered_search_history() {
+                        self.handle_search_history_select(i);
+                        return Task::none();
+                    }
+                }
                 self.run_search();
                 Task::none()
             }

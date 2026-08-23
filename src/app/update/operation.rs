@@ -15,16 +15,28 @@
 //! `bounds` into that list's `ListGeometry.rows`. Because a scrollable's rows
 //! are visited contiguously right after its own `scrollable` callback, the
 //! `current` flag is correctly scoped — and the only id'd `Container`s in the
-//! tree are list rows (sidebar playlist and library rows), so nothing else is
-//! captured. The track/queue/recent lists are virtualized and uniform-height,
-//! so they use `ROW_HEIGHT` for drop math instead and don't need `rows`.
+//! tree are list rows (sidebar playlist, library, and search-history rows), so
+//! nothing else is captured. The track/queue/recent lists are virtualized and
+//! uniform-height, so they use `ROW_HEIGHT` for drop math instead and don't
+//! need `rows`.
 //! The global search `text_input` (id `SEARCH_INPUT_ID`) is captured via the
 //! `text_input` callback so its bounds can hit-test the search-history
 //! dropdown.
+//!
+//! The search-history dropdown rows are captured by a *separate* operation,
+//! `CaptureSearchHistoryRows`, so they can be refreshed on every search-input
+//! message without re-walking the whole widget tree (sidebar/library/queue/
+//! track/recent + search input). See that struct for details.
 
-use crate::app::{
-    ui::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, SEARCH_INPUT_ID, TRACK_LIST_ID},
-    Message,
+use crate::{
+    app::{
+        ui::{
+            QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, SEARCH_HISTORY_LIST_ID, SEARCH_INPUT_ID,
+            TRACK_LIST_ID,
+        },
+        Message,
+    },
+    theme,
 };
 use iced::{widget::Id, Rectangle};
 use iced_core::widget::operation::{Operation, Outcome, Scrollable};
@@ -55,6 +67,8 @@ pub struct CaptureBounds {
     pub queue: Option<ListGeometry>,
     pub track: Option<ListGeometry>,
     pub recent: Option<ListGeometry>,
+    /// Captured separately by [`CaptureSearchHistoryRows`] (see that struct).
+    pub search_history: Option<ListGeometry>,
     pub search_input: Option<Rectangle>,
     current: Option<Id>,
 }
@@ -129,19 +143,17 @@ impl Operation<Message> for CaptureBounds {
         });
     }
 
-    fn container(&mut self, _id: Option<&Id>, bounds: Rectangle) {
+    fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
         let Some(target) = self.current.clone() else {
             return;
         };
-        // Only the sidebar/library lists use measured row geometry for
-        // drop-index math; the virtualized track/queue/recent lists derive
-        // their boundaries from the uniform `ROW_HEIGHT`, so collecting their
-        // rows would be wasted work.
         if target == QUEUE_LIST_ID || target == TRACK_LIST_ID || target == QUEUE_RECENT_LIST_ID {
             return;
         }
-        if let Some(g) = self.geo_mut(&target) {
-            g.rows.push(bounds);
+        if id.is_some() {
+            if let Some(g) = self.geo_mut(&target) {
+                g.rows.push(bounds);
+            }
         }
     }
 
@@ -158,5 +170,64 @@ impl Operation<Message> for CaptureBounds {
 
     fn finish(&self) -> Outcome<Message> {
         Outcome::Some(Message::ListBoundsCaptured(self.clone()))
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct CaptureSearchHistoryRows {
+    geo: Option<ListGeometry>,
+    current: bool,
+}
+
+impl CaptureSearchHistoryRows {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Operation<Message> for CaptureSearchHistoryRows {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Message>)) {
+        operate(self);
+    }
+
+    fn scrollable(
+        &mut self,
+        id: Option<&Id>,
+        bounds: Rectangle,
+        _content_bounds: Rectangle,
+        translation: iced::Vector,
+        _state: &mut dyn Scrollable,
+    ) {
+        if id == Some(&SEARCH_HISTORY_LIST_ID) {
+            self.current = true;
+            self.geo = Some(ListGeometry {
+                bounds,
+                translation_y: translation.y,
+                rows: Vec::new(),
+            });
+        } else {
+            self.current = false;
+        }
+    }
+
+    fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+        if self.current && id.is_some() {
+            if let Some(g) = &mut self.geo {
+                g.rows.push(bounds);
+            }
+        }
+    }
+
+    fn finish(&self) -> Outcome<Message> {
+        match self.geo.clone() {
+            Some(mut geo) => {
+                if !geo.rows.is_empty() {
+                    let last = theme::SEARCH_DROPDOWN_MAX_ITEMS.min(geo.rows.len()) - 1;
+                    geo.bounds.height = geo.rows[last].y + geo.rows[last].height - geo.bounds.y;
+                }
+                Outcome::Some(Message::SearchHistoryBoundsCaptured(geo))
+            }
+            None => Outcome::None,
+        }
     }
 }

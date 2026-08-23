@@ -17,25 +17,24 @@ use crate::{
 use iced::widget::Id;
 
 impl MusicPlayer {
-    pub fn handle_left_release(&mut self) {
+    pub fn handle_left_release(&mut self) -> Task<Message> {
         let cursor = self.drag.cursor_pos;
         let is_cursor_in_search_input =
             self.bounds.search_input.is_some_and(|r| r.contains(cursor));
         if self.show_search_history {
             if !is_cursor_in_search_input {
                 self.show_search_history = false;
+                self.drag.clear_hovered_search_history();
             }
         } else {
             if is_cursor_in_search_input {
-                self.update_search_history();
-                self.show_search_history = true;
-                return;
+                return self.activate_search_input();
             }
         }
 
         let Some(pressed) = self.drag.pressed.take() else {
             self.drag.stop();
-            return;
+            return Task::none();
         };
 
         if self.drag.drag_active {
@@ -65,6 +64,7 @@ impl MusicPlayer {
         }
 
         self.drag.stop();
+        Task::none()
     }
 
     pub fn handle_drag_update(&mut self) -> Task<Message> {
