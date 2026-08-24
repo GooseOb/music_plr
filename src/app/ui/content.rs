@@ -14,10 +14,13 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
     } else {
         match &player.view_data().kind {
             ViewKind::Search(s) => search::view_search(player, s),
-            ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_) => search::view_search_radio(player),
+            ViewKind::SongRadio(label) | ViewKind::ArtistRadio(label) => {
+                search::view_search_radio(player, label)
+            }
             ViewKind::Artist(_) => artist::view_artist(player),
             ViewKind::Album(r) | ViewKind::PlaylistView(r) => search::view_browse(player, &r.name),
-            ViewKind::Playlist(_) | ViewKind::Downloads => playlist::view_playlist(player),
+            ViewKind::Playlist(entry) => playlist::view_playlist(player, entry),
+            ViewKind::Downloads => playlist::view_downloads(player),
             ViewKind::Settings => settings::view_settings(player),
         }
     };

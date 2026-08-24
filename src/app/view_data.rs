@@ -159,14 +159,6 @@ impl ViewData {
         }
     }
 
-    /// The radio header label, or empty when not on a radio view.
-    pub fn label(&self) -> &str {
-        match &self.kind {
-            ViewKind::SongRadio(l) | ViewKind::ArtistRadio(l) => l,
-            _ => "",
-        }
-    }
-
     // ── constructors ─────────────────────────────────────────────
 
     /// Create a fresh `Search` view for `query` on `provider` at the given

@@ -279,8 +279,10 @@ fn view_library_button(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .into()
 }
 
-pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let label = player.view_data().label();
+pub(super) fn view_search_radio<'a>(
+    player: &'a MusicPlayer,
+    label: &'a str,
+) -> Element<'a, Message, AppTheme> {
     let content = &player.view_data().content;
 
     let header = Container::new(text(label).width(Length::Fill).center())
