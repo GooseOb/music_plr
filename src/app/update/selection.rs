@@ -29,10 +29,10 @@ impl MusicPlayer {
     pub fn view_tracks(&self) -> &[Track] {
         let vd = self.view_data();
         match &vd.kind {
-            ViewKind::Playlist { index, .. } => self
+            ViewKind::Playlist(entry) => self
                 .playlists
                 .playlists
-                .get(*index)
+                .get(entry.index)
                 .map_or(&[], |p| &p.tracks),
             _ => vd.tracks(),
         }

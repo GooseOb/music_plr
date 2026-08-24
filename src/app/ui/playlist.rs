@@ -5,7 +5,10 @@ use iced::{
 };
 
 use crate::{
-    app::{interaction::TrackListKind, ui::shared_components::empty_state, ViewKind},
+    app::{
+        interaction::TrackListKind, ui::shared_components::empty_state, view_data::PlaylistEntry,
+        ViewKind,
+    },
     icons,
     load_state::LoadState,
     theme::AppTheme,
@@ -30,10 +33,11 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
         .align_y(alignment::Vertical::Center)
         .padding([theme::SPACING_SM, theme::SPACING_XL])
         .into()
-    } else if let Some(idx) = player.view_data().selected_playlist_id() {
+    } else if let ViewKind::Playlist(entry) = &player.view_data().kind {
+        let idx = entry.index;
         if let Some(pl) = player.playlists.playlists.get(idx) {
             Row::with_children([
-                text_input(&pl.name, player.view_data().playlist_name())
+                text_input(&pl.name, &entry.name)
                     .on_input(Message::RenamePlaylist)
                     .padding([theme::SPACING_SM, theme::SPACING_MD])
                     .width(Length::Fill)
@@ -80,10 +84,12 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
             _ => empty_state("No downloaded tracks"),
         }
     } else {
-        let playlist = player
-            .view_data()
-            .selected_playlist_id()
-            .and_then(|idx| player.playlists.playlists.get(idx));
+        let playlist = match &player.view_data().kind {
+            ViewKind::Playlist(PlaylistEntry { index, .. }) => {
+                player.playlists.playlists.get(*index)
+            }
+            _ => None,
+        };
         if let Some(pl) = playlist {
             view_track_list(&pl.tracks, player, TrackListKind::Active, 0)
         } else {

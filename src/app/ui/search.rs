@@ -7,11 +7,12 @@ use iced::{
     Color, Element, Length, Rectangle,
 };
 
+use crate::app::{
+    interaction::{HoverTarget, Pressed, TrackListKind},
+    ui::overlays::pos_absolute,
+    view_data::SearchData,
+};
 use crate::{
-    app::{
-        interaction::{HoverTarget, Pressed, TrackListKind},
-        ui::overlays::pos_absolute,
-    },
     data::library::LibraryKind,
     icons,
     load_state::LoadState,
@@ -102,24 +103,26 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
 
 pub(super) fn view_search<'a>(
     player: &'a MusicPlayer,
-    tab: &'a crate::providers::SearchTab,
+    search: &'a SearchData,
 ) -> Element<'a, Message, AppTheme> {
+    let tab = &search.tab;
     let content = &player.view_data().content;
     match content {
         LoadState::Failed(e) => empty_state(format!("Search failed: {e}")),
         LoadState::Loading => empty_state("Searching..."),
-        LoadState::Ready(results) if tab.is_track_tab() => view_search_track_tab(player, results),
-        LoadState::Ready(_) => view_search_card_tab(player, tab),
+        LoadState::Ready(results) if tab.is_track_tab() => {
+            view_search_track_tab(player, search, results)
+        }
+        LoadState::Ready(_) => view_search_card_tab(player, search, tab),
     }
 }
 
 /// The Songs/Videos tab: a scrollable, paged track list with "Load More".
 fn view_search_track_tab<'a>(
     player: &'a MusicPlayer,
+    search: &SearchData,
     results: &'a [Track],
 ) -> Element<'a, Message, AppTheme> {
-    let exhausted = player.view_data().exhausted();
-
     let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
 
     if results.is_empty() {
@@ -127,14 +130,18 @@ fn view_search_track_tab<'a>(
     } else {
         children.push(view_track_list(results, player, TrackListKind::Active, 0));
 
-        if !exhausted {
-            let in_flight = player.view_data().append_in_flight;
+        if !search.exhausted {
             let btn = Button::new(
-                text(if in_flight { "Loading..." } else { "Load More" }).color(Color::WHITE),
+                text(if search.append_in_flight {
+                    "Loading..."
+                } else {
+                    "Load More"
+                })
+                .color(Color::WHITE),
             )
             .padding(theme::SPACING_SM)
             .width(Length::Fill)
-            .on_press_maybe((!in_flight).then_some(Message::SearchLoadMore));
+            .on_press_maybe((!search.append_in_flight).then_some(Message::SearchLoadMore));
 
             children.push(Container::new(btn).padding(theme::SPACING_SM).into());
         }
@@ -150,6 +157,7 @@ fn view_search_track_tab<'a>(
 /// An Artists/Albums/Playlists tab: the concrete card list, filling the page.
 fn view_search_card_tab<'a>(
     player: &'a MusicPlayer,
+    search: &SearchData,
     tab: &'a SearchTab,
 ) -> Element<'a, Message, AppTheme> {
     let (items, kind): (&[CardData], LibraryKind) = match tab {
@@ -171,7 +179,7 @@ fn view_search_card_tab<'a>(
             id: c.id.clone(),
             title: c.title.clone(),
             thumbnail: c.thumbnail.clone(),
-            provider: player.view_data().provider(),
+            provider: search.provider,
         };
         card_row(player, i, &c.id, &c.title, &c.subtitle, &item)
     });

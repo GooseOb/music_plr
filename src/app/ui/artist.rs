@@ -5,9 +5,9 @@ use iced::{
 };
 
 use crate::{
-    app::{TrackListKind, ViewKind},
+    app::{view_data::BrowseRef, TrackListKind, ViewKind},
     load_state::LoadState,
-    providers::{ArtistSectionKind, ProviderId, SectionContent},
+    providers::{ArtistSection, ArtistSectionKind, ProviderId, SectionContent},
     theme::{self, AppTheme},
 };
 
@@ -23,16 +23,16 @@ const CARD_IMAGE_SIZE: f32 = 120.0;
 /// The artist page: header (picture, name, stats), then one section per row,
 /// each with its own "Provided by" provider picker.
 pub(super) fn view_artist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let ViewKind::Artist { id, name, page, .. } = &player.view_data().kind else {
+    let ViewKind::Artist(entry) = &player.view_data().kind else {
         return empty_state("Not an artist page");
     };
     let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::new();
     children.push(header(
         player,
-        id,
-        name,
-        page.header.as_ref(),
-        page.header_provider,
+        &entry.id,
+        &entry.name,
+        entry.page.header.as_ref(),
+        entry.page.header_provider,
     ));
 
     for kind in [
@@ -41,8 +41,9 @@ pub(super) fn view_artist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, A
         ArtistSectionKind::Playlists,
         ArtistSectionKind::Related,
     ] {
-        children.push(section_header(kind, page.section(kind).provider));
-        children.push(section_body(player, kind));
+        let section = entry.page.section(kind);
+        children.push(section_header(kind, section.provider));
+        children.push(section_body(player, section, kind));
     }
 
     scrollable(
@@ -218,10 +219,10 @@ fn cards<'a>(
                     &c.title,
                     &subtitle,
                     Message::Browse(
-                        ViewKind::Album {
+                        ViewKind::Album(BrowseRef {
                             id: c.id.clone(),
                             name: c.title.clone(),
-                        },
+                        }),
                         provider,
                     ),
                 )
@@ -236,10 +237,10 @@ fn cards<'a>(
                     &c.title,
                     "",
                     Message::Browse(
-                        ViewKind::PlaylistView {
+                        ViewKind::PlaylistView(BrowseRef {
                             id: c.id.clone(),
                             name: c.title.clone(),
-                        },
+                        }),
                         provider,
                     ),
                 )
@@ -265,13 +266,13 @@ fn cards<'a>(
     }
 }
 
-fn section_body(player: &MusicPlayer, kind: ArtistSectionKind) -> Element<'_, Message, AppTheme> {
+fn section_body<'a>(
+    player: &'a MusicPlayer,
+    section: &'a ArtistSection,
+    kind: ArtistSectionKind,
+) -> Element<'a, Message, AppTheme> {
     let view_data = player.view_data();
-    let ViewKind::Artist { page, .. } = &view_data.kind else {
-        return empty_state("Not an artist page");
-    };
 
-    let section = page.section(kind);
     if kind == ArtistSectionKind::Popular {
         // Popular tracks live in the view's track list so all the usual
         // interactions (play, context menu, drag) work on them.

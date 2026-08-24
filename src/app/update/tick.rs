@@ -117,16 +117,14 @@ impl MusicPlayer {
                     .ensure(track.primary_id(), track.thumbnail());
             }
         }
-        if let ViewKind::Search {
-            tab:
-                crate::providers::SearchTab::Artists(cards)
-                | crate::providers::SearchTab::Albums(cards)
-                | crate::providers::SearchTab::Playlists(cards),
-            ..
-        } = &view.kind
-        {
-            for card in cards {
-                self.thumbnail_index.ensure(&card.id, &card.thumbnail);
+        if let ViewKind::Search(s) = &view.kind {
+            if let crate::providers::SearchTab::Artists(cards)
+            | crate::providers::SearchTab::Albums(cards)
+            | crate::providers::SearchTab::Playlists(cards) = &s.tab
+            {
+                for card in cards {
+                    self.thumbnail_index.ensure(&card.id, &card.thumbnail);
+                }
             }
         }
     }
@@ -188,19 +186,14 @@ impl MusicPlayer {
     ) {
         // Apply to the slot that requested this search.
         if let Some(idx) = self.slot_for_request(rid) {
-            if let ViewKind::Search {
-                exhausted,
-                tab: kind_tab,
-                ..
-            } = &mut self.nav_history[idx].kind
-            {
+            if let ViewKind::Search(s) = &mut self.nav_history[idx].kind {
                 let count = if tab.is_track_tab() {
                     tracks.len()
                 } else {
                     tab.card_count().unwrap_or(0)
                 };
-                *exhausted = count < crate::theme::SEARCH_PAGE_SIZE;
-                *kind_tab = tab;
+                s.exhausted = count < crate::theme::SEARCH_PAGE_SIZE;
+                s.tab = tab;
                 self.install_results(idx, tracks);
             }
         }
@@ -218,9 +211,11 @@ impl MusicPlayer {
                     if let Some(existing) = slot.tracks_mut() {
                         existing.extend(tracks);
                     }
-                    slot.set_exhausted(exhausted);
+                    if let ViewKind::Search(s) = &mut slot.kind {
+                        s.exhausted = exhausted;
+                        s.append_in_flight = false;
+                    }
                     slot.request_id = 0;
-                    slot.append_in_flight = false;
                     self.finalize_view(idx);
                 }
             }
@@ -308,15 +303,15 @@ impl MusicPlayer {
     fn process_search_error(&mut self, msg: String) {
         if matches!(
             self.view_data().kind,
-            ViewKind::Search { .. }
+            ViewKind::Search(_)
                 | ViewKind::SongRadio(_)
                 | ViewKind::ArtistRadio(_)
-                | ViewKind::Album { .. }
-                | ViewKind::PlaylistView { .. }
+                | ViewKind::Album(_)
+                | ViewKind::PlaylistView(_)
         ) {
             self.view_data_mut().set_failed(msg.clone());
-            if matches!(self.view_data().kind, ViewKind::Search { .. }) {
-                self.view_data_mut().append_in_flight = false;
+            if let ViewKind::Search(s) = &mut self.view_data_mut().kind {
+                s.append_in_flight = false;
             }
         }
         self.notify_error(msg);

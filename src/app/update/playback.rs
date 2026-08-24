@@ -71,7 +71,7 @@ impl MusicPlayer {
                 // Avoid holding a `view_data_mut` borrow across the playlist
                 // store access by deciding the target first.
                 let target = match &self.view_data().kind {
-                    ViewKind::Playlist { index, .. } => Some(*index),
+                    ViewKind::Playlist(entry) => Some(entry.index),
                     _ => None,
                 };
                 match target {

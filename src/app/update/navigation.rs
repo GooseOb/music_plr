@@ -12,18 +12,20 @@ impl MusicPlayer {
     }
 
     fn sync_search_query(&mut self) {
-        self.search_query = self.view_data().search_query().to_string();
+        if let ViewKind::Search(s) = &self.view_data().kind {
+            self.search_query = s.query.clone();
+        }
     }
 
     pub(super) fn sync_search_scope(&mut self) {
-        if let ViewKind::Search { tab, .. } = &self.view_data().kind {
-            self.search_scope = tab.scope();
+        if let ViewKind::Search(s) = &self.view_data().kind {
+            self.search_scope = s.tab.scope();
         }
     }
 
     pub(super) fn sync_search_provider(&mut self) {
-        if let ViewKind::Search { provider, .. } = &self.view_data().kind {
-            self.search_provider = *provider;
+        if let ViewKind::Search(s) = &self.view_data().kind {
+            self.search_provider = s.provider;
         }
     }
 
@@ -71,8 +73,8 @@ impl MusicPlayer {
         // Capture the live query into the outgoing `Search` entry (if any) so
         // Back navigation restores it.
         let live_query = self.search_query.clone();
-        if let ViewKind::Search { query, .. } = &mut self.view_data_mut().kind {
-            *query = live_query;
+        if let ViewKind::Search(s) = &mut self.view_data_mut().kind {
+            s.query = live_query;
         }
         self.drag.cleanup();
 
@@ -169,8 +171,12 @@ mod tests {
 
         // Back must restore the Playlist(2) view without clobbering it.
         let _ = p.handle_navigate_back();
-        assert!(matches!(p.view_data().kind, ViewKind::Playlist { .. }));
-        assert_eq!(p.view_data().selected_playlist_id(), Some(2));
+        assert!(matches!(p.view_data().kind, ViewKind::Playlist(_)));
+        let active = match &p.view_data().kind {
+            ViewKind::Playlist(entry) => entry.index,
+            _ => unreachable!(),
+        };
+        assert_eq!(active, 2);
         // The outgoing entry is preserved as a distinct history slot.
         assert_eq!(p.nav_history.len(), 3);
     }
@@ -183,10 +189,16 @@ mod tests {
         // Three slots: initial Playlist (from PlaylistStore), Playlist(0), Playlist(1).
         assert_eq!(p.nav_history.len(), 3);
         let _ = p.handle_navigate_back();
-        assert_eq!(p.view_data().selected_playlist_id(), Some(0));
+        assert_eq!(
+            match &p.view_data().kind {
+                ViewKind::Playlist(e) => Some(e.index),
+                _ => None,
+            },
+            Some(0)
+        );
         let _ = p.handle_navigate_back();
         // Returns to the initial (pre-navigation) view, not clobbered.
-        assert!(matches!(p.view_data().kind, ViewKind::Playlist { .. }));
+        assert!(matches!(p.view_data().kind, ViewKind::Playlist(_)));
         assert_eq!(p.nav_history.len(), 3);
     }
 
@@ -205,7 +217,7 @@ mod tests {
 
         // Navigate away to a different view before results arrive.
         p.handle_navigate_to(ViewData::new_playlist(5, "Other".into()));
-        assert!(matches!(p.view_data().kind, ViewKind::Playlist { .. }));
+        assert!(matches!(p.view_data().kind, ViewKind::Playlist(_)));
         assert_eq!(p.view_data().request_id, 0);
 
         // Deliver the search results (simulating the background thread).
@@ -236,7 +248,7 @@ mod tests {
         ));
 
         // The active (Playlist) slot must be untouched.
-        assert!(matches!(p.view_data().kind, ViewKind::Playlist { .. }));
+        assert!(matches!(p.view_data().kind, ViewKind::Playlist(_)));
         assert!(p.view_data().tracks().is_empty());
 
         // Going back to the search slot shows the delivered results.

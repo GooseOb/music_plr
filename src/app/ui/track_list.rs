@@ -35,16 +35,16 @@ pub(super) fn view_track_list<'a>(
     }
 
     let show_album = list == TrackListKind::Active
-        && !matches!(player.view_data().kind, crate::app::ViewKind::Album { .. });
+        && !matches!(player.view_data().kind, crate::app::ViewKind::Album(_));
     let show_plays = list == TrackListKind::Active
         && matches!(
             player.view_data().kind,
-            crate::app::ViewKind::Search { .. }
+            crate::app::ViewKind::Search(_)
                 | crate::app::ViewKind::SongRadio(_)
                 | crate::app::ViewKind::ArtistRadio(_)
-                | crate::app::ViewKind::Artist { .. }
-                | crate::app::ViewKind::Album { .. }
-                | crate::app::ViewKind::PlaylistView { .. }
+                | crate::app::ViewKind::Artist(_)
+                | crate::app::ViewKind::Album(_)
+                | crate::app::ViewKind::PlaylistView(_)
         );
 
     virtual_scrollable(tracks.len(), list, player, |i| {
@@ -249,10 +249,10 @@ fn track_row_layout_inner<'a>(
                 Button::new(text(album.name.clone()).size(theme::TEXT_SIZE_SM))
                     .style(button_style_album())
                     .on_press(Message::Browse(
-                        crate::app::ViewKind::Album {
+                        crate::app::ViewKind::Album(crate::app::view_data::BrowseRef {
                             id: album.id.clone(),
                             name: album.name.clone(),
-                        },
+                        }),
                         track.source,
                     )),
             )

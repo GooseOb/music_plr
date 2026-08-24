@@ -83,13 +83,11 @@ fn library_row<'a>(
     index: usize,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let is_active = matches!(
-        &player.view_data().kind,
-        ViewKind::Artist { id, .. }
-            | ViewKind::Album { id, .. }
-            | ViewKind::PlaylistView { id, .. }
-        if id == &item.id
-    );
+    let is_active = match &player.view_data().kind {
+        ViewKind::Artist(entry) => entry.id == item.id,
+        ViewKind::Album(r) | ViewKind::PlaylistView(r) => r.id == item.id,
+        _ => false,
+    };
     let text_color = if is_active { p.fg } else { p.fg_secondary };
     let thumb = player.thumbnail_index.get(&item.id);
     let thumb = thumbnail(p, theme::ICON_SIZE_LG + 4.0, thumb);
@@ -211,8 +209,10 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .iter()
         .enumerate()
         .map(|(i, pl)| {
-            let is_active = matches!(player.view_data().kind, ViewKind::Playlist { .. })
-                && player.view_data().selected_playlist_id() == Some(i);
+            let is_active = match &player.view_data().kind {
+                ViewKind::Playlist(entry) => entry.index == i,
+                _ => false,
+            };
             let is_dragged_over = matches!(
                 player.drag.drop_target,
                 Some(DropTarget::PlaylistAdd(j)) if j == i

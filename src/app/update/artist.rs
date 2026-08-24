@@ -1,6 +1,6 @@
 use super::{thread, BackendResult, MusicPlayer, ViewData};
 use crate::{
-    app::ViewKind,
+    app::{view_data::ArtistEntry, ViewKind},
     providers::{ArtistDataKind, ArtistPage, ArtistPageState, ArtistSectionKind, ProviderId},
 };
 
@@ -24,12 +24,12 @@ impl MusicPlayer {
     /// followers stats). Both run in parallel on their own threads. Anything
     /// else loads lazily when a section picker selects that provider.
     pub fn open_artist(&mut self, id: &str, name: &str, source: ProviderId) {
-        let kind = ViewKind::Artist {
+        let kind = ViewKind::Artist(ArtistEntry {
             id: id.to_string(),
             name: name.to_string(),
             source,
             page: Box::new(ArtistPageState::new(source, id)),
-        };
+        });
         self.push_new_view(ViewData {
             kind,
             ..Default::default()
@@ -61,10 +61,10 @@ impl MusicPlayer {
         kinds: &'static [ArtistDataKind],
     ) {
         let known_id = {
-            let ViewKind::Artist { page, .. } = &mut self.view_data_mut().kind else {
+            let ViewKind::Artist(entry) = &mut self.view_data_mut().kind else {
                 return;
             };
-            page.provider_ids.get(&provider).cloned()
+            entry.page.provider_ids.get(&provider).cloned()
         };
         let name = name.to_string();
         let tx = self.result_tx.clone();
@@ -138,17 +138,17 @@ impl MusicPlayer {
         let name;
         let cached_tracks;
         {
-            let ViewKind::Artist { name: n, page, .. } = &mut self.view_data_mut().kind else {
+            let ViewKind::Artist(entry) = &mut self.view_data_mut().kind else {
                 return;
             };
 
             // Serve from the per-provider cache when this section's data was
             // already fetched — no loading state, no request.
-            cached_tracks = page.serve_cached_section(section_kind, provider);
+            cached_tracks = entry.page.serve_cached_section(section_kind, provider);
             if cached_tracks.is_none() {
-                page.start_section_load(section_kind, provider);
+                entry.page.start_section_load(section_kind, provider);
             }
-            name = n.clone();
+            name = entry.name.clone();
         }
         if let Some(tracks) = cached_tracks {
             let slot = self.view_data_mut();
@@ -176,9 +176,10 @@ impl MusicPlayer {
         let Some(idx) = self.slot_for_request(rid) else {
             return;
         };
-        let ViewKind::Artist { page, .. } = &mut self.nav_history[idx].kind else {
+        let ViewKind::Artist(entry) = &mut self.nav_history[idx].kind else {
             return;
         };
+        let page = &mut entry.page;
         match result {
             Ok(fetched) => {
                 if let Some(id) = resolved_id {
@@ -232,9 +233,10 @@ impl MusicPlayer {
     /// otherwise a header-only fetch is kicked off.
     pub fn handle_artist_header_provider_changed(&mut self, provider: ProviderId) {
         let (name, cache_hit) = {
-            let ViewKind::Artist { name, page, .. } = &mut self.view_data_mut().kind else {
+            let ViewKind::Artist(entry) = &mut self.view_data_mut().kind else {
                 return;
             };
+            let (name, page) = (&entry.name, &mut entry.page);
             page.header_provider = Some(provider);
             let cached = page
                 .pages
@@ -261,9 +263,10 @@ impl MusicPlayer {
     /// Seed thumbnail downloads for the artist header and all card rows of
     /// the given artist-page view.
     pub(crate) fn seed_artist_thumbnails(&mut self, view: &ViewData) {
-        let ViewKind::Artist { id, page, .. } = &view.kind else {
+        let ViewKind::Artist(entry) = &view.kind else {
             return;
         };
+        let (id, page) = (&entry.id, &entry.page);
         if let Some(header) = &page.header {
             let key = crate::app::ui::artist::header_thumb_key(
                 id,

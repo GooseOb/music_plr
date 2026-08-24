@@ -24,44 +24,51 @@ pub struct ViewData {
     pub scroll: f32,
     #[serde(skip)]
     pub request_id: u64,
-    /// A "Load More" append is running; the list stays visible, so this
-    /// needs its own flag to keep the button from re-firing.
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SearchData {
+    pub query: String,
+    pub provider: ProviderId,
+    pub tab: crate::providers::SearchTab,
+    pub exhausted: bool,
     #[serde(skip)]
     pub append_in_flight: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BrowseRef {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlaylistEntry {
+    pub index: usize,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ArtistEntry {
+    pub id: String,
+    pub name: String,
+    /// The provider that owns `id` (the page's entry point).
+    pub source: ProviderId,
+    /// Per-section selected providers, loaded content and known
+    /// per-provider artist ids — all persisted so Back/Forward restores
+    /// the page exactly as it was.
+    pub page: Box<crate::providers::ArtistPageState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ViewKind {
-    Search {
-        exhausted: bool,
-        query: String,
-        provider: ProviderId,
-        tab: crate::providers::SearchTab,
-    },
+    Search(SearchData),
     SongRadio(String),
     ArtistRadio(String),
-    Artist {
-        id: String,
-        name: String,
-        /// The provider that owns `id` (the page's entry point).
-        source: ProviderId,
-        /// Per-section selected providers, loaded content and known
-        /// per-provider artist ids — all persisted so Back/Forward restores
-        /// the page exactly as it was.
-        page: Box<crate::providers::ArtistPageState>,
-    },
-    Album {
-        id: String,
-        name: String,
-    },
-    PlaylistView {
-        id: String,
-        name: String,
-    },
-    Playlist {
-        index: usize,
-        name: String,
-    },
+    Artist(ArtistEntry),
+    Album(BrowseRef),
+    PlaylistView(BrowseRef),
+    Playlist(PlaylistEntry),
     Downloads,
     Settings,
 }
@@ -69,7 +76,7 @@ pub enum ViewKind {
 impl From<LibraryItem> for ViewKind {
     fn from(item: LibraryItem) -> Self {
         match item.kind {
-            LibraryKind::Artist => ViewKind::Artist {
+            LibraryKind::Artist => ViewKind::Artist(ArtistEntry {
                 id: item.id.clone(),
                 name: item.title,
                 source: item.provider,
@@ -77,27 +84,27 @@ impl From<LibraryItem> for ViewKind {
                     item.provider,
                     &item.id,
                 )),
-            },
-            LibraryKind::Album => ViewKind::Album {
+            }),
+            LibraryKind::Album => ViewKind::Album(BrowseRef {
                 id: item.id,
                 name: item.title,
-            },
-            LibraryKind::Playlist => ViewKind::PlaylistView {
+            }),
+            LibraryKind::Playlist => ViewKind::PlaylistView(BrowseRef {
                 id: item.id,
                 name: item.title,
-            },
+            }),
         }
     }
 }
 
 impl Default for ViewKind {
     fn default() -> Self {
-        ViewKind::Search {
-            exhausted: false,
+        ViewKind::Search(SearchData {
             query: String::new(),
             provider: ProviderId::YouTube,
             tab: crate::providers::SearchTab::Songs,
-        }
+            ..Default::default()
+        })
     }
 }
 
@@ -106,8 +113,8 @@ impl ViewKind {
         match self {
             // Artist pages have their own load path (`open_artist`) and are
             // not served by the generic browse flow.
-            ViewKind::Album { id, name } => Some((id, "album", name)),
-            ViewKind::PlaylistView { id, name } => Some((id, "playlist", name)),
+            ViewKind::Album(r) => Some((&r.id, "album", &r.name)),
+            ViewKind::PlaylistView(r) => Some((&r.id, "playlist", &r.name)),
             _ => None,
         }
     }
@@ -118,12 +125,12 @@ impl ViewData {
     pub fn is_search_like(&self) -> bool {
         matches!(
             self.kind,
-            ViewKind::Search { .. }
+            ViewKind::Search(_)
                 | ViewKind::SongRadio(_)
                 | ViewKind::ArtistRadio(_)
-                | ViewKind::Artist { .. }
-                | ViewKind::Album { .. }
-                | ViewKind::PlaylistView { .. }
+                | ViewKind::Artist(_)
+                | ViewKind::Album(_)
+                | ViewKind::PlaylistView(_)
         )
     }
 
@@ -135,36 +142,17 @@ impl ViewData {
     /// flooding with duplicate-query `Search` snapshots.
     pub fn same_kind(&self, other: &Self) -> bool {
         match (&self.kind, &other.kind) {
-            (
-                ViewKind::Search {
-                    exhausted: a,
-                    query: qa,
-                    provider: pa,
-                    tab: ta,
-                },
-                ViewKind::Search {
-                    exhausted: b,
-                    query: qb,
-                    provider: pb,
-                    tab: tb,
-                },
-            ) => a == b && qa == qb && pa == pb && ta == tb,
+            // Compare identity fields only: `exhausted`/`append_in_flight`
+            // are transient UI state, not what distinguishes views.
+            (ViewKind::Search(a), ViewKind::Search(b)) => {
+                a.query == b.query && a.provider == b.provider && a.tab == b.tab
+            }
             // Distinct variants despite identical bodies: a SongRadio and an
             // ArtistRadio with the same label are different views.
             (ViewKind::SongRadio(a), ViewKind::SongRadio(b))
             | (ViewKind::ArtistRadio(a), ViewKind::ArtistRadio(b)) => a == b,
-            (
-                ViewKind::Artist {
-                    id: ia, source: sa, ..
-                },
-                ViewKind::Artist {
-                    id: ib, source: sb, ..
-                },
-            ) => ia == ib && sa == sb,
-            (
-                ViewKind::Playlist { index: a, name: c },
-                ViewKind::Playlist { index: b, name: d },
-            ) => a == b && c == d,
+            (ViewKind::Artist(a), ViewKind::Artist(b)) => a.id == b.id && a.source == b.source,
+            (ViewKind::Playlist(a), ViewKind::Playlist(b)) => a == b,
             (ViewKind::Downloads, ViewKind::Downloads)
             | (ViewKind::Settings, ViewKind::Settings) => true,
             _ => false,
@@ -179,59 +167,6 @@ impl ViewData {
         }
     }
 
-    /// Whether the search results are exhausted (no more pages). Only
-    /// meaningful for `Search`; `false` otherwise.
-    pub fn exhausted(&self) -> bool {
-        matches!(
-            self.kind,
-            ViewKind::Search {
-                exhausted: true,
-                ..
-            }
-        )
-    }
-
-    /// Set the search `exhausted` flag. A no-op when not on `Search`.
-    pub fn set_exhausted(&mut self, value: bool) {
-        if let ViewKind::Search { exhausted, .. } = &mut self.kind {
-            *exhausted = value;
-        }
-    }
-
-    /// The search query for the `Search` view, or empty when not on `Search`.
-    pub fn search_query(&self) -> &str {
-        match &self.kind {
-            ViewKind::Search { query, .. } => query,
-            _ => "",
-        }
-    }
-
-    /// The provider backing the active view. For a `Search` view this is the
-    /// provider that produced the results (and thus the one to browse into
-    /// when a card is clicked); elsewhere it falls back to `YouTube` so callers
-    /// always receive a concrete provider.
-    pub fn provider(&self) -> ProviderId {
-        match &self.kind {
-            ViewKind::Search { provider, .. } => *provider,
-            _ => ProviderId::YouTube,
-        }
-    }
-
-    /// The selected playlist index for the Playlist view, or `None`.
-    pub fn selected_playlist_id(&self) -> Option<usize> {
-        match &self.kind {
-            ViewKind::Playlist { index, .. } => Some(*index),
-            _ => None,
-        }
-    }
-
-    pub fn playlist_name(&self) -> &str {
-        match &self.kind {
-            ViewKind::Playlist { name, .. } => name,
-            _ => "",
-        }
-    }
-
     // ── constructors ─────────────────────────────────────────────
 
     /// Create a fresh `Search` view for `query` on `provider` at the given
@@ -242,12 +177,12 @@ impl ViewData {
         scope: crate::providers::SearchScope,
     ) -> Self {
         Self {
-            kind: ViewKind::Search {
-                exhausted: false,
+            kind: ViewKind::Search(SearchData {
                 query,
                 provider,
                 tab: crate::providers::SearchTab::from_scope(scope),
-            },
+                ..Default::default()
+            }),
             content: LoadState::Loading,
             ..Default::default()
         }
@@ -266,7 +201,7 @@ impl ViewData {
     /// Create a `Playlist` view.
     pub fn new_playlist(index: usize, name: String) -> Self {
         Self {
-            kind: ViewKind::Playlist { index, name },
+            kind: ViewKind::Playlist(PlaylistEntry { index, name }),
             ..Default::default()
         }
     }

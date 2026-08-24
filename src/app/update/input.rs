@@ -1,7 +1,7 @@
 use iced::widget::operation;
 
 use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData};
-use crate::app::{ui::SEARCH_HISTORY_LIST_ID, TrackListSearch};
+use crate::app::{ui::SEARCH_HISTORY_LIST_ID, view_data::ViewKind, TrackListSearch};
 
 impl MusicPlayer {
     pub fn handle_cursor_moved(&mut self, pos: iced::Point) -> Task<Message> {
@@ -73,7 +73,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Physical::Code(Code::Delete) => {
-                if self.view_data_mut().selected_playlist_id().is_some() {
+                if matches!(&self.view_data().kind, ViewKind::Playlist(_)) {
                     self.handle_delete_selected();
                 }
                 Task::none()

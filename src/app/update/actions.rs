@@ -183,7 +183,7 @@ impl MusicPlayer {
             pos,
             target_indices,
             position: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
-            in_playlist: matches!(self.view_data_mut().kind, ViewKind::Playlist { .. }),
+            in_playlist: matches!(self.view_data().kind, ViewKind::Playlist(_)),
             track,
         });
     }

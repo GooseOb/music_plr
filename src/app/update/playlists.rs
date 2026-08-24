@@ -14,9 +14,9 @@ impl MusicPlayer {
     }
 
     pub fn handle_select_playlist(&mut self, index: usize) {
-        if index < self.playlists.playlists.len()
-            && self.view_data_mut().selected_playlist_id() != Some(index)
-        {
+        let already_selected =
+            matches!(&self.view_data().kind, ViewKind::Playlist(p) if p.index == index);
+        if index < self.playlists.playlists.len() && !already_selected {
             self.playlist_picker = None;
             self.clear_selection();
             self.drag.cleanup();
@@ -45,14 +45,14 @@ impl MusicPlayer {
     }
 
     pub fn handle_rename_playlist(&mut self, new_name: &str) {
-        if let Some(idx) = self.view_data_mut().selected_playlist_id() {
-            if !new_name.trim().is_empty() {
-                self.playlists.playlists[idx].name = new_name.trim().to_string();
-                self.playlists.save();
-                if let ViewKind::Playlist { name, .. } = &mut self.view_data_mut().kind {
-                    *name = new_name.trim().to_string();
-                }
-            }
+        let idx = match &self.view_data().kind {
+            ViewKind::Playlist(entry) if !new_name.trim().is_empty() => entry.index,
+            _ => return,
+        };
+        self.playlists.playlists[idx].name = new_name.trim().to_string();
+        self.playlists.save();
+        if let ViewKind::Playlist(entry) = &mut self.view_data_mut().kind {
+            entry.name = new_name.trim().to_string();
         }
     }
 
@@ -64,12 +64,8 @@ impl MusicPlayer {
         // a valid adjacent selection or, if none remain, leave for a safe view.
         let mut navigate_away = false;
         let mut new_selection: Option<usize> = None;
-        if let ViewKind::Playlist {
-            index: selected_idx,
-            ..
-        } = &self.view_data().kind
-        {
-            let sp = *selected_idx;
+        if let ViewKind::Playlist(entry) = &self.view_data().kind {
+            let sp = entry.index;
             if sp == index {
                 if self.playlists.playlists.is_empty() {
                     navigate_away = true;
@@ -91,9 +87,9 @@ impl MusicPlayer {
             ));
         } else if let Some(new_idx) = new_selection {
             let new_name = self.playlists.playlists[new_idx].name.clone();
-            if let ViewKind::Playlist { index, name } = &mut self.view_data_mut().kind {
-                *index = new_idx;
-                *name = new_name;
+            if let ViewKind::Playlist(entry) = &mut self.view_data_mut().kind {
+                entry.index = new_idx;
+                entry.name = new_name;
             }
         }
 
@@ -130,7 +126,11 @@ impl MusicPlayer {
             }
         }
 
-        let Some(idx) = self.view_data_mut().selected_playlist_id() else {
+        let active = match &self.view_data().kind {
+            ViewKind::Playlist(p) => Some(p.index),
+            _ => None,
+        };
+        let Some(idx) = active else {
             let count = new_tracks.len();
             self.notify(format!(
                 "Added {} local track{} (select a playlist to organize)",
@@ -167,9 +167,9 @@ impl MusicPlayer {
     }
 
     pub fn handle_remove_from_playlist_batch(&mut self, indices: &[usize]) {
-        if let Some(sp) = self.view_data_mut().selected_playlist_id() {
-            if sp < self.playlists.playlists.len() {
-                let removed = self.playlists.remove_tracks_at(sp, indices);
+        if let ViewKind::Playlist(p) = &self.view_data().kind {
+            if p.index < self.playlists.playlists.len() {
+                let removed = self.playlists.remove_tracks_at(p.index, indices);
                 self.notify_tracks("Removed", removed, "");
                 self.clear_selection_if_touched(indices, super::TrackListKind::Active);
             }
@@ -182,17 +182,17 @@ impl MusicPlayer {
         indices: &[usize],
         selection: &[usize],
     ) -> Vec<usize> {
-        let new_positions = if let Some(sp) = self.view_data_mut().selected_playlist_id() {
-            if sp < self.playlists.playlists.len() {
-                crate::util::reorder_tracks(
-                    &mut self.playlists.playlists[sp].tracks,
-                    drop_idx,
-                    indices,
-                    selection,
-                )
-            } else {
-                Vec::new()
-            }
+        let sp = match &self.view_data().kind {
+            ViewKind::Playlist(p) => p.index,
+            _ => return Vec::new(),
+        };
+        let new_positions = if sp < self.playlists.playlists.len() {
+            crate::util::reorder_tracks(
+                &mut self.playlists.playlists[sp].tracks,
+                drop_idx,
+                indices,
+                selection,
+            )
         } else {
             Vec::new()
         };
@@ -216,7 +216,11 @@ impl MusicPlayer {
         if self.clipboard.is_empty() {
             return;
         }
-        let Some(idx) = self.view_data_mut().selected_playlist_id() else {
+        let active = match &self.view_data().kind {
+            ViewKind::Playlist(p) => Some(p.index),
+            _ => None,
+        };
+        let Some(idx) = active else {
             return;
         };
         self.playlists
@@ -234,10 +238,10 @@ impl MusicPlayer {
         }
         let indices: Vec<usize> = self.view_data_mut().selection.clone();
 
-        if matches!(self.view_data_mut().kind, ViewKind::Playlist { .. }) {
-            if let Some(sp) = self.view_data_mut().selected_playlist_id() {
-                if sp < self.playlists.playlists.len() {
-                    let removed = self.playlists.remove_tracks_at(sp, &indices);
+        if matches!(self.view_data_mut().kind, ViewKind::Playlist(_)) {
+            if let ViewKind::Playlist(p) = &self.view_data().kind {
+                if p.index < self.playlists.playlists.len() {
+                    let removed = self.playlists.remove_tracks_at(p.index, &indices);
                     self.notify_tracks("Removed", removed, "");
                 }
             }
@@ -283,9 +287,9 @@ mod tests {
         // Delete the playlist currently being viewed (B at index 1).
         p.handle_delete_playlist(1);
         match &p.view_data().kind {
-            ViewKind::Playlist { index: sp, name } => {
-                assert_eq!(*sp, 1);
-                assert_eq!(name, "C");
+            ViewKind::Playlist(entry) => {
+                assert_eq!(entry.index, 1);
+                assert_eq!(entry.name, "C");
             }
             other => panic!("expected Playlist view, got {other:?}"),
         }
@@ -296,10 +300,10 @@ mod tests {
         p.handle_delete_playlist(0);
         assert_eq!(
             p.view_data().kind,
-            ViewKind::Playlist {
+            ViewKind::Playlist(crate::app::view_data::PlaylistEntry {
                 index: 0,
                 name: "C".into(),
-            }
+            })
         );
     }
 
@@ -313,7 +317,7 @@ mod tests {
         // Playlist view rather than leaving it with no selection.
         p.handle_delete_playlist(0);
         assert!(p.playlists.playlists.is_empty());
-        assert!(!matches!(p.view_data().kind, ViewKind::Playlist { .. }));
+        assert!(!matches!(p.view_data().kind, ViewKind::Playlist(_)));
     }
 
     #[test]
@@ -337,10 +341,10 @@ mod tests {
         // The active view still points at B, now at index 3.
         assert_eq!(
             p.view_data().kind,
-            ViewKind::Playlist {
+            ViewKind::Playlist(crate::app::view_data::PlaylistEntry {
                 index: 3,
                 name: "B".into(),
-            }
+            })
         );
     }
 
@@ -365,10 +369,10 @@ mod tests {
         // C was at index 2; a row moved in above it, so it shifts to index 3.
         assert_eq!(
             p.view_data().kind,
-            ViewKind::Playlist {
+            ViewKind::Playlist(crate::app::view_data::PlaylistEntry {
                 index: 3,
                 name: "C".into(),
-            }
+            })
         );
     }
 }

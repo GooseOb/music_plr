@@ -3,6 +3,7 @@ use crate::data::library::{LibraryItem, LibraryKind};
 use crate::{
     app::{update::operation::CaptureSearchHistoryRows, ViewKind},
     load_state::LoadState,
+    providers::ProviderId,
 };
 
 impl MusicPlayer {
@@ -86,21 +87,26 @@ impl MusicPlayer {
     }
 
     pub fn handle_search_load_more(&mut self) {
-        if !matches!(self.view_data_mut().kind, ViewKind::Search { .. }) {
+        if !matches!(self.view_data_mut().kind, ViewKind::Search(_)) {
             return;
         }
         let vd = self.view_data();
-        let (exhausted, count) = match &vd.content {
-            LoadState::Ready(tracks) => (vd.exhausted(), tracks.len()),
+        let ViewKind::Search(search) = &vd.kind else {
+            return;
+        };
+        let count = match &vd.content {
+            LoadState::Ready(tracks) => tracks.len(),
             _ => return,
         };
-        if exhausted || count == 0 || vd.append_in_flight {
+        if search.exhausted || count == 0 || search.append_in_flight {
             return;
         }
 
         // Append targets the slot that issued the original search.
         let rid = self.view_data_mut().request_id;
-        self.view_data_mut().append_in_flight = true;
+        if let ViewKind::Search(s) = &mut self.view_data_mut().kind {
+            s.append_in_flight = true;
+        }
 
         let query = self.search_query.clone();
         let offset = count;
@@ -222,30 +228,27 @@ impl MusicPlayer {
     }
 
     pub fn current_library_item(&self) -> Option<LibraryItem> {
-        let view_provider = self.view_data().provider();
         match &self.view_data().kind {
-            ViewKind::Artist {
-                id, name, source, ..
-            } => Some(LibraryItem {
+            ViewKind::Artist(a) => Some(LibraryItem {
                 kind: LibraryKind::Artist,
-                id: id.clone(),
-                title: name.clone(),
+                id: a.id.clone(),
+                title: a.name.clone(),
                 thumbnail: String::new(),
-                provider: *source,
+                provider: a.source,
             }),
-            ViewKind::Album { id, name } => Some(LibraryItem {
+            ViewKind::Album(r) => Some(LibraryItem {
                 kind: LibraryKind::Album,
-                id: id.clone(),
-                title: name.clone(),
+                id: r.id.clone(),
+                title: r.name.clone(),
                 thumbnail: String::new(),
-                provider: view_provider,
+                provider: ProviderId::YouTube,
             }),
-            ViewKind::PlaylistView { id, name } => Some(LibraryItem {
+            ViewKind::PlaylistView(r) => Some(LibraryItem {
                 kind: LibraryKind::Playlist,
-                id: id.clone(),
-                title: name.clone(),
+                id: r.id.clone(),
+                title: r.name.clone(),
                 thumbnail: String::new(),
-                provider: view_provider,
+                provider: ProviderId::YouTube,
             }),
             _ => None,
         }

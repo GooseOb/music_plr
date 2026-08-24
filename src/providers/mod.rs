@@ -260,8 +260,9 @@ pub struct CardData {
 /// describing which scopes produced card lists. Only `YouTube` currently
 /// produces card tabs; other providers return a flat track list under
 /// `SearchTab::Songs`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SearchTab {
+    #[default]
     Songs,
     Videos,
     Artists(Vec<CardData>),
@@ -348,8 +349,8 @@ pub fn browse(provider: ProviderId, id: &str, kind: &str) -> Result<Vec<Track>> 
 }
 
 pub use artist_page::{
-    ArtistAlbumCard, ArtistDataKind, ArtistHeader, ArtistPage, ArtistPageState, ArtistSectionKind,
-    RelatedArtistCard, SectionContent,
+    ArtistAlbumCard, ArtistDataKind, ArtistHeader, ArtistPage, ArtistPageState, ArtistSection,
+    ArtistSectionKind, RelatedArtistCard, SectionContent,
 };
 
 /// Fetch only the requested [`ArtistDataKind`] pieces of an artist page for

@@ -13,13 +13,11 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
         lyrics::view_lyrics(player, lyrics_state)
     } else {
         match &player.view_data().kind {
-            ViewKind::Search { tab, .. } => search::view_search(player, tab),
+            ViewKind::Search(s) => search::view_search(player, s),
             ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_) => search::view_search_radio(player),
-            ViewKind::Artist { .. } => artist::view_artist(player),
-            ViewKind::Album { name, .. } | ViewKind::PlaylistView { name, .. } => {
-                search::view_browse(player, name)
-            }
-            ViewKind::Playlist { .. } | ViewKind::Downloads => playlist::view_playlist(player),
+            ViewKind::Artist(_) => artist::view_artist(player),
+            ViewKind::Album(r) | ViewKind::PlaylistView(r) => search::view_browse(player, &r.name),
+            ViewKind::Playlist(_) | ViewKind::Downloads => playlist::view_playlist(player),
             ViewKind::Settings => settings::view_settings(player),
         }
     };

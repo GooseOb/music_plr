@@ -152,7 +152,8 @@ impl MusicPlayer {
             return None;
         };
         // Only local playlists and queue can be dropped onto
-        if list == TrackListKind::Active && self.view_data().selected_playlist_id().is_none() {
+        if list == TrackListKind::Active && !matches!(&self.view_data().kind, ViewKind::Playlist(_))
+        {
             return None;
         }
         let drop_idx = self.compute_drop_idx(list);
@@ -353,8 +354,12 @@ impl MusicPlayer {
     /// Insert tracks from `source` into the current playlist at the given
     /// drop index. `indices` are positions in the source list.
     fn copy_from_queue(&mut self, source: TrackListKind, indices: &[usize], drop_idx: usize) {
-        let Some(sp) = self.view_data_mut().selected_playlist_id() else {
-            if !self.view_data_mut().is_search_like() {
+        let active = match &self.view_data().kind {
+            ViewKind::Playlist(p) => Some(p.index),
+            _ => None,
+        };
+        let Some(sp) = active else {
+            if !self.view_data().is_search_like() {
                 self.notify("Select a playlist to drop tracks into");
             }
             return;
@@ -458,15 +463,15 @@ impl MusicPlayer {
         // is inserted at or before their new position.
         let removed_before = usize::from(from < to);
         let landed = to - removed_before;
-        if let ViewKind::Playlist { index, .. } = &mut self.view_data_mut().kind {
-            if *index == from {
-                *index = landed;
+        if let ViewKind::Playlist(entry) = &mut self.view_data_mut().kind {
+            if entry.index == from {
+                entry.index = landed;
             } else {
-                let mut new_sp = *index - usize::from(from < *index);
+                let mut new_sp = entry.index - usize::from(from < entry.index);
                 if landed <= new_sp {
                     new_sp += 1;
                 }
-                *index = new_sp;
+                entry.index = new_sp;
             }
         }
         self.notify("Reordered playlist");
@@ -513,7 +518,10 @@ impl MusicPlayer {
         let id = item.id.clone();
         let name_for_thread = name.clone();
         let tx = self.result_tx.clone();
-        let provider = self.view_data().provider();
+        let provider = match &self.view_data().kind {
+            ViewKind::Search(s) => s.provider,
+            _ => crate::providers::ProviderId::YouTube,
+        };
         self.notify(format!("Creating playlist \"{name}\"..."));
         Self::spawn_backend_thread(
             move || crate::providers::browse(provider, &id, kind_str),

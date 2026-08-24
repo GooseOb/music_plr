@@ -57,7 +57,6 @@ mod tests {
                 selection: vec![2],
                 scroll: 42.0,
                 request_id: 0,
-                append_in_flight: false,
             },
             queue: PlayQueue::default(),
             show_queue: true,
