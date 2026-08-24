@@ -241,16 +241,17 @@ impl MusicPlayer {
                     self.notify_tracks("Removed", removed, "");
                 }
             }
-        } else if let ViewKind::Downloads = &self.view_data_mut().kind {
-            let tracks = &mut self.view_data_mut().tracks;
-            let removed_urls: Vec<String> = indices
-                .iter()
-                .filter_map(|&i| tracks.get(i).map(|t| t.primary_url().to_string()))
-                .collect();
-            let removed = crate::util::remove_at(tracks, &indices);
-            self.notify_tracks("Removed", removed, "from downloads");
-            for url in removed_urls {
-                self.download_registry.remove(&url);
+        } else if let ViewKind::Downloads = &self.view_data().kind {
+            if let Some(tracks) = self.view_data_mut().tracks_mut() {
+                let removed_urls: Vec<String> = indices
+                    .iter()
+                    .filter_map(|&i| tracks.get(i).map(|t| t.primary_url().to_string()))
+                    .collect();
+                let removed = crate::util::remove_at(tracks, &indices);
+                self.notify_tracks("Removed", removed, "from downloads");
+                for url in removed_urls {
+                    self.download_registry.remove(&url);
+                }
             }
         }
         self.clear_selection();

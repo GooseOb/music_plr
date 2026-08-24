@@ -4,7 +4,7 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::theme::AppTheme;
+use crate::{app::LyricsState, load_state::LoadState, theme::AppTheme};
 
 use super::{
     shared_components::empty_state,
@@ -13,20 +13,21 @@ use super::{
     theme, Message, MusicPlayer,
 };
 
-pub(super) fn view_lyrics<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
+pub(super) fn view_lyrics<'a>(
+    player: &'a MusicPlayer,
+    lyrics_state: &'a LyricsState,
+) -> Element<'a, Message, AppTheme> {
     let track = player.queue.current();
-    let lyrics_state = player.lyrics.as_ref();
-    let is_select_mode = lyrics_state.is_some_and(|s| s.select_mode);
 
-    let body: Element<'a, Message, AppTheme> = if is_select_mode {
-        lyrics_state
-            .and_then(|state| state.editor.as_ref())
-            .map_or_else(|| empty_state("No lyrics available."), view_select_editor)
+    let body: Element<'a, Message, AppTheme> = if let Some(editor) = lyrics_state.editor.as_ref() {
+        view_select_editor(editor)
     } else {
-        let lyrics = lyrics_state.and_then(|state| state.lyrics.as_ref());
-        match (track, lyrics) {
-            (Some(_), Some(lyrics)) if !lyrics.timed.is_empty() => view_synced(player, lyrics),
-            (Some(_), Some(lyrics)) => Container::new(
+        let lyrics_state = &lyrics_state.lyrics;
+        match (track, lyrics_state) {
+            (Some(_), LoadState::Ready(lyrics)) if !lyrics.timed.is_empty() => {
+                view_synced(player, lyrics)
+            }
+            (Some(_), LoadState::Ready(lyrics)) => Container::new(
                 text(lyrics.plain.clone())
                     .size(theme::TEXT_SIZE_LG)
                     .center()
@@ -35,17 +36,15 @@ pub(super) fn view_lyrics<'a>(player: &'a MusicPlayer) -> Element<'a, Message, A
             )
             .padding(theme::SPACING_LG)
             .into(),
-            (Some(_), None) if lyrics_state.is_some_and(|s| s.loading) => {
-                empty_state("Looking up lyrics…")
-            }
-            (Some(_), None) => empty_state("No lyrics available."),
+            (Some(_), LoadState::Loading) => empty_state("Looking up lyrics…"),
+            (Some(_), LoadState::Failed(e)) => empty_state(format!("Couldn't load lyrics: {e}")),
             (None, _) => empty_state("Play a track to see its lyrics."),
         }
     };
 
     Column::with_children([
         Container::new(body).height(Length::Fill).into(),
-        view_bottom_controls(player, is_select_mode).into(),
+        view_bottom_controls(player, lyrics_state.editor.is_some()).into(),
     ])
     .spacing(theme::SPACING_MD)
     .into()

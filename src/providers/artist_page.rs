@@ -6,6 +6,7 @@
 //! navigation.
 
 use super::CardData;
+use crate::load_state::LoadState;
 use crate::{providers::ProviderId, types::Track};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -18,6 +19,17 @@ pub struct ArtistHeader {
     pub image: String,
     pub stats: Vec<(String, String)>,
     pub description: String,
+}
+
+impl ArtistHeader {
+    /// Append `incoming`'s stats whose label isn't already present.
+    fn merge_stats_from(&mut self, incoming: &Self) {
+        for stat in &incoming.stats {
+            if !self.stats.iter().any(|(label, _)| label == &stat.0) {
+                self.stats.push(stat.clone());
+            }
+        }
+    }
 }
 
 /// One entry in the Albums row (albums, EPs and singles merged; `badge`
@@ -52,13 +64,37 @@ pub struct ArtistPage {
     pub related: Vec<RelatedArtistCard>,
 }
 
-/// A page section: which provider currently backs it, whether a fetch is in
-/// flight, and its content.
+/// A page section: which provider currently backs it and its load state.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct ArtistSection<T> {
+pub struct ArtistSection {
     pub provider: Option<ProviderId>,
-    pub loading: bool,
-    pub content: T,
+    pub state: crate::load_state::LoadState<SectionContent>,
+}
+
+/// Per-section payload. All four sections share one representation so the
+/// rest of the code can iterate over them instead of matching on named
+/// fields everywhere.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SectionContent {
+    Tracks(Vec<Track>),
+    Albums(Vec<ArtistAlbumCard>),
+    Playlists(Vec<CardData>),
+    Related(Vec<RelatedArtistCard>),
+}
+
+impl Default for SectionContent {
+    fn default() -> Self {
+        Self::Tracks(Vec::new())
+    }
+}
+
+impl SectionContent {
+    fn as_tracks(&self) -> Option<&Vec<Track>> {
+        match self {
+            Self::Tracks(tracks) => Some(tracks),
+            _ => None,
+        }
+    }
 }
 
 /// One fetchable piece of an artist page. Backends only request the data
@@ -117,11 +153,7 @@ impl CachedArtistPage {
         }
         if let Some(header) = page.header {
             if let Some(existing) = &mut self.page.header {
-                for stat in header.stats {
-                    if !existing.stats.iter().any(|(label, _)| label == &stat.0) {
-                        existing.stats.push(stat);
-                    }
-                }
+                existing.merge_stats_from(&header);
                 if existing.image.is_empty() {
                     existing.image = header.image;
                 }
@@ -141,7 +173,7 @@ impl CachedArtistPage {
 }
 
 /// Persisted per-artist-page state stored in `ViewKind::Artist`.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArtistPageState {
     /// Known per-provider artist ids (the source id arrives pre-filled;
     /// others are resolved lazily by name).
@@ -151,10 +183,20 @@ pub struct ArtistPageState {
     pub pages: BTreeMap<ProviderId, CachedArtistPage>,
     pub header_provider: Option<ProviderId>,
     pub header: Option<ArtistHeader>,
-    pub popular: ArtistSection<Vec<Track>>,
-    pub albums: ArtistSection<Vec<ArtistAlbumCard>>,
-    pub playlists: ArtistSection<Vec<CardData>>,
-    pub related: ArtistSection<Vec<RelatedArtistCard>>,
+    /// Indexed by `ArtistSectionKind` (see [`Self::section`]).
+    pub sections: [ArtistSection; 4],
+}
+
+impl Default for ArtistPageState {
+    fn default() -> Self {
+        Self {
+            sections: std::array::from_fn(|_| ArtistSection::default()),
+            provider_ids: BTreeMap::new(),
+            pages: BTreeMap::new(),
+            header_provider: None,
+            header: None,
+        }
+    }
 }
 
 impl ArtistPageState {
@@ -164,18 +206,140 @@ impl ArtistPageState {
         state.provider_ids.insert(source, id.to_string());
         // The source provider owns the header until explicitly switched;
         // without this, whichever companion answers first would claim it.
+        // Its page fetch starts immediately, so show loading indicators
+        // rather than empty states until it lands.
+        for kind in ArtistSectionKind::ALL {
+            state.start_section_load(kind, source);
+        }
         state.header_provider = Some(source);
-        state.popular.provider = Some(source);
-        state.albums.provider = Some(source);
-        state.playlists.provider = Some(source);
-        state.related.provider = Some(source);
-        // The source provider's page fetch starts immediately; show loading
-        // indicators rather than empty states until it lands.
-        state.popular.loading = true;
-        state.albums.loading = true;
-        state.playlists.loading = true;
-        state.related.loading = true;
         state
+    }
+
+    pub fn section(&self, kind: ArtistSectionKind) -> &ArtistSection {
+        &self.sections[kind as usize]
+    }
+
+    pub fn section_mut(&mut self, kind: ArtistSectionKind) -> &mut ArtistSection {
+        &mut self.sections[kind as usize]
+    }
+
+    /// Point `kind` at `provider` and reset it to Loading.
+    pub fn start_section_load(&mut self, kind: ArtistSectionKind, provider: ProviderId) {
+        *self.section_mut(kind) = ArtistSection {
+            provider: Some(provider),
+            state: crate::load_state::LoadState::Loading,
+        };
+    }
+
+    /// `(id, thumbnail)` of every non-empty card across the card sections.
+    pub fn card_thumbs(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.sections.iter().flat_map(|s| match &s.state {
+            LoadState::Ready(SectionContent::Albums(v)) => {
+                v.iter().map(|c| (&c.id, &c.thumbnail)).collect()
+            }
+            LoadState::Ready(SectionContent::Playlists(v)) => {
+                v.iter().map(|c| (&c.id, &c.thumbnail)).collect()
+            }
+            LoadState::Ready(SectionContent::Related(v)) => {
+                v.iter().map(|r| (&r.id, &r.thumbnail)).collect()
+            }
+            _ => Vec::new(),
+        })
+    }
+
+    /// Serve `kind` from `provider`'s cache when it covers the section.
+    /// Returns the popular tracks when they were served (the view's track
+    /// list mirrors that section).
+    pub fn serve_cached_section(
+        &mut self,
+        kind: ArtistSectionKind,
+        provider: ProviderId,
+    ) -> Option<Vec<Track>> {
+        let cached = self.pages.get(&provider)?;
+        if !cached.covers(kind.data_kinds()) {
+            return None;
+        }
+        let content = cached.page.content(kind.data_kind())?;
+        let tracks = content.as_tracks().cloned();
+        let section = self.section_mut(kind);
+        section.provider = Some(provider);
+        section.state = crate::load_state::LoadState::Ready(content);
+        tracks
+    }
+
+    /// Mark each requested section owned by `provider` as ready with the
+    /// fetched data. Returns the popular tracks when they were among the
+    /// fetched kinds.
+    pub fn apply_fetch(
+        &mut self,
+        kinds: &[ArtistDataKind],
+        provider: ProviderId,
+        fetched: &ArtistPage,
+    ) -> Option<Vec<Track>> {
+        let mut new_tracks = None;
+        for kind in ArtistSectionKind::ALL {
+            let data_kind = kind.data_kind();
+            if !data_kind.wanted(kinds) || self.section(kind).provider != Some(provider) {
+                continue;
+            }
+            if let Some(content) = fetched.content(data_kind) {
+                new_tracks = content.as_tracks().cloned();
+                self.section_mut(kind).state = crate::load_state::LoadState::Ready(content);
+            }
+        }
+        new_tracks
+    }
+
+    /// Fail every loading section owned by `provider` (already-loaded
+    /// sections keep their content).
+    pub fn fail_sections(&mut self, provider: ProviderId, msg: &str) {
+        for section in &mut self.sections {
+            if section.provider == Some(provider) && section.state.is_loading() {
+                section.state = crate::load_state::LoadState::Failed(msg.to_string());
+            }
+        }
+    }
+
+    /// Apply `provider`'s header onto the page: an unowned header is taken
+    /// as-is (blanked unless `provider` explicitly owns the header block),
+    /// while an existing one only gains new stats and refreshed image/bio
+    /// from the owner.
+    pub fn merge_header(&mut self, provider: ProviderId, incoming: Option<&ArtistHeader>) {
+        let Some(incoming) = incoming else {
+            return;
+        };
+        let explicit = self.header_provider == Some(provider);
+        match &mut self.header {
+            None => {
+                let mut header = incoming.clone();
+                if !explicit {
+                    header.image.clear();
+                    header.description.clear();
+                }
+                self.header = Some(header);
+            }
+            Some(existing) => {
+                existing.merge_stats_from(incoming);
+                if explicit {
+                    existing.image.clone_from(&incoming.image);
+                    existing.description.clone_from(&incoming.description);
+                }
+            }
+        }
+    }
+}
+
+impl ArtistPage {
+    /// Clone out the section content for `kind` (`None` for `Header`, which
+    /// has no section).
+    pub fn content(&self, kind: ArtistDataKind) -> Option<SectionContent> {
+        match kind {
+            ArtistDataKind::Popular => Some(SectionContent::Tracks(self.popular.clone())),
+            ArtistDataKind::Albums => Some(SectionContent::Albums(self.albums.clone())),
+            ArtistDataKind::Playlists => Some(SectionContent::Playlists(self.playlists.clone())),
+            ArtistDataKind::Related => Some(SectionContent::Related(self.related.clone())),
+            ArtistDataKind::Header => None,
+        }
     }
 }
 
@@ -189,12 +353,32 @@ pub enum ArtistSectionKind {
 }
 
 impl ArtistSectionKind {
+    pub const ALL: [Self; 4] = [Self::Popular, Self::Albums, Self::Playlists, Self::Related];
+
     pub fn label(self) -> &'static str {
         match self {
             Self::Popular => "Most popular songs",
             Self::Albums => "Albums",
             Self::Playlists => "Playlists",
             Self::Related => "Fans also like",
+        }
+    }
+
+    pub fn data_kind(self) -> ArtistDataKind {
+        match self {
+            Self::Popular => ArtistDataKind::Popular,
+            Self::Albums => ArtistDataKind::Albums,
+            Self::Playlists => ArtistDataKind::Playlists,
+            Self::Related => ArtistDataKind::Related,
+        }
+    }
+
+    pub fn data_kinds(self) -> &'static [ArtistDataKind] {
+        match self {
+            Self::Popular => &[ArtistDataKind::Popular],
+            Self::Albums => &[ArtistDataKind::Albums],
+            Self::Playlists => &[ArtistDataKind::Playlists],
+            Self::Related => &[ArtistDataKind::Related],
         }
     }
 

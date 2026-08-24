@@ -14,8 +14,10 @@ use crate::{
     },
     data::library::LibraryKind,
     icons,
+    load_state::LoadState,
     providers::{CardData, ProviderId, SearchTab},
     theme::AppTheme,
+    types::Track,
 };
 
 use super::{
@@ -102,18 +104,20 @@ pub(super) fn view_search<'a>(
     player: &'a MusicPlayer,
     tab: &'a crate::providers::SearchTab,
 ) -> Element<'a, Message, AppTheme> {
-    if player.view_data().loading {
-        empty_state("Searching...")
-    } else if tab.is_track_tab() {
-        view_search_track_tab(player)
-    } else {
-        view_search_card_tab(player, tab)
+    let content = &player.view_data().content;
+    match content {
+        LoadState::Failed(e) => empty_state(format!("Search failed: {e}")),
+        LoadState::Loading => empty_state("Searching..."),
+        LoadState::Ready(results) if tab.is_track_tab() => view_search_track_tab(player, results),
+        LoadState::Ready(_) => view_search_card_tab(player, tab),
     }
 }
 
 /// The Songs/Videos tab: a scrollable, paged track list with "Load More".
-fn view_search_track_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let results = player.view_data().tracks.as_slice();
+fn view_search_track_tab<'a>(
+    player: &'a MusicPlayer,
+    results: &'a [Track],
+) -> Element<'a, Message, AppTheme> {
     let exhausted = player.view_data().exhausted();
 
     let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
@@ -124,10 +128,13 @@ fn view_search_track_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme>
         children.push(view_track_list(results, player, TrackListKind::Active, 0));
 
         if !exhausted {
-            let btn = Button::new(text("Load More").color(Color::WHITE))
-                .padding(theme::SPACING_SM)
-                .width(Length::Fill)
-                .on_press(Message::SearchLoadMore);
+            let in_flight = player.view_data().append_in_flight;
+            let btn = Button::new(
+                text(if in_flight { "Loading..." } else { "Load More" }).color(Color::WHITE),
+            )
+            .padding(theme::SPACING_SM)
+            .width(Length::Fill)
+            .on_press_maybe((!in_flight).then_some(Message::SearchLoadMore));
 
             children.push(Container::new(btn).padding(theme::SPACING_SM).into());
         }
@@ -155,11 +162,7 @@ fn view_search_card_tab<'a>(
     };
 
     if items.is_empty() {
-        return empty_state(if player.view_data().loading {
-            "Searching..."
-        } else {
-            "No results found"
-        });
+        return empty_state("No results found");
     }
 
     let cards = items.iter().enumerate().map(|(i, c)| {
@@ -232,8 +235,7 @@ pub(super) fn view_browse<'a>(
     player: &'a MusicPlayer,
     label: &'a str,
 ) -> Element<'a, Message, AppTheme> {
-    let tracks = player.view_data().tracks.as_slice();
-    let loading = player.view_data().loading;
+    let content = &player.view_data().content;
 
     let header = Row::with_children([
         text(label)
@@ -247,10 +249,12 @@ pub(super) fn view_browse<'a>(
     .spacing(theme::SPACING_SM)
     .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
-    let track_list = if loading && tracks.is_empty() {
-        empty_state("Loading...")
-    } else {
-        view_track_list(tracks, player, TrackListKind::Active, 0)
+    let track_list = match content {
+        LoadState::Failed(e) => empty_state(format!("Couldn't load: {e}")),
+        LoadState::Loading => empty_state("Loading..."),
+        LoadState::Ready(tracks) => {
+            view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
+        }
     };
 
     Column::with_children([header.into(), track_list]).into()
@@ -269,16 +273,17 @@ fn view_library_button(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
 pub(super) fn view_search_radio(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let label = player.view_data().label();
-    let tracks = player.view_data().tracks.as_slice();
-    let loading = player.view_data().loading;
+    let content = &player.view_data().content;
 
     let header = Container::new(text(label).width(Length::Fill).center())
         .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
-    let track_list = if loading && tracks.is_empty() {
-        empty_state("Generating radio...")
-    } else {
-        view_track_list(tracks, player, TrackListKind::Active, 0)
+    let track_list = match content {
+        LoadState::Failed(e) => empty_state(format!("Radio failed: {e}")),
+        LoadState::Loading => empty_state("Generating radio..."),
+        LoadState::Ready(tracks) => {
+            view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
+        }
     };
 
     Column::with_children([header.into(), track_list]).into()

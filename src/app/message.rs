@@ -24,7 +24,7 @@ pub enum BackendResult {
     DownloadError(String),
     SearchError(String),
     ThumbnailsDownloaded(Vec<String>),
-    LyricsFetched(Option<Lyrics>, String),
+    LyricsFetched(Result<Lyrics, String>, String),
     NormalizationComputed(String, f32),
     CardPlaylistReady(usize, String, Vec<Track>),
     /// A full artist-page fetch finished for `provider`. `resolved_id` is the

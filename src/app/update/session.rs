@@ -79,8 +79,4 @@ impl MusicPlayer {
         };
         self.notify(format!("{verb} {n} track{plural}{tail}"));
     }
-
-    pub fn clear_notification(&mut self) {
-        self.notification = None;
-    }
 }

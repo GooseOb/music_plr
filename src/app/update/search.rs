@@ -1,6 +1,9 @@
 use super::{mpsc, thread, BackendResult, MusicPlayer, ViewData};
-use crate::app::{update::operation::CaptureSearchHistoryRows, ViewKind};
 use crate::data::library::{LibraryItem, LibraryKind};
+use crate::{
+    app::{update::operation::CaptureSearchHistoryRows, ViewKind},
+    load_state::LoadState,
+};
 
 impl MusicPlayer {
     pub fn run_search(&mut self) {
@@ -11,11 +14,10 @@ impl MusicPlayer {
         let scope = self.search_scope;
         let provider = self.search_provider;
 
-        // Switch to Search view. `new_search()` returns an empty, non-loading
-        // state for the active scope; flip `loading` on and clear the dropdown.
+        // Switch to Search view. `new_search()` returns an empty, loading
+        // state; clear the search-history dropdown.
         // Push as a fresh history slot so the outgoing view survives for Back.
-        let mut new_view = ViewData::new_search(query.clone(), provider, scope);
-        new_view.loading = true;
+        let new_view = ViewData::new_search(query.clone(), provider, scope);
         self.push_new_view(new_view);
         let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
@@ -87,18 +89,18 @@ impl MusicPlayer {
         if !matches!(self.view_data_mut().kind, ViewKind::Search { .. }) {
             return;
         }
-        let (loading, exhausted, count) = (
-            self.view_data_mut().loading,
-            self.view_data_mut().exhausted(),
-            self.view_data_mut().tracks.len(),
-        );
-        if loading || exhausted || count == 0 {
+        let vd = self.view_data();
+        let (exhausted, count) = match &vd.content {
+            LoadState::Ready(tracks) => (vd.exhausted(), tracks.len()),
+            _ => return,
+        };
+        if exhausted || count == 0 || vd.append_in_flight {
             return;
         }
 
         // Append targets the slot that issued the original search.
         let rid = self.view_data_mut().request_id;
-        self.view_data_mut().loading = true;
+        self.view_data_mut().append_in_flight = true;
 
         let query = self.search_query.clone();
         let offset = count;
@@ -204,7 +206,7 @@ impl MusicPlayer {
             .expect("start_browse called with a non-browse ViewKind");
         self.push_new_view(ViewData {
             kind: kind.clone(),
-            loading: true,
+            content: crate::load_state::LoadState::Loading,
             ..Default::default()
         });
         let rid = self.request_ids.next();

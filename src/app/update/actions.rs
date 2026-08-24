@@ -1,6 +1,7 @@
 use super::{BackendResult, ContextMenuState, MusicPlayer, Track};
 use crate::app::interaction::{TrackListKind, TrackPos};
 use crate::app::EditTrackState;
+use crate::load_state::LoadState;
 use crate::{
     app::{PlaylistPicker, ViewKind},
     data::JsonStore,
@@ -52,13 +53,14 @@ impl MusicPlayer {
         }
     }
 
-    /// Keep the lyrics editor in sync with the current lyrics text.
+    /// Keep the lyrics editor in sync with the current lyrics text
+    /// (no-op outside line-select mode).
     pub(super) fn sync_lyrics_editor(&mut self) {
         let Some(state) = &mut self.lyrics else {
             return;
         };
         let text = match &state.lyrics {
-            Some(lyrics) => {
+            LoadState::Ready(lyrics) => {
                 if lyrics.timed.is_empty() {
                     lyrics.plain.clone()
                 } else {
@@ -70,9 +72,22 @@ impl MusicPlayer {
                         .join("\n")
                 }
             }
-            None => String::new(),
+            _ => String::new(),
         };
-        state.editor = Some(iced::widget::text_editor::Content::with_text(&text));
+        let Some(editor) = state.editor.as_mut() else {
+            return;
+        };
+        *editor = iced::widget::text_editor::Content::with_text(&text);
+    }
+
+    pub fn toggle_lyrics_select_mode(&mut self) {
+        let Some(state) = &mut self.lyrics else {
+            return;
+        };
+        if state.editor.take().is_none() {
+            state.editor = Some(iced::widget::text_editor::Content::default());
+            self.sync_lyrics_editor();
+        }
     }
 
     /// Switch the active lyrics provider, persist it, and force a refetch.
@@ -88,9 +103,8 @@ impl MusicPlayer {
     pub(super) fn ensure_lyrics_for_current(&mut self) {
         let Some(track) = self.queue.current() else {
             if let Some(state) = &mut self.lyrics {
-                state.lyrics = None;
+                state.lyrics = crate::load_state::LoadState::Loading;
                 state.track_id = None;
-                state.loading = false;
             }
             self.sync_lyrics_editor();
             return;
@@ -105,18 +119,14 @@ impl MusicPlayer {
         let album = track.album().map(|a| a.name.clone());
         let duration = track.duration();
 
-        if state.track_id.as_deref() == Some(current_id.as_str())
-            && (state.lyrics.is_some() || state.loading || state.not_found)
-        {
+        if state.track_id.as_deref() == Some(current_id.as_str()) && !state.lyrics.is_loading() {
             return;
         }
         let cached = crate::data::lyrics_cache::LyricsCache::load()
             .get_for(&current_id, self.lyrics_client.selected());
         if let Some(cached_lyrics) = cached {
-            state.lyrics = Some(cached_lyrics);
+            state.lyrics = crate::load_state::LoadState::Ready(cached_lyrics);
             state.track_id = Some(current_id.clone());
-            state.loading = false;
-            self.clear_notification();
             self.sync_lyrics_editor();
             return;
         }
@@ -130,22 +140,19 @@ impl MusicPlayer {
         let id = current_id.clone();
         let client = self.lyrics_client.clone();
         let tx = self.result_tx.clone();
-        state.lyrics = None;
+        state.lyrics = crate::load_state::LoadState::Loading;
         state.track_id = Some(id.clone());
-        state.loading = true;
-        state.not_found = false;
         self.sync_lyrics_editor();
         std::thread::spawn(move || {
-            let result = client.fetch(&req);
-            match result {
-                Ok(lyrics) => {
-                    let _ = tx.send(BackendResult::LyricsFetched(lyrics, id));
-                }
+            let result = match client.fetch(&req) {
+                Ok(Some(lyrics)) => Ok(lyrics),
+                Ok(None) => Err("No lyrics found for this track.".to_string()),
                 Err(e) => {
-                    let _ = tx.send(BackendResult::LyricsFetched(None, id));
                     tracing::warn!("Lyrics lookup failed: {e}");
+                    Err(e.to_string())
                 }
-            }
+            };
+            let _ = tx.send(BackendResult::LyricsFetched(result, id));
         });
     }
 
@@ -153,9 +160,8 @@ impl MusicPlayer {
     /// and refetches for the new track.
     pub fn clear_lyrics_for_track_change(&mut self) {
         if let Some(state) = &mut self.lyrics {
-            state.lyrics = None;
+            state.lyrics = crate::load_state::LoadState::Loading;
             state.track_id = None;
-            state.loading = false;
         }
         self.sync_lyrics_editor();
     }

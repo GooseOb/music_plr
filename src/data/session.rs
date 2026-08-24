@@ -53,11 +53,11 @@ mod tests {
         let state = SessionState {
             data: ViewData {
                 kind: ViewKind::ArtistRadio("Test Radio".into()),
-                tracks: Vec::new(),
-                loading: false,
+                content: crate::load_state::LoadState::Ready(Vec::new()),
                 selection: vec![2],
                 scroll: 42.0,
                 request_id: 0,
+                append_in_flight: false,
             },
             queue: PlayQueue::default(),
             show_queue: true,

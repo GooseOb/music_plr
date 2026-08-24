@@ -69,7 +69,7 @@ impl MusicPlayer {
         let name = name.to_string();
         let tx = self.result_tx.clone();
 
-        let fetch = move || -> anyhow::Result<(String, crate::providers::ArtistPage)> {
+        let fetch = move || -> anyhow::Result<(String, ArtistPage)> {
             let id = match known_id {
                 Some(id) => Some(id),
                 None => crate::providers::resolve_artist_id(provider, &name)?,
@@ -135,72 +135,29 @@ impl MusicPlayer {
         section_kind: ArtistSectionKind,
         provider: ProviderId,
     ) {
-        fn set_section<T: Default>(
-            section: &mut crate::providers::ArtistSection<T>,
-            provider: ProviderId,
-        ) {
-            *section = crate::providers::ArtistSection {
-                provider: Some(provider),
-                loading: true,
-                content: Default::default(),
-            };
-        }
-        // Static slices so the fetch closure can own them.
-        let needed: &'static [ArtistDataKind] = match section_kind {
-            ArtistSectionKind::Popular => &[ArtistDataKind::Popular],
-            ArtistSectionKind::Albums => &[ArtistDataKind::Albums],
-            ArtistSectionKind::Playlists => &[ArtistDataKind::Playlists],
-            ArtistSectionKind::Related => &[ArtistDataKind::Related],
-        };
         let name;
+        let cached_tracks;
         {
             let ViewKind::Artist { name: n, page, .. } = &mut self.view_data_mut().kind else {
                 return;
             };
-            name = n.clone();
 
             // Serve from the per-provider cache when this section's data was
             // already fetched — no loading state, no request.
-            if let Some(cached) = page.pages.get(&provider) {
-                if cached.covers(needed) {
-                    let mut tracks: Option<Vec<crate::types::Track>> = None;
-                    match section_kind {
-                        ArtistSectionKind::Popular => {
-                            page.popular.content.clone_from(&cached.page.popular);
-                            page.popular.provider = Some(provider);
-                            tracks = Some(cached.page.popular.clone());
-                        }
-                        ArtistSectionKind::Albums => {
-                            page.albums.content.clone_from(&cached.page.albums);
-                            page.albums.provider = Some(provider);
-                        }
-                        ArtistSectionKind::Playlists => {
-                            page.playlists.content.clone_from(&cached.page.playlists);
-                            page.playlists.provider = Some(provider);
-                        }
-                        ArtistSectionKind::Related => {
-                            page.related.content.clone_from(&cached.page.related);
-                            page.related.provider = Some(provider);
-                        }
-                    }
-                    if let Some(tracks) = tracks {
-                        let slot = self.view_data_mut();
-                        slot.tracks = tracks;
-                        slot.selection.clear();
-                    }
-                    return;
-                }
+            cached_tracks = page.serve_cached_section(section_kind, provider);
+            if cached_tracks.is_none() {
+                page.start_section_load(section_kind, provider);
             }
-
-            match section_kind {
-                ArtistSectionKind::Popular => set_section(&mut page.popular, provider),
-                ArtistSectionKind::Albums => set_section(&mut page.albums, provider),
-                ArtistSectionKind::Playlists => set_section(&mut page.playlists, provider),
-                ArtistSectionKind::Related => set_section(&mut page.related, provider),
-            }
+            name = n.clone();
+        }
+        if let Some(tracks) = cached_tracks {
+            let slot = self.view_data_mut();
+            slot.set_tracks(tracks);
+            slot.selection.clear();
+            return;
         }
         let rid = self.slot_request_id();
-        self.load_artist_page(rid, &name, provider, needed);
+        self.load_artist_page(rid, &name, provider, section_kind.data_kinds());
     }
 
     /// Merge a finished artist-data fetch into its view slot. Only the
@@ -231,87 +188,40 @@ impl MusicPlayer {
                     .entry(provider)
                     .or_default()
                     .merge(kinds, fetched.clone());
-                let explicit = page.header_provider == Some(provider);
-                match (&mut page.header, &fetched.header) {
-                    (None, Some(incoming)) => {
-                        let mut header = incoming.clone();
-                        if !explicit {
-                            header.image.clear();
-                            header.description.clear();
-                        }
-                        page.header = Some(header);
-                    }
-                    (Some(existing), Some(incoming)) => {
-                        for stat in &incoming.stats {
-                            if !existing.stats.iter().any(|(label, _)| label == &stat.0) {
-                                existing.stats.push(stat.clone());
-                            }
-                        }
-                        if explicit {
-                            existing.image.clone_from(&incoming.image);
-                            existing.description.clone_from(&incoming.description);
-                        }
-                    }
-                    _ => {}
-                }
-                let mut new_tracks: Option<Vec<crate::types::Track>> = None;
-                if ArtistDataKind::Popular.wanted(kinds) && page.popular.provider == Some(provider)
-                {
-                    page.popular.content.clone_from(&fetched.popular);
-                    page.popular.loading = false;
-                    new_tracks = Some(fetched.popular.clone());
-                }
-                if ArtistDataKind::Albums.wanted(kinds) && page.albums.provider == Some(provider) {
-                    page.albums.content.clone_from(&fetched.albums);
-                    page.albums.loading = false;
-                }
-                if ArtistDataKind::Playlists.wanted(kinds)
-                    && page.playlists.provider == Some(provider)
-                {
-                    page.playlists.content.clone_from(&fetched.playlists);
-                    page.playlists.loading = false;
-                }
-                if ArtistDataKind::Related.wanted(kinds) && page.related.provider == Some(provider)
-                {
-                    page.related.content.clone_from(&fetched.related);
-                    page.related.loading = false;
-                }
-                let view = self.nav_history[idx].clone();
+                page.merge_header(provider, fetched.header.as_ref());
+                let new_tracks = page.apply_fetch(kinds, provider, &fetched);
                 if let Some(tracks) = new_tracks {
                     let slot = &mut self.nav_history[idx];
-                    if same_popular_ids(&slot.tracks, &tracks, provider) {
-                        // Enrichment resend of the rows already on screen:
-                        // backfill metadata in place so a selection made while
-                        // the fetch ran survives.
-                        for (existing, incoming) in slot.tracks.iter_mut().zip(&tracks) {
-                            if let (Some(e), Some(i)) = (
-                                existing.providers.get_mut(&provider),
-                                incoming.providers.get(&provider),
-                            ) {
-                                e.duration = i.duration;
-                                e.play_count = i.play_count;
+                    let enriched = match slot.tracks_mut() {
+                        Some(existing) if same_popular_ids(existing, &tracks, provider) => {
+                            // Enrichment resend of the rows already on screen:
+                            // backfill metadata in place so a selection made while
+                            // the fetch ran survives.
+                            for (existing, incoming) in existing.iter_mut().zip(&tracks) {
+                                if let (Some(e), Some(i)) = (
+                                    existing.providers.get_mut(&provider),
+                                    incoming.providers.get(&provider),
+                                ) {
+                                    e.duration = i.duration;
+                                    e.play_count = i.play_count;
+                                }
                             }
+                            true
                         }
-                    } else {
-                        slot.tracks = tracks;
+                        _ => false,
+                    };
+                    if !enriched {
+                        slot.set_tracks(tracks);
                         slot.selection.clear();
                     }
                 }
                 self.finalize_view(idx);
+                let view = self.nav_history[idx].clone();
                 self.seed_artist_thumbnails(&view);
             }
             Err(msg) => {
                 tracing::warn!("artist page load failed: {msg}");
-                for loading in [
-                    (&mut page.popular.loading, page.popular.provider),
-                    (&mut page.albums.loading, page.albums.provider),
-                    (&mut page.playlists.loading, page.playlists.provider),
-                    (&mut page.related.loading, page.related.provider),
-                ] {
-                    if loading.1 == Some(provider) {
-                        *loading.0 = false;
-                    }
-                }
+                page.fail_sections(provider, &msg);
                 self.notify_error(format!("{}: {msg}", provider.label()));
             }
         }
@@ -354,22 +264,16 @@ impl MusicPlayer {
         let ViewKind::Artist { id, page, .. } = &view.kind else {
             return;
         };
-        let Some(header) = &page.header else {
-            return;
-        };
-        let key =
-            crate::app::ui::artist::header_thumb_key(id, page.header_provider.unwrap_or_default());
-        if !header.image.is_empty() {
-            self.thumbnail_index.ensure(&key, &header.image);
+        if let Some(header) = &page.header {
+            let key = crate::app::ui::artist::header_thumb_key(
+                id,
+                page.header_provider.unwrap_or_default(),
+            );
+            if !header.image.is_empty() {
+                self.thumbnail_index.ensure(&key, &header.image);
+            }
         }
-        let cards = page
-            .albums
-            .content
-            .iter()
-            .map(|c| (&c.id, &c.thumbnail))
-            .chain(page.playlists.content.iter().map(|c| (&c.id, &c.thumbnail)))
-            .chain(page.related.content.iter().map(|c| (&c.id, &c.thumbnail)));
-        for (id, thumbnail) in cards {
+        for (id, thumbnail) in page.card_thumbs() {
             if !thumbnail.is_empty() {
                 self.thumbnail_index.ensure(id, thumbnail);
             }

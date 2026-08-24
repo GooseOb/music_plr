@@ -6,7 +6,8 @@ use iced::{
 
 use crate::{
     app::{TrackListKind, ViewKind},
-    providers::{ArtistSectionKind, CardData, ProviderId},
+    load_state::LoadState,
+    providers::{ArtistSectionKind, ProviderId, SectionContent},
     theme::{self, AppTheme},
 };
 
@@ -40,7 +41,7 @@ pub(super) fn view_artist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, A
         ArtistSectionKind::Playlists,
         ArtistSectionKind::Related,
     ] {
-        children.push(section_header(kind, section_provider(page, kind)));
+        children.push(section_header(kind, page.section(kind).provider));
         children.push(section_body(player, kind));
     }
 
@@ -55,18 +56,6 @@ pub(super) fn view_artist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, A
     .width(Length::Fill)
     .height(Length::Fill)
     .into()
-}
-
-fn section_provider(
-    page: &crate::providers::ArtistPageState,
-    kind: ArtistSectionKind,
-) -> Option<ProviderId> {
-    match kind {
-        ArtistSectionKind::Popular => page.popular.provider,
-        ArtistSectionKind::Albums => page.albums.provider,
-        ArtistSectionKind::Playlists => page.playlists.provider,
-        ArtistSectionKind::Related => page.related.provider,
-    }
 }
 
 /// Thumbnail cache key for the artist header image, namespaced by the
@@ -208,57 +197,39 @@ fn section_header(
     .into()
 }
 
-fn section_body(player: &MusicPlayer, kind: ArtistSectionKind) -> Element<'_, Message, AppTheme> {
-    let ViewKind::Artist { page, .. } = &player.view_data().kind else {
-        return empty_state("Not an artist page");
-    };
-    let (loading, is_empty) = match kind {
-        ArtistSectionKind::Popular => (page.popular.loading, page.popular.content.is_empty()),
-        ArtistSectionKind::Albums => (page.albums.loading, page.albums.content.is_empty()),
-        ArtistSectionKind::Playlists => (page.playlists.loading, page.playlists.content.is_empty()),
-        ArtistSectionKind::Related => (page.related.loading, page.related.content.is_empty()),
-    };
-
-    if loading && is_empty {
-        return empty_state("Loading...");
-    }
-
-    match kind {
-        ArtistSectionKind::Popular => {
-            if player.view_data().tracks.is_empty() {
-                return empty_state("Nothing here");
-            }
-            // Popular tracks live in the view's track list so all the usual
-            // interactions (play, context menu, drag) work on them.
-            view_track_list(
-                player.view_data().tracks.as_slice(),
-                player,
-                TrackListKind::Active,
-                0,
-            )
-        }
-        ArtistSectionKind::Albums => h_scroll_cards(page.albums.content.iter().map(|c| {
-            let subtitle: String = match (c.badge.as_str(), c.date.as_str()) {
-                ("", date) => date.to_string(),
-                (badge, "") => (*badge).to_string(),
-                (badge, date) => format!("{badge} \u{00b7} {date}"),
-            };
-            h_card(
-                player,
-                &c.id,
-                &c.title,
-                &subtitle,
-                Message::Browse(
-                    ViewKind::Album {
-                        id: c.id.clone(),
-                        name: c.title.clone(),
-                    },
-                    page.albums.provider.unwrap_or_default(),
-                ),
-            )
-        })),
-        ArtistSectionKind::Playlists => {
-            h_scroll_cards(page.playlists.content.iter().map(|c: &CardData| {
+/// Render one card section's contents into card widgets.
+fn cards<'a>(
+    player: &'a MusicPlayer,
+    provider: ProviderId,
+    content: &'a SectionContent,
+) -> Vec<Element<'a, Message, AppTheme>> {
+    match content {
+        SectionContent::Albums(v) => v
+            .iter()
+            .map(|c| {
+                let subtitle: String = match (c.badge.as_str(), c.date.as_str()) {
+                    ("", date) => date.to_string(),
+                    (badge, "") => (*badge).to_string(),
+                    (badge, date) => format!("{badge} \u{00b7} {date}"),
+                };
+                h_card(
+                    player,
+                    &c.id,
+                    &c.title,
+                    &subtitle,
+                    Message::Browse(
+                        ViewKind::Album {
+                            id: c.id.clone(),
+                            name: c.title.clone(),
+                        },
+                        provider,
+                    ),
+                )
+            })
+            .collect(),
+        SectionContent::Playlists(v) => v
+            .iter()
+            .map(|c| {
                 h_card(
                     player,
                     &c.id,
@@ -269,25 +240,71 @@ fn section_body(player: &MusicPlayer, kind: ArtistSectionKind) -> Element<'_, Me
                             id: c.id.clone(),
                             name: c.title.clone(),
                         },
-                        page.playlists.provider.unwrap_or_default(),
+                        provider,
                     ),
                 )
-            }))
-        }
-        ArtistSectionKind::Related => h_scroll_cards(page.related.content.iter().map(|r| {
-            h_card(
-                player,
-                &r.id,
-                &r.name,
-                &r.stat,
-                Message::OpenArtist {
-                    id: r.id.clone(),
-                    name: r.name.clone(),
-                    source: page.related.provider.unwrap_or_default(),
-                },
-            )
-        })),
+            })
+            .collect(),
+        SectionContent::Related(v) => v
+            .iter()
+            .map(|r| {
+                h_card(
+                    player,
+                    &r.id,
+                    &r.name,
+                    &r.stat,
+                    Message::OpenArtist {
+                        id: r.id.clone(),
+                        name: r.name.clone(),
+                        source: provider,
+                    },
+                )
+            })
+            .collect(),
+        SectionContent::Tracks(_) => Vec::new(),
     }
+}
+
+fn section_body(player: &MusicPlayer, kind: ArtistSectionKind) -> Element<'_, Message, AppTheme> {
+    let view_data = player.view_data();
+    let ViewKind::Artist { page, .. } = &view_data.kind else {
+        return empty_state("Not an artist page");
+    };
+
+    let section = page.section(kind);
+    if kind == ArtistSectionKind::Popular {
+        // Popular tracks live in the view's track list so all the usual
+        // interactions (play, context menu, drag) work on them.
+        return match &view_data.content {
+            LoadState::Ready(tracks) if !tracks.is_empty() => {
+                view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
+            }
+            _ => empty_state("Nothing here"),
+        };
+    }
+
+    // Failed sections offer an in-place retry (re-requesting the provider).
+    let content = match &section.state {
+        LoadState::Ready(content) => content,
+        LoadState::Failed(e) => {
+            let retry = Button::new(text("Retry").style(fg_accent()))
+                .padding([theme::SPACING_2XS, theme::SPACING_SM])
+                .style(super::styles::button_style_scope(false))
+                .on_press_maybe(
+                    section
+                        .provider
+                        .map(|p| Message::ArtistSectionProviderChanged(kind, p)),
+                );
+            return Column::new()
+                .spacing(theme::SPACING_SM)
+                .push(text(format!("Couldn't load: {e}")))
+                .push(retry)
+                .into();
+        }
+        LoadState::Loading => return empty_state("Loading..."),
+    };
+    let provider = section.provider.unwrap_or_default();
+    h_scroll_cards(cards(player, provider, content))
 }
 
 /// A horizontal row of square art cards (pic on top, text below).

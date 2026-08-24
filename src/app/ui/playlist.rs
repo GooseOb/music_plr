@@ -7,8 +7,8 @@ use iced::{
 use crate::{
     app::{interaction::TrackListKind, ui::shared_components::empty_state, ViewKind},
     icons,
+    load_state::LoadState,
     theme::AppTheme,
-    types::Track,
 };
 
 use super::{
@@ -73,11 +73,11 @@ pub(super) fn view_playlist<'a>(player: &'a MusicPlayer) -> Element<'a, Message,
     };
 
     let track_list = if is_downloads {
-        let tracks: &[Track] = &player.view_data().tracks;
-        if tracks.is_empty() {
-            empty_state("No downloaded tracks")
-        } else {
-            view_track_list(tracks, player, TrackListKind::Active, 0)
+        match &player.view_data().content {
+            LoadState::Ready(tracks) if !tracks.is_empty() => {
+                view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
+            }
+            _ => empty_state("No downloaded tracks"),
         }
     } else {
         let playlist = player

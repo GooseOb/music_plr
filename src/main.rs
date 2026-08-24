@@ -8,6 +8,7 @@ mod app;
 mod audio;
 mod data;
 mod icons;
+mod load_state;
 mod lyrics;
 mod mpris;
 mod providers;

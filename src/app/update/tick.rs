@@ -109,7 +109,7 @@ impl MusicPlayer {
     /// missing ones. Called wherever a view becomes active (navigation,
     /// results installed) — the tick only drains, it never re-scans visibility.
     pub(crate) fn seed_view_thumbnails(&mut self, view: &ViewData) {
-        for track in &view.tracks {
+        for track in view.tracks() {
             // Seed thumbnails for any track that carries a thumbnail URL,
             // regardless of provider (YouTube, SoundCloud, MusicBrainz, …).
             if !track.thumbnail().is_empty() {
@@ -169,8 +169,7 @@ impl MusicPlayer {
 
     fn install_results(&mut self, idx: usize, tracks: Vec<crate::types::Track>) {
         let slot = &mut self.nav_history[idx];
-        slot.tracks = tracks;
-        slot.loading = false;
+        slot.set_tracks(tracks);
         slot.selection.clear();
         slot.request_id = 0;
         self.finalize_view(idx);
@@ -179,7 +178,6 @@ impl MusicPlayer {
     pub(crate) fn finalize_view(&mut self, idx: usize) {
         self.save_session();
         self.seed_view_thumbnails(&self.nav_history[idx].clone());
-        self.clear_notification();
     }
 
     fn process_search_results(
@@ -216,10 +214,13 @@ impl MusicPlayer {
             BackendResult::SearchResultsAppend(rid, tracks) => {
                 let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
                 if let Some(idx) = self.slot_for_request(rid) {
-                    self.nav_history[idx].tracks.extend(tracks);
-                    self.nav_history[idx].loading = false;
-                    self.nav_history[idx].set_exhausted(exhausted);
-                    self.nav_history[idx].request_id = 0;
+                    let slot = &mut self.nav_history[idx];
+                    if let Some(existing) = slot.tracks_mut() {
+                        existing.extend(tracks);
+                    }
+                    slot.set_exhausted(exhausted);
+                    slot.request_id = 0;
+                    slot.append_in_flight = false;
                     self.finalize_view(idx);
                 }
             }
@@ -262,16 +263,7 @@ impl MusicPlayer {
                 error!("Download error: {}", msg);
                 self.notify_error(msg);
             }
-            BackendResult::SearchError(msg) => {
-                if matches!(
-                    self.view_data().kind,
-                    ViewKind::Search { .. } | ViewKind::SongRadio(_) | ViewKind::ArtistRadio(_)
-                ) {
-                    self.view_data_mut().loading = false;
-                }
-                self.clear_notification();
-                self.notify_error(msg);
-            }
+            BackendResult::SearchError(msg) => self.process_search_error(msg),
             BackendResult::ProviderResolved {
                 original,
                 provider,
@@ -304,10 +296,30 @@ impl MusicPlayer {
                     self.handle_add_local_music(&paths);
                 }
             }
-            BackendResult::LyricsFetched(lyrics, track_id) => {
-                self.process_lyrics_fetched(lyrics, track_id);
+            BackendResult::LyricsFetched(result, track_id) => {
+                self.process_lyrics_fetched(result, &track_id);
             }
         }
+    }
+
+    /// A failed search/browse/radio fetch: surface the error on the current
+    /// view only while it is still waiting (never wiping loaded results),
+    /// plus a toast.
+    fn process_search_error(&mut self, msg: String) {
+        if matches!(
+            self.view_data().kind,
+            ViewKind::Search { .. }
+                | ViewKind::SongRadio(_)
+                | ViewKind::ArtistRadio(_)
+                | ViewKind::Album { .. }
+                | ViewKind::PlaylistView { .. }
+        ) {
+            self.view_data_mut().set_failed(msg.clone());
+            if matches!(self.view_data().kind, ViewKind::Search { .. }) {
+                self.view_data_mut().append_in_flight = false;
+            }
+        }
+        self.notify_error(msg);
     }
 
     fn process_download_complete(&mut self, track: crate::types::Track) {
@@ -316,28 +328,37 @@ impl MusicPlayer {
         self.notify(format!("Download complete! Saved to {path}"));
         self.thumbnail_index.mark_downloaded(track.primary_id());
         if matches!(self.view_data().kind, ViewKind::Downloads) {
-            self.view_data_mut().tracks.push(track);
+            if let Some(tracks) = self.view_data_mut().tracks_mut() {
+                tracks.push(track);
+            }
         }
     }
 
-    fn process_lyrics_fetched(&mut self, lyrics: Option<crate::lyrics::Lyrics>, track_id: String) {
+    fn process_lyrics_fetched(
+        &mut self,
+        result: Result<crate::lyrics::Lyrics, String>,
+        track_id: &str,
+    ) {
         if track_id.is_empty() {
             return;
         }
         let Some(state) = &mut self.lyrics else {
             return;
         };
-        if state.track_id.as_deref() != Some(track_id.as_str()) {
+        if state.track_id.as_deref() != Some(track_id) {
             return;
         }
-        state.loading = false;
-        state.lyrics = lyrics;
-        state.track_id = Some(track_id);
-        state.not_found = state.lyrics.is_none();
-        if let (Some(lyrics), Some(id)) = (&state.lyrics, state.track_id.as_ref()) {
-            let mut cache = crate::data::lyrics_cache::LyricsCache::load();
-            cache.insert(id, lyrics);
+        match result {
+            Ok(lyrics) => {
+                if let Some(id) = state.track_id.as_ref() {
+                    let mut cache = crate::data::lyrics_cache::LyricsCache::load();
+                    cache.insert(id, &lyrics);
+                }
+                state.lyrics = crate::load_state::LoadState::Ready(lyrics);
+            }
+            Err(e) => state.lyrics = crate::load_state::LoadState::Failed(e),
         }
+        state.track_id = Some(track_id.to_owned());
         self.sync_lyrics_editor();
     }
 

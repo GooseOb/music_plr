@@ -34,7 +34,7 @@ impl MusicPlayer {
                 .playlists
                 .get(*index)
                 .map_or(&[], |p| &p.tracks),
-            _ => &vd.tracks,
+            _ => vd.tracks(),
         }
     }
 
@@ -167,7 +167,7 @@ mod tests {
     fn toggle_adds_then_removes_per_list() {
         let mut p = player();
         p.queue.tracks = vec![track("1"), track("2")];
-        p.view_data_mut().tracks = vec![track("1")];
+        p.view_data_mut().set_tracks(vec![track("1")]);
 
         let q = TrackPos::new(0, TrackListKind::Queue);
         let a = TrackPos::new(0, TrackListKind::Active);

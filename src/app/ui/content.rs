@@ -9,8 +9,8 @@ use super::{
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let search_bar = search::view_search_bar(player);
 
-    let inner: Element<'a, Message, AppTheme> = if player.lyrics.is_some() {
-        lyrics::view_lyrics(player)
+    let inner: Element<'a, Message, AppTheme> = if let Some(lyrics_state) = player.lyrics.as_ref() {
+        lyrics::view_lyrics(player, lyrics_state)
     } else {
         match &player.view_data().kind {
             ViewKind::Search { tab, .. } => search::view_search(player, tab),

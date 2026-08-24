@@ -1,5 +1,6 @@
 use crate::{
     data::library::{LibraryItem, LibraryKind},
+    load_state::LoadState,
     providers::ProviderId,
     types::Track,
 };
@@ -18,15 +19,15 @@ impl RequestIdGenerator {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ViewData {
     pub kind: ViewKind,
-    /// The view's own track list. For `Playlist` the tracks live in the
-    /// `PlaylistStore` (see [`MusicPlayer::view_tracks`]); this stays empty.
-    pub tracks: Vec<Track>,
-    /// Used by `Search` and `Radio`; harmless (always false) elsewhere.
-    pub loading: bool,
+    pub content: LoadState<Vec<Track>>,
     pub selection: Vec<usize>,
     pub scroll: f32,
     #[serde(skip)]
     pub request_id: u64,
+    /// A "Load More" append is running; the list stays visible, so this
+    /// needs its own flag to keep the button from re-firing.
+    #[serde(skip)]
+    pub append_in_flight: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -247,6 +248,7 @@ impl ViewData {
                 provider,
                 tab: crate::providers::SearchTab::from_scope(scope),
             },
+            content: LoadState::Loading,
             ..Default::default()
         }
     }
@@ -256,7 +258,7 @@ impl ViewData {
     pub fn new_radio(kind: ViewKind) -> Self {
         Self {
             kind,
-            loading: true,
+            content: LoadState::Loading,
             ..Default::default()
         }
     }
@@ -273,7 +275,7 @@ impl ViewData {
     pub fn new_downloads(tracks: Vec<Track>) -> Self {
         Self {
             kind: ViewKind::Downloads,
-            tracks,
+            content: LoadState::Ready(tracks),
             ..Default::default()
         }
     }
@@ -283,6 +285,29 @@ impl ViewData {
         Self {
             kind: ViewKind::Settings,
             ..Default::default()
+        }
+    }
+
+    /// The view's track list; empty while loading or after a failure.
+    pub fn tracks(&self) -> &[Track] {
+        match &self.content {
+            LoadState::Ready(tracks) => tracks.as_slice(),
+            _ => &[],
+        }
+    }
+
+    pub fn set_tracks(&mut self, tracks: Vec<Track>) {
+        self.content = LoadState::Ready(tracks);
+    }
+
+    pub fn set_failed(&mut self, msg: String) {
+        self.content = LoadState::Failed(msg);
+    }
+
+    pub fn tracks_mut(&mut self) -> Option<&mut Vec<Track>> {
+        match &mut self.content {
+            LoadState::Ready(tracks) => Some(tracks),
+            _ => None,
         }
     }
 }

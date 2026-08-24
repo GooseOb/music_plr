@@ -348,8 +348,8 @@ pub fn browse(provider: ProviderId, id: &str, kind: &str) -> Result<Vec<Track>> 
 }
 
 pub use artist_page::{
-    ArtistAlbumCard, ArtistDataKind, ArtistHeader, ArtistPage, ArtistPageState, ArtistSection,
-    ArtistSectionKind, RelatedArtistCard,
+    ArtistAlbumCard, ArtistDataKind, ArtistHeader, ArtistPage, ArtistPageState, ArtistSectionKind,
+    RelatedArtistCard, SectionContent,
 };
 
 /// Fetch only the requested [`ArtistDataKind`] pieces of an artist page for

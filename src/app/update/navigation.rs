@@ -45,7 +45,8 @@ impl MusicPlayer {
 
     pub(super) fn sync_downloads_view(&mut self) {
         if matches!(self.view_data().kind, ViewKind::Downloads) {
-            self.view_data_mut().tracks = self.download_registry.clone_tracks();
+            let tracks = self.download_registry.clone_tracks();
+            self.view_data_mut().set_tracks(tracks);
         }
     }
 
@@ -236,12 +237,12 @@ mod tests {
 
         // The active (Playlist) slot must be untouched.
         assert!(matches!(p.view_data().kind, ViewKind::Playlist { .. }));
-        assert!(p.view_data().tracks.is_empty());
+        assert!(p.view_data().tracks().is_empty());
 
         // Going back to the search slot shows the delivered results.
         let _ = p.handle_navigate_back();
         assert!(matches!(p.view_data().kind, ViewKind::Search { .. }));
-        assert_eq!(p.view_data().tracks.len(), 1);
+        assert_eq!(p.view_data().tracks().len(), 1);
         assert_eq!(
             p.view_data().request_id,
             0,

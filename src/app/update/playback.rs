@@ -84,7 +84,11 @@ impl MusicPlayer {
                         self.playlists.save();
                     }
                     None => {
-                        if let Some(t) = self.view_data_mut().tracks.get_mut(index) {
+                        if let Some(t) = self
+                            .view_data_mut()
+                            .tracks_mut()
+                            .and_then(|ts| ts.get_mut(index))
+                        {
                             *t = track;
                         }
                     }

@@ -26,11 +26,9 @@ pub use view_data::{RequestIdGenerator, ViewData, ViewKind};
 
 #[derive(Debug, Clone)]
 pub struct LyricsState {
-    pub lyrics: Option<crate::lyrics::Lyrics>,
     pub track_id: Option<String>,
-    pub loading: bool,
-    pub not_found: bool,
-    pub select_mode: bool,
+    pub lyrics: crate::load_state::LoadState<crate::lyrics::Lyrics>,
+    /// `Some` while line-select mode is active (the editable working copy).
     pub editor: Option<iced::widget::text_editor::Content>,
 }
 
@@ -50,12 +48,9 @@ pub struct EditTrackState {
 impl LyricsState {
     fn new() -> Self {
         Self {
-            lyrics: None,
             track_id: None,
-            loading: true,
-            not_found: false,
-            select_mode: false,
-            editor: Some(iced::widget::text_editor::Content::with_text("")),
+            lyrics: crate::load_state::LoadState::Loading,
+            editor: None,
         }
     }
 }
@@ -548,9 +543,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ToggleLyricsSelectMode => {
-                if let Some(state) = &mut self.lyrics {
-                    state.select_mode = !state.select_mode;
-                }
+                self.toggle_lyrics_select_mode();
                 Task::none()
             }
             Message::LyricsLineClicked(secs) => {
