@@ -117,6 +117,15 @@ impl MusicPlayer {
                     .ensure(track.primary_id(), track.thumbnail());
             }
         }
+        match &view.kind {
+            ViewKind::Album(r) => {
+                self.thumbnail_index.ensure(&r.id, &r.thumbnail);
+            }
+            ViewKind::PlaylistView(r) => {
+                self.thumbnail_index.ensure(&r.id, &r.thumbnail);
+            }
+            _ => {}
+        }
         if let ViewKind::Search(s) = &view.kind {
             if let crate::providers::SearchTab::Artists(cards)
             | crate::providers::SearchTab::Albums(cards)
@@ -161,6 +170,23 @@ impl MusicPlayer {
                 let delta_frac = delta_us as f32 / 1_000_000.0 / self.duration.max(0.001);
                 let new_frac = (self.progress + delta_frac).clamp(0.0, 1.0);
                 self.seek(new_frac);
+            }
+        }
+    }
+
+    /// Fill in missing badge/date/thumbnail on the browsed album view once
+    /// metadata arrives from the backend.
+    fn apply_album_meta(&mut self, idx: usize, meta: crate::providers::AlbumMeta) {
+        if let ViewKind::Album(r) = &mut self.nav_history[idx].kind {
+            if r.badge.is_empty() {
+                r.badge = meta.badge;
+            }
+            if r.date.is_empty() {
+                r.date = meta.date;
+            }
+            if r.thumbnail.is_empty() && !meta.thumbnail.is_empty() {
+                self.thumbnail_index.ensure(&r.id.clone(), &meta.thumbnail);
+                r.thumbnail = meta.thumbnail;
             }
         }
     }
@@ -219,10 +245,13 @@ impl MusicPlayer {
                     self.finalize_view(idx);
                 }
             }
-            BackendResult::BrowseResults(rid, tracks) => {
+            BackendResult::BrowseResults(rid, tracks, meta) => {
                 // Apply to the slot that issued the browse, matched by request id
                 if let Some(idx) = self.slot_for_request(rid) {
                     self.install_results(idx, tracks);
+                    if let Some(meta) = meta {
+                        self.apply_album_meta(idx, meta);
+                    }
                 }
             }
             BackendResult::ArtistIdResolved {

@@ -36,10 +36,24 @@ pub struct SearchData {
     pub append_in_flight: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BrowseRef {
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct AlbumRef {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub badge: String,
+    #[serde(default)]
+    pub date: String,
+    #[serde(default)]
+    pub thumbnail: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PlaylistRef {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub thumbnail: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -66,8 +80,8 @@ pub enum ViewKind {
     SongRadio(String),
     ArtistRadio(String),
     Artist(ArtistEntry),
-    Album(BrowseRef),
-    PlaylistView(BrowseRef),
+    Album(AlbumRef),
+    PlaylistView(PlaylistRef),
     Playlist(PlaylistEntry),
     Downloads,
     Settings,
@@ -85,13 +99,16 @@ impl From<LibraryItem> for ViewKind {
                     &item.id,
                 )),
             }),
-            LibraryKind::Album => ViewKind::Album(BrowseRef {
+            LibraryKind::Album => ViewKind::Album(AlbumRef {
                 id: item.id,
                 name: item.title,
+                thumbnail: item.thumbnail,
+                ..Default::default()
             }),
-            LibraryKind::Playlist => ViewKind::PlaylistView(BrowseRef {
+            LibraryKind::Playlist => ViewKind::PlaylistView(PlaylistRef {
                 id: item.id,
                 name: item.title,
+                thumbnail: item.thumbnail,
             }),
         }
     }

@@ -251,7 +251,7 @@ impl MusicPlayer {
         let id = id.to_string();
         Self::spawn_backend_thread(
             move || crate::providers::browse(provider, &id, kind_str),
-            move |tracks| BackendResult::BrowseResults(rid, tracks),
+            move |(tracks, meta)| BackendResult::BrowseResults(rid, tracks, meta),
             tx,
         );
     }

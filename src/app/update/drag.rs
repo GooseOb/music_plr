@@ -525,7 +525,7 @@ impl MusicPlayer {
         self.notify(format!("Creating playlist \"{name}\"..."));
         Self::spawn_backend_thread(
             move || crate::providers::browse(provider, &id, kind_str),
-            move |tracks| BackendResult::CardPlaylistReady(idx, name_for_thread, tracks),
+            move |(tracks, _)| BackendResult::CardPlaylistReady(idx, name_for_thread, tracks),
             tx,
         );
 

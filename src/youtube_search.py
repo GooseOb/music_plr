@@ -192,7 +192,12 @@ def browse(browse_id, limit=50, kind=None):
                 out.append(t)
             if len(out) >= limit:
                 break
-        return out
+        meta = {
+            "badge": album.get("type", "") or "",
+            "date": str(album.get("year", "") or ""),
+            "thumbnail": (album.get("thumbnails") or [{}])[-1].get("url", ""),
+        }
+        return {"meta": meta, "tracks": out}
     if kind == "playlist" or (kind is None and (browse_id.startswith("PL") or browse_id.startswith("OL"))):
         pl = yt.get_playlist(browse_id, limit=limit)
         for e in pl.get("tracks", []):
@@ -320,7 +325,7 @@ def artist_page(browse_id):
             bid = e.get("browseId") or ""
             if not bid:
                 continue
-            label = e.get("type", "") or badge or ""
+            label = e.get("type", "") or badge or ("Single" if badge else "Album")
             albums.append({
                 "id": bid,
                 "title": e.get("title", ""),

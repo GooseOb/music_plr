@@ -85,7 +85,8 @@ fn library_row<'a>(
     let p = &player.app_theme.palette;
     let is_active = match &player.view_data().kind {
         ViewKind::Artist(entry) => entry.id == item.id,
-        ViewKind::Album(r) | ViewKind::PlaylistView(r) => r.id == item.id,
+        ViewKind::Album(r) => r.id == item.id,
+        ViewKind::PlaylistView(r) => r.id == item.id,
         _ => false,
     };
     let text_color = if is_active { p.fg } else { p.fg_secondary };

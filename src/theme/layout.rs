@@ -13,6 +13,7 @@ pub const DRAG_AUTO_SCROLL_ZONE: f32 = 50.0;
 pub const DRAG_AUTO_SCROLL_SPEED: f32 = 16.0;
 pub const DROP_LINE_HEIGHT: f32 = 2.0;
 pub const PLAYBAR_THUMBNAIL_SIZE: f32 = 56.0;
+pub const PAGE_THUMBNAIL_SIZE: f32 = PLAYBAR_THUMBNAIL_SIZE * 2.0;
 pub const TRACK_LEADING_WIDTH: f32 = 30.0;
 
 pub const SPACING_XS: f32 = 4.0;

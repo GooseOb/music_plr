@@ -5,7 +5,10 @@ use iced::{
 };
 
 use crate::{
-    app::{view_data::BrowseRef, TrackListKind, ViewKind},
+    app::{
+        view_data::{AlbumRef, PlaylistRef},
+        TrackListKind, ViewKind,
+    },
     load_state::LoadState,
     providers::{ArtistSection, ArtistSectionKind, ProviderId, SectionContent},
     theme::{self, AppTheme},
@@ -116,7 +119,7 @@ fn header<'a>(
     let thumb = player
         .thumbnail_index
         .get(&header_thumb_key(id, header_provider.unwrap_or_default()));
-    let image = thumbnail(p, theme::PLAYBAR_THUMBNAIL_SIZE * 2.0, thumb);
+    let image = thumbnail(p, theme::PAGE_THUMBNAIL_SIZE, thumb);
 
     let stats_line = header
         .as_ref()
@@ -221,9 +224,12 @@ fn cards<'a>(
                     &c.title,
                     &subtitle,
                     Message::Browse(
-                        ViewKind::Album(BrowseRef {
+                        ViewKind::Album(AlbumRef {
                             id: c.id.clone(),
                             name: c.title.clone(),
+                            badge: c.badge.clone(),
+                            date: c.date.clone(),
+                            thumbnail: c.thumbnail.clone(),
                         }),
                         provider,
                     ),
@@ -239,9 +245,10 @@ fn cards<'a>(
                     &c.title,
                     "",
                     Message::Browse(
-                        ViewKind::PlaylistView(BrowseRef {
+                        ViewKind::PlaylistView(PlaylistRef {
                             id: c.id.clone(),
                             name: c.title.clone(),
+                            thumbnail: c.thumbnail.clone(),
                         }),
                         provider,
                     ),
@@ -338,7 +345,6 @@ where
     .direction(scrollable::Direction::Horizontal(
         scrollable::Scrollbar::new(),
     ))
-    .height(CARD_IMAGE_SIZE + theme::TEXT_SIZE_LG as f32 * 3.0)
     .into()
 }
 

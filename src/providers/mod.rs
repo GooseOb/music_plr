@@ -339,12 +339,25 @@ pub fn search_more(provider: ProviderId, query: &str, offset: usize) -> Result<V
 
 /// Drill down into a card (artist/album/playlist) for `provider`. Returns the
 /// browsed tracks; empty for providers that don't support browsing.
-pub fn browse(provider: ProviderId, id: &str, kind: &str) -> Result<Vec<Track>> {
+/// Album metadata shown in the album view header (type + release year).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AlbumMeta {
+    pub badge: String,
+    pub date: String,
+    pub thumbnail: String,
+}
+
+pub fn browse(
+    provider: ProviderId,
+    id: &str,
+    kind: &str,
+) -> Result<(Vec<Track>, Option<AlbumMeta>)> {
     match provider {
         ProviderId::YouTube => youtube::browse(id, kind),
-        ProviderId::SoundCloud => soundcloud::browse(id, kind),
-        ProviderId::MusicBrainz => musicbrainz::browse(id, kind),
-        ProviderId::Local => Ok(Vec::new()),
+        ProviderId::SoundCloud => Ok((soundcloud::browse(id, kind)?, None)),
+        ProviderId::MusicBrainz => Ok((musicbrainz::browse(id, kind)?, None)),
+        ProviderId::Local => Ok((Vec::new(), None)),
     }
 }
 

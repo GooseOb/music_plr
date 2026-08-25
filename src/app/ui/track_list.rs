@@ -249,9 +249,10 @@ fn track_row_layout_inner<'a>(
                 Button::new(text(album.name.clone()).size(theme::TEXT_SIZE_SM))
                     .style(button_style_album())
                     .on_press(Message::Browse(
-                        crate::app::ViewKind::Album(crate::app::view_data::BrowseRef {
+                        crate::app::ViewKind::Album(crate::app::view_data::AlbumRef {
                             id: album.id.clone(),
                             name: album.name.clone(),
+                            ..Default::default()
                         }),
                         track.source,
                     )),

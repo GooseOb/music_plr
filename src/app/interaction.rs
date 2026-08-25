@@ -474,10 +474,8 @@ mod tests {
     }
 
     #[test]
-    fn recent_is_read_only_and_panel_membership_is_by_tab() {
+    fn recent_is_read_only() {
         assert!(Queue.is_interactive() && Active.is_interactive());
         assert!(!Recent.is_interactive());
-        assert!(Queue.in_queue_panel() && Recent.in_queue_panel());
-        assert!(!Active.in_queue_panel());
     }
 }

@@ -240,22 +240,45 @@ fn card_row<'a>(
     .into()
 }
 
+/// "Badge · date" line for album views; `None` when both are empty.
+pub(super) fn browse_meta(badge: &str, date: &str) -> Option<String> {
+    match (badge.trim(), date.trim()) {
+        ("", "") => None,
+        (badge, "") => Some(badge.to_string()),
+        ("", date) => Some(date.to_string()),
+        (badge, date) => Some(format!("{badge} \u{00b7} {date}")),
+    }
+}
+
 pub(super) fn view_browse<'a>(
     player: &'a MusicPlayer,
     label: &'a str,
+    thumb_key: &str,
+    meta: Option<String>,
 ) -> Element<'a, Message, AppTheme> {
     let content = &player.view_data().content;
+    let p = &player.app_theme.palette;
 
+    let image = thumbnail(
+        p,
+        theme::PAGE_THUMBNAIL_SIZE,
+        player.thumbnail_index.get(thumb_key),
+    );
     let header = Row::with_children([
-        text(label)
-            .size(theme::TEXT_SIZE_LG)
-            .width(Length::Fill)
-            .center()
-            .into(),
-        view_library_button(player),
+        image,
+        Column::with_children([
+            text(label).size(theme::TEXT_SIZE_LG).into(),
+            text(meta.unwrap_or_default())
+                .size(theme::TEXT_SIZE_SM)
+                .style(fg_secondary())
+                .into(),
+            view_library_button(player),
+        ])
+        .spacing(theme::SPACING_MD)
+        .into(),
     ])
     .align_y(alignment::Vertical::Center)
-    .spacing(theme::SPACING_SM)
+    .spacing(theme::SPACING_MD)
     .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
     let track_list = match content {

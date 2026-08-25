@@ -177,11 +177,32 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
 }
 
 /// Browse the contents of an artist/album/playlist, returning its tracks.
-pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
+/// Album browse payload: the python helper returns `{meta, tracks}` for
+/// albums; other kinds (and older helpers) return a bare track list.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum YtBrowseOutput {
+    Album {
+        #[serde(default)]
+        meta: crate::providers::AlbumMeta,
+        #[serde(default)]
+        tracks: Vec<YouTubeVideo>,
+    },
+    Tracks(Vec<YouTubeVideo>),
+}
+
+pub fn browse(id: &str, kind: &str) -> Result<(Vec<Track>, Option<crate::providers::AlbumMeta>)> {
     let stdout = run_python("browse", &[id, "50", kind])?;
-    let items: Vec<YouTubeVideo> =
-        serde_json::from_str(&stdout).context("Failed to parse ytmusicapi browse output")?;
-    Ok(items.into_iter().map(Track::from).collect())
+    match serde_json::from_str::<YtBrowseOutput>(&stdout)
+        .context("Failed to parse ytmusicapi browse output")?
+    {
+        YtBrowseOutput::Album { meta, tracks } => {
+            let has_meta = !meta.badge.is_empty() || !meta.date.is_empty();
+            let out = if has_meta { Some(meta) } else { None };
+            Ok((tracks.into_iter().map(Track::from).collect(), out))
+        }
+        YtBrowseOutput::Tracks(items) => Ok((items.into_iter().map(Track::from).collect(), None)),
+    }
 }
 
 /// Raw JSON shape returned by the python helper's `artist_page` mode. The
