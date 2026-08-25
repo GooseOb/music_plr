@@ -92,8 +92,8 @@ pub fn track_row<'a>(
 }
 
 pub fn empty_state<'a>(msg: impl text::IntoFragment<'a>) -> Element<'a, Message, AppTheme> {
-    Container::new(text(msg).style(fg_secondary()).center())
-        .padding(theme::SPACING_XL)
+    Container::new(text(msg).style(fg_secondary()))
+        .center(Length::Fill)
         .into()
 }
 

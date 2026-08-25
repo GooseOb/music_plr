@@ -31,9 +31,12 @@ pub(super) fn view_lyrics<'a>(
     {
         view_select_editor(&lyrics_state.editor)
     } else {
+        let mode = lyrics_state.mode;
         let lyrics_state = &lyrics_state.lyrics;
         match (track, lyrics_state) {
-            (Some(_), LoadState::Ready(lyrics)) if !lyrics.timed.is_empty() => {
+            (Some(_), LoadState::Ready(lyrics))
+                if !lyrics.timed.is_empty() && mode == LyricsViewMode::Synced =>
+            {
                 view_synced(player, lyrics)
             }
             (Some(_), LoadState::Ready(lyrics)) => Container::new(
@@ -128,6 +131,7 @@ fn view_select_editor(
                 selection: p.accent.scale_alpha(0.4),
             }
         })
+        .padding(theme::SPACING_LG)
         .into()
 }
 
