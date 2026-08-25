@@ -103,8 +103,9 @@ impl MusicPlayer {
             return;
         }
 
-        // Append targets the slot that issued the original search.
-        let rid = self.view_data_mut().request_id;
+        // Append targets the slot that issued the original search. The id was
+        // zeroed when the initial results landed, so mint a fresh one.
+        let rid = self.slot_request_id();
         if let ViewKind::Search(s) = &mut self.view_data_mut().kind {
             s.append_in_flight = true;
         }

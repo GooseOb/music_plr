@@ -142,7 +142,7 @@ impl MusicPlayer {
 
     /// Reuse the slot's live request id so results keep matching this
     /// view even across several concurrent loads.
-    fn slot_request_id(&mut self) -> u64 {
+    pub(super) fn slot_request_id(&mut self) -> u64 {
         let current = self.view_data().request_id;
         if current == 0 {
             let next = self.request_ids.next();
