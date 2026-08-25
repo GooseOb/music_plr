@@ -209,22 +209,14 @@ fn card_row<'a>(
         .center();
     let thumb = thumbnail(p, theme::THUMBNAIL_SIZE, thumb);
     let saved = player.library.contains(item.kind, &item.id);
-    let toggle = Container::new(
-        toggle_bookmark_button(p, saved).on_press(Message::ToggleLibrarySave(item.clone())),
-    )
-    .padding([0.0, theme::SPACING_MD]);
-    let subtitle_el = if subtitle.is_empty() {
-        None
-    } else {
-        Some(
-            text(subtitle)
-                .size(theme::TEXT_SIZE_SM)
-                .style(fg_secondary())
-                .into(),
-        )
-    };
-    let main =
-        inner_row_layout(leading.into(), Some(thumb), title, subtitle_el, None).width(Length::Fill);
+    let toggle = toggle_bookmark_button(p, saved)
+        .on_press(Message::ToggleLibrarySave(item.clone()))
+        .into();
+    let subtitle_el = text(subtitle)
+        .size(theme::TEXT_SIZE_SM)
+        .style(fg_secondary())
+        .into();
+    let main = inner_row_layout(leading.into(), thumb, title, subtitle_el, toggle);
     let is_hovered = player.drag.is_hovered_card(item);
     let is_dragging_this = player.drag.pressed.as_ref() == Some(&Pressed::Card(item.clone()));
     let hover_item = item.clone();
@@ -233,7 +225,7 @@ fn card_row<'a>(
         .on_press(Message::DragPress(Pressed::Card(item.clone())))
         .on_move(move |_| Message::HoverStart(HoverTarget::Card(hover_item.clone())));
     track_row(
-        Row::with_children([main.into(), toggle.into()]),
+        main,
         if is_dragging_this || is_hovered {
             p.bg_hover
         } else {

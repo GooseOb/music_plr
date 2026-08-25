@@ -36,36 +36,30 @@ pub fn thumbnail<'a>(
     }
 }
 
-/// The shared inner row layout used by both track rows and the non-track
-/// card rows (artists/albums/playlists): leading | optional thumbnail |
-/// title(+subtitle) | optional trailing. `subtitle`/`trailing` are `None`
-/// when not needed.
 pub fn inner_row_layout<'a>(
     leading: Element<'a, Message, AppTheme>,
-    thumbnail: Option<Element<'a, Message, AppTheme>>,
+    thumbnail: Element<'a, Message, AppTheme>,
     title: &'a str,
-    subtitle: Option<Element<'a, Message, AppTheme>>,
-    trailing: Option<Element<'a, Message, AppTheme>>,
+    subtitle: Element<'a, Message, AppTheme>,
+    trailing: Element<'a, Message, AppTheme>,
 ) -> Row<'a, Message, AppTheme> {
-    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(5);
-    children.push(leading);
-    if let Some(thumbnail) = thumbnail {
-        children.push(thumbnail);
-    }
-    let title_el = text(title).size(theme::TEXT_SIZE_MD).width(Length::Fill);
-    children.push(match subtitle {
-        Some(sub) => Column::with_children([title_el.into(), sub])
-            .spacing(theme::SPACING_2XS)
-            .into(),
-        None => title_el.into(),
-    });
-    if let Some(trailing) = trailing {
-        children.push(trailing);
-    }
-    Row::with_children(children)
-        .spacing(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center)
-        .padding([theme::SPACING_XS, theme::SPACING_SM])
+    Row::with_children([
+        leading,
+        thumbnail,
+        Column::with_children([
+            text(title)
+                .size(theme::TEXT_SIZE_MD)
+                .width(Length::Fill)
+                .into(),
+            subtitle,
+        ])
+        .spacing(theme::SPACING_2XS)
+        .into(),
+        trailing,
+    ])
+    .spacing(theme::SPACING_SM)
+    .align_y(alignment::Vertical::Center)
+    .padding([theme::SPACING_XS, theme::SPACING_SM])
 }
 
 /// Wraps row content in a container with an optional fixed height and

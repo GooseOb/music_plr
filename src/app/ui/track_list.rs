@@ -314,14 +314,12 @@ fn track_row_layout_inner<'a>(
 
     inner_row_layout(
         leading,
-        Some(thumbnail(p, theme::THUMBNAIL_SIZE, thumb)),
+        thumbnail(p, theme::THUMBNAIL_SIZE, thumb),
         &track.title,
-        Some(artist_subtitle),
-        Some(
-            Row::with_children(trailing_children)
-                .align_y(alignment::Vertical::Center)
-                .into(),
-        ),
+        artist_subtitle,
+        Row::with_children(trailing_children)
+            .align_y(alignment::Vertical::Center)
+            .into(),
     )
 }
 
