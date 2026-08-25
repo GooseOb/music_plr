@@ -44,11 +44,23 @@ impl MusicPlayer {
     /// Play `track` through `provider`, replacing the queue, then enqueue the
     /// remaining view tracks after `index` and persist the session.
     fn play_and_queue_rest(&mut self, track: Track, provider: ProviderId, index: usize) {
+        self.record_now_playing_origin();
         self.play_track_replacing_queue(track, provider);
         for t in self.tracks_after(index).to_vec() {
             self.queue.enqueue(t);
         }
         self.save_session();
+    }
+
+    /// Snapshot the current view as the source of the track being played.
+    /// `request_id` is zeroed so an in-flight response for the live view can
+    /// never be routed into the restored snapshot.
+    pub(super) fn record_now_playing_origin(&mut self) {
+        let mut snap = self.view_data().clone();
+        snap.request_id = 0;
+        snap.scroll = 0.0;
+        snap.selection.clear();
+        self.now_playing_from = Some(snap);
     }
 
     /// Returns the tracks after `index` in the current view.

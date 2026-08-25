@@ -311,7 +311,7 @@ impl MusicPlayer {
     }
 
     /// Set the hovered track and center it in its list.
-    fn move_hovered(&mut self, pos: TrackPos) -> Task<Message> {
+    pub(crate) fn move_hovered(&mut self, pos: TrackPos) -> Task<Message> {
         self.drag.is_hover_controlled = true;
         self.drag.set_hovered(HoverTarget::Track(pos));
         self.scroll_track_into_view(pos)

@@ -1,6 +1,6 @@
 use super::{Message, MusicPlayer, Task, ViewData};
 use crate::app::ui::TRACK_LIST_ID;
-use crate::app::ViewKind;
+use crate::app::{interaction::TrackListKind, interaction::TrackPos, ViewKind};
 
 impl MusicPlayer {
     pub const fn can_navigate_back(&self) -> bool {
@@ -112,6 +112,22 @@ impl MusicPlayer {
         let task = self.restore_nav_entry(entry);
         self.save_session();
         task
+    }
+
+    pub fn handle_reveal_now_playing(&mut self) -> Task<Message> {
+        let Some(origin) = self.now_playing_from.clone() else {
+            return Task::none();
+        };
+        let Some(track) = self.queue.current().cloned() else {
+            return Task::none();
+        };
+        self.handle_navigate_to(origin);
+        let key = track.cache_key();
+        let index = self.view_tracks().iter().position(|t| t.cache_key() == key);
+        let Some(index) = index else {
+            return Task::none();
+        };
+        self.move_hovered(TrackPos::new(index, TrackListKind::Active))
     }
 
     pub(super) fn slot_for_request(&self, rid: u64) -> Option<usize> {
@@ -259,6 +275,37 @@ mod tests {
             p.view_data().request_id,
             0,
             "request id cleared after delivery"
+        );
+    }
+
+    #[test]
+    fn reveal_now_playing_navigates_to_origin_and_focuses_track() {
+        let mut p = player();
+        let track = crate::types::Track::from_provider(
+            ProviderId::YouTube,
+            "id1".into(),
+            "https://example.com".into(),
+            "Song",
+            "Artist",
+            180,
+            "",
+            None,
+            None,
+        );
+        let mut origin = ViewData::new_radio(ViewKind::SongRadio("Radio".into()));
+        origin.set_tracks(vec![track.clone()]);
+        p.now_playing_from = Some(origin);
+        p.queue = crate::types::PlayQueue::new();
+        p.queue.enqueue(track);
+
+        // The live view is a Playlist, so reveal must navigate first.
+        assert!(matches!(p.view_data().kind, ViewKind::Playlist(_)));
+        let _ = p.handle_reveal_now_playing();
+
+        assert!(matches!(p.view_data().kind, ViewKind::SongRadio(_)));
+        assert_eq!(
+            p.drag.hovered_track(),
+            Some(TrackPos::new(0, TrackListKind::Active))
         );
     }
 }

@@ -38,6 +38,7 @@ impl MusicPlayer {
             let first = tracks[0].clone();
             self.queue
                 .set_queue(tracks, self.config.max_recently_played);
+            self.record_now_playing_origin();
             self.play_track_internal(&first, first.source);
             self.save_session();
             self.mpris_dirty = true;

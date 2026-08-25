@@ -134,6 +134,7 @@ pub enum Message {
 
     ToggleQueue,
     SwitchQueueTab(QueueTab),
+    RevealNowPlaying,
     ToggleRepeat,
     ShowLyrics,
     SetLyricsViewMode(crate::app::LyricsViewMode),

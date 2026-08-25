@@ -16,9 +16,6 @@ use super::styles::{button_style_primary, button_style_scope, fg_secondary};
 use iced::advanced::graphics::geometry::Renderer as _;
 use iced_core::Renderer as _;
 
-/// Render a thumbnail image if it exists on disk, otherwise a music-note
-/// placeholder. `thumb` is the resolved path from the thumbnail index
-/// (`Some`) or `None` when not yet downloaded.
 pub fn thumbnail<'a>(
     p: &Palette,
     size: f32,

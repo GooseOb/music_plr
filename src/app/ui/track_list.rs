@@ -332,8 +332,7 @@ pub(super) fn section_header<'a>(
         text(label)
             .size(theme::TEXT_SIZE_XS)
             .color(p.accent)
-            .width(Length::Fill)
-            .center(),
+            .width(Length::Fill),
     )
     .padding([theme::SPACING_SM, theme::SPACING_MD])
 }

@@ -5,7 +5,10 @@ use iced::{
 };
 
 use crate::{
-    app::interaction::{TrackListKind, TrackPos},
+    app::{
+        interaction::{TrackListKind, TrackPos},
+        ViewKind,
+    },
     icons,
     theme::{self, AppTheme},
     types::QueueTab,
@@ -13,7 +16,7 @@ use crate::{
 
 use super::{
     shared_components::empty_state,
-    styles::{bg_secondary, button_style_panel_item, fg_secondary},
+    styles::{bg_secondary, button_style_album, button_style_panel_item, fg_secondary},
     track_list::{
         section_header, track_row_layout, view_track_list, view_track_row, virtual_scrollable,
     },
@@ -89,10 +92,44 @@ fn queue_tab<'a>(
     .into()
 }
 
+pub fn now_playing_source_label(kind: &ViewKind) -> Option<&str> {
+    match kind {
+        ViewKind::Search(s) => (!s.query.is_empty()).then_some(s.query.as_str()),
+        ViewKind::SongRadio(label) | ViewKind::ArtistRadio(label) => Some(label),
+        ViewKind::Artist(e) => Some(&e.name),
+        ViewKind::Album(r) => Some(&r.name),
+        ViewKind::PlaylistView(r) => Some(&r.name),
+        ViewKind::Playlist(e) => Some(e.name.as_str()),
+        ViewKind::Downloads => Some("Downloads"),
+        ViewKind::Settings => None,
+    }
+}
+
 fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.app_theme.palette;
 
-    let now_playing_header = section_header("NOW PLAYING", p);
+    let now_playing_header: Element<'_, Message, AppTheme> = match player
+        .now_playing_from
+        .as_ref()
+        .and_then(|v| now_playing_source_label(&v.kind))
+    {
+        Some(source) => Row::with_children([
+            text("Now playing from")
+                .size(theme::TEXT_SIZE_XS)
+                .color(p.accent)
+                .into(),
+            Button::new(text(source).size(theme::TEXT_SIZE_XS))
+                .padding(0)
+                .style(button_style_album())
+                .on_press(Message::RevealNowPlaying)
+                .into(),
+        ])
+        .spacing(theme::SPACING_XS)
+        .padding([theme::SPACING_SM, theme::SPACING_MD])
+        .align_y(alignment::Vertical::Center)
+        .into(),
+        None => section_header("Now playing", p).into(),
+    };
 
     let now_playing_row: Element<'_, Message, AppTheme> =
         if let Some(track) = player.queue.current() {
@@ -109,7 +146,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             .into()
         };
 
-    let up_next_header = section_header("UP NEXT", p);
+    let up_next_header = section_header("Up next", p);
 
     let offset = 1;
     let upcoming = if offset <= player.queue.tracks.len() {
@@ -131,7 +168,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     };
 
     Column::with_children([
-        now_playing_header.into(),
+        now_playing_header,
         now_playing_row,
         rule::horizontal(1)
             .style(move |_| rule::Style {

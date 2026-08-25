@@ -168,6 +168,8 @@ pub struct MusicPlayer {
 
     pub queue_selected_indices: Vec<usize>,
 
+    pub now_playing_from: Option<ViewData>,
+
     pub track_list_search: Option<TrackListSearch>,
 
     pub app_theme: AppTheme,
@@ -258,6 +260,7 @@ impl MusicPlayer {
             context_menu: None,
             edit_track: None,
             queue_selected_indices: Vec::new(),
+            now_playing_from: None,
             track_list_search: None,
             app_theme: AppTheme::new(Palette::dark()),
             bounds: crate::app::update::operation::CaptureBounds::default(),
@@ -589,6 +592,7 @@ impl MusicPlayer {
                 self.handle_show_lyrics();
                 Task::none()
             }
+            Message::RevealNowPlaying => self.handle_reveal_now_playing(),
             Message::SetLyricsViewMode(mode) => {
                 self.set_lyrics_view_mode(mode);
                 Task::none()
