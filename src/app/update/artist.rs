@@ -1,7 +1,11 @@
 use super::{thread, BackendResult, MusicPlayer, ViewData};
 use crate::{
     app::{view_data::ArtistEntry, ViewKind},
-    providers::{ArtistDataKind, ArtistPage, ArtistPageState, ArtistSectionKind, ProviderId},
+    load_state::LoadState,
+    providers::{
+        spawn_artist_kinds_fetch, ArtistDataKind, ArtistKindData, ArtistKindResult,
+        ArtistPageState, ArtistSectionKind, ProviderId, SectionContent,
+    },
 };
 
 /// True when both lists are the same popular-track rows (per `provider`
@@ -43,8 +47,11 @@ impl MusicPlayer {
                 None => ArtistPageState::loading_for(source),
             }),
         });
+        // Popular tracks render from the view's track list; keep it in the
+        // Loading state until they arrive instead of an empty "Nothing here".
         self.push_new_view(ViewData {
             kind,
+            content: LoadState::Loading,
             ..Default::default()
         });
         let rid = self.request_ids.next();
@@ -64,8 +71,10 @@ impl MusicPlayer {
         }
     }
 
-    /// Fetch only `kinds` of `provider`'s artist data in the background,
-    /// resolving the artist id by name when unknown.
+    /// Fetch each kind of `provider`'s artist data in the background,
+    /// resolving the artist id by name when unknown. Results arrive as one
+    /// [`BackendResult::ArtistSectionLoaded`] per kind as soon as its data
+    /// is available.
     fn load_artist_page(
         &mut self,
         rid: u64,
@@ -82,51 +91,52 @@ impl MusicPlayer {
         let name = name.to_string();
         let tx = self.result_tx.clone();
 
-        let fetch = move || -> anyhow::Result<(String, ArtistPage)> {
-            let id = match known_id {
-                Some(id) => Some(id),
-                None => crate::providers::resolve_artist_id(provider, &name)?,
-            };
-            let resolved = id
-                .clone()
-                .ok_or_else(|| anyhow::anyhow!("Could not find {name} on {}", provider.label()))?;
-            Ok((
-                resolved.clone(),
-                crate::providers::fetch_artist_page(provider, &resolved, kinds)?,
-            ))
-        };
-
         thread::spawn(move || {
-            let (resolved_id, page) = match fetch() {
-                Ok((id, page)) => (Some(id), Ok(page)),
-                Err(e) => (None, Err(e.to_string())),
+            let fail_all = |msg: String| {
+                for &kind in kinds {
+                    let _ = tx.send(BackendResult::ArtistSectionLoaded {
+                        rid,
+                        provider,
+                        kind,
+                        data: Box::new(Err(msg.clone())),
+                    });
+                }
             };
-            // Render the page immediately; for YouTube popular tracks a
-            // second pass backfills durations/view counts once yt-dlp
-            // finishes.
-            let enrich = provider == ProviderId::YouTube && ArtistDataKind::Popular.wanted(kinds);
-            if let (true, Ok(page)) = (enrich, &page) {
-                let _ = tx.send(BackendResult::ArtistPageLoaded {
+            let resolved_id = match known_id {
+                Some(id) => id,
+                None => match crate::providers::resolve_artist_id(provider, &name) {
+                    // The id is only reported back when freshly resolved;
+                    // an already-known one needs no caching.
+                    Ok(Some(id)) => {
+                        let _ = tx.send(BackendResult::ArtistIdResolved {
+                            rid,
+                            provider,
+                            resolved_id: id.clone(),
+                        });
+                        id
+                    }
+                    Ok(None) => {
+                        fail_all(format!("Could not find {name} on {}", provider.label()));
+                        return;
+                    }
+                    Err(e) => {
+                        fail_all(e.to_string());
+                        return;
+                    }
+                },
+            };
+            // YouTube's enrichment resend of Popular arrives later from the
+            // fetch itself; everything here forwards as it lands.
+            for ArtistKindResult(kind, data) in
+                spawn_artist_kinds_fetch(provider, &resolved_id, kinds)
+            {
+                let _ = tx.send(BackendResult::ArtistSectionLoaded {
                     rid,
                     provider,
-                    resolved_id: resolved_id.clone(),
-                    kinds,
-                    page: Box::new(Ok(page.clone())),
+                    kind,
+                    data: Box::new(data),
                 });
             }
-            let mut page = page;
-            if enrich {
-                if let Ok(page) = &mut page {
-                    crate::providers::enrich_track_metadata(&mut page.popular);
-                }
-            }
-            let _ = tx.send(BackendResult::ArtistPageLoaded {
-                rid,
-                provider,
-                resolved_id,
-                kinds,
-                page: Box::new(page),
-            });
         });
     }
 
@@ -149,7 +159,7 @@ impl MusicPlayer {
         provider: ProviderId,
     ) {
         let name;
-        let cached_tracks;
+        let served;
         {
             let ViewKind::Artist(entry) = &mut self.view_data_mut().kind else {
                 return;
@@ -157,34 +167,54 @@ impl MusicPlayer {
 
             // Serve from the per-provider cache when this section's data was
             // already fetched — no loading state, no request.
-            cached_tracks = entry.page.serve_cached_section(section_kind, provider);
-            if cached_tracks.is_none() {
+            served = entry.page.serve_cached_section(section_kind, provider);
+            if served.is_none() {
                 entry.page.start_section_load(section_kind, provider);
             }
             name = entry.name.clone();
         }
-        if let Some(tracks) = cached_tracks {
-            let slot = self.view_data_mut();
-            slot.set_tracks(tracks);
-            slot.selection.clear();
+        if let Some(content) = served {
+            if let SectionContent::Tracks(tracks) = content {
+                // Popular tracks mirror into the view's track list so the
+                // usual interactions keep working on them.
+                let slot = self.view_data_mut();
+                slot.set_tracks(tracks);
+                slot.selection.clear();
+            }
             return;
         }
+        if section_kind == ArtistSectionKind::Popular {
+            self.view_data_mut().content = LoadState::Loading;
+        }
+        // A fresh attempt must be allowed to toast its own failure.
+        self.artist_error_dedup = None;
         let rid = self.slot_request_id();
         self.load_artist_page(rid, &name, provider, section_kind.data_kinds());
     }
 
-    /// Merge a finished artist-data fetch into its view slot. Only the
-    /// requested `kinds` are applied to the sections; the header picture and
-    /// bio come exclusively from whichever provider owns the header
-    /// (`header_provider`), while its stats merge additively (labels are
-    /// provider-scoped, e.g. "Monthly listeners" / "Followers" counts).
-    pub fn apply_artist_page(
+    /// Cache a freshly resolved per-provider artist id on the page that
+    /// requested it.
+    pub fn apply_artist_id_resolved(&mut self, rid: u64, provider: ProviderId, resolved_id: &str) {
+        let Some(idx) = self.slot_for_request(rid) else {
+            return;
+        };
+        if let ViewKind::Artist(entry) = &mut self.nav_history[idx].kind {
+            entry
+                .page
+                .provider_ids
+                .insert(provider, resolved_id.to_string());
+        }
+    }
+
+    /// Merge one finished artist-section fetch into its view slot: cache it
+    /// under `provider`, mark the owning section ready (or failed), and —
+    /// for popular tracks — refresh the view's track list.
+    pub fn apply_artist_section(
         &mut self,
         rid: u64,
         provider: ProviderId,
-        resolved_id: Option<String>,
-        kinds: &'static [ArtistDataKind],
-        result: Result<ArtistPage, String>,
+        kind: ArtistDataKind,
+        result: Result<ArtistKindData, String>,
     ) {
         let Some(idx) = self.slot_for_request(rid) else {
             return;
@@ -193,51 +223,86 @@ impl MusicPlayer {
             return;
         };
         let page = &mut entry.page;
+        let succeeded = result.is_ok();
         match result {
-            Ok(fetched) => {
-                if let Some(id) = resolved_id {
-                    page.provider_ids.insert(provider, id);
-                }
+            Ok(data) => {
                 page.pages
                     .entry(provider)
                     .or_default()
-                    .merge(kinds, fetched.clone());
-                page.merge_header(provider, fetched.header.as_ref());
-                let new_tracks = page.apply_fetch(kinds, provider, &fetched);
-                if let Some(tracks) = new_tracks {
-                    let slot = &mut self.nav_history[idx];
-                    let enriched = match slot.tracks_mut() {
-                        Some(existing) if same_popular_ids(existing, &tracks, provider) => {
-                            // Enrichment resend of the rows already on screen:
-                            // backfill metadata in place so a selection made while
-                            // the fetch ran survives.
-                            for (existing, incoming) in existing.iter_mut().zip(&tracks) {
-                                if let (Some(e), Some(i)) = (
-                                    existing.providers.get_mut(&provider),
-                                    incoming.providers.get(&provider),
-                                ) {
-                                    e.duration = i.duration;
-                                    e.play_count = i.play_count;
+                    .merge_kind(kind, &data);
+                if let ArtistKindData::Header(header) = &data {
+                    page.merge_header(provider, Some(header));
+                } else {
+                    let section_kind = ArtistSectionKind::ALL
+                        .into_iter()
+                        .find(|k| k.data_kind() == kind);
+                    if let Some(section_kind) = section_kind {
+                        if page.section(section_kind).provider == Some(provider) {
+                            page.section_mut(section_kind).state =
+                                LoadState::Ready(data.to_section_content());
+                            if section_kind == ArtistSectionKind::Popular {
+                                if let ArtistKindData::Popular(tracks) = data {
+                                    let slot = &mut self.nav_history[idx];
+                                    Self::install_popular_tracks(slot, tracks, provider);
                                 }
                             }
-                            true
                         }
-                        _ => false,
-                    };
-                    if !enriched {
-                        slot.set_tracks(tracks);
-                        slot.selection.clear();
                     }
                 }
-                self.finalize_view(idx);
-                let view = self.nav_history[idx].clone();
-                self.seed_artist_thumbnails(&view);
             }
-            Err(msg) => {
-                tracing::warn!("artist page load failed: {msg}");
-                page.fail_sections(provider, &msg);
-                self.notify_error(format!("{}: {msg}", provider.label()));
+            Err(ref msg) => {
+                tracing::warn!("artist {kind:?} load failed: {msg}");
+                page.fail_section(provider, kind, msg);
+                if kind == ArtistDataKind::Popular
+                    && page.section(ArtistSectionKind::Popular).provider == Some(provider)
+                    && self.nav_history[idx].content.is_loading()
+                {
+                    self.nav_history[idx].content = LoadState::Failed(msg.clone());
+                }
+                // One logical failure fans out to one message per kind;
+                // surface only the first as a toast.
+                if self.artist_error_dedup != Some((rid, provider)) {
+                    self.artist_error_dedup = Some((rid, provider));
+                    self.notify_error(format!("{}: {msg}", provider.label()));
+                }
             }
+        }
+        if succeeded {
+            if self.artist_error_dedup == Some((rid, provider)) {
+                self.artist_error_dedup = None;
+            }
+            self.finalize_view(idx);
+            let view = self.nav_history[idx].clone();
+            self.seed_artist_thumbnails(&view);
+        }
+    }
+
+    /// Put freshly loaded popular tracks into the view slot. An enrichment
+    /// resend of the rows already on screen backfills metadata in place so a
+    /// selection made while the fetch ran survives.
+    fn install_popular_tracks(
+        slot: &mut ViewData,
+        tracks: Vec<crate::types::Track>,
+        provider: ProviderId,
+    ) {
+        let enriched = match slot.tracks_mut() {
+            Some(existing) if same_popular_ids(existing, &tracks, provider) => {
+                for (existing, incoming) in existing.iter_mut().zip(&tracks) {
+                    if let (Some(e), Some(i)) = (
+                        existing.providers.get_mut(&provider),
+                        incoming.providers.get(&provider),
+                    ) {
+                        e.duration = i.duration;
+                        e.play_count = i.play_count;
+                    }
+                }
+                true
+            }
+            _ => false,
+        };
+        if !enriched {
+            slot.set_tracks(tracks);
+            slot.selection.clear();
         }
     }
 

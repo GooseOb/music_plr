@@ -128,6 +128,8 @@ pub struct MusicPlayer {
 
     pub notification: Option<std::borrow::Cow<'static, str>>,
 
+    pub artist_error_dedup: Option<(u64, crate::providers::ProviderId)>,
+
     pub thumbnail_index: crate::data::thumbnails::ThumbnailIndex,
     pub playlists: PlaylistStore,
     pub playlist_create_name: String,
@@ -227,6 +229,7 @@ impl MusicPlayer {
             duration: 0.0,
             download_registry: DownloadRegistry::load(),
             notification: None,
+            artist_error_dedup: None,
             track_loading: false,
             playlists: PlaylistStore::load(),
             playlist_create_name: String::new(),

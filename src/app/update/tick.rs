@@ -225,13 +225,17 @@ impl MusicPlayer {
                     self.install_results(idx, tracks);
                 }
             }
-            BackendResult::ArtistPageLoaded {
+            BackendResult::ArtistIdResolved {
                 rid,
                 provider,
                 resolved_id,
-                kinds,
-                page,
-            } => self.apply_artist_page(rid, provider, resolved_id, kinds, *page),
+            } => self.apply_artist_id_resolved(rid, provider, &resolved_id),
+            BackendResult::ArtistSectionLoaded {
+                rid,
+                provider,
+                kind,
+                data,
+            } => self.apply_artist_section(rid, provider, kind, *data),
             BackendResult::CardPlaylistReady(idx, name, tracks) => {
                 // A dragged card turned into a playlist; the browse result
                 // fills it. The playlist view reads tracks from the store, so

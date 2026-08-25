@@ -88,15 +88,6 @@ impl Default for SectionContent {
     }
 }
 
-impl SectionContent {
-    fn as_tracks(&self) -> Option<&Vec<Track>> {
-        match self {
-            Self::Tracks(tracks) => Some(tracks),
-            _ => None,
-        }
-    }
-}
-
 /// One fetchable piece of an artist page. Backends only request the data
 /// for the kinds they're asked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +113,41 @@ impl ArtistDataKind {
     }
 }
 
+/// The data one [`ArtistDataKind`] resolves to — what a fetch actually
+/// delivers, without wrapping it in a page.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ArtistKindData {
+    Header(ArtistHeader),
+    Popular(Vec<Track>),
+    Albums(Vec<ArtistAlbumCard>),
+    Playlists(Vec<CardData>),
+    Related(Vec<RelatedArtistCard>),
+}
+
+impl ArtistKindData {
+    /// View as section content (for rendering a section directly).
+    pub fn to_section_content(&self) -> SectionContent {
+        match self {
+            Self::Popular(tracks) => SectionContent::Tracks(tracks.clone()),
+            Self::Albums(albums) => SectionContent::Albums(albums.clone()),
+            Self::Playlists(playlists) => SectionContent::Playlists(playlists.clone()),
+            Self::Related(related) => SectionContent::Related(related.clone()),
+            Self::Header(_) => SectionContent::default(),
+        }
+    }
+
+    /// Store into an [`ArtistPage`] under `kind`.
+    fn store(&self, page: &mut ArtistPage) {
+        match self {
+            Self::Header(_) => {}
+            Self::Popular(v) => page.popular.clone_from(v),
+            Self::Albums(v) => page.albums.clone_from(v),
+            Self::Playlists(v) => page.playlists.clone_from(v),
+            Self::Related(v) => page.related.clone_from(v),
+        }
+    }
+}
+
 /// A provider page plus which kinds it already contains — the unit of the
 /// per-provider cache. Sections absent from `fetched` still need fetching.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -136,38 +162,27 @@ impl CachedArtistPage {
         kinds.iter().all(|k| self.fetched.contains(k))
     }
 
-    /// Merge a fresh partial fetch: overwrite each part that is non-empty in
-    /// the response (empty means "not requested"), and record its kinds.
-    pub fn merge(&mut self, kinds: &[ArtistDataKind], page: ArtistPage) {
-        if !page.popular.is_empty() {
-            self.page.popular = page.popular;
-        }
-        if !page.albums.is_empty() {
-            self.page.albums = page.albums;
-        }
-        if !page.playlists.is_empty() {
-            self.page.playlists = page.playlists;
-        }
-        if !page.related.is_empty() {
-            self.page.related = page.related;
-        }
-        if let Some(header) = page.header {
+    /// Merge one fetched kind's data and record it (the kind was actually
+    /// requested, so an empty list is a valid result). Header merges
+    /// additively instead of overwriting.
+    pub fn merge_kind(&mut self, kind: ArtistDataKind, data: &ArtistKindData) {
+        if let ArtistKindData::Header(header) = data {
             if let Some(existing) = &mut self.page.header {
-                existing.merge_stats_from(&header);
+                existing.merge_stats_from(header);
                 if existing.image.is_empty() {
-                    existing.image = header.image;
+                    existing.image.clone_from(&header.image);
                 }
                 if existing.description.is_empty() {
-                    existing.description = header.description;
+                    existing.description.clone_from(&header.description);
                 }
             } else {
-                self.page.header = Some(header);
+                self.page.header = Some(header.clone());
             }
+        } else {
+            data.store(&mut self.page);
         }
-        for kind in kinds {
-            if !self.fetched.contains(kind) {
-                self.fetched.push(*kind);
-            }
+        if !self.fetched.contains(&kind) {
+            self.fetched.push(kind);
         }
     }
 }
@@ -255,53 +270,33 @@ impl ArtistPageState {
     }
 
     /// Serve `kind` from `provider`'s cache when it covers the section.
-    /// Returns the popular tracks when they were served (the view's track
-    /// list mirrors that section).
+    /// `None` means a genuine cache miss (caller starts a load); `Some`
+    /// carries the section's content, already stored as `Ready`.
     pub fn serve_cached_section(
         &mut self,
         kind: ArtistSectionKind,
         provider: ProviderId,
-    ) -> Option<Vec<Track>> {
+    ) -> Option<SectionContent> {
         let cached = self.pages.get(&provider)?;
         if !cached.covers(kind.data_kinds()) {
             return None;
         }
         let content = cached.page.content(kind.data_kind())?;
-        let tracks = content.as_tracks().cloned();
         let section = self.section_mut(kind);
         section.provider = Some(provider);
-        section.state = crate::load_state::LoadState::Ready(content);
-        tracks
+        section.state = crate::load_state::LoadState::Ready(content.clone());
+        Some(content)
     }
 
-    /// Mark each requested section owned by `provider` as ready with the
-    /// fetched data. Returns the popular tracks when they were among the
-    /// fetched kinds.
-    pub fn apply_fetch(
-        &mut self,
-        kinds: &[ArtistDataKind],
-        provider: ProviderId,
-        fetched: &ArtistPage,
-    ) -> Option<Vec<Track>> {
-        let mut new_tracks = None;
+    /// Fail the loading section for `data_kind` if `provider` owns it
+    /// (already-loaded sections keep their content).
+    pub fn fail_section(&mut self, provider: ProviderId, data_kind: ArtistDataKind, msg: &str) {
         for kind in ArtistSectionKind::ALL {
-            let data_kind = kind.data_kind();
-            if !data_kind.wanted(kinds) || self.section(kind).provider != Some(provider) {
-                continue;
-            }
-            if let Some(content) = fetched.content(data_kind) {
-                new_tracks = content.as_tracks().cloned();
-                self.section_mut(kind).state = crate::load_state::LoadState::Ready(content);
-            }
-        }
-        new_tracks
-    }
-
-    /// Fail every loading section owned by `provider` (already-loaded
-    /// sections keep their content).
-    pub fn fail_sections(&mut self, provider: ProviderId, msg: &str) {
-        for section in &mut self.sections {
-            if section.provider == Some(provider) && section.state.is_loading() {
+            let section = self.section_mut(kind);
+            if section.provider == Some(provider)
+                && kind.data_kind() == data_kind
+                && section.state.is_loading()
+            {
                 section.state = crate::load_state::LoadState::Failed(msg.to_string());
             }
         }
@@ -399,5 +394,88 @@ impl ArtistSectionKind {
             ],
             _ => &[ProviderId::YouTube, ProviderId::SoundCloud],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn yt_page(popular: bool) -> ArtistPage {
+        ArtistPage {
+            header: Some(ArtistHeader::default()),
+            popular: if popular {
+                vec![crate::types::Track::default()]
+            } else {
+                Vec::new()
+            },
+            albums: vec![ArtistAlbumCard::default()],
+            playlists: vec![CardData::default()],
+            related: vec![RelatedArtistCard::default()],
+        }
+    }
+
+    #[test]
+    fn switching_provider_back_serves_from_cache() {
+        let mut state = ArtistPageState::new(ProviderId::YouTube, "yt1");
+
+        // Open: YouTube answers everything.
+        let page = yt_page(true);
+        state.pages.entry(ProviderId::YouTube).or_default();
+        for &kind in ArtistDataKind::ALL {
+            let data = match kind {
+                ArtistDataKind::Header => ArtistKindData::Header(page.header.clone().unwrap()),
+                ArtistDataKind::Popular => ArtistKindData::Popular(page.popular.clone()),
+                ArtistDataKind::Albums => ArtistKindData::Albums(page.albums.clone()),
+                ArtistDataKind::Playlists => ArtistKindData::Playlists(page.playlists.clone()),
+                ArtistDataKind::Related => ArtistKindData::Related(page.related.clone()),
+            };
+            state
+                .pages
+                .get_mut(&ProviderId::YouTube)
+                .unwrap()
+                .merge_kind(kind, &data);
+            if kind != ArtistDataKind::Header {
+                let sk = ArtistSectionKind::ALL
+                    .into_iter()
+                    .find(|k| k.data_kind() == kind)
+                    .unwrap();
+                state.section_mut(sk).state = LoadState::Ready(data.to_section_content());
+            }
+        }
+
+        // Sanity: YouTube cache already covers Albums before any switching.
+        assert!(state
+            .serve_cached_section(ArtistSectionKind::Albums, ProviderId::YouTube)
+            .is_some());
+
+        // Switch Albums to SoundCloud, fetch arrives.
+        assert!(state
+            .serve_cached_section(ArtistSectionKind::Albums, ProviderId::SoundCloud)
+            .is_none());
+        state.start_section_load(ArtistSectionKind::Albums, ProviderId::SoundCloud);
+        state
+            .pages
+            .entry(ProviderId::SoundCloud)
+            .or_default()
+            .merge_kind(
+                ArtistDataKind::Albums,
+                &ArtistKindData::Albums(vec![ArtistAlbumCard::default()]),
+            );
+        state.section_mut(ArtistSectionKind::Albums).state = LoadState::Ready(
+            ArtistKindData::Albums(vec![ArtistAlbumCard::default()]).to_section_content(),
+        );
+
+        // Back to YouTube: must be a cache hit, no reload.
+        assert!(
+            state
+                .serve_cached_section(ArtistSectionKind::Albums, ProviderId::YouTube)
+                .is_some(),
+            "YouTube albums should be served from cache"
+        );
+        // And SoundCloud again too.
+        assert!(state
+            .serve_cached_section(ArtistSectionKind::Albums, ProviderId::SoundCloud)
+            .is_some());
     }
 }

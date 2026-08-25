@@ -27,16 +27,21 @@ pub enum BackendResult {
     LyricsFetched(Result<Lyrics, String>, String),
     NormalizationComputed(String, f32),
     CardPlaylistReady(usize, String, Vec<Track>),
-    /// A full artist-page fetch finished for `provider`. `resolved_id` is the
-    /// provider artist id when the thread had to resolve it by name (so the
-    /// caller can cache it). `page` is the error on failure.
-    ArtistPageLoaded {
+    /// An artist id was resolved on `provider` (by name) for the page that
+    /// issued request `rid`; cached into the page's known provider ids.
+    ArtistIdResolved {
         rid: u64,
         provider: ProviderId,
-        resolved_id: Option<String>,
-        /// Which data kinds this fetch asked for; only these are merged.
-        kinds: &'static [crate::providers::ArtistDataKind],
-        page: Box<Result<crate::providers::ArtistPage, String>>,
+        resolved_id: String,
+    },
+    /// One artist-page section (`kind`) finished fetching for `provider`;
+    /// the payload is exactly that kind's data. The error fails just its
+    /// section.
+    ArtistSectionLoaded {
+        rid: u64,
+        provider: ProviderId,
+        kind: crate::providers::ArtistDataKind,
+        data: Box<Result<crate::providers::ArtistKindData, String>>,
     },
     LocalFilesPicked(Vec<std::path::PathBuf>),
     ProviderResolved {

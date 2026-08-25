@@ -349,27 +349,80 @@ pub fn browse(provider: ProviderId, id: &str, kind: &str) -> Result<Vec<Track>> 
 }
 
 pub use artist_page::{
-    ArtistAlbumCard, ArtistDataKind, ArtistHeader, ArtistPage, ArtistPageState, ArtistSection,
-    ArtistSectionKind, RelatedArtistCard, SectionContent,
+    ArtistAlbumCard, ArtistDataKind, ArtistHeader, ArtistKindData, ArtistPage, ArtistPageState,
+    ArtistSection, ArtistSectionKind, RelatedArtistCard, SectionContent,
 };
 
-/// Fetch only the requested [`ArtistDataKind`] pieces of an artist page for
-/// `provider`. Backends issue just the requests needed for those kinds.
-pub fn fetch_artist_page(
+/// One artist-page section fetch result: the kind and its data (or error).
+/// See [`spawn_artist_kinds_fetch`].
+pub struct ArtistKindResult(pub ArtistDataKind, pub Result<ArtistKindData, String>);
+
+/// Fetch each requested kind of `provider`'s artist page on a background
+/// thread, delivering one [`ArtistKindResult`] per kind as soon as its data
+/// is available (via the returned channel). Providers that get everything in
+/// one call (`YouTube`, `MusicBrainz`) send all kinds after that call;
+/// `SoundCloud`'s independent endpoints deliver incrementally, so one
+/// failing section no longer blanks the others.
+pub fn spawn_artist_kinds_fetch(
     provider: ProviderId,
     id: &str,
-    kinds: &[artist_page::ArtistDataKind],
-) -> Result<artist_page::ArtistPage> {
-    match provider {
-        ProviderId::YouTube => youtube::fetch_artist_page(id, kinds),
-        ProviderId::SoundCloud => soundcloud::fetch_artist_page(id, kinds),
-        ProviderId::MusicBrainz => musicbrainz::fetch_artist_page(id, kinds),
-        ProviderId::Local => Ok(artist_page::ArtistPage::default()),
-    }
+    kinds: &'static [ArtistDataKind],
+) -> std::sync::mpsc::Receiver<ArtistKindResult> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let id = id.to_string();
+    thread::spawn(move || {
+        if provider == ProviderId::SoundCloud {
+            soundcloud::fetch_artist_kinds(&id, kinds, &tx);
+        } else {
+            // One-shot providers: a single request answers every kind; split
+            // it into per-kind payloads and send them all at once. YouTube's
+            // popular tracks lack durations/view counts; a yt-dlp enrichment
+            // pass runs AFTER the fan-out (it takes seconds) and resends
+            // Popular so the page never waits on it.
+            let result = match provider {
+                ProviderId::YouTube => youtube::fetch_artist_page(&id, kinds),
+                ProviderId::MusicBrainz => musicbrainz::fetch_artist_page(&id, kinds),
+                _ => Ok(artist_page::ArtistPage::default()),
+            }
+            .map_err(|e| format!("{e:#}"));
+            for &kind in kinds {
+                let data = match &result {
+                    Ok(page) => single_kind_data(page, kind)
+                        .map_or_else(|| Err(format!("No {kind:?} data")), Ok),
+                    Err(e) => Err(e.clone()),
+                };
+                let _ = tx.send(ArtistKindResult(kind, data));
+            }
+            if provider == ProviderId::YouTube {
+                if let Ok(page) = &result {
+                    if ArtistDataKind::Popular.wanted(kinds) {
+                        let mut page = page.clone();
+                        youtube::enrich_track_metadata(&mut page.popular);
+                        let _ = tx.send(ArtistKindResult(
+                            ArtistDataKind::Popular,
+                            Ok(ArtistKindData::Popular(page.popular)),
+                        ));
+                    }
+                }
+            }
+        }
+    });
+    rx
 }
 
-/// Fill missing duration/view counts on `YouTube` tracks (batched yt-dlp pass).
-pub use youtube::enrich_track_metadata;
+/// Project `page` down to just `kind`'s data. `None` means the page has no
+/// data for that kind (e.g. no header) — the kind is skipped rather than
+/// cached as covered with empty content.
+fn single_kind_data(page: &ArtistPage, kind: ArtistDataKind) -> Option<ArtistKindData> {
+    use artist_page::ArtistKindData as D;
+    match kind {
+        ArtistDataKind::Header => page.header.clone().map(D::Header),
+        ArtistDataKind::Popular => Some(D::Popular(page.popular.clone())),
+        ArtistDataKind::Albums => Some(D::Albums(page.albums.clone())),
+        ArtistDataKind::Playlists => Some(D::Playlists(page.playlists.clone())),
+        ArtistDataKind::Related => Some(D::Related(page.related.clone())),
+    }
+}
 
 /// Resolve an artist name to that provider's artist id (used to lazily open
 /// a page section on a provider whose id isn't known yet). Returns

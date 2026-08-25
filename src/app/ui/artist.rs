@@ -273,14 +273,18 @@ fn failed_state<'a>(
     kind: ArtistSectionKind,
     e: &str,
 ) -> Element<'a, Message, AppTheme> {
-    Column::with_children([
-        text(format!("Couldn't load: {e}")).into(),
-        Button::new(text("Retry").style(fg_accent()))
-            .padding([theme::SPACING_2XS, theme::SPACING_SM])
-            .on_press_maybe(provider.map(|p| Message::ArtistSectionProviderChanged(kind, p)))
-            .into(),
-    ])
-    .spacing(theme::SPACING_SM)
+    Container::new(
+        Column::with_children([
+            text(format!("Couldn't load: {e}")).into(),
+            Button::new("Retry")
+                .padding([theme::SPACING_2XS, theme::SPACING_SM])
+                .on_press_maybe(provider.map(|p| Message::ArtistSectionProviderChanged(kind, p)))
+                .into(),
+        ])
+        .align_x(alignment::Horizontal::Center)
+        .spacing(theme::SPACING_SM),
+    )
+    .center(Length::Fill)
     .into()
 }
 
