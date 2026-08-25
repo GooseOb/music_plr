@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    shared_components::{empty_state, scope_button, scope_tab_row},
+    shared_components::{empty_state, loading_state, scope_button, scope_tab_row},
     styles::{button_style_panel_item, fg_secondary},
     theme, Message, MusicPlayer,
 };
@@ -23,6 +23,7 @@ pub(super) fn view_lyrics<'a>(
     lyrics_state: &'a LyricsState,
 ) -> Element<'a, Message, AppTheme> {
     let track = player.queue.current();
+    let p = &player.app_theme.palette;
 
     let lyrics_ready = matches!(&lyrics_state.lyrics, LoadState::Ready(_));
 
@@ -48,7 +49,7 @@ pub(super) fn view_lyrics<'a>(
             )
             .padding(theme::SPACING_LG)
             .into(),
-            (Some(_), LoadState::Loading) => empty_state("Looking up lyrics…"),
+            (Some(_), LoadState::Loading) => loading_state(p, "Looking up lyrics…"),
             (Some(_), LoadState::Failed(e)) => empty_state(format!("Couldn't load lyrics: {e}")),
             (None, _) => empty_state("Play a track to see its lyrics."),
         }

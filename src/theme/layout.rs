@@ -32,6 +32,8 @@ pub const SEARCH_DROPDOWN_MAX_ITEMS: usize = 5;
 pub const ICON_SIZE_SM: f32 = 14.0;
 pub const ICON_SIZE_MD: f32 = 16.0;
 pub const ICON_SIZE_LG: f32 = 18.0;
+pub const SPINNER_SIZE: f32 = 28.0;
+pub const SPINNER_FRAME_MS: u64 = 33;
 
 pub const TEXT_SIZE_XS: u32 = 12;
 pub const TEXT_SIZE_SM: u32 = 13;

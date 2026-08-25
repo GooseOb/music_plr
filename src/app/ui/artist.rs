@@ -12,7 +12,9 @@ use crate::{
 };
 
 use super::{
-    shared_components::{empty_state, scope_tab_row, thumbnail, toggle_bookmark_button},
+    shared_components::{
+        empty_state, loading_state, scope_tab_row, thumbnail, toggle_bookmark_button,
+    },
     styles::{fg_accent, fg_secondary},
     view_track_list, Message, MusicPlayer,
 };
@@ -266,6 +268,22 @@ fn cards<'a>(
     }
 }
 
+fn failed_state<'a>(
+    provider: Option<ProviderId>,
+    kind: ArtistSectionKind,
+    e: &str,
+) -> Element<'a, Message, AppTheme> {
+    Column::with_children([
+        text(format!("Couldn't load: {e}")).into(),
+        Button::new(text("Retry").style(fg_accent()))
+            .padding([theme::SPACING_2XS, theme::SPACING_SM])
+            .on_press_maybe(provider.map(|p| Message::ArtistSectionProviderChanged(kind, p)))
+            .into(),
+    ])
+    .spacing(theme::SPACING_SM)
+    .into()
+}
+
 fn section_body<'a>(
     player: &'a MusicPlayer,
     section: &'a ArtistSection,
@@ -277,32 +295,23 @@ fn section_body<'a>(
         // Popular tracks live in the view's track list so all the usual
         // interactions (play, context menu, drag) work on them.
         return match &view_data.content {
-            LoadState::Ready(tracks) if !tracks.is_empty() => {
-                view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
+            LoadState::Ready(tracks) => {
+                if tracks.is_empty() {
+                    empty_state("Nothing here")
+                } else {
+                    view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
+                }
             }
-            _ => empty_state("Nothing here"),
+            LoadState::Failed(e) => return failed_state(section.provider, kind, e),
+            LoadState::Loading => return loading_state(&player.app_theme.palette, "Loading..."),
         };
     }
 
     // Failed sections offer an in-place retry (re-requesting the provider).
     let content = match &section.state {
         LoadState::Ready(content) => content,
-        LoadState::Failed(e) => {
-            let retry = Button::new(text("Retry").style(fg_accent()))
-                .padding([theme::SPACING_2XS, theme::SPACING_SM])
-                .style(super::styles::button_style_scope(false))
-                .on_press_maybe(
-                    section
-                        .provider
-                        .map(|p| Message::ArtistSectionProviderChanged(kind, p)),
-                );
-            return Column::new()
-                .spacing(theme::SPACING_SM)
-                .push(text(format!("Couldn't load: {e}")))
-                .push(retry)
-                .into();
-        }
-        LoadState::Loading => return empty_state("Loading..."),
+        LoadState::Failed(e) => return failed_state(section.provider, kind, e),
+        LoadState::Loading => return loading_state(&player.app_theme.palette, "Loading..."),
     };
     let provider = section.provider.unwrap_or_default();
     h_scroll_cards(cards(player, provider, content))

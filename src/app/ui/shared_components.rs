@@ -1,7 +1,9 @@
+use std::time::Duration;
+
 use iced::{
-    alignment,
-    widget::{container, image, text, text_input, Button, Column, Container, Id, Row},
-    Color, Element, Length,
+    advanced, alignment,
+    widget::{canvas, container, image, text, text_input, Button, Column, Container, Id, Row},
+    window, Color, Element, Length, Size, Vector,
 };
 
 use crate::{
@@ -11,12 +13,14 @@ use crate::{
 };
 
 use super::styles::{button_style_primary, button_style_scope, fg_secondary};
+use iced::advanced::graphics::geometry::Renderer as _;
+use iced_core::Renderer as _;
 
 /// Render a thumbnail image if it exists on disk, otherwise a music-note
 /// placeholder. `thumb` is the resolved path from the thumbnail index
 /// (`Some`) or `None` when not yet downloaded.
 pub fn thumbnail<'a>(
-    p: &'a Palette,
+    p: &Palette,
     size: f32,
     thumb: Option<&'a std::path::PathBuf>,
 ) -> Element<'a, Message, AppTheme> {
@@ -95,6 +99,112 @@ pub fn empty_state<'a>(msg: impl text::IntoFragment<'a>) -> Element<'a, Message,
     Container::new(text(msg).style(fg_secondary()))
         .center(Length::Fill)
         .into()
+}
+
+/// Animated loading indicator: spinner above a status line. The widget
+/// drives its own animation by rescheduling redraws on every window
+/// `RedrawRequested` event, so it needs no subscription or messages; it
+/// stops automatically when unmounted.
+pub fn loading_state<'a>(
+    p: &'a Palette,
+    msg: impl text::IntoFragment<'a>,
+) -> Element<'a, Message, AppTheme> {
+    Container::new(
+        Column::with_children([
+            spinner(p.fg_secondary, theme::SPINNER_SIZE),
+            text(msg).style(fg_secondary()).into(),
+        ])
+        .spacing(theme::SPACING_SM)
+        .align_x(alignment::Horizontal::Center),
+    )
+    .center(Length::Fill)
+    .into()
+}
+
+pub fn spinner(color: Color, size: f32) -> Element<'static, Message, AppTheme> {
+    Element::new(Spinner { color, size })
+}
+
+/// Self-animating arc spinner. Rotation is derived from the wall clock at
+/// draw time; `update` keeps the redraw loop alive while mounted.
+struct Spinner {
+    color: Color,
+    size: f32,
+}
+
+impl<Message> advanced::Widget<Message, AppTheme, iced::Renderer> for Spinner {
+    fn size(&self) -> Size<Length> {
+        Size::new(Length::Fixed(self.size), Length::Fixed(self.size))
+    }
+
+    fn layout(
+        &mut self,
+        _tree: &mut advanced::widget::Tree,
+        _renderer: &iced::Renderer,
+        limits: &advanced::layout::Limits,
+    ) -> advanced::layout::Node {
+        advanced::layout::Node::new(limits.resolve(self.size, self.size, Size::ZERO))
+    }
+
+    fn update(
+        &mut self,
+        _tree: &mut advanced::widget::Tree,
+        event: &iced::Event,
+        _layout: advanced::Layout<'_>,
+        _cursor: iced::mouse::Cursor,
+        _renderer: &iced::Renderer,
+        _clipboard: &mut dyn advanced::Clipboard,
+        shell: &mut advanced::Shell<'_, Message>,
+        _viewport: &iced::Rectangle,
+    ) {
+        if let iced::Event::Window(window::Event::RedrawRequested(now)) = event {
+            shell.request_redraw_at(*now + Duration::from_millis(theme::SPINNER_FRAME_MS));
+        }
+    }
+
+    fn draw(
+        &self,
+        _tree: &advanced::widget::Tree,
+        renderer: &mut iced::Renderer,
+        _theme: &AppTheme,
+        _style: &advanced::renderer::Style,
+        layout: advanced::Layout<'_>,
+        _cursor: iced::mouse::Cursor,
+        _viewport: &iced::Rectangle,
+    ) {
+        let bounds = layout.bounds();
+        if bounds.width < 1.0 || bounds.height < 1.0 {
+            return;
+        }
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let stroke_width = (self.size / 10.0).max(2.0);
+        let radius = bounds.width / 2.0 - stroke_width;
+        if radius > 0.0 {
+            let frac = (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.subsec_millis()) as f32)
+                / 1000.0;
+            let start_angle: iced::Radians = (frac * std::f32::consts::TAU).into();
+            let mut builder = canvas::path::Builder::new();
+            builder.arc(canvas::path::Arc {
+                center: frame.center(),
+                radius,
+                start_angle,
+                end_angle: (start_angle.0 + std::f32::consts::TAU * 0.75).into(),
+            });
+            frame.stroke(
+                &builder.build(),
+                canvas::Stroke::default()
+                    .with_color(self.color)
+                    .with_width(stroke_width)
+                    .with_line_cap(canvas::LineCap::Round),
+            );
+        }
+        let geometry = frame.into_geometry();
+        renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
+            renderer.draw_geometry(geometry);
+        });
+    }
 }
 
 pub fn scope_button(

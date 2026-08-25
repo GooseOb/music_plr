@@ -6,7 +6,7 @@ description = "A music player with YouTube search, local playback, and MPRIS int
 license = "MIT"
 
 [dependencies]
-iced = { version = "0.14", features = ["image", "svg", "tokio", "debug"] }
+iced = { version = "0.14", features = ["image", "svg", "tokio", "debug", "canvas", "advanced"] }
 # Pinned to the same version iced resolves to, so we can implement the
 # `widget::operation::Operation` trait (not publicly re-exported by `iced`).
 # Keep this in lockstep with `iced`'s `iced_core` when upgrading.

@@ -23,7 +23,8 @@ use crate::{
 
 use super::{
     shared_components::{
-        empty_state, inner_row_layout, scope_tab_row, thumbnail, toggle_bookmark_button, track_row,
+        empty_state, inner_row_layout, loading_state, scope_tab_row, thumbnail,
+        toggle_bookmark_button, track_row,
     },
     styles::{
         bg_search_hist, bg_secondary, button_style_hist, button_style_primary, fg_secondary,
@@ -109,7 +110,7 @@ pub(super) fn view_search<'a>(
     let content = &player.view_data().content;
     match content {
         LoadState::Failed(e) => empty_state(format!("Search failed: {e}")),
-        LoadState::Loading => empty_state("Searching..."),
+        LoadState::Loading => loading_state(&player.app_theme.palette, "Searching..."),
         LoadState::Ready(results) if tab.is_track_tab() => {
             view_search_track_tab(player, search, results)
         }
@@ -259,7 +260,7 @@ pub(super) fn view_browse<'a>(
 
     let track_list = match content {
         LoadState::Failed(e) => empty_state(format!("Couldn't load: {e}")),
-        LoadState::Loading => empty_state("Loading..."),
+        LoadState::Loading => loading_state(&player.app_theme.palette, "Loading..."),
         LoadState::Ready(tracks) => {
             view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
         }
@@ -290,7 +291,7 @@ pub(super) fn view_search_radio<'a>(
 
     let track_list = match content {
         LoadState::Failed(e) => empty_state(format!("Radio failed: {e}")),
-        LoadState::Loading => empty_state("Generating radio..."),
+        LoadState::Loading => loading_state(&player.app_theme.palette, "Generating radio..."),
         LoadState::Ready(tracks) => {
             view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
         }
