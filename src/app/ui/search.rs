@@ -132,14 +132,11 @@ fn view_search_track_tab<'a>(
         children.push(view_track_list(results, player, TrackListKind::Active, 0));
 
         if !search.exhausted {
-            let btn = Button::new(
-                text(if search.append_in_flight {
-                    "Loading..."
-                } else {
-                    "Load More"
-                })
-                .color(Color::WHITE),
-            )
+            let btn = Button::new(text(if search.append_in_flight {
+                "Loading..."
+            } else {
+                "Load More"
+            }))
             .padding(theme::SPACING_SM)
             .width(Length::Fill)
             .on_press_maybe((!search.append_in_flight).then_some(Message::SearchLoadMore));
@@ -148,11 +145,7 @@ fn view_search_track_tab<'a>(
         }
     }
 
-    Column::with_children(children)
-        .spacing(0)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    Column::with_children(children).into()
 }
 
 /// An Artists/Albums/Playlists tab: the concrete card list, filling the page.

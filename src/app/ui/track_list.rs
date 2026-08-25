@@ -104,6 +104,7 @@ where
 
     scrollable(Column::with_children(children))
         .id(list)
+        .height(Length::Fill)
         .on_scroll(move |vp| Message::ListScrolled {
             list,
             translation_y: vp.absolute_offset().y,
