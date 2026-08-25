@@ -72,6 +72,7 @@ impl MusicPlayer {
     pub fn handle_search_scope_changed(&mut self, scope: crate::providers::SearchScope) {
         if scope != self.search_scope {
             self.search_scope = scope;
+            self.save_session();
             self.run_search();
         }
     }
@@ -83,6 +84,7 @@ impl MusicPlayer {
             if !provider.supported_scopes().contains(&self.search_scope) {
                 self.search_scope = provider.supported_scopes()[0];
             }
+            self.save_session();
             self.run_search();
         }
     }

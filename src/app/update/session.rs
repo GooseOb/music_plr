@@ -28,6 +28,8 @@ impl MusicPlayer {
             volume: self.volume,
             repeat: self.repeat,
             library_expanded: self.library_expanded,
+            search_scope: self.search_scope,
+            search_provider: self.search_provider,
             lyrics_provider: self.lyrics_client.selected(),
         };
         state.save();
@@ -48,6 +50,8 @@ impl MusicPlayer {
         self.nav_history = vec![self.view_data().clone()];
         self.nav_history_pos = 0;
         self.lyrics_client = crate::lyrics::LyricsClient::new(state.lyrics_provider);
+        self.search_scope = state.search_scope;
+        self.search_provider = state.search_provider;
     }
 
     pub fn resume_playback(&mut self) {

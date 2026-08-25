@@ -12,6 +12,10 @@ pub struct SessionState {
     pub volume: f32,
     pub repeat: bool,
     pub library_expanded: bool,
+    #[serde(default)]
+    pub search_scope: crate::providers::SearchScope,
+    #[serde(default)]
+    pub search_provider: crate::providers::ProviderId,
     pub lyrics_provider: crate::lyrics::LyricsProvider,
 }
 
@@ -24,6 +28,8 @@ impl Default for SessionState {
             volume: 0.8,
             repeat: false,
             library_expanded: true,
+            search_scope: crate::providers::SearchScope::Songs,
+            search_provider: crate::providers::ProviderId::YouTube,
             lyrics_provider: crate::lyrics::LyricsProvider::default(),
         }
     }
@@ -63,6 +69,8 @@ mod tests {
             volume: 0.5,
             repeat: true,
             library_expanded: false,
+            search_scope: crate::providers::SearchScope::Songs,
+            search_provider: crate::providers::ProviderId::YouTube,
             lyrics_provider: crate::lyrics::LyricsProvider::LrcLib,
         };
         let json = serde_json::to_string(&state).unwrap();
