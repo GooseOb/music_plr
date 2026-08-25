@@ -202,8 +202,15 @@ impl Default for ArtistPageState {
 impl ArtistPageState {
     /// Seed the source provider's id and default every section to it.
     pub fn new(source: ProviderId, id: &str) -> Self {
-        let mut state = Self::default();
+        let mut state = Self::loading_for(source);
         state.provider_ids.insert(source, id.to_string());
+        state
+    }
+
+    /// Like [`ArtistPageState::new`] but without a known source id; the id
+    /// is resolved by artist name when the page loads.
+    pub fn loading_for(source: ProviderId) -> Self {
+        let mut state = Self::default();
         // The source provider owns the header until explicitly switched;
         // without this, whichever companion answers first would claim it.
         // Its page fetch starts immediately, so show loading indicators

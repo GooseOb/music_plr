@@ -11,8 +11,7 @@ use iced::{
 
 use crate::{
     app::{
-        interaction::TrackListKind,
-        ui::{shared_components::thumbnail, styles::scroll_padding},
+        interaction::{ContextMenuFocus, CtxAction, SubmenuKind},
         EditTrackField,
     },
     icons,
@@ -21,10 +20,10 @@ use crate::{
 };
 
 use super::{
-    shared_components::{disabled_text_input_row, text_input_row},
+    shared_components::{disabled_text_input_row, text_input_row, thumbnail},
     styles::{
         bg_overlay, bg_popup, button_style_danger, button_style_popup_item, button_style_primary,
-        fg_accent, fg_secondary,
+        context_menu_item_style, fg_accent, fg_secondary, scroll_padding,
     },
     theme, ContextMenuState, Message, MusicPlayer,
 };
@@ -99,194 +98,299 @@ pub(super) fn view_drop_indicator(rect: Rectangle) -> Element<'static, Message, 
 }
 
 #[allow(clippy::too_many_lines)]
-pub(super) fn view_context_menu<'a>(
-    menu: &'a ContextMenuState,
-    p: &'a Palette,
-) -> Element<'a, Message, AppTheme> {
+pub(super) fn view_context_menu(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let p = &player.app_theme.palette;
+    let menu = player.context_menu.as_ref().expect("context menu open");
     let (pos_x, pos_y) = menu.position;
+    let n = menu.target_indices.len();
 
-    let items: Vec<Element<'_, Message, AppTheme>> = {
-        let mut v: Vec<Element<'_, Message, AppTheme>> = vec![menu_item(
-            Cow::Borrowed("Play"),
-            icons::PLAY_ICON,
-            p,
-            Message::ContextMenuPlayTrack(menu.pos),
-        )
-        .into()];
-
-        v.push(
+    // Rows shrink to content until the measured width is stable (a frame at
+    // a clipped position wraps, so Fill is only safe once captures agree);
+    // then they fill the captured panel width.
+    let row_len = player
+        .bounds
+        .context_menu
+        .as_ref()
+        .filter(|g| g.stable)
+        .map_or(Length::Shrink, |_| Length::Fill);
+    let items: Vec<Element<'_, Message, AppTheme>> = menu
+        .actions()
+        .iter()
+        .enumerate()
+        .map(|(i, action)| {
+            let (label, icon) = action_label(*action, n);
+            let focused = menu.hovered == Some(ContextMenuFocus::Item(i));
+            let chevron = action.submenu().is_some();
             menu_item(
-                Cow::Borrowed("Edit"),
-                icons::EDIT_ICON,
+                label,
+                icon,
+                i,
+                focused,
+                chevron,
+                action.to_message(menu),
                 p,
-                Message::ContextMenuEditTrack,
+                row_len,
             )
-            .into(),
-        );
+        })
+        .collect();
 
-        if menu.track.provider_artist_id(menu.track.source).is_some() {
-            v.push(
-                menu_item(
-                    Cow::Borrowed("Go to artist"),
-                    icons::ARTIST_ICON,
-                    p,
-                    Message::ContextMenuGoToArtist,
-                )
-                .into(),
-            );
-        }
+    // Width measured on the first frames; both panels share it once stable
+    // so buttons can fill the row and the submenu can flip side without
+    // remeasuring.
+    let panel_width = player
+        .bounds
+        .context_menu
+        .as_ref()
+        .filter(|g| g.stable)
+        .map_or(Length::Shrink, |g| Length::Fixed(g.panel.width));
 
-        // Per-provider playback/download. Providers the track already carries
-        // an id for play/download directly; others show a search icon and
-        // trigger an id-resolving lookup first.
-        for &provider in crate::providers::ProviderId::searchable() {
-            if !provider.capabilities().stream {
-                continue;
-            }
-            let has_id = menu.track.has_provider(provider);
-            let label = if has_id {
-                Cow::Owned(format!("Play via {}", provider.label()))
-            } else {
-                Cow::Owned(format!("Play via {} (search)", provider.label()))
-            };
-            let icon = if has_id {
-                icons::PLAY_ICON
-            } else {
-                icons::SEARCH_ICON
-            };
-            v.push(
-                menu_item(
-                    label,
-                    icon,
-                    p,
-                    Message::ContextMenuPlayViaProvider(provider, menu.pos),
-                )
-                .into(),
-            );
-        }
-
-        let target_indices = &menu.target_indices;
-        let n = target_indices.len();
-
-        let add_label = if n > 1 {
-            Cow::Owned(format!("Add {n} tracks to Playlist"))
-        } else {
-            Cow::Borrowed("Add to Playlist")
-        };
-        v.push(
-            menu_item(
-                add_label,
-                icons::FOLDER_ICON,
-                p,
-                Message::TogglePicker(target_indices.clone()),
-            )
-            .into(),
-        );
-
-        // Download: for each stream+download provider, offer direct download
-        // when the track has an id, or a search-then-download otherwise.
-        for &provider in crate::providers::ProviderId::defaultable() {
-            if !provider.capabilities().download {
-                continue;
-            }
-            let has_id = menu.track.has_provider(provider);
-            let label = if has_id {
-                Cow::Owned(format!("Download from {}", provider.label()))
-            } else {
-                Cow::Owned(format!("Download from {} (search)", provider.label()))
-            };
-            let icon = if has_id {
-                icons::DOWNLOAD_ICON
-            } else {
-                icons::SEARCH_ICON
-            };
-            v.push(
-                menu_item(
-                    label,
-                    icon,
-                    p,
-                    Message::ContextMenuDownloadViaProvider(provider, target_indices.clone()),
-                )
-                .into(),
-            );
-        }
-
-        // Radio: only providers that support similarity search, and only when
-        // the track already carries that provider's id.
-        for &provider in crate::providers::ProviderId::searchable() {
-            if !provider.capabilities().radio {
-                continue;
-            }
-            if menu.track.has_provider(provider) {
-                v.push(
-                    menu_item(
-                        Cow::Owned(format!("Song Radio – {}", provider.label())),
-                        icons::RADIO_ICON,
-                        p,
-                        Message::ContextMenuSongRadioProvider(provider),
-                    )
-                    .into(),
-                );
-                v.push(
-                    menu_item(
-                        Cow::Owned(format!("Artist Radio – {}", provider.label())),
-                        icons::RADIO_ICON,
-                        p,
-                        Message::ContextMenuArtistRadioProvider(provider),
-                    )
-                    .into(),
-                );
-            }
-        }
-
-        if menu.pos.list == TrackListKind::Queue {
-            let label = if n > 1 {
-                Cow::Owned(format!("Remove {n} tracks from queue"))
-            } else {
-                Cow::Borrowed("Remove from Queue")
-            };
-            v.push(
-                menu_item(
-                    label,
-                    icons::DELETE_ICON,
-                    p,
-                    Message::ContextMenuRemoveFromQueue(target_indices.clone()),
-                )
-                .into(),
-            );
-        } else if menu.in_playlist && menu.pos.list != TrackListKind::Recent {
-            let label = if n > 1 {
-                Cow::Owned(format!("Remove {n} tracks from playlist"))
-            } else {
-                Cow::Borrowed("Remove from Playlist")
-            };
-            v.push(
-                menu_item(
-                    label,
-                    icons::DELETE_ICON,
-                    p,
-                    Message::ContextMenuRemoveFromPlaylist(target_indices.clone()),
-                )
-                .into(),
-            );
-        }
-
-        v
-    };
-
-    let menu_content = Container::new(
+    let mut row_children: Vec<Element<'_, Message, AppTheme>> = vec![Container::new(
         Column::with_children(items)
             .spacing(2)
             .padding(theme::SPACING_SM),
     )
-    .width(theme::CONTEXT_MENU_WIDTH)
-    .style(bg_popup());
+    .id(super::CONTEXT_MENU_PANEL_ID)
+    .width(panel_width)
+    .style(bg_popup())
+    .into()];
 
-    let overlay = Container::new(pos_absolute(opaque(menu_content), pos_x, pos_y))
+    let mut anchor_x = pos_x;
+
+    if let Some(kind) = menu.open_submenu_kind() {
+        let entries = submenu_entries(kind, menu, p, row_len);
+        // Skip until the capture task has delivered geometry, so the submenu
+        // doesn't render at the panel top and jump once bounds arrive.
+        let geo = player
+            .bounds
+            .context_menu
+            .as_ref()
+            .filter(|_| !entries.is_empty());
+        if let Some(geo) = geo {
+            let parent_index = match menu.hovered {
+                Some(ContextMenuFocus::Item(i)) => i,
+                Some(ContextMenuFocus::Sub(..)) => menu
+                    .actions()
+                    .iter()
+                    .position(|a| a.submenu() == Some(kind))
+                    .unwrap_or(0),
+                None => 0,
+            };
+            let submenu_h = entries.len() as f32 * geo.row_height;
+            let max_offset =
+                (player.window_size.height - pos_y - submenu_h - theme::SPACING_SM).max(0.0);
+            let offset = geo
+                .row_offsets
+                .get(parent_index)
+                .copied()
+                .unwrap_or(0.0)
+                .clamp(0.0, max_offset);
+            let submenu_left =
+                pos_x + 2.0 * geo.panel.width + theme::SPACING_XS > player.window_size.width;
+            let submenu: Element<'_, Message, AppTheme> = Column::with_children([
+                Space::new().height(offset).into(),
+                Container::new(
+                    Column::with_children(entries)
+                        .spacing(2)
+                        .padding(theme::SPACING_SM),
+                )
+                .width(panel_width)
+                .style(bg_popup())
+                .into(),
+            ])
+            .into();
+            let spacer: Element<'_, Message, AppTheme> =
+                Space::new().width(theme::SPACING_XS).into();
+            if submenu_left {
+                // Keep the main panel anchored at `pos_x`; open the submenu
+                // to its left instead of pushing the panel right.
+                anchor_x -= geo.panel.width + theme::SPACING_XS;
+                row_children.insert(0, submenu);
+                row_children.insert(1, spacer);
+            } else {
+                row_children.push(spacer);
+                row_children.push(submenu);
+            }
+        }
+    }
+
+    let panels =
+        MouseArea::new(Row::with_children(row_children)).on_exit(Message::ContextMenuHover(None));
+
+    let overlay = Container::new(pos_absolute(opaque(panels), anchor_x.max(0.0), pos_y))
         .width(Length::Fill)
         .height(Length::Fill);
 
     opaque(MouseArea::new(overlay).on_press(Message::CloseContextMenu))
+}
+
+/// Label and icon shown for a main-menu entry (`n` = selected track count).
+fn action_label<'a>(action: CtxAction, n: usize) -> (Cow<'a, str>, &'static [u8]) {
+    match action {
+        CtxAction::Play => (Cow::Borrowed("Play"), icons::PLAY_ICON),
+        CtxAction::Edit => (Cow::Borrowed("Edit"), icons::EDIT_ICON),
+        CtxAction::GoToArtist => (Cow::Borrowed("Go to artist"), icons::ARTIST_ICON),
+        CtxAction::AddToPlaylist => (
+            if n > 1 {
+                Cow::Owned(format!("Add {n} tracks to Playlist"))
+            } else {
+                Cow::Borrowed("Add to Playlist")
+            },
+            icons::FOLDER_ICON,
+        ),
+        CtxAction::Download => (
+            if n > 1 {
+                Cow::Owned(format!("Download {n} tracks"))
+            } else {
+                Cow::Borrowed("Download")
+            },
+            icons::DOWNLOAD_ICON,
+        ),
+        CtxAction::SongRadio => (Cow::Borrowed("Song Radio"), icons::RADIO_ICON),
+        CtxAction::ArtistRadio => (Cow::Borrowed("Artist Radio"), icons::RADIO_ICON),
+        CtxAction::RemoveFromQueue => (
+            if n > 1 {
+                Cow::Owned(format!("Remove {n} tracks from queue"))
+            } else {
+                Cow::Borrowed("Remove from Queue")
+            },
+            icons::DELETE_ICON,
+        ),
+        CtxAction::RemoveFromPlaylist => (
+            if n > 1 {
+                Cow::Owned(format!("Remove {n} tracks from playlist"))
+            } else {
+                Cow::Borrowed("Remove from Playlist")
+            },
+            icons::DELETE_ICON,
+        ),
+    }
+}
+
+/// A context-menu row; `chevron` marks a submenu parent (clicking it still
+/// triggers the default action). Mouse hover feeds keyboard focus.
+#[allow(clippy::too_many_arguments)]
+fn menu_item<'a>(
+    label: Cow<'a, str>,
+    icon: &'static [u8],
+    index: usize,
+    focused: bool,
+    chevron: bool,
+    on_press: Message,
+    p: &'a Palette,
+    row_len: Length,
+) -> Element<'a, Message, AppTheme> {
+    let mut children = vec![
+        icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
+        text(label).into(),
+    ];
+    if chevron {
+        children.push(Space::new().width(row_len).into());
+        children.push(
+            icons::icon(
+                icons::CHEVRON_RIGHT_ICON,
+                p.fg_secondary,
+                theme::ICON_SIZE_SM,
+            )
+            .into(),
+        );
+    }
+    let item = context_menu_item(children, focused, row_len);
+
+    context_menu_button(
+        item.id(super::CONTEXT_MENU_ROW_ID).width(row_len),
+        on_press,
+        ContextMenuFocus::Item(index),
+    )
+}
+
+fn context_menu_item<'a>(
+    children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
+    focused: bool,
+    row_len: Length,
+) -> Container<'a, Message, AppTheme> {
+    Container::new(
+        Row::with_children(children)
+            .spacing(theme::SPACING_SM)
+            .padding([theme::SPACING_XS, theme::SPACING_SM])
+            .align_y(alignment::Vertical::Center)
+            .width(row_len),
+    )
+    .style(context_menu_item_style(focused))
+}
+
+fn context_menu_button<'a>(
+    item: impl Into<Element<'a, Message, AppTheme>>,
+    on_press: Message,
+    target: ContextMenuFocus,
+) -> Element<'a, Message, AppTheme> {
+    MouseArea::new(item.into())
+        .interaction(iced::mouse::Interaction::Pointer)
+        .on_press(on_press)
+        .on_enter(Message::ContextMenuHover(Some(target)))
+        .into()
+}
+
+#[allow(clippy::too_many_lines)]
+fn submenu_entries<'a>(
+    kind: SubmenuKind,
+    menu: &'a ContextMenuState,
+    p: &'a Palette,
+    row_len: Length,
+) -> Vec<Element<'a, Message, AppTheme>> {
+    kind.providers()
+        .into_iter()
+        .enumerate()
+        .map(|(i, provider)| {
+            let focused = menu.hovered == Some(ContextMenuFocus::Sub(kind, i));
+            // `(base label, icon, whether the track carries an id here,
+            // whether a missing id falls back to search)`.
+            let (base, icon, has_id, search_fallback) = match kind {
+                SubmenuKind::Play => (
+                    "Play via",
+                    icons::PLAY_ICON,
+                    menu.track.has_provider(provider),
+                    true,
+                ),
+                SubmenuKind::Download => (
+                    "Download from",
+                    icons::DOWNLOAD_ICON,
+                    menu.track.has_provider(provider),
+                    true,
+                ),
+                SubmenuKind::SongRadio | SubmenuKind::ArtistRadio => {
+                    ("Via", icons::RADIO_ICON, true, false)
+                }
+                SubmenuKind::GoToArtist => (
+                    "On",
+                    icons::ARTIST_ICON,
+                    menu.track.provider_artist_id(provider).is_some(),
+                    true,
+                ),
+            };
+            let by_search = search_fallback && !has_id;
+            let label = if by_search {
+                Cow::Owned(format!("{} {} (search)", base, provider.label()))
+            } else {
+                Cow::Owned(format!("{} {}", base, provider.label()))
+            };
+            let icon = if by_search { icons::SEARCH_ICON } else { icon };
+            let message = kind.entry_message(provider, menu);
+            let item = context_menu_item(
+                [
+                    icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
+                    text(label).into(),
+                ],
+                focused,
+                row_len,
+            );
+
+            context_menu_button(
+                item.id(super::CONTEXT_MENU_ROW_ID).width(row_len),
+                message,
+                ContextMenuFocus::Sub(kind, i),
+            )
+        })
+        .collect()
 }
 
 pub(super) fn view_edit_track(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
@@ -375,27 +479,6 @@ pub fn pos_absolute(
         Space::new().height(pos_y),
         Row::with_children([Space::new().width(pos_x).into(), content])
     ]
-}
-
-fn menu_item<'a>(
-    label: Cow<'a, str>,
-    icon: &'static [u8],
-    p: &'a Palette,
-    on_press: Message,
-) -> Button<'a, Message, AppTheme> {
-    Button::new(
-        Row::with_children([
-            icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
-            text(label).into(),
-        ])
-        .spacing(theme::SPACING_SM)
-        .padding([theme::SPACING_XS, theme::SPACING_SM])
-        .align_y(alignment::Vertical::Center)
-        .width(Length::Fill),
-    )
-    .padding(0)
-    .style(button_style_popup_item())
-    .on_press(on_press)
 }
 
 pub(super) fn view_playlist_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {

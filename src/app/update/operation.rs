@@ -70,6 +70,8 @@ pub struct CaptureBounds {
     /// Captured separately by [`CaptureSearchHistoryRows`] (see that struct).
     pub search_history: Option<ListGeometry>,
     pub search_input: Option<Rectangle>,
+    /// Captured by [`CaptureContextMenu`] when the context menu opens.
+    pub context_menu: Option<ContextMenuGeometry>,
     current: Option<Id>,
 }
 
@@ -229,5 +231,53 @@ impl Operation<Message> for CaptureSearchHistoryRows {
             }
             None => Outcome::None,
         }
+    }
+}
+
+/// Measured context-menu layout, derived from captured bounds. The view and
+/// the position-flip logic both read this instead of raw rects.
+#[derive(Debug, Clone)]
+pub struct ContextMenuGeometry {
+    pub panel: Rectangle,
+    /// Main-menu row tops relative to the panel top, in display order.
+    pub row_offsets: Vec<f32>,
+    pub row_height: f32,
+    /// True once two consecutive captures agree, i.e. the measured width was
+    /// not clipped by the window edge; rows only stretch to full width then.
+    pub stable: bool,
+}
+
+/// Captures the context-menu panel and each main-menu row's bounds. Run once
+/// when the menu opens; the geometry drives submenu alignment and the
+/// flip-inside-window placement done in the handler.
+#[derive(Default, Clone, Debug)]
+pub struct CaptureContextMenu {
+    panel: Option<Rectangle>,
+    rows: Vec<Rectangle>,
+}
+
+impl Operation<Message> for CaptureContextMenu {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<Message>)) {
+        operate(self);
+    }
+
+    fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+        use crate::app::ui::{CONTEXT_MENU_PANEL_ID, CONTEXT_MENU_ROW_ID};
+        match id {
+            Some(id) if *id == CONTEXT_MENU_ROW_ID => self.rows.push(bounds),
+            Some(id) if *id == CONTEXT_MENU_PANEL_ID => self.panel = Some(bounds),
+            _ => {}
+        }
+    }
+
+    fn finish(&self) -> Outcome<Message> {
+        let Some(panel) = self.panel else {
+            return Outcome::None;
+        };
+        Outcome::Some(Message::ContextMenuBoundsCaptured {
+            panel,
+            row_offsets: self.rows.iter().map(|r| r.y - panel.y).collect(),
+            row_height: self.rows.first().map_or(0.0, |r| r.height),
+        })
     }
 }

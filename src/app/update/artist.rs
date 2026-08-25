@@ -24,11 +24,24 @@ impl MusicPlayer {
     /// followers stats). Both run in parallel on their own threads. Anything
     /// else loads lazily when a section picker selects that provider.
     pub fn open_artist(&mut self, id: &str, name: &str, source: ProviderId) {
+        self.open_artist_internal(Some(id), name, source);
+    }
+
+    /// Open an artist page by name alone; the id is resolved on the target
+    /// provider in the background.
+    pub fn open_artist_by_name(&mut self, name: &str, source: ProviderId) {
+        self.open_artist_internal(None, name, source);
+    }
+
+    fn open_artist_internal(&mut self, id: Option<&str>, name: &str, source: ProviderId) {
         let kind = ViewKind::Artist(ArtistEntry {
-            id: id.to_string(),
+            id: id.unwrap_or_default().to_string(),
             name: name.to_string(),
             source,
-            page: Box::new(ArtistPageState::new(source, id)),
+            page: Box::new(match id {
+                Some(id) => ArtistPageState::new(source, id),
+                None => ArtistPageState::loading_for(source),
+            }),
         });
         self.push_new_view(ViewData {
             kind,

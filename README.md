@@ -21,7 +21,7 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 - **Settings** — In-app settings view to edit `config.json` values (download directory, stream cache size, history/recently-played limits, and a volume-normalization toggle) live, with a reset-to-defaults action
 - **Volume Normalization** — Optional per-track loudness normalization (RMS-based, computed once via native symphonia decoding and cached) so tracks play at a consistent volume; toggle it from Settings
 - **Navigation History** — Back/forward navigation restoring view, results, selection, and scroll
-- **Context Menu** — Right-click menu with Play, Radio, Playlist, Download, and Remove actions; selection-aware
+- **Context Menu** — Right-click menu with Play, Radio, Playlist, Download, and Remove actions; selection-aware. Play, Download, Song Radio, Artist Radio, and Go to artist open provider submenus on hover (click uses the source provider if capable, else the default). Keyboard-navigable: <kbd>↑</kbd>/<kbd>↓</kbd> move within a pane (wrapping), <kbd>→</kbd>/<kbd>←</kbd> enter/leave a submenu, <kbd>Enter</kbd> activates, <kbd>Esc</kbd> closes.
 - **Session Restore** — Reopens with your last view, queue, and volume
 - **Lyrics** — Free, no-API-key lyrics via [LRCLib](https://lrclib.net), behind a pluggable provider interface so more sources can be added later. The playbar Lyrics button opens a dedicated view with synced (timed) lines that seek playback when clicked, falling back to plain text or a "not found" state. Lyrics are cached on disk per track.
 - **Dark Theme** — Dark color scheme with accent green highlights

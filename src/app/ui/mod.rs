@@ -1,7 +1,7 @@
 use crate::theme::{self, AppTheme};
 
 use iced::{
-    widget::{self, Column, Row, Stack},
+    widget::{self, Column, Id, Row, Stack},
     Element,
 };
 
@@ -27,6 +27,12 @@ pub use track_list::TRACK_LIST_ID;
 
 use track_list::view_track_list;
 
+/// Id of the context-menu panel and its rows. Rows all share one id;
+/// `CaptureBounds` records their bounds in visit (top-to-bottom) order so a
+/// submenu can be aligned with its parent row.
+pub const CONTEXT_MENU_PANEL_ID: Id = Id::new("context_menu_panel");
+pub const CONTEXT_MENU_ROW_ID: Id = Id::new("context_menu_row");
+
 pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let mut body = vec![
         sidebar::view_sidebar(player),
@@ -49,8 +55,8 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         stack = stack.push(overlays::view_delete_confirm());
     } else if player.edit_track.is_some() {
         stack = stack.push(overlays::view_edit_track(player));
-    } else if let Some(menu) = &player.context_menu {
-        stack = stack.push(overlays::view_context_menu(menu, &player.app_theme.palette));
+    } else if player.context_menu.is_some() {
+        stack = stack.push(overlays::view_context_menu(player));
     } else if let Some(rect) = player.drop_indicator_rect() {
         stack = stack.push(overlays::view_drop_indicator(rect));
     }

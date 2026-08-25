@@ -4,6 +4,7 @@ use crate::{
     app::{update::operation::CaptureSearchHistoryRows, ViewKind},
     load_state::LoadState,
     providers::ProviderId,
+    types::Track,
 };
 
 impl MusicPlayer {
@@ -157,19 +158,20 @@ impl MusicPlayer {
         iced_runtime::task::widget(CaptureSearchHistoryRows::new())
     }
 
-    /// Start a song or artist radio seeded by `provider`. Same fallback rules
-    /// as the rest of the radio flow.
+    /// Start a song or artist radio seeded by `provider`. When the track
+    /// carries no id for the provider, one is resolved by search inside the
+    /// spawned thread before querying the radio.
     pub fn start_radio_provider(
         &mut self,
         provider: crate::providers::ProviderId,
-        name: &str,
-        id: &str,
+        track: &Track,
         artist: bool,
     ) {
         if !provider.capabilities().radio {
             self.notify(format!("{provider:?} does not support radio"));
             return;
         }
+        let name = if artist { &track.artist } else { &track.title };
         let label = format!("Radio ({}): {name}", provider.label());
         let kind = if artist {
             ViewKind::ArtistRadio(label.clone())
@@ -183,7 +185,15 @@ impl MusicPlayer {
             "Generating radio for {}: {name}...",
             if artist { "artist" } else { "song" }
         ));
-        let id = id.to_string();
+        let id = if artist {
+            track.provider_artist_id(provider)
+        } else {
+            track.provider_id(provider)
+        }
+        .unwrap_or_default()
+        .to_string();
+        let name = name.clone();
+        let seed = track.clone();
         let tx = self.result_tx.clone();
         let radio_fn: fn(
             crate::providers::ProviderId,
@@ -194,7 +204,26 @@ impl MusicPlayer {
             crate::providers::radio_song
         };
         Self::spawn_backend_thread(
-            move || radio_fn(provider, &id),
+            move || {
+                let id = if id.is_empty() {
+                    let resolved = if artist {
+                        crate::providers::resolve_artist_id(provider, &name)?
+                    } else {
+                        crate::providers::resolve_id(provider, &seed)?
+                            .and_then(|t| t.provider_id(provider).map(str::to_owned))
+                    };
+                    match resolved {
+                        Some(id) => id,
+                        None => anyhow::bail!(format!(
+                            "Could not find \"{name}\" on {}",
+                            provider.label()
+                        )),
+                    }
+                } else {
+                    id
+                };
+                radio_fn(provider, &id)
+            },
             move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
             tx,
         );

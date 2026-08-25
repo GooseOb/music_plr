@@ -12,6 +12,7 @@ use iced::{Subscription, Task};
 use std::{sync::mpsc, time::Duration};
 use tracing::{error, warn};
 
+use crate::app::update::operation::ContextMenuGeometry;
 use crate::app::update::settings::SettingsChange;
 
 mod interaction;
@@ -20,7 +21,9 @@ mod ui;
 mod update;
 mod view_data;
 
-pub use interaction::{ContextMenuState, DragState, TrackListKind, TrackListSearch, TrackPos};
+pub use interaction::{
+    ContextMenuState, DefaultCtxAction, DragState, TrackListKind, TrackListSearch, TrackPos,
+};
 pub use message::{BackendResult, EditTrackField, Message};
 pub use view_data::{RequestIdGenerator, ViewData, ViewKind};
 
@@ -431,7 +434,7 @@ impl MusicPlayer {
             }
             Message::TrackRightClicked(pos) => {
                 self.show_context_menu(pos);
-                Task::none()
+                iced_runtime::task::widget(update::operation::CaptureContextMenu::default())
             }
             Message::PlayTrackAt(pos) => {
                 self.handle_play_track(pos);
@@ -612,7 +615,16 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuGoToArtist => {
-                self.handle_context_menu_go_to_artist();
+                let provider = match self.context_menu.as_ref() {
+                    Some(menu) => menu.default_go_to_artist_provider(self.config.default_provider),
+                    None => return Task::none(),
+                };
+                self.handle_context_menu_go_to_artist(provider);
+                Task::none()
+            }
+            Message::ContextMenuGoToArtistProvider(provider) => {
+                self.close_context_menu();
+                self.handle_context_menu_go_to_artist(provider);
                 Task::none()
             }
             Message::ContextMenuPlayViaProvider(provider, pos) => {
@@ -631,6 +643,78 @@ impl MusicPlayer {
             }
             Message::ContextMenuArtistRadioProvider(provider) => {
                 self.handle_context_menu_artist_radio(provider);
+                Task::none()
+            }
+            Message::ContextMenuHover(focus) => {
+                if let Some(menu) = &mut self.context_menu {
+                    menu.hovered = focus;
+                }
+                Task::none()
+            }
+            Message::ContextMenuBoundsCaptured {
+                panel,
+                row_offsets,
+                row_height,
+            } => {
+                let prev = self.bounds.context_menu.take();
+                let width_changed = prev
+                    .as_ref()
+                    .is_none_or(|p| (p.panel.width - panel.width).abs() > f32::EPSILON);
+                // Recompute the flip from the original cursor point using
+                // the latest measurement. A panel flush with the window edge
+                // means its measurement was clipped by the remaining space,
+                // so that counts as overflow too. Flipped menus keep their
+                // bottom/right edge at the cursor.
+                let edge_epsilon = 1.0;
+                let moved = if let Some(menu) = &mut self.context_menu {
+                    let (cx, cy) = menu.cursor;
+                    let nx = if cx + panel.width > self.window_size.width - edge_epsilon {
+                        (cx - panel.width).max(0.0)
+                    } else {
+                        cx
+                    };
+                    let ny = if cy + panel.height > self.window_size.height - edge_epsilon {
+                        (cy - panel.height).max(0.0)
+                    } else {
+                        cy
+                    };
+                    let moved = (nx, ny) != menu.position;
+                    menu.position = (nx, ny);
+                    moved
+                } else {
+                    false
+                };
+                let stable = !moved && !width_changed;
+                self.bounds.context_menu = Some(ContextMenuGeometry {
+                    panel,
+                    row_offsets,
+                    row_height,
+                    stable,
+                });
+                // Re-measure after a flip or a clipped-width correction; the
+                // captures converge once position and width stop changing.
+                if stable {
+                    Task::none()
+                } else {
+                    iced_runtime::task::widget(update::operation::CaptureContextMenu::default())
+                }
+            }
+            Message::ContextMenuDefault(action) => {
+                let Some(menu) = self.context_menu.as_ref() else {
+                    return Task::none();
+                };
+                let provider = menu.default_provider(action, self.config.default_provider);
+                let indices = menu.target_indices.clone();
+                self.close_context_menu();
+                match action {
+                    DefaultCtxAction::Download => {
+                        self.download_track_via_provider(provider, &indices);
+                    }
+                    DefaultCtxAction::SongRadio => self.handle_context_menu_song_radio(provider),
+                    DefaultCtxAction::ArtistRadio => {
+                        self.handle_context_menu_artist_radio(provider);
+                    }
+                }
                 Task::none()
             }
             Message::ContextMenuRemoveFromPlaylist(indices) => {

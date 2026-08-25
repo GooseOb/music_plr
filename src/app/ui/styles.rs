@@ -200,6 +200,21 @@ pub fn button_style_popup_item() -> impl Fn(&AppTheme, button::Status) -> button
     )
 }
 
+pub fn context_menu_item_style(active: bool) -> impl Fn(&AppTheme) -> container::Style + 'static {
+    move |theme| {
+        let p = &theme.palette;
+        container::Style {
+            background: if active {
+                Some(p.bg_hover.into())
+            } else {
+                None
+            },
+            border: border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
+}
+
 pub fn button_style_panel_item(
     active: bool,
     text_color: Color,

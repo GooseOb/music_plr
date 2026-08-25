@@ -1,9 +1,119 @@
 use iced::widget::operation;
 
 use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData};
+use crate::app::interaction::ContextMenuFocus;
 use crate::app::{ui::SEARCH_HISTORY_LIST_ID, view_data::ViewKind, TrackListSearch};
 
 impl MusicPlayer {
+    /// Arrow-key navigation and Enter activation while the context menu is
+    /// open. Mirrors track-list nav: Up/Down move within the focused pane and
+    /// wrap at the edges; Left/Right switch between the menu and its submenu.
+    pub fn handle_context_menu_key(
+        &mut self,
+        key: iced::keyboard::key::Physical,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> Task<Message> {
+        use iced::keyboard::key::{Code, Physical};
+        if matches!(key, Physical::Code(Code::Escape)) && !modifiers.control() {
+            self.close_context_menu();
+            return Task::none();
+        }
+        if self.context_menu.is_none() {
+            return Task::none();
+        }
+        match key {
+            Physical::Code(Code::ArrowUp) => self.step_context_menu_focus(-1),
+            Physical::Code(Code::ArrowDown) => self.step_context_menu_focus(1),
+            Physical::Code(Code::ArrowLeft) => self.context_menu_horizontal(-1),
+            Physical::Code(Code::ArrowRight) => self.context_menu_horizontal(1),
+            Physical::Code(Code::Enter) => {
+                let menu = self.context_menu.as_ref().expect("checked above");
+                let message = match menu.hovered {
+                    Some(ContextMenuFocus::Item(i)) => {
+                        menu.actions().get(i).map(|a| a.to_message(menu))
+                    }
+                    Some(ContextMenuFocus::Sub(kind, i)) => kind
+                        .providers()
+                        .get(i)
+                        .map(|p| kind.entry_message(*p, menu)),
+                    None => None,
+                };
+                match message {
+                    Some(m) => iced::Task::done(m),
+                    None => Task::none(),
+                }
+            }
+            _ => Task::none(),
+        }
+    }
+
+    fn step_context_menu_focus(&mut self, dir: isize) -> Task<Message> {
+        // Move within whichever pane focus is currently in; an unfocused menu
+        // starts in the main list.
+        let focus = {
+            let Some(menu) = self.context_menu.as_ref() else {
+                return Task::none();
+            };
+            let (_in_submenu, kind, count, current) = match menu.hovered {
+                Some(ContextMenuFocus::Sub(kind, i)) => {
+                    (true, Some(kind), kind.providers().len(), Some(i))
+                }
+                other => {
+                    let i = match other {
+                        Some(ContextMenuFocus::Item(i)) => Some(i),
+                        _ => None,
+                    };
+                    (false, None, menu.actions().len(), i)
+                }
+            };
+            if count == 0 {
+                return Task::none();
+            }
+            let next = current.map_or(if dir < 0 { count - 1 } else { 0 }, |i| {
+                (i.cast_signed() + dir).rem_euclid(count.cast_signed()) as usize
+            });
+            match kind {
+                Some(kind) => ContextMenuFocus::Sub(kind, next),
+                None => ContextMenuFocus::Item(next),
+            }
+        };
+        if let Some(m) = self.context_menu.as_mut() {
+            m.hovered = Some(focus);
+        }
+        Task::none()
+    }
+
+    fn context_menu_horizontal(&mut self, dir: isize) -> Task<Message> {
+        let focus = {
+            let Some(menu) = self.context_menu.as_ref() else {
+                return Task::none();
+            };
+            match (menu.hovered, dir) {
+                // Enter the open submenu from its parent row.
+                (Some(ContextMenuFocus::Item(i)), 1) => {
+                    let Some(kind) = menu.actions().get(i).and_then(|a| a.submenu()) else {
+                        return Task::none();
+                    };
+                    ContextMenuFocus::Sub(kind, 0)
+                }
+                // Leave the submenu back to its parent row.
+                (Some(ContextMenuFocus::Sub(kind, _)), -1) => {
+                    let i = menu
+                        .actions()
+                        .iter()
+                        .position(|a| a.submenu() == Some(kind))
+                        .unwrap_or(0);
+                    ContextMenuFocus::Item(i)
+                }
+                _ => return Task::none(),
+            }
+        };
+        if let Some(m) = self.context_menu.as_mut() {
+            m.hovered = Some(focus);
+        }
+        Task::none()
+    }
+
     pub fn handle_cursor_moved(&mut self, pos: iced::Point) -> Task<Message> {
         self.drag.is_hover_controlled = false;
         self.drag.cursor_pos = pos;
@@ -37,6 +147,9 @@ impl MusicPlayer {
         modifiers: iced::keyboard::Modifiers,
     ) -> Task<Message> {
         use iced::keyboard::key::{Code, Physical};
+        if self.context_menu.is_some() {
+            return self.handle_context_menu_key(key, modifiers);
+        }
         let task = match key {
             Physical::Code(Code::KeyF) if modifiers.control() || modifiers.logo() => {
                 self.open_track_list_search()

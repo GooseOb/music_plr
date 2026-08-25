@@ -44,6 +44,5 @@ pub const QUEUE_BTN_WIDTH: f32 = 36.0;
 pub const VOLUME_SLIDER_WIDTH: f32 = 80.0;
 pub const PLAYBAR_TRACK_INFO_WIDTH: f32 = 164.0;
 pub const TIME_TEXT_WIDTH: f32 = 48.0;
-pub const CONTEXT_MENU_WIDTH: f32 = 190.0;
 pub const DIALOG_WIDTH: f32 = 300.0;
 pub const QUEUE_WIDTH_RATIO: f32 = 0.2;

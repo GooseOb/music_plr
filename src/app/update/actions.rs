@@ -9,6 +9,12 @@ use crate::{
 };
 
 impl MusicPlayer {
+    /// Take the open menu, clearing its captured geometry so a reopened
+    /// menu never renders against stale measurements.
+    fn take_context_menu(&mut self) -> Option<ContextMenuState> {
+        self.bounds.context_menu = None;
+        self.context_menu.take()
+    }
     /// Spawn a download for `track` specifically from `provider` (used by the
     /// "download from [provider]" context-menu flow).
     pub(super) fn spawn_download_thread_for(
@@ -183,35 +189,40 @@ impl MusicPlayer {
             pos,
             target_indices,
             position: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
+            cursor: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
             in_playlist: matches!(self.view_data().kind, ViewKind::Playlist(_)),
             track,
+            hovered: None,
         });
     }
 
     pub fn close_context_menu(&mut self) {
         self.context_menu = None;
+        self.bounds.context_menu = None;
     }
 
-    pub fn handle_context_menu_go_to_artist(&mut self) {
-        if let Some(track) = self.context_menu.take().map(|m| m.track) {
-            if let Some(artist_id) = track.provider_artist_id(track.source) {
-                self.open_artist(artist_id, &track.artist, track.source);
-            }
+    /// Open the artist page on `provider`, using the track's stored artist
+    /// id when present and resolving by name otherwise.
+    pub fn handle_context_menu_go_to_artist(&mut self, provider: ProviderId) {
+        let Some(track) = self.take_context_menu().map(|m| m.track) else {
+            return;
+        };
+        if let Some(artist_id) = track.provider_artist_id(provider) {
+            self.open_artist(artist_id, &track.artist, provider);
+        } else {
+            self.open_artist_by_name(&track.artist, provider);
         }
     }
 
     pub fn handle_context_menu_song_radio(&mut self, provider: ProviderId) {
-        if let Some(track) = self.context_menu.take().map(|m| m.track) {
-            let id = track.provider_id(provider).unwrap_or_default().to_string();
-            self.start_radio_provider(provider, &track.title, &id, false);
+        if let Some(track) = self.take_context_menu().map(|m| m.track) {
+            self.start_radio_provider(provider, &track, false);
         }
     }
 
     pub fn handle_context_menu_artist_radio(&mut self, provider: ProviderId) {
-        if let Some(track) = self.context_menu.take().map(|m| m.track) {
-            if let Some(browse_id) = track.provider_artist_id(provider) {
-                self.start_radio_provider(provider, &track.artist, browse_id, true);
-            }
+        if let Some(track) = self.take_context_menu().map(|m| m.track) {
+            self.start_radio_provider(provider, &track, true);
         }
     }
 

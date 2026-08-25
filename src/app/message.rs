@@ -3,7 +3,7 @@
 use super::ViewData;
 use crate::{
     app::{
-        interaction::{self, TrackListKind, TrackPos},
+        interaction::{self, ContextMenuFocus, DefaultCtxAction, TrackListKind, TrackPos},
         update::operation::CaptureBounds,
         ViewKind,
     },
@@ -12,7 +12,7 @@ use crate::{
     providers::ProviderId,
     types::{QueueTab, Track},
 };
-use iced::Point;
+use iced::{Point, Rectangle};
 
 #[derive(Debug, Clone)]
 pub enum BackendResult {
@@ -68,6 +68,11 @@ pub enum Message {
     LeftButtonReleased,
     ListBoundsCaptured(Box<CaptureBounds>),
     SearchHistoryBoundsCaptured(crate::app::update::operation::ListGeometry),
+    ContextMenuBoundsCaptured {
+        panel: Rectangle,
+        row_offsets: Vec<f32>,
+        row_height: f32,
+    },
     ListScrolled {
         list: TrackListKind,
         translation_y: f32,
@@ -145,7 +150,10 @@ pub enum Message {
     SettingsResetDefaults,
 
     ContextMenuPlayTrack(TrackPos),
+    ContextMenuHover(Option<ContextMenuFocus>),
     ContextMenuGoToArtist,
+    ContextMenuGoToArtistProvider(ProviderId),
+    ContextMenuDefault(DefaultCtxAction),
     ContextMenuPlayViaProvider(ProviderId, TrackPos),
     ContextMenuDownloadViaProvider(ProviderId, Vec<usize>),
     ContextMenuSongRadioProvider(ProviderId),

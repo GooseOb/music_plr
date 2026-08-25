@@ -8,6 +8,7 @@ pub const BOOKMARK_ICON: &[u8] = include_bytes!("../icons/bookmark.svg");
 pub const CACHE_ICON: &[u8] = include_bytes!("../icons/cache.svg");
 pub const CHEVRON_UP_ICON: &[u8] = include_bytes!("../icons/chevron-up.svg");
 pub const CHEVRON_DOWN_ICON: &[u8] = include_bytes!("../icons/chevron-down.svg");
+pub const CHEVRON_RIGHT_ICON: &[u8] = include_bytes!("../icons/chevron-right.svg");
 pub const CLOSE_ICON: &[u8] = include_bytes!("../icons/close.svg");
 pub const DELETE_ICON: &[u8] = include_bytes!("../icons/delete.svg");
 pub const DOWNLOAD_ICON: &[u8] = include_bytes!("../icons/download.svg");
