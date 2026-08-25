@@ -1,7 +1,7 @@
 use iced::widget::operation;
 
 use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData};
-use crate::app::interaction::ContextMenuFocus;
+use crate::app::interaction::{ContextMenuFocus, HoverTarget};
 use crate::app::{ui::SEARCH_HISTORY_LIST_ID, view_data::ViewKind, TrackListSearch};
 
 impl MusicPlayer {
@@ -191,7 +191,7 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Physical::Code(Code::Tab) => self.toggle_keyboard_list(),
+            Physical::Code(Code::ArrowLeft | Code::ArrowRight) => self.toggle_keyboard_list(),
             Physical::Code(Code::ArrowUp) => {
                 if self.track_list_search.is_some() {
                     return self.handle_track_list_search_step(-1);
@@ -236,15 +236,21 @@ impl MusicPlayer {
             return Task::none();
         }
 
-        let target = if self.hovered_list().in_queue_panel() {
-            TrackListKind::Active
-        } else {
+        let target = if self.hovered_list().is_main() {
             self.queue.queue_tab.into()
+        } else {
+            TrackListKind::Active
         };
-        if self.track_count(target) == 0 {
+        if self.track_count(target) == 0
+            || self.drag.hovered_track().is_some_and(|p| p.list == target)
+        {
             return Task::none();
         }
-        self.move_hovered(TrackPos::new(target.first_index(), target))
+        let index = self.drag.recall_focus(target).map_or_else(
+            || target.first_index(),
+            |i| i.clamp(target.first_index(), self.track_count(target) - 1),
+        );
+        self.move_hovered(TrackPos::new(index, target))
     }
 
     /// Scroll `pos` into view of its list. `center` forces the row to the
@@ -253,10 +259,10 @@ impl MusicPlayer {
     fn scroll_track_into_view(&self, pos: TrackPos) -> Task<Message> {
         let TrackPos { index, list } = pos;
 
-        let bounds = if list.in_queue_panel() {
-            self.bounds.queue.as_ref().map(|g| g.bounds)
-        } else {
+        let bounds = if list.is_main() {
             self.bounds.track.as_ref().map(|g| g.bounds)
+        } else {
+            self.bounds.queue.as_ref().map(|g| g.bounds)
         };
 
         let Some(bounds) = bounds else {
@@ -296,7 +302,10 @@ impl MusicPlayer {
                 ((pos.index - first).cast_signed() + dir).rem_euclid(span.cast_signed()) as usize
                     + first
             }
-            _ => first,
+            _ => self
+                .drag
+                .recall_focus(list)
+                .map_or(first, |i| i.clamp(first, count - 1)),
         };
         self.move_hovered(TrackPos::new(new_idx, list))
     }
@@ -304,7 +313,7 @@ impl MusicPlayer {
     /// Set the hovered track and center it in its list.
     fn move_hovered(&mut self, pos: TrackPos) -> Task<Message> {
         self.drag.is_hover_controlled = true;
-        self.drag.set_hovered_track(pos);
+        self.drag.set_hovered(HoverTarget::Track(pos));
         self.scroll_track_into_view(pos)
     }
 

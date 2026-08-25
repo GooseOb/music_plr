@@ -35,8 +35,17 @@ impl TrackListKind {
         }
     }
 
-    pub const fn in_queue_panel(self) -> bool {
-        matches!(self, TrackListKind::Queue | TrackListKind::Recent)
+    /// Slot into `DragState::last_focus` for this list.
+    pub const fn slot(self) -> usize {
+        match self {
+            TrackListKind::Queue => 0,
+            TrackListKind::Active => 1,
+            TrackListKind::Recent => 2,
+        }
+    }
+
+    pub const fn is_main(self) -> bool {
+        matches!(self, TrackListKind::Active)
     }
 }
 
@@ -339,6 +348,8 @@ pub struct DragState {
     pub drop_target: Option<DropTarget>,
     pub is_hover_controlled: bool,
     pub hovered: Option<HoverTarget>,
+    /// Last focused row per list, so returning to a list restores focus.
+    pub last_focus: [Option<usize>; 3],
 }
 
 impl DragState {
@@ -362,9 +373,18 @@ impl DragState {
         }
     }
 
-    /// Set the hovered track (keyboard-navigation focus).
-    pub fn set_hovered_track(&mut self, pos: TrackPos) {
-        self.hovered = Some(HoverTarget::Track(pos));
+    /// Set the hovered target, remembering track rows as the list's last
+    /// focused row.
+    pub fn set_hovered(&mut self, target: HoverTarget) {
+        if let HoverTarget::Track(pos) = &target {
+            self.last_focus[pos.list.slot()] = Some(pos.index);
+        }
+        self.hovered = Some(target);
+    }
+
+    /// The last focused row index of `list`, if still meaningful-ish.
+    pub fn recall_focus(&self, list: TrackListKind) -> Option<usize> {
+        self.last_focus[list.slot()]
     }
 
     /// Clear a hovered track without disturbing an unrelated card hover.

@@ -472,7 +472,7 @@ impl MusicPlayer {
             }
             Message::HoverStart(target) => {
                 if !self.drag.is_hover_controlled {
-                    self.drag.hovered = Some(target);
+                    self.drag.set_hovered(target);
                 }
                 Task::none()
             }
