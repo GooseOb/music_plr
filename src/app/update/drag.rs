@@ -291,18 +291,7 @@ impl MusicPlayer {
 
     pub fn handle_track_drop(&mut self, pos: TrackPos) {
         let source = pos.list;
-        let track_idx = pos.index;
-
-        let was_in_selection = {
-            let sel = self.selection(source);
-            !sel.is_empty() && sel.contains(&track_idx)
-        };
-
-        let indices: Vec<usize> = if was_in_selection {
-            self.selection(source).to_vec()
-        } else {
-            vec![track_idx]
-        };
+        let indices = self.dragged_indices(source).to_vec();
 
         // Dropped on the playlist sidebar: add to that playlist (prepend). The
         // target was resolved during the drag into `drop_target` and is shown
@@ -335,6 +324,17 @@ impl MusicPlayer {
             TrackListKind::Active => self.copy_from_queue(source, &indices, drop_idx),
             TrackListKind::Recent => {}
         }
+    }
+
+    pub fn dragged_indices(&self, list: TrackListKind) -> &[usize] {
+        match &self.drag.dragged {
+            Some((drag_list, indices)) if *drag_list == list => indices,
+            _ => &[],
+        }
+    }
+
+    pub fn is_dragging_track(&self, pos: TrackPos) -> bool {
+        self.dragged_indices(pos.list).contains(&pos.index)
     }
 
     fn copy_to_queue(&mut self, source: TrackListKind, indices: &[usize], drop_idx: usize) {
@@ -390,8 +390,10 @@ impl MusicPlayer {
         indices: &[usize],
         source: TrackListKind,
     ) {
-        let min_idx = *indices.iter().min().unwrap();
-        let max_idx = *indices.iter().max().unwrap();
+        let (Some(min_idx), Some(max_idx)) = (indices.iter().min(), indices.iter().max()) else {
+            return;
+        };
+        let (min_idx, max_idx) = (*min_idx, *max_idx);
         let is_valid_drop = drop_idx > max_idx || drop_idx < min_idx;
         if drop_idx > self.track_count(source) || !is_valid_drop {
             return;
@@ -558,6 +560,13 @@ impl MusicPlayer {
                     self.handle_play_track(pos);
                     return;
                 }
+                let sel = self.selection(pos.list);
+                let indices = if !sel.is_empty() && sel.contains(&pos.index) {
+                    sel.to_vec()
+                } else {
+                    vec![pos.index]
+                };
+                self.drag.dragged = Some((pos.list, indices));
                 self.drag.pressed = Some(Pressed::Track(pos));
             }
             _ => {

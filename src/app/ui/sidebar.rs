@@ -89,7 +89,12 @@ fn library_row<'a>(
         ViewKind::PlaylistView(r) => r.id == item.id,
         _ => false,
     };
-    let text_color = if is_active { p.fg } else { p.fg_secondary };
+    let is_dragging_this = player.drag.pressed.as_ref() == Some(&Pressed::Card(item.clone()));
+    let text_color = if is_active || is_dragging_this {
+        p.fg
+    } else {
+        p.fg_secondary
+    };
     let thumb = player.thumbnail_index.get(&item.id);
     let thumb = thumbnail(p, theme::ICON_SIZE_LG + 4.0, thumb);
     let is_hovered = player.drag.is_hovered_library_card(item);
@@ -102,7 +107,9 @@ fn library_row<'a>(
         .padding(theme::SPACING_XS)
         .on_press(Message::ToggleLibrarySave(item.clone()));
 
-    let bg = if is_active {
+    let bg = if is_dragging_this {
+        p.bg_current
+    } else if is_active {
         p.bg_current.scale_alpha(0.7)
     } else if is_hovered {
         p.bg_hover
@@ -119,6 +126,13 @@ fn library_row<'a>(
         .padding([theme::SPACING_SM, theme::SPACING_MD])
         .style(move |_| iced::widget::container::Style {
             background: Some(bg.into()),
+            border: if is_dragging_this {
+                iced::border::rounded(theme::RADIUS_MD)
+                    .width(2.0)
+                    .color(p.accent)
+            } else {
+                iced::border::rounded(theme::RADIUS_MD)
+            },
             ..Default::default()
         }),
     )

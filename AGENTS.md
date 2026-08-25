@@ -87,7 +87,9 @@ src/
   `Recent` tracks come from `recently_played` (queue/playlist items suppressed).
 - **`DragState`** (`app/interaction.rs`): one `pressed: Option<Pressed>` (dragged thing:
   `Track(TrackPos)` / `Card(LibraryItem)` / `Playlist(usize)` row) and one `hovered: Option<HoverTarget>`
-  (cursor target; `Track` doubles as the keyboard-navigation focus). Single enum field each. `drop_target`
+  (cursor target; `Track` doubles as the keyboard-navigation focus), and `dragged: Option<(TrackListKind, Vec<usize>)>` — the dragged
+  track indices, resolved once at press time (selection if the pressed track is selected, else just it);
+  stored with its list because `pressed` is taken before drop handling. Single enum field each. `drop_target`
   resolves the active drag: `Track`/`Playlist`/`Library` (insertion line), `PlaylistAdd` (track→existing
   playlist, row highlighted), `PlaylistReorder { from, to }`. Same-list reorders; cross-list copies move
   all selected; cards dropped on the playlist list become local playlists (`create_at` + bg `browse`).

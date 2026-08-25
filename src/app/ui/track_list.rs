@@ -170,6 +170,7 @@ fn view_track_row_inner<'a>(
     let p = &player.app_theme.palette;
     let is_selected = player.selection(pos.list).contains(&pos.index);
     let is_hovered = player.drag.hovered_track() == Some(pos);
+    let is_dragging = player.is_dragging_track(pos);
     let is_current = player
         .queue
         .current()
@@ -185,7 +186,7 @@ fn view_track_row_inner<'a>(
         } else {
             None
         },
-        is_hovered,
+        is_hovered || is_dragging,
         p.bg,
     );
 
@@ -199,8 +200,12 @@ fn view_track_row_inner<'a>(
         .on_right_press(Message::TrackRightClicked(pos))
         .on_move(move |_| Message::HoverStart(HoverTarget::Track(pos)));
 
-    let border = if is_match {
-        Some(if is_hovered { p.accent } else { p.fg_muted })
+    let border = if is_match || is_dragging {
+        Some(if is_hovered || is_dragging {
+            p.accent
+        } else {
+            p.fg_muted
+        })
     } else {
         None
     };

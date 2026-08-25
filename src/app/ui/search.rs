@@ -226,6 +226,7 @@ fn card_row<'a>(
     let main =
         inner_row_layout(leading.into(), Some(thumb), title, subtitle_el, None).width(Length::Fill);
     let is_hovered = player.drag.is_hovered_card(item);
+    let is_dragging_this = player.drag.pressed.as_ref() == Some(&Pressed::Card(item.clone()));
     let hover_item = item.clone();
     let main = MouseArea::new(main)
         .interaction(player.drag.clickable_cursor_interaction())
@@ -233,9 +234,13 @@ fn card_row<'a>(
         .on_move(move |_| Message::HoverStart(HoverTarget::Card(hover_item.clone())));
     track_row(
         Row::with_children([main.into(), toggle.into()]),
-        if is_hovered { p.bg_hover } else { p.bg },
+        if is_dragging_this || is_hovered {
+            p.bg_hover
+        } else {
+            p.bg
+        },
         None,
-        None,
+        is_dragging_this.then_some(p.accent),
     )
     .into()
 }

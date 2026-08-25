@@ -346,6 +346,11 @@ pub struct DragState {
     pub drag_origin: Option<Point>,
     pub drag_active: bool,
     pub drop_target: Option<DropTarget>,
+    /// Track indices carried by the current drag, resolved at press time:
+    /// the whole selection if the pressed track is selected, else just it.
+    /// The list is stored alongside because `pressed` is taken before the
+    /// drop handler runs.
+    pub dragged: Option<(TrackListKind, Vec<usize>)>,
     pub is_hover_controlled: bool,
     pub hovered: Option<HoverTarget>,
     /// Last focused row per list, so returning to a list restores focus.
@@ -358,6 +363,7 @@ impl DragState {
         self.drag_origin = None;
         self.pressed = None;
         self.drop_target = None;
+        self.dragged = None;
     }
 
     pub(crate) fn cleanup(&mut self) {
