@@ -60,7 +60,7 @@ impl MusicPlayer {
     }
 
     /// Keep the lyrics editor in sync with the current lyrics text
-    /// (no-op outside line-select mode).
+    /// (no-op outside `Selectable` mode).
     pub(super) fn sync_lyrics_editor(&mut self) {
         let Some(state) = &mut self.lyrics else {
             return;
@@ -80,20 +80,20 @@ impl MusicPlayer {
             }
             _ => String::new(),
         };
-        let Some(editor) = state.editor.as_mut() else {
-            return;
-        };
-        *editor = iced::widget::text_editor::Content::with_text(&text);
+        if state.mode == crate::app::LyricsViewMode::Selectable {
+            state.editor = iced::widget::text_editor::Content::with_text(&text);
+        }
     }
 
-    pub fn toggle_lyrics_select_mode(&mut self) {
+    pub fn set_lyrics_view_mode(&mut self, mode: crate::app::LyricsViewMode) {
         let Some(state) = &mut self.lyrics else {
             return;
         };
-        if state.editor.take().is_none() {
-            state.editor = Some(iced::widget::text_editor::Content::default());
-            self.sync_lyrics_editor();
+        if !state.mode_available(mode) {
+            return;
         }
+        state.mode = mode;
+        self.sync_lyrics_editor();
     }
 
     /// Switch the active lyrics provider, persist it, and force a refetch.
@@ -131,8 +131,10 @@ impl MusicPlayer {
         let cached = crate::data::lyrics_cache::LyricsCache::load()
             .get_for(&current_id, self.lyrics_client.selected());
         if let Some(cached_lyrics) = cached {
+            let mode = crate::app::LyricsViewMode::for_lyrics(&cached_lyrics);
             state.lyrics = crate::load_state::LoadState::Ready(cached_lyrics);
             state.track_id = Some(current_id.clone());
+            state.mode = mode;
             self.sync_lyrics_editor();
             return;
         }

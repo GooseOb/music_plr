@@ -131,7 +131,7 @@ pub enum Message {
     SwitchQueueTab(QueueTab),
     ToggleRepeat,
     ShowLyrics,
-    ToggleLyricsSelectMode,
+    SetLyricsViewMode(crate::app::LyricsViewMode),
     LyricsLineClicked(f32),
     SelectLyricsProvider(crate::lyrics::LyricsProvider),
     LyricsEditorAction(iced::widget::text_editor::Action),

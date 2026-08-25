@@ -349,7 +349,9 @@ impl MusicPlayer {
                     let mut cache = crate::data::lyrics_cache::LyricsCache::load();
                     cache.insert(id, &lyrics);
                 }
+                let mode = crate::app::LyricsViewMode::for_lyrics(&lyrics);
                 state.lyrics = crate::load_state::LoadState::Ready(lyrics);
+                state.mode = mode;
             }
             Err(e) => state.lyrics = crate::load_state::LoadState::Failed(e),
         }

@@ -27,12 +27,19 @@ pub use interaction::{
 pub use message::{BackendResult, EditTrackField, Message};
 pub use view_data::{RequestIdGenerator, ViewData, ViewKind};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LyricsViewMode {
+    Selectable,
+    Synced,
+    Plain,
+}
+
 #[derive(Debug, Clone)]
 pub struct LyricsState {
     pub track_id: Option<String>,
     pub lyrics: crate::load_state::LoadState<crate::lyrics::Lyrics>,
-    /// `Some` while line-select mode is active (the editable working copy).
-    pub editor: Option<iced::widget::text_editor::Content>,
+    pub mode: LyricsViewMode,
+    pub editor: iced::widget::text_editor::Content,
 }
 
 /// Mutable working copy of a track being edited in the track-editing popup.
@@ -48,12 +55,34 @@ pub struct EditTrackState {
     pub pos: TrackPos,
 }
 
+impl LyricsViewMode {
+    pub fn for_lyrics(lyrics: &crate::lyrics::Lyrics) -> Self {
+        if lyrics.timed.is_empty() {
+            Self::Plain
+        } else {
+            Self::Synced
+        }
+    }
+}
+
 impl LyricsState {
     fn new() -> Self {
         Self {
             track_id: None,
             lyrics: crate::load_state::LoadState::Loading,
-            editor: None,
+            mode: LyricsViewMode::Selectable,
+            editor: iced::widget::text_editor::Content::default(),
+        }
+    }
+
+    pub fn mode_available(&self, mode: LyricsViewMode) -> bool {
+        let crate::load_state::LoadState::Ready(lyrics) = &self.lyrics else {
+            return false;
+        };
+        match mode {
+            LyricsViewMode::Selectable => !(lyrics.timed.is_empty() && lyrics.plain.is_empty()),
+            LyricsViewMode::Synced => !lyrics.timed.is_empty(),
+            LyricsViewMode::Plain => !lyrics.plain.is_empty(),
         }
     }
 }
@@ -355,10 +384,8 @@ impl MusicPlayer {
             Message::KeyPressed { key, modifiers } => self.handle_key_press(key, modifiers),
             Message::LyricsEditorAction(action) => {
                 if let Some(state) = &mut self.lyrics {
-                    if let Some(editor) = &mut state.editor {
-                        if !matches!(action, iced::widget::text_editor::Action::Edit(_)) {
-                            editor.perform(action);
-                        }
+                    if !matches!(action, iced::widget::text_editor::Action::Edit(_)) {
+                        state.editor.perform(action);
                     }
                 }
                 Task::none()
@@ -545,8 +572,8 @@ impl MusicPlayer {
                 self.handle_show_lyrics();
                 Task::none()
             }
-            Message::ToggleLyricsSelectMode => {
-                self.toggle_lyrics_select_mode();
+            Message::SetLyricsViewMode(mode) => {
+                self.set_lyrics_view_mode(mode);
                 Task::none()
             }
             Message::LyricsLineClicked(secs) => {

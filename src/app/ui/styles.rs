@@ -167,29 +167,29 @@ pub fn button_style_list_item(
 pub fn button_style_scope(
     selected: bool,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    button_style(
-        move |p, hot| {
-            Some(if hot {
-                if selected {
-                    p.accent_hover
-                } else {
-                    p.bg_hover
+    move |theme, status| {
+        let p = &theme.palette;
+        button::Style {
+            background: match status {
+                button::Status::Disabled => None,
+                button::Status::Pressed | button::Status::Hovered => {
+                    Some(if selected { p.accent_hover } else { p.bg_hover }.into())
                 }
+                button::Status::Active => {
+                    Some(if selected { p.accent } else { p.bg_tertiary }.into())
+                }
+            },
+            text_color: if matches!(status, button::Status::Disabled) {
+                p.fg_muted
             } else if selected {
-                p.accent
-            } else {
-                p.bg_tertiary
-            })
-        },
-        move |p, _| {
-            if selected {
                 Color::BLACK
             } else {
                 p.fg_secondary
-            }
-        },
-        theme::RADIUS_SM,
-    )
+            },
+            border: border::rounded(theme::RADIUS_SM),
+            ..Default::default()
+        }
+    }
 }
 
 pub fn button_style_popup_item() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {

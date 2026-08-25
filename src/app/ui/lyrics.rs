@@ -1,15 +1,18 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, text_editor::Binding, Button, Column, Container, Row},
+    widget::{scrollable, text, text_editor::Binding, Button, Column, Container, Row, Space},
     Color, Element, Length,
 };
 
-use crate::{app::LyricsState, load_state::LoadState, theme::AppTheme};
+use crate::{
+    app::{LyricsState, LyricsViewMode},
+    load_state::LoadState,
+    theme::AppTheme,
+};
 
 use super::{
-    shared_components::empty_state,
-    shared_components::scope_tab_row,
-    styles::{button_style_panel_item, button_style_scope, fg_secondary},
+    shared_components::{empty_state, scope_button, scope_tab_row},
+    styles::{button_style_panel_item, fg_secondary},
     theme, Message, MusicPlayer,
 };
 
@@ -19,8 +22,12 @@ pub(super) fn view_lyrics<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let track = player.queue.current();
 
-    let body: Element<'a, Message, AppTheme> = if let Some(editor) = lyrics_state.editor.as_ref() {
-        view_select_editor(editor)
+    let lyrics_ready = matches!(&lyrics_state.lyrics, LoadState::Ready(_));
+
+    let body: Element<'a, Message, AppTheme> = if lyrics_state.mode == LyricsViewMode::Selectable
+        && lyrics_ready
+    {
+        view_select_editor(&lyrics_state.editor)
     } else {
         let lyrics_state = &lyrics_state.lyrics;
         match (track, lyrics_state) {
@@ -44,19 +51,30 @@ pub(super) fn view_lyrics<'a>(
 
     Column::with_children([
         Container::new(body).height(Length::Fill).into(),
-        view_bottom_controls(player, lyrics_state.editor.is_some()).into(),
+        view_bottom_controls(player, lyrics_state).into(),
     ])
     .spacing(theme::SPACING_MD)
     .into()
 }
 
-fn view_bottom_controls(player: &MusicPlayer, is_select_mode: bool) -> Row<'_, Message, AppTheme> {
-    let select_toggle = Button::new(
-        text(if is_select_mode { "Deselect" } else { "Select" }).size(theme::TEXT_SIZE_SM),
-    )
-    .padding([theme::SPACING_XS, theme::SPACING_MD])
-    .style(button_style_scope(is_select_mode))
-    .on_press(Message::ToggleLyricsSelectMode);
+fn view_bottom_controls<'a>(
+    player: &'a MusicPlayer,
+    lyrics_state: &'a LyricsState,
+) -> Row<'a, Message, AppTheme> {
+    const MODES: [(LyricsViewMode, &str); 3] = [
+        (LyricsViewMode::Selectable, "Selectable"),
+        (LyricsViewMode::Synced, "Synced"),
+        (LyricsViewMode::Plain, "Plain"),
+    ];
+
+    let picker = Row::with_children(MODES.iter().map(|&(mode, label)| {
+        let selected = lyrics_state.mode == mode;
+        let available = lyrics_state.mode_available(mode);
+        scope_button(label, selected)
+            .on_press_maybe(available.then_some(Message::SetLyricsViewMode(mode)))
+            .into()
+    }))
+    .spacing(theme::SPACING_XS);
 
     let selected_provider = player.lyrics_client.selected();
     let provider_row = scope_tab_row(crate::lyrics::LyricsProvider::all().iter().map(|provider| {
@@ -67,10 +85,13 @@ fn view_bottom_controls(player: &MusicPlayer, is_select_mode: bool) -> Row<'_, M
         )
     }));
 
-    Row::with_children([select_toggle.into(), provider_row])
-        .padding(theme::SPACING_SM)
-        .spacing(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center)
+    Row::with_children([
+        provider_row,
+        Space::new().width(Length::Fill).into(),
+        picker.into(),
+    ])
+    .padding(theme::SPACING_SM)
+    .align_y(alignment::Vertical::Center)
 }
 
 fn view_select_editor(
