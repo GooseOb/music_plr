@@ -64,7 +64,7 @@ pub(super) fn view_playlist<'a>(
 
     let track_list = view_track_list(&pl.tracks, player, TrackListKind::Active, 0);
 
-    Column::with_children([header.into(), track_list]).into()
+    Column::with_children([header, track_list]).into()
 }
 
 pub(super) fn view_downloads(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {

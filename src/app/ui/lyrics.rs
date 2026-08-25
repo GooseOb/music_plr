@@ -1,6 +1,8 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, text_editor::Binding, Button, Column, Container, Row, Space},
+    widget::{
+        scrollable, text, text_editor::Binding, Button, Column, Container, MouseArea, Row, Space,
+    },
     Color, Element, Length,
 };
 
@@ -48,6 +50,10 @@ pub(super) fn view_lyrics<'a>(
             (None, _) => empty_state("Play a track to see its lyrics."),
         }
     };
+
+    let body: Element<'a, Message, AppTheme> = MouseArea::new(body)
+        .on_right_press(Message::CopyLyrics)
+        .into();
 
     Column::with_children([
         Container::new(body).height(Length::Fill).into(),

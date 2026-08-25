@@ -390,6 +390,20 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
+            Message::CopyLyrics => {
+                let Some(state) = &self.lyrics else {
+                    return Task::none();
+                };
+                let text = match &state.lyrics {
+                    crate::load_state::LoadState::Ready(lyrics) => lyrics.plain.clone(),
+                    _ => return Task::none(),
+                };
+                if text.is_empty() {
+                    return Task::none();
+                }
+                self.notify("Lyrics copied to clipboard");
+                iced::clipboard::write(text)
+            }
             Message::SearchInputChanged(query) => {
                 self.search_query = query;
                 self.update_search_history();

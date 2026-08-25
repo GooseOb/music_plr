@@ -135,6 +135,7 @@ pub enum Message {
     LyricsLineClicked(f32),
     SelectLyricsProvider(crate::lyrics::LyricsProvider),
     LyricsEditorAction(iced::widget::text_editor::Action),
+    CopyLyrics,
 
     NavigateTo(ViewData),
     NavigateBack,
