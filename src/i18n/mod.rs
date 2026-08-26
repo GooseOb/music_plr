@@ -189,4 +189,8 @@ pub struct Strings {
     pub couldnt_load_lyrics: fn(&str) -> String,
     pub search_failed: fn(&str) -> String,
     pub radio_label: fn(&str, &str) -> String,
+    pub ctx_add_to_playlist_n: fn(usize) -> String,
+    pub ctx_download_n: fn(usize) -> String,
+    pub ctx_remove_from_queue_n: fn(usize) -> String,
+    pub ctx_remove_from_playlist_n: fn(usize) -> String,
 }

@@ -141,6 +141,10 @@ pub const STRINGS: Strings = Strings {
     couldnt_load_lyrics: |e| format!("Couldn't load lyrics: {e}"),
     search_failed: |e| format!("Search failed: {e}"),
     radio_label: |w, name| format!("Radio ({w}): {name}"),
+    ctx_add_to_playlist_n: |n| format!("Add {} to playlist", en_tracks(n)),
+    ctx_download_n: |n| format!("Download {}", en_tracks(n)),
+    ctx_remove_from_queue_n: |n| format!("Remove {} from queue", en_tracks(n)),
+    ctx_remove_from_playlist_n: |n| format!("Remove {} from playlist", en_tracks(n)),
 };
 
 fn en_tracks(n: usize) -> String {

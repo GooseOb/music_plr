@@ -232,7 +232,7 @@ fn action_label(
         CtxAction::GoToArtist => (Cow::Borrowed(tr.ctx_go_to_artist), icons::ARTIST_ICON),
         CtxAction::AddToPlaylist => (
             if n > 1 {
-                Cow::Owned(format!("{} {n}", tr.ctx_add_to_playlist))
+                Cow::Owned((tr.ctx_add_to_playlist_n)(n))
             } else {
                 Cow::Borrowed(tr.ctx_add_to_playlist)
             },
@@ -240,7 +240,7 @@ fn action_label(
         ),
         CtxAction::Download => (
             if n > 1 {
-                Cow::Owned(format!("{} {n}", tr.ctx_download))
+                Cow::Owned((tr.ctx_download_n)(n))
             } else {
                 Cow::Borrowed(tr.ctx_download)
             },
@@ -250,7 +250,7 @@ fn action_label(
         CtxAction::ArtistRadio => (Cow::Borrowed(tr.ctx_artist_radio), icons::RADIO_ICON),
         CtxAction::RemoveFromQueue => (
             if n > 1 {
-                Cow::Owned(format!("{} {n}", tr.ctx_remove_from_queue))
+                Cow::Owned((tr.ctx_remove_from_queue_n)(n))
             } else {
                 Cow::Borrowed(tr.ctx_remove_from_queue)
             },
@@ -258,7 +258,7 @@ fn action_label(
         ),
         CtxAction::RemoveFromPlaylist => (
             if n > 1 {
-                Cow::Owned(format!("{} {n}", tr.ctx_remove_from_playlist))
+                Cow::Owned((tr.ctx_remove_from_playlist_n)(n))
             } else {
                 Cow::Borrowed(tr.ctx_remove_from_playlist)
             },
