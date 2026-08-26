@@ -84,8 +84,8 @@ impl MusicPlayer {
             Pressed::Card(_) => {
                 self.drag.drop_target = self.card_drop_target(containing.as_ref());
             }
-            Pressed::Track(pos) => {
-                self.drag.drop_target = self.resolve_track_drop(*pos, containing.as_ref());
+            Pressed::Track(_) => {
+                self.drag.drop_target = self.resolve_track_drop(containing.as_ref());
             }
             Pressed::Playlist(from) => {
                 self.drag.drop_target = self.resolve_playlist_drop(*from, containing.as_ref());
@@ -132,11 +132,7 @@ impl MusicPlayer {
         Some(DropTarget::PlaylistReorder { from, to })
     }
 
-    fn resolve_track_drop(
-        &self,
-        source: TrackPos,
-        containing: Option<&(Id, &ListGeometry)>,
-    ) -> Option<DropTarget> {
+    fn resolve_track_drop(&self, containing: Option<&(Id, &ListGeometry)>) -> Option<DropTarget> {
         let (id, geo) = containing?;
         let list = if *id == QUEUE_LIST_ID {
             TrackListKind::Queue
@@ -158,16 +154,6 @@ impl MusicPlayer {
             return None;
         }
         let drop_idx = self.compute_drop_idx(list);
-        // Same-list reorder guard: never drop onto a selected run that
-        // would merely shift it. Cross-list copies are unguarded.
-        if source.list == TrackListKind::Active {
-            let sel = self.selection(TrackListKind::Active).to_vec();
-            if let (Some(min), Some(max)) = (sel.iter().copied().min(), sel.iter().copied().max()) {
-                if drop_idx > min && drop_idx < max {
-                    return None;
-                }
-            }
-        }
         Some(DropTarget::Track(TrackPos::new(drop_idx, list)))
     }
 
@@ -394,12 +380,7 @@ impl MusicPlayer {
         indices: &[usize],
         source: TrackListKind,
     ) {
-        let (Some(min_idx), Some(max_idx)) = (indices.iter().min(), indices.iter().max()) else {
-            return;
-        };
-        let (min_idx, max_idx) = (*min_idx, *max_idx);
-        let is_valid_drop = drop_idx > max_idx || drop_idx < min_idx;
-        if drop_idx > self.track_count(source) || !is_valid_drop {
+        if drop_idx > self.track_count(source) {
             return;
         }
 
