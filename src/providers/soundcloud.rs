@@ -19,68 +19,75 @@ use rsoundcloud::{
     UsersApi,
 };
 use std::sync::OnceLock;
-/// Map an `rsoundcloud` album/playlist into a card for the search tab.
-fn album_to_card(ap: &AlbumPlaylist) -> CardData {
-    CardData {
-        id: ap.album_playlist.id.to_string(),
-        title: ap.album_playlist.title.clone(),
-        subtitle: ap.user.user.username.clone(),
-        thumbnail: ap.album_playlist.artwork_url.clone().unwrap_or_default(),
+impl From<&AlbumPlaylist> for CardData {
+    fn from(ap: &AlbumPlaylist) -> Self {
+        CardData {
+            id: ap.album_playlist.id.to_string(),
+            title: ap.album_playlist.title.clone(),
+            subtitle: ap.user.user.username.clone(),
+            thumbnail: ap.album_playlist.artwork_url.clone().unwrap_or_default(),
+        }
     }
 }
 
-/// Map an `rsoundcloud` track into a playable `Track`. The `permalink_url` +
+/// A `rsoundcloud` track becomes a playable `Track`. The `permalink_url` +
 /// numeric `id` let the existing `yt-dlp` stream/download path play it, so we
 /// don't need `SoundCloud`'s (auth-gated) stream URLs.
-fn sc_track_to_track(t: &SCTrack) -> Track {
-    let mut track = Track::from_provider(
-        ProviderId::SoundCloud,
-        t.track.id.to_string(),
-        t.track.permalink_url.clone(),
-        t.track.title.clone(),
-        t.user.username.clone(),
-        (t.track.duration.max(0) as u64 / 1000) as u32,
-        t.track
-            .artwork_url
-            .clone()
-            .unwrap_or_else(|| t.user.avatar_url.clone()),
-        None,
-        Some(t.user.id.to_string()),
-    );
-    if let Some(pt) = track.providers.get_mut(&ProviderId::SoundCloud) {
-        pt.play_count = t.track.playback_count.unwrap_or(0).max(0) as u64;
+impl From<&SCTrack> for Track {
+    fn from(t: &SCTrack) -> Self {
+        let mut track = Track::from_provider(
+            ProviderId::SoundCloud,
+            t.track.id.to_string(),
+            t.track.permalink_url.clone(),
+            t.track.title.clone(),
+            t.user.username.clone(),
+            (t.track.duration.max(0) as u64 / 1000) as u32,
+            t.track
+                .artwork_url
+                .clone()
+                .unwrap_or_else(|| t.user.avatar_url.clone()),
+            None,
+            Some(t.user.id.to_string()),
+        );
+        if let Some(pt) = track.providers.get_mut(&ProviderId::SoundCloud) {
+            pt.play_count = t.track.playback_count.unwrap_or(0).max(0) as u64;
+        }
+        track
     }
-    track
 }
 
 /// Map an `rsoundcloud` user (artist) into a card for the Artists search tab.
-fn user_to_card(u: &User) -> CardData {
-    CardData {
-        id: u.user.id.to_string(),
-        title: u.user.username.clone(),
-        subtitle: u.user.full_name.clone(),
-        thumbnail: u.user.avatar_url.clone(),
+impl From<&User> for CardData {
+    fn from(u: &User) -> Self {
+        CardData {
+            id: u.user.id.to_string(),
+            title: u.user.username.clone(),
+            subtitle: u.user.full_name.clone(),
+            thumbnail: u.user.avatar_url.clone(),
+        }
     }
 }
 
-/// Map a `rsoundcloud` basic track (from an artist's track list) into a
+/// A `rsoundcloud` basic track (from an artist's track list) becomes a
 /// playable `Track`, carrying the `permalink_url` for `yt-dlp` playback.
-fn sc_basic_track_to_track(t: &BasicTrack) -> Track {
-    let mut track = Track::from_provider(
-        ProviderId::SoundCloud,
-        t.track.id.to_string(),
-        t.track.permalink_url.clone(),
-        t.track.title.clone(),
-        t.user.username.clone(),
-        (t.track.duration.max(0) as u64 / 1000) as u32,
-        t.track.artwork_url.clone().unwrap_or_default(),
-        None,
-        Some(t.user.id.to_string()),
-    );
-    if let Some(pt) = track.providers.get_mut(&ProviderId::SoundCloud) {
-        pt.play_count = t.track.playback_count.unwrap_or(0).max(0) as u64;
+impl From<&BasicTrack> for Track {
+    fn from(t: &BasicTrack) -> Self {
+        let mut track = Track::from_provider(
+            ProviderId::SoundCloud,
+            t.track.id.to_string(),
+            t.track.permalink_url.clone(),
+            t.track.title.clone(),
+            t.user.username.clone(),
+            (t.track.duration.max(0) as u64 / 1000) as u32,
+            t.track.artwork_url.clone().unwrap_or_default(),
+            None,
+            Some(t.user.id.to_string()),
+        );
+        if let Some(pt) = track.providers.get_mut(&ProviderId::SoundCloud) {
+            pt.play_count = t.track.playback_count.unwrap_or(0).max(0) as u64;
+        }
+        track
     }
-    track
 }
 
 /// Run an async `rsoundcloud` call to completion on the shared current-thread
@@ -164,7 +171,7 @@ fn search_tracks(query: &str, offset: usize) -> Result<Vec<Track>> {
             .search_tracks(query.to_string(), search_page(offset))
             .await
     })?;
-    Ok(tracks.iter().map(sc_track_to_track).collect())
+    Ok(tracks.iter().map(Track::from).collect())
 }
 
 fn search_users(query: &str, offset: usize) -> Result<Vec<CardData>> {
@@ -174,11 +181,11 @@ fn search_users(query: &str, offset: usize) -> Result<Vec<CardData>> {
             .search_users(query.to_string(), search_page(offset))
             .await
     })?;
-    Ok(cards.iter().map(user_to_card).collect())
+    Ok(cards.iter().map(CardData::from).collect())
 }
 
 /// Search albums or playlists (both return the same `AlbumPlaylist` shape and
-/// map through `album_to_card`, so they share one body).
+/// map through `From<&AlbumPlaylist>`, so they share one body).
 fn search_sets(query: &str, offset: usize, albums: bool) -> Result<Vec<CardData>> {
     let cards = block_on_sc(async {
         let client = sc_client().await?;
@@ -192,7 +199,7 @@ fn search_sets(query: &str, offset: usize, albums: bool) -> Result<Vec<CardData>
                 .await
         }
     })?;
-    Ok(cards.iter().map(album_to_card).collect())
+    Ok(cards.iter().map(CardData::from).collect())
 }
 
 pub fn search_more(query: &str, offset: usize) -> Vec<Track> {
@@ -211,13 +218,13 @@ pub fn browse(id: &str, kind: &str) -> Result<Vec<Track>> {
             let client = sc_client().await?;
             client.get_user_tracks(ResourceId::Id(parsed)).await
         })?;
-        Ok(tracks.iter().map(sc_basic_track_to_track).collect())
+        Ok(tracks.iter().map(Track::from).collect())
     } else {
         let tracks = block_on_sc(async {
             let client = sc_client().await?;
             client.get_playlist_tracks(ResourceId::Id(parsed)).await
         })?;
-        Ok(tracks.iter().map(sc_track_to_track).collect())
+        Ok(tracks.iter().map(Track::from).collect())
     }
 }
 
@@ -242,7 +249,7 @@ async fn popular_tracks(client: &SoundCloudClient, id: u64) -> Result<Vec<Track>
     })
     .await
     .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-    Ok(tracks.iter().map(sc_basic_track_to_track).collect())
+    Ok(tracks.iter().map(Track::from).collect())
 }
 
 async fn album_cards(

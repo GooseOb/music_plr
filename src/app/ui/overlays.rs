@@ -180,15 +180,8 @@ pub(super) fn view_context_menu<'a>(
                     .unwrap_or(0),
                 None => 0,
             };
-            let submenu_h = entries.len() as f32 * geo.row_height;
-            let max_offset =
-                (player.window_size.height - pos_y - submenu_h - theme::SPACING_SM).max(0.0);
-            let offset = geo
-                .row_offsets
-                .get(parent_index)
-                .copied()
-                .unwrap_or(0.0)
-                .clamp(0.0, max_offset);
+
+            let offset = geo.row_offsets.get(parent_index).copied().unwrap_or(0.0);
             let submenu_left =
                 pos_x + 2.0 * geo.panel.width + theme::SPACING_XS > player.window_size.width;
             let submenu: Element<'_, Message, AppTheme> = Column::with_children([
