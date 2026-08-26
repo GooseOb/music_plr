@@ -303,28 +303,26 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .into();
 
     let create_row = Row::with_children([
-        Container::new(
-            text_input(
-                player.strings.new_playlist_name,
-                &player.playlist_create_name,
-            )
-            .on_input(Message::NewPlaylistNameChanged)
-            .padding([theme::SPACING_SM, theme::SPACING_SM]),
+        text_input(
+            player.strings.new_playlist_name,
+            &player.playlist_create_name,
         )
+        .on_input(Message::NewPlaylistNameChanged)
+        .padding(theme::SPACING_SM)
         .into(),
         Button::new(icons::icon(
             icons::ADD_ICON,
             Color::BLACK,
             theme::ICON_SIZE_SM,
         ))
-        .padding(theme::SPACING_MD - 2f32)
+        .padding(theme::SPACING_SM)
         .style(button_style_primary())
         .on_press(Message::CreatePlaylist)
         .into(),
     ])
     .align_y(alignment::Vertical::Center)
     .spacing(theme::SPACING_SM)
-    .padding([theme::SPACING_SM, theme::SPACING_MD]);
+    .padding([theme::SPACING_XS, theme::SPACING_SM]);
 
     let sidebar_content = Column::with_children([
         nav_buttons.into(),
@@ -333,6 +331,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             .spacing(theme::SPACING_XS)
             .into(),
         widget::rule::horizontal(1).into(),
+        create_row.into(),
         scrollable(Column::with_children(playlist_items).spacing(theme::SPACING_XS))
             .id(iced::widget::Id::new("sidebar_playlist_list"))
             .height(Length::FillPortion(2))
@@ -340,9 +339,8 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         widget::rule::horizontal(1).into(),
         library_header,
         library_section,
-        view_notification(player),
         widget::rule::horizontal(1).into(),
-        create_row.into(),
+        view_notification(player),
     ])
     .spacing(theme::SPACING_XS)
     .padding([theme::SPACING_SM, theme::SPACING_XS]);
