@@ -1,7 +1,9 @@
+use std::collections::HashSet;
+
+use serde::{Deserialize, Serialize};
+
 use super::{JsonStore, StoreLocation};
 use crate::types::Track;
-use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Playlist {
@@ -123,8 +125,7 @@ impl PlaylistStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::providers::ProviderId;
-    use crate::types::ProviderTrack;
+    use crate::{providers::ProviderId, types::ProviderTrack};
 
     /// Build a YouTube-source test track from an id (url mirrors id).
     fn mk(id: &str) -> Track {

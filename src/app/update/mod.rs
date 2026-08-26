@@ -1,8 +1,9 @@
+use std::thread;
+
 use super::{
     error, mpris, mpsc, warn, BackendResult, ContextMenuState, Message, MprisCommand, MprisUpdate,
     MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData,
 };
-use std::thread;
 
 mod actions;
 mod artist;

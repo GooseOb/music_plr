@@ -5,11 +5,12 @@
 //! `ViewKind::Artist`, so selected providers and loaded content survive
 //! navigation.
 
-use super::CardData;
-use crate::load_state::LoadState;
-use crate::{providers::ProviderId, types::Track};
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+
+use super::CardData;
+use crate::{load_state::LoadState, providers::ProviderId, types::Track};
 
 /// Header block: picture, name-line stats ("Monthly listeners: 280M" etc.)
 /// and an optional bio.

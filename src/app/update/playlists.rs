@@ -1,6 +1,7 @@
+use std::path::PathBuf;
+
 use super::{MusicPlayer, Track, ViewData};
 use crate::{app::ViewKind, data::JsonStore};
-use std::path::PathBuf;
 
 impl MusicPlayer {
     pub fn handle_create_playlist(&mut self) {
@@ -269,8 +270,10 @@ impl MusicPlayer {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::{MusicPlayer, ViewData, ViewKind};
-    use crate::data::config;
+    use crate::{
+        app::{MusicPlayer, ViewData, ViewKind},
+        data::config,
+    };
 
     fn player_with_playlists(names: &[&str]) -> MusicPlayer {
         let mut p = MusicPlayer::new_with(config::Config::default());

@@ -1,12 +1,14 @@
+use tracing::debug;
+
 use super::{
     error, mpris, mpsc, spawn_thumbnail_download, BackendResult, MprisCommand, MprisUpdate,
     MusicPlayer, ViewData,
 };
-use crate::app::ViewKind;
-use crate::data::cache::StreamCache;
-use crate::data::JsonStore;
-use crate::providers::ProviderId;
-use tracing::debug;
+use crate::{
+    app::ViewKind,
+    data::{cache::StreamCache, JsonStore},
+    providers::ProviderId,
+};
 
 /// Split a cache key of the form `"{provider:?}:{id}"` back into its parts.
 fn parse_cache_key(key: &str) -> (ProviderId, String) {

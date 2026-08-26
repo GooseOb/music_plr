@@ -6,17 +6,18 @@
 //! queries (search, `recording?artist=`, `release?inc=recordings`) and
 //! deserializes the typed responses.
 
+use anyhow::Result;
+use musicbrainz_rs::{
+    entity::{artist::Artist, recording::Recording, release::Release},
+    Browse, Fetch, Search,
+};
+
 use crate::{
     providers::{
         ArtistAlbumCard, ArtistHeader, ArtistPage, CardData, ProviderId, SearchScope, SearchTab,
     },
     theme::SEARCH_PAGE_SIZE,
     types::{Track, TrackAlbum},
-};
-use anyhow::Result;
-use musicbrainz_rs::{
-    entity::{artist::Artist, recording::Recording, release::Release},
-    Browse, Fetch, Search,
 };
 
 /// Map a `musicbrainz_rs` `Recording` (from a song search or artist browse)
@@ -174,8 +175,9 @@ pub fn fetch_artist_page(
     id: &str,
     kinds: &[crate::providers::ArtistDataKind],
 ) -> Result<ArtistPage> {
-    use crate::providers::ArtistDataKind as K;
     use musicbrainz_rs::entity::release_group::ReleaseGroupPrimaryType as PrimaryType;
+
+    use crate::providers::ArtistDataKind as K;
 
     // Header and albums come from one fetch; skip it entirely when neither
     // is requested (MB cannot serve popular/playlists/related anyway).

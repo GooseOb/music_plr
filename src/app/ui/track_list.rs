@@ -6,6 +6,13 @@ use iced::{
 
 pub const TRACK_LIST_ID: Id = Id::new("track_list");
 
+use super::{
+    shared_components::{
+        empty_state, inner_row_layout, play_pause_button, subtitle_artist, thumbnail, track_row,
+    },
+    styles::{button_style_album, button_style_primary, fg_secondary, row_bg},
+    theme, Message, MusicPlayer,
+};
 use crate::{
     app::{
         interaction::{row_id, HoverTarget, Pressed, TrackListKind, TrackPos},
@@ -14,14 +21,6 @@ use crate::{
     icons,
     theme::{AppTheme, Palette},
     types::Track,
-};
-
-use super::{
-    shared_components::{
-        empty_state, inner_row_layout, play_pause_button, subtitle_artist, thumbnail, track_row,
-    },
-    styles::{button_style_album, button_style_primary, fg_secondary, row_bg},
-    theme, Message, MusicPlayer,
 };
 
 pub(super) fn view_track_list<'a>(

@@ -1,10 +1,10 @@
-use crate::theme::{self, AppTheme, Palette};
-
 use iced::{
     border,
     widget::{button, container, text},
     Color,
 };
+
+use crate::theme::{self, AppTheme, Palette};
 
 /// Row background for list rows: `current` is `(idle_alpha, hovered_alpha)`
 /// applied to `bg_current` for the current/active row (alpha 1.0 = solid),

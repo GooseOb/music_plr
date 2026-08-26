@@ -7,14 +7,16 @@
 
 use std::path::Path;
 
-use symphonia::core::{
-    codecs::{DecoderOptions, CODEC_TYPE_NULL},
-    formats::FormatOptions,
-    io::MediaSourceStream,
-    meta::MetadataOptions,
-    probe::Hint,
+use symphonia::{
+    core::{
+        codecs::{DecoderOptions, CODEC_TYPE_NULL},
+        formats::FormatOptions,
+        io::MediaSourceStream,
+        meta::MetadataOptions,
+        probe::Hint,
+    },
+    default::get_probe,
 };
-use symphonia::default::get_probe;
 
 /// Target RMS amplitude (linear, full scale = 1.0). Tracks quieter or louder
 /// than this are scaled toward it, so playback loudness is consistent.

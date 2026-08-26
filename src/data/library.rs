@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 use super::{JsonStore, StoreLocation};
 use crate::providers::ProviderId;
-use serde::{Deserialize, Serialize};
 
 /// What kind of thing a [`LibraryItem`] represents. Distinguishes the three
 /// saveable entity types so the saved list and lookups can be grouped/filtered.

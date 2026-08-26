@@ -6,16 +6,15 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{
-    app::{LyricsState, LyricsViewMode},
-    load_state::LoadState,
-    theme::AppTheme,
-};
-
 use super::{
     shared_components::{empty_state, loading_state, scope_button, scope_tab_row},
     styles::{button_style_panel_item, fg_secondary},
     theme, Message, MusicPlayer,
+};
+use crate::{
+    app::{LyricsState, LyricsViewMode},
+    load_state::LoadState,
+    theme::AppTheme,
 };
 
 pub(super) fn view_lyrics<'a>(

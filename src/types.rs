@@ -1,12 +1,13 @@
-use crate::providers::{ProviderId, ProviderMap};
-use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use std::collections::HashMap;
 use std::collections::VecDeque;
 
+use serde::{Deserialize, Serialize};
+
 /// Per-provider identifier/url for a track. Re-exported from the provider
 /// module for convenience.
 pub use crate::providers::ProviderTrack;
+use crate::providers::{ProviderId, ProviderMap};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrackAlbum {

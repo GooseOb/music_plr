@@ -1,8 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use super::{JsonStore, StoreLocation};
 #[cfg(test)]
 use crate::app::ViewKind;
 use crate::{app::ViewData, types::PlayQueue};
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionState {

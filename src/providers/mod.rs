@@ -17,14 +17,18 @@ mod soundcloud;
 mod youtube;
 mod ytdlp;
 
-use crate::types::Track;
+use std::{
+    collections::HashMap,
+    io::Read,
+    process::{Command, Output, Stdio},
+    thread,
+    time::{Duration, Instant},
+};
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::io::Read;
-use std::process::{Command, Output, Stdio};
-use std::thread;
-use std::time::{Duration, Instant};
+
+use crate::types::Track;
 
 /// Run a short-lived child process to completion, killing it when it exceeds
 /// `timeout`. stdout/stderr are drained on helper threads so a chatty child

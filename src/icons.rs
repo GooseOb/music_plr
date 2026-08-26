@@ -1,5 +1,6 @@
-use crate::theme::AppTheme;
 use iced::{widget::svg, Color};
+
+use crate::theme::AppTheme;
 
 pub const ADD_ICON: &[u8] = include_bytes!("../icons/add.svg");
 pub const ARTIST_ICON: &[u8] = include_bytes!("../icons/artist.svg");

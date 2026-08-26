@@ -1,7 +1,7 @@
 use super::{mpsc, thread, BackendResult, MusicPlayer, ViewData};
-use crate::data::library::{LibraryItem, LibraryKind};
 use crate::{
     app::{update::operation::CaptureSearchHistoryRows, ViewKind},
+    data::library::{LibraryItem, LibraryKind},
     load_state::LoadState,
     providers::ProviderId,
     types::Track,

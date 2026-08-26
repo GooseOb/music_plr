@@ -1,8 +1,12 @@
 use iced::widget::operation;
 
 use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData};
-use crate::app::interaction::{ContextMenuFocus, HoverTarget};
-use crate::app::{ui::SEARCH_HISTORY_LIST_ID, view_data::ViewKind, TrackListSearch};
+use crate::app::{
+    interaction::{ContextMenuFocus, HoverTarget},
+    ui::SEARCH_HISTORY_LIST_ID,
+    view_data::ViewKind,
+    TrackListSearch,
+};
 
 impl MusicPlayer {
     /// Arrow-key navigation and Enter activation while the context menu is

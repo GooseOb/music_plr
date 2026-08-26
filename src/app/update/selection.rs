@@ -118,9 +118,7 @@ impl MusicPlayer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::view_data::ViewData;
-    use crate::data::config;
-    use crate::types::Track;
+    use crate::{app::view_data::ViewData, data::config, types::Track};
 
     fn player() -> MusicPlayer {
         // Same headless construction as the navigation tests: MPRIS no-ops

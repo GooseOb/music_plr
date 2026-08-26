@@ -1,3 +1,5 @@
+use iced::widget::Id;
+
 use super::{
     operation::{ListGeometry, LIBRARY_LIST_ID, SIDEBAR_LIST_ID},
     BackendResult, Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData,
@@ -14,7 +16,6 @@ use crate::{
         JsonStore,
     },
 };
-use iced::widget::Id;
 
 impl MusicPlayer {
     pub fn handle_left_release(&mut self) -> Task<Message> {

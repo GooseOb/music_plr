@@ -4,6 +4,14 @@ use iced::{
     Color, Element, Length,
 };
 
+use super::{
+    shared_components::{thumbnail, toggle_bookmark_button},
+    styles::{
+        bg_secondary, button_style_list_item, button_style_nav, button_style_panel_item,
+        button_style_primary, fg_secondary,
+    },
+    theme, widget, Message, MusicPlayer,
+};
 use crate::{
     app::{
         interaction::{DropTarget, HoverTarget, Pressed},
@@ -12,15 +20,6 @@ use crate::{
     data::library::LibraryItem,
     icons,
     theme::AppTheme,
-};
-
-use super::{
-    shared_components::{thumbnail, toggle_bookmark_button},
-    styles::{
-        bg_secondary, button_style_list_item, button_style_nav, button_style_panel_item,
-        button_style_primary, fg_secondary,
-    },
-    theme, widget, Message, MusicPlayer,
 };
 
 fn playlist_row<'a>(

@@ -9,6 +9,14 @@ use iced::{
     Element, Length, Rectangle,
 };
 
+use super::{
+    shared_components::{disabled_text_input_row, text_input_row, thumbnail},
+    styles::{
+        bg_overlay, bg_popup, button_style_danger, button_style_popup_item, button_style_primary,
+        context_menu_item_style, fg_accent, fg_secondary, scroll_padding,
+    },
+    theme, ContextMenuState, Message, MusicPlayer,
+};
 use crate::{
     app::{
         interaction::{ContextMenuFocus, CtxAction, SubmenuKind},
@@ -17,15 +25,6 @@ use crate::{
     icons,
     providers::{ProviderId, ProviderTrack},
     theme::{AppTheme, Palette},
-};
-
-use super::{
-    shared_components::{disabled_text_input_row, text_input_row, thumbnail},
-    styles::{
-        bg_overlay, bg_popup, button_style_danger, button_style_popup_item, button_style_primary,
-        context_menu_item_style, fg_accent, fg_secondary, scroll_padding,
-    },
-    theme, ContextMenuState, Message, MusicPlayer,
 };
 
 fn provider_row<'a>(

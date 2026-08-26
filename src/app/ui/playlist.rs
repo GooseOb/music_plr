@@ -4,6 +4,10 @@ use iced::{
     Color, Element, Length,
 };
 
+use super::{
+    styles::{button_style_danger, fg_secondary},
+    theme, view_track_list, Message, MusicPlayer,
+};
 use crate::{
     app::{
         interaction::TrackListKind, ui::shared_components::empty_state, view_data::PlaylistEntry,
@@ -11,11 +15,6 @@ use crate::{
     icons,
     load_state::LoadState,
     theme::AppTheme,
-};
-
-use super::{
-    styles::{button_style_danger, fg_secondary},
-    theme, view_track_list, Message, MusicPlayer,
 };
 
 pub(super) fn view_playlist<'a>(

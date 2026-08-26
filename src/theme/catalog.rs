@@ -4,8 +4,9 @@
 //! `AppTheme` instead of `iced::Theme`; separated from `mod.rs` because
 //! it is never edited when tweaking the design.
 
-use super::{AppTheme, RADIUS_MD, RADIUS_SM, SPACING_SM};
 use iced::{widget, Color};
+
+use super::{AppTheme, RADIUS_MD, RADIUS_SM, SPACING_SM};
 
 impl widget::container::Catalog for AppTheme {
     type Class<'a> = widget::container::StyleFn<'a, AppTheme>;

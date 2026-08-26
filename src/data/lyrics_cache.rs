@@ -1,10 +1,11 @@
 //! On-disk lyrics cache keyed by track id.
 
-use crate::lyrics::{Lyrics, LyricsProvider};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 use super::{JsonStore, StoreLocation};
+use crate::lyrics::{Lyrics, LyricsProvider};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CachedLyrics {

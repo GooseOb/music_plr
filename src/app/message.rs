@@ -1,5 +1,7 @@
 //! Messages produced by the UI and results produced by background work.
 
+use iced::{Point, Rectangle};
+
 use super::ViewData;
 use crate::{
     app::{
@@ -12,7 +14,6 @@ use crate::{
     providers::ProviderId,
     types::{QueueTab, Track},
 };
-use iced::{Point, Rectangle};
 
 #[derive(Debug, Clone)]
 pub enum BackendResult {

@@ -1,10 +1,11 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     data::library::{LibraryItem, LibraryKind},
     load_state::LoadState,
     providers::ProviderId,
     types::Track,
 };
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default)]
 pub struct RequestIdGenerator(u64);

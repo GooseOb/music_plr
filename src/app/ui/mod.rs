@@ -1,11 +1,10 @@
-use crate::theme::{self, AppTheme};
-
 use iced::{
     widget::{self, Column, Id, Row, Stack},
     Element,
 };
 
 use super::{ContextMenuState, Message, MusicPlayer};
+use crate::theme::{self, AppTheme};
 
 pub(crate) mod artist;
 mod content;
@@ -23,9 +22,8 @@ mod track_list;
 pub(super) mod track_list_search;
 pub use queue::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID};
 pub use search::{SEARCH_HISTORY_LIST_ID, SEARCH_INPUT_ID};
-pub use track_list::TRACK_LIST_ID;
-
 use track_list::view_track_list;
+pub use track_list::TRACK_LIST_ID;
 
 /// Id of the context-menu panel and its rows. Rows all share one id;
 /// `CaptureBounds` records their bounds in visit (top-to-bottom) order so a

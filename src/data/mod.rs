@@ -8,8 +8,9 @@
 //! dir, persistent user *data* in the data dir, and regenerable *caches* in
 //! the cache dir.
 
-use serde::{de::DeserializeOwned, Serialize};
 use std::path::PathBuf;
+
+use serde::{de::DeserializeOwned, Serialize};
 
 pub mod cache;
 pub mod config;

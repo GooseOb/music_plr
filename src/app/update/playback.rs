@@ -1,10 +1,13 @@
-use super::{MusicPlayer, Track, TrackListKind, TrackPos};
-use crate::app::ViewKind;
-use crate::data::cache::StreamCache;
-use crate::data::JsonStore;
-use crate::providers::ProviderId;
 use std::path::PathBuf;
+
 use tracing::debug;
+
+use super::{MusicPlayer, Track, TrackListKind, TrackPos};
+use crate::{
+    app::ViewKind,
+    data::{cache::StreamCache, JsonStore},
+    providers::ProviderId,
+};
 
 impl MusicPlayer {
     pub fn handle_play_track(&mut self, pos: TrackPos) {

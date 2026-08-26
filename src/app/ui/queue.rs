@@ -4,6 +4,14 @@ use iced::{
     Element, Length,
 };
 
+use super::{
+    shared_components::empty_state,
+    styles::{bg_secondary, button_style_album, button_style_panel_item, fg_secondary},
+    track_list::{
+        section_header, track_row_layout, view_track_list, view_track_row, virtual_scrollable,
+    },
+    Message, MusicPlayer,
+};
 use crate::{
     app::{
         interaction::{TrackListKind, TrackPos},
@@ -12,15 +20,6 @@ use crate::{
     icons,
     theme::{self, AppTheme},
     types::QueueTab,
-};
-
-use super::{
-    shared_components::empty_state,
-    styles::{bg_secondary, button_style_album, button_style_panel_item, fg_secondary},
-    track_list::{
-        section_header, track_row_layout, view_track_list, view_track_row, virtual_scrollable,
-    },
-    Message, MusicPlayer,
 };
 
 pub const QUEUE_LIST_ID: Id = Id::new("queue_list");

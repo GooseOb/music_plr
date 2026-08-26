@@ -1,10 +1,11 @@
-use super::{theme, Message, MusicPlayer};
-use crate::theme::AppTheme;
 use iced::{
     alignment,
     widget::{text, text_input, Button, Container, Id, Row},
     Element,
 };
+
+use super::{theme, Message, MusicPlayer};
+use crate::theme::AppTheme;
 
 pub const TRACK_LIST_SEARCH_ID: Id = Id::new("track_list_search_input");
 

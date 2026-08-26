@@ -1,9 +1,10 @@
 //! Shared `yt-dlp` invocation helpers used by the provider backends.
 
-use super::run_command_with_timeout;
+use std::{process::Command, time::Duration};
+
 use anyhow::{Context, Result};
-use std::process::Command;
-use std::time::Duration;
+
+use super::run_command_with_timeout;
 
 /// yt-dlp audio downloads transcode to MP3 in real time and can legitimately
 /// run for minutes, so they get a much larger budget than metadata calls.

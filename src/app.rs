@@ -1,4 +1,10 @@
+use std::{sync::mpsc, time::Duration};
+
+use iced::{Subscription, Task};
+use tracing::{error, warn};
+
 use crate::{
+    app::update::{operation::ContextMenuGeometry, settings::SettingsChange},
     audio::AudioPlayer,
     data::{
         cache::StreamCache, config, downloads::DownloadRegistry, playlists::PlaylistStore,
@@ -8,12 +14,6 @@ use crate::{
     theme::{AppTheme, Palette},
     types::{PlayQueue, Track},
 };
-use iced::{Subscription, Task};
-use std::{sync::mpsc, time::Duration};
-use tracing::{error, warn};
-
-use crate::app::update::operation::ContextMenuGeometry;
-use crate::app::update::settings::SettingsChange;
 
 mod interaction;
 mod message;

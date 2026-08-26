@@ -9,16 +9,23 @@
 //! `Track` produced here carries a `SoundCloud` id + `permalink_url` so the
 //! playback/download path can hand that URL to `yt-dlp`.
 
-use super::ytdlp;
-use crate::providers::{ArtistHeader, CardData, ProviderId, SearchScope, SearchTab};
-use crate::types::Track;
+use std::sync::OnceLock;
+
 use anyhow::{Context, Result};
 use rsoundcloud::{
-    models::playlist::AlbumPlaylist, models::track::BasicTrack, models::track::Track as SCTrack,
-    models::user::User, CollectionParams, PlaylistsApi, ResourceId, SearchApi, SoundCloudClient,
-    UsersApi,
+    models::{
+        playlist::AlbumPlaylist,
+        track::{BasicTrack, Track as SCTrack},
+        user::User,
+    },
+    CollectionParams, PlaylistsApi, ResourceId, SearchApi, SoundCloudClient, UsersApi,
 };
-use std::sync::OnceLock;
+
+use super::ytdlp;
+use crate::{
+    providers::{ArtistHeader, CardData, ProviderId, SearchScope, SearchTab},
+    types::Track,
+};
 impl From<&AlbumPlaylist> for CardData {
     fn from(ap: &AlbumPlaylist) -> Self {
         CardData {

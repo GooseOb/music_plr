@@ -4,6 +4,13 @@ use iced::{
     Element, Length,
 };
 
+use super::{
+    shared_components::{
+        empty_state, loading_state, scope_tab_row, thumbnail, toggle_bookmark_button,
+    },
+    styles::{fg_accent, fg_secondary},
+    view_track_list, Message, MusicPlayer,
+};
 use crate::{
     app::{
         view_data::{AlbumRef, PlaylistRef},
@@ -12,14 +19,6 @@ use crate::{
     load_state::LoadState,
     providers::{ArtistSection, ArtistSectionKind, ProviderId, SectionContent},
     theme::{self, AppTheme},
-};
-
-use super::{
-    shared_components::{
-        empty_state, loading_state, scope_tab_row, thumbnail, toggle_bookmark_button,
-    },
-    styles::{fg_accent, fg_secondary},
-    view_track_list, Message, MusicPlayer,
 };
 
 const CARD_WIDTH: f32 = 140.0;

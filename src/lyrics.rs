@@ -1,8 +1,9 @@
 //! Lyrics fetching, backed by a handful of free, no-API-key providers.
 
+use std::fmt::Write as _;
+
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::fmt::Write as _;
 
 use crate::util::urlencode;
 

@@ -10,15 +10,15 @@ use std::{
     thread,
     time::Duration,
 };
+
 use tracing::{debug, warn};
 
 mod growing;
 mod normalization;
 mod symphonia_source;
 
-pub use normalization::compute_normalization_gain;
-
 use growing::GrowingMediaSource;
+pub use normalization::compute_normalization_gain;
 use symphonia_source::SymphoniaStreamingSource;
 
 pub struct AudioPlayer {

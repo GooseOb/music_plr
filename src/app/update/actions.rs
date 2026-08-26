@@ -1,10 +1,11 @@
 use super::{BackendResult, ContextMenuState, MusicPlayer, Track};
-use crate::app::interaction::{TrackListKind, TrackPos};
-use crate::app::EditTrackState;
-use crate::load_state::LoadState;
 use crate::{
-    app::{PlaylistPicker, ViewKind},
+    app::{
+        interaction::{TrackListKind, TrackPos},
+        EditTrackState, PlaylistPicker, ViewKind,
+    },
     data::JsonStore,
+    load_state::LoadState,
     providers::ProviderId,
 };
 

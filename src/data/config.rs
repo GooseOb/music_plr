@@ -1,5 +1,6 @@
-use crate::{data::JsonStore, i18n::Language, providers::ProviderId};
 use serde::{Deserialize, Serialize};
+
+use crate::{data::JsonStore, i18n::Language, providers::ProviderId};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {

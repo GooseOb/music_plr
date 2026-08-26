@@ -59,6 +59,7 @@ pub fn urlencode(s: &str) -> String {
 /// on any failure (missing file, unsupported codec, corrupt header, zero rate).
 pub fn try_probe_duration(path: &str) -> Option<u32> {
     use std::fs::File;
+
     use symphonia::core::{
         formats::FormatOptions,
         io::{MediaSourceStream, MediaSourceStreamOptions},

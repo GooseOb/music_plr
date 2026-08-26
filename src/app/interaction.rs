@@ -1,10 +1,11 @@
 //! Mouse, drag, and context-menu interaction state.
 
+use iced::{widget::Id, Point};
+
 use crate::{
     data::library::LibraryItem,
     types::{QueueTab, Track},
 };
-use iced::{widget::Id, Point};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TrackListKind {
@@ -458,9 +459,10 @@ impl DragState {
 
 #[cfg(test)]
 mod tests {
+    use iced::widget::Id;
+
     use super::TrackListKind::{Active, Queue, Recent};
     use crate::app::ui::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, TRACK_LIST_ID};
-    use iced::widget::Id;
 
     #[test]
     fn each_list_targets_a_distinct_scrollable() {

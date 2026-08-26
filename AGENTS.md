@@ -19,20 +19,18 @@ YouTube-search music player with local playback and MPRIS, built with iced.
 
 ```sh
 cargo build && cargo run
-cargo fmt && cargo clippy && cargo test
+# rustfmt.toml uses unstable import options; plain `cargo fmt` silently ignores them
+cargo +nightly fmt && cargo clippy && cargo test
 ```
 
 ## Version Control
 
-**Do not commit unless explicitly asked.** Leave changes in the working tree and report what was
-changed; the user decides when and how it lands. This applies to `git commit` as well as anything
-that implicitly commits (`git merge`, `git rebase`, `git stash`, `git checkout` over local edits).
-Never `push`, amend, or rewrite history unprompted.
+**Do not commit unless explicitly asked.** Leave changes in the working tree and report what changed; the user decides when and how it lands. This applies to `git commit` and anything that implicitly commits (`git merge`, `git rebase`, `git stash`, `git checkout` over local edits). Never `push`, amend, or rewrite history unprompted.
 
 When a commit _is_ requested: one logical change per commit, imperative subject under ~72 chars,
 and a body explaining **why** when it isn't obvious from the diff.
 
-Run `cargo fmt && cargo clippy && cargo test` before handing work back, committed or not.
+Run `cargo +nightly fmt && cargo clippy && cargo test` before handing work back, committed or not.
 
 ## Conventions
 
@@ -145,8 +143,4 @@ src/
 
 ## Maintenance
 
-After structural changes (new/removed files, renamed types/functions), verify `AGENTS.md` reflects actual state. Keep it under ~150 lines.
-
-**`README.md` must be kept up to date too** — user-facing, drifts. Check it whenever module layout,
-keyboard shortcuts (`app/update/input.rs`), config fields (`data/config.rs`, `config.json`),
-on-disk paths (`data/*.rs` `FILE` consts), external tool requirements, or the audio pipeline change.
+Keep `AGENTS.md` (and `README.md`) under ~150 lines and in sync after structural changes: new/removed files, renamed types/functions, module layout, keyboard shortcuts (`app/update/input.rs`), config fields (`data/config.rs`), on-disk paths (`data/*.rs` `FILE` consts), external tool requirements, or the audio pipeline.

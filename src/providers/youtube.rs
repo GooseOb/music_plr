@@ -1,15 +1,20 @@
-use super::{run_command_with_timeout, ytdlp};
-use crate::providers::{
-    ArtistAlbumCard, ArtistHeader, CardData, ProviderId, RelatedArtistCard, SearchScope, SearchTab,
-};
-use crate::types::Track;
-use anyhow::{Context, Result};
-use serde::Deserialize;
 use std::{
     io::Write,
     process::{Command, Stdio},
     sync::atomic::{AtomicU64, Ordering},
     time::Duration,
+};
+
+use anyhow::{Context, Result};
+use serde::Deserialize;
+
+use super::{run_command_with_timeout, ytdlp};
+use crate::{
+    providers::{
+        ArtistAlbumCard, ArtistHeader, CardData, ProviderId, RelatedArtistCard, SearchScope,
+        SearchTab,
+    },
+    types::Track,
 };
 
 #[derive(Debug, Clone, serde::Deserialize)]

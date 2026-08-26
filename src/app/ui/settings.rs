@@ -4,16 +4,15 @@ use iced::{
     Element,
 };
 
+use super::{
+    shared_components::{scope_tab_row, text_input_row},
+    Message, MusicPlayer,
+};
 use crate::{
     app::ui::styles::fg_accent,
     i18n::Language,
     providers::ProviderId,
     theme::{self, AppTheme},
-};
-
-use super::{
-    shared_components::{scope_tab_row, text_input_row},
-    Message, MusicPlayer,
 };
 
 fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {

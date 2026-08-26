@@ -1,6 +1,7 @@
+use std::time::Duration;
+
 use super::{warn, MusicPlayer};
 use crate::data::{session::SessionState, JsonStore};
-use std::time::Duration;
 
 const SESSION_FLUSH_MIN_INTERVAL: Duration = Duration::from_secs(1);
 

@@ -7,20 +7,6 @@ use iced::{
     Color, Element, Length, Rectangle,
 };
 
-use crate::app::{
-    interaction::{HoverTarget, Pressed, TrackListKind},
-    ui::overlays::pos_absolute,
-    view_data::SearchData,
-};
-use crate::{
-    data::library::LibraryKind,
-    icons,
-    load_state::LoadState,
-    providers::{CardData, ProviderId, SearchTab},
-    theme::AppTheme,
-    types::Track,
-};
-
 use super::{
     shared_components::{
         empty_state, inner_row_layout, loading_state, scope_tab_row, thumbnail,
@@ -31,6 +17,19 @@ use super::{
         scroll_padding,
     },
     theme, view_track_list, Message, MusicPlayer,
+};
+use crate::{
+    app::{
+        interaction::{HoverTarget, Pressed, TrackListKind},
+        ui::overlays::pos_absolute,
+        view_data::SearchData,
+    },
+    data::library::LibraryKind,
+    icons,
+    load_state::LoadState,
+    providers::{CardData, ProviderId, SearchTab},
+    theme::AppTheme,
+    types::Track,
 };
 
 pub const SEARCH_INPUT_ID: Id = Id::new("search_input");

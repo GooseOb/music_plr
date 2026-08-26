@@ -1,10 +1,11 @@
 use iced::widget::{Column, Space};
 
-use crate::app::ui::search::browse_meta;
-use crate::{app::ViewKind, theme::AppTheme};
-
 use super::{
     artist, lyrics, playlist, search, settings, track_list_search, Element, Message, MusicPlayer,
+};
+use crate::{
+    app::{ui::search::browse_meta, ViewKind},
+    theme::AppTheme,
 };
 
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {

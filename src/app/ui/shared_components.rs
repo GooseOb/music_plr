@@ -1,20 +1,20 @@
 use std::time::Duration;
 
 use iced::{
-    advanced, alignment,
+    advanced,
+    advanced::graphics::geometry::Renderer as _,
+    alignment,
     widget::{canvas, container, image, text, text_input, Button, Column, Container, Id, Row},
     window, Color, Element, Length, Size, Vector,
 };
+use iced_core::Renderer as _;
 
+use super::styles::{button_style_primary, button_style_scope, fg_secondary};
 use crate::{
     app::Message,
     icons,
     theme::{self, AppTheme, Palette},
 };
-
-use super::styles::{button_style_primary, button_style_scope, fg_secondary};
-use iced::advanced::graphics::geometry::Renderer as _;
-use iced_core::Renderer as _;
 
 pub fn thumbnail<'a>(
     p: &Palette,

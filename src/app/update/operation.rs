@@ -28,6 +28,9 @@
 //! message without re-walking the whole widget tree (sidebar/library/queue/
 //! track/recent + search input). See that struct for details.
 
+use iced::{widget::Id, Rectangle};
+use iced_core::widget::operation::{Operation, Outcome, Scrollable};
+
 use crate::{
     app::{
         ui::{
@@ -38,8 +41,6 @@ use crate::{
     },
     theme,
 };
-use iced::{widget::Id, Rectangle};
-use iced_core::widget::operation::{Operation, Outcome, Scrollable};
 
 #[derive(Debug, Clone)]
 pub struct ListGeometry {

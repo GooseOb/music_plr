@@ -4,14 +4,12 @@ use iced::{
     Color, Element, Length,
 };
 
-use crate::{icons, theme::AppTheme, util::format_duration};
-
 use super::{
-    shared_components::thumbnail,
-    shared_components::{play_pause_button, subtitle_artist},
+    shared_components::{play_pause_button, subtitle_artist, thumbnail},
     styles::{bg_tertiary, button_style_queue, fg_secondary},
     theme, Message, MusicPlayer,
 };
+use crate::{icons, theme::AppTheme, util::format_duration};
 
 fn time_text(time: u32) -> Element<'static, Message, AppTheme> {
     text(format_duration(time))

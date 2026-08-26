@@ -1,6 +1,9 @@
 use super::{Message, MusicPlayer, Task, ViewData};
-use crate::app::ui::TRACK_LIST_ID;
-use crate::app::{interaction::TrackListKind, interaction::TrackPos, ViewKind};
+use crate::app::{
+    interaction::{TrackListKind, TrackPos},
+    ui::TRACK_LIST_ID,
+    ViewKind,
+};
 
 impl MusicPlayer {
     pub const fn can_navigate_back(&self) -> bool {
@@ -138,10 +141,11 @@ impl MusicPlayer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{message::BackendResult, ViewKind};
-    use crate::data::config;
-    use crate::providers::ProviderId;
-    use crate::providers::SearchScope;
+    use crate::{
+        app::{message::BackendResult, ViewKind},
+        data::config,
+        providers::{ProviderId, SearchScope},
+    };
 
     fn player() -> MusicPlayer {
         // `new_with` inits MPRIS (spawns a thread, no-ops if D-Bus is absent),

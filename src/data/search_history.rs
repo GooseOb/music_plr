@@ -1,5 +1,6 @@
-use super::{JsonStore, StoreLocation};
 use serde::{Deserialize, Serialize};
+
+use super::{JsonStore, StoreLocation};
 
 /// User data: the persisted list of past search queries.
 /// Preferences (`max_visible`, `max_stored`) live in `config.rs`.

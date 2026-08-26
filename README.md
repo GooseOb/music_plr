@@ -43,9 +43,12 @@ A music player with YouTube search, local playback, and MPRIS integration, built
 ```sh
 cargo build
 cargo run
-cargo fmt && cargo clippy
+cargo +nightly fmt && cargo clippy
 cargo test
 ```
+
+> `cargo +nightly fmt` (not plain `cargo fmt`) is required: `rustfmt.toml` enables unstable
+> import options that stable rustfmt silently ignores. Install nightly with `rustup toolchain install nightly`.
 
 ## Keyboard Shortcuts
 
