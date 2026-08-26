@@ -357,15 +357,6 @@ pub enum ArtistSectionKind {
 impl ArtistSectionKind {
     pub const ALL: [Self; 4] = [Self::Popular, Self::Albums, Self::Playlists, Self::Related];
 
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Popular => "Most popular songs",
-            Self::Albums => "Albums",
-            Self::Playlists => "Playlists",
-            Self::Related => "Fans also like",
-        }
-    }
-
     pub fn data_kind(self) -> ArtistDataKind {
         match self {
             Self::Popular => ArtistDataKind::Popular,

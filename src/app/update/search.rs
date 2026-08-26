@@ -171,11 +171,18 @@ impl MusicPlayer {
         artist: bool,
     ) {
         if !provider.capabilities().radio {
-            self.notify(format!("{provider:?} does not support radio"));
+            let p = format!("{provider:?}");
+            let msg = (self.strings.provider_no_radio)(&p);
+            self.notify(msg);
             return;
         }
         let name = if artist { &track.artist } else { &track.title };
-        let label = format!("Radio ({}): {name}", provider.label());
+        let word = if artist {
+            self.strings.radio_word_artist
+        } else {
+            self.strings.radio_word_song
+        };
+        let label = (self.strings.radio_label)(word, name);
         let kind = if artist {
             ViewKind::ArtistRadio(label.clone())
         } else {
@@ -184,10 +191,14 @@ impl MusicPlayer {
         self.push_new_view(ViewData::new_radio(kind));
         let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
-        self.notify(format!(
-            "Generating radio for {}: {name}...",
-            if artist { "artist" } else { "song" }
-        ));
+        let word = if artist {
+            self.strings.radio_word_artist
+        } else {
+            self.strings.radio_word_song
+        };
+        let name = name.clone();
+        let msg = (self.strings.generating_radio_for)(word, &name);
+        self.notify(msg);
         let id = if artist {
             track.provider_artist_id(provider)
         } else {
@@ -198,6 +209,7 @@ impl MusicPlayer {
         let name = name.clone();
         let seed = track.clone();
         let tx = self.result_tx.clone();
+        let not_found = self.strings.could_not_find_on;
         let radio_fn: fn(
             crate::providers::ProviderId,
             &str,
@@ -217,10 +229,7 @@ impl MusicPlayer {
                     };
                     match resolved {
                         Some(id) => id,
-                        None => anyhow::bail!(format!(
-                            "Could not find \"{name}\" on {}",
-                            provider.label()
-                        )),
+                        None => anyhow::bail!((not_found)(&name, provider.label())),
                     }
                 } else {
                     id
@@ -249,7 +258,8 @@ impl MusicPlayer {
         });
         let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
-        self.notify(format!("Opening: {label}..."));
+        let msg = (self.strings.opening)(label);
+        self.notify(msg);
         let tx = self.result_tx.clone();
         let id = id.to_string();
         Self::spawn_backend_thread(

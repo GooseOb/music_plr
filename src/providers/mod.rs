@@ -184,15 +184,6 @@ impl ProviderId {
         }
     }
 
-    pub fn search_placeholder(self) -> &'static str {
-        match self {
-            ProviderId::YouTube => "Search YouTube Music...",
-            ProviderId::SoundCloud => "Search SoundCloud...",
-            ProviderId::MusicBrainz => "Search MusicBrainz...",
-            ProviderId::Local => "Search...",
-        }
-    }
-
     /// Whether this provider streams/ downloads via yt-dlp (`YouTube`,
     /// `SoundCloud`) rather than a direct HTTP file URL.
     pub fn uses_ytdlp(self) -> bool {
@@ -212,17 +203,6 @@ pub enum SearchScope {
 }
 
 impl SearchScope {
-    pub fn label(self) -> &'static str {
-        match self {
-            SearchScope::Songs => "Songs",
-            SearchScope::Videos => "Videos",
-            SearchScope::Artists => "Artists",
-            SearchScope::Albums => "Albums",
-            SearchScope::Playlists => "Playlists",
-        }
-    }
-
-    /// All scopes in display order (used by `YouTube`, which supports all).
     pub fn all() -> &'static [SearchScope] {
         &[
             SearchScope::Songs,

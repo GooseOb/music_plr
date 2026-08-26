@@ -49,9 +49,9 @@ pub(super) fn view_lyrics<'a>(
             )
             .padding(theme::SPACING_LG)
             .into(),
-            (Some(_), LoadState::Loading) => loading_state(p, "Looking up lyrics…"),
-            (Some(_), LoadState::Failed(e)) => empty_state(format!("Couldn't load lyrics: {e}")),
-            (None, _) => empty_state("Play a track to see its lyrics."),
+            (Some(_), LoadState::Loading) => loading_state(p, player.strings.looking_up_lyrics),
+            (Some(_), LoadState::Failed(e)) => empty_state((player.strings.couldnt_load_lyrics)(e)),
+            (None, _) => empty_state(player.strings.play_a_track_for_lyrics),
         }
     };
 
@@ -71,13 +71,18 @@ fn view_bottom_controls<'a>(
     player: &'a MusicPlayer,
     lyrics_state: &'a LyricsState,
 ) -> Row<'a, Message, AppTheme> {
-    const MODES: [(LyricsViewMode, &str); 3] = [
-        (LyricsViewMode::Selectable, "Selectable"),
-        (LyricsViewMode::Synced, "Synced"),
-        (LyricsViewMode::Plain, "Plain"),
+    const MODES: [LyricsViewMode; 3] = [
+        LyricsViewMode::Selectable,
+        LyricsViewMode::Synced,
+        LyricsViewMode::Plain,
+    ];
+    let labels = [
+        player.strings.lyrics_selectable,
+        player.strings.lyrics_synced,
+        player.strings.lyrics_plain,
     ];
 
-    let picker = Row::with_children(MODES.iter().map(|&(mode, label)| {
+    let picker = Row::with_children(MODES.iter().zip(labels).map(|(&mode, label)| {
         let selected = lyrics_state.mode == mode;
         let available = lyrics_state.mode_available(mode);
         scope_button(label, selected)

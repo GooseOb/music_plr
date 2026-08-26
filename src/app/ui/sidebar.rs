@@ -210,12 +210,16 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
 
     let nav_items: Vec<Element<'_, Message, AppTheme>> = vec![
         sidebar_nav_item(
-            "Search",
+            player.strings.search,
             ViewData::new_search(String::new(), player.search_provider, player.search_scope),
             player,
         ),
-        sidebar_nav_item("Downloads", downloads_view_data(player), player),
-        sidebar_nav_item("Settings", ViewData::new_settings(), player),
+        sidebar_nav_item(
+            player.strings.downloads,
+            downloads_view_data(player),
+            player,
+        ),
+        sidebar_nav_item(player.strings.settings, ViewData::new_settings(), player),
     ];
 
     let playlist_items: Vec<Element<'_, Message, AppTheme>> = player
@@ -259,20 +263,20 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .collect();
 
     let library_section: Element<'_, Message, AppTheme> = if player.library.items.is_empty() {
-        library_collapsed("Nothing saved yet")
+        library_collapsed(player.strings.nothing_saved_yet)
     } else if player.library_expanded {
         scrollable(Column::with_children(library_items).spacing(theme::SPACING_XS))
             .id(iced::widget::Id::new("sidebar_library_list"))
             .height(Length::Fill)
             .into()
     } else {
-        library_collapsed(format!("{} saved", player.library.items.len()))
+        library_collapsed((player.strings.n_saved)(player.library.items.len()))
     };
 
     let library_header = Button::new(
         Row::with_children([
             icons::icon(icons::BOOKMARK_ICON, p.fg_muted, theme::ICON_SIZE_MD).into(),
-            text("Library").style(fg_secondary()).into(),
+            text(player.strings.library).style(fg_secondary()).into(),
             iced::widget::right(
                 text(if player.library_expanded {
                     "▾"
@@ -294,9 +298,12 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
 
     let create_row = Row::with_children([
         Container::new(
-            text_input("New playlist name", &player.playlist_create_name)
-                .on_input(Message::NewPlaylistNameChanged)
-                .padding([theme::SPACING_SM, theme::SPACING_SM]),
+            text_input(
+                player.strings.new_playlist_name,
+                &player.playlist_create_name,
+            )
+            .on_input(Message::NewPlaylistNameChanged)
+            .padding([theme::SPACING_SM, theme::SPACING_SM]),
         )
         .into(),
         Button::new(icons::icon(

@@ -306,7 +306,8 @@ impl MusicPlayer {
                 .playlists
                 .insert_tracks_at(playlist_idx, tracks.iter(), 0);
             let name = self.playlists.playlists[playlist_idx].name.clone();
-            self.notify_tracks("Added", count, &format!("to {name}"));
+            let msg = (self.strings.added_to)(count, &name);
+            self.notify(msg);
             return;
         }
 
@@ -348,7 +349,8 @@ impl MusicPlayer {
             self.queue.tracks.insert(clamped + j, track);
         }
         self.save_session();
-        self.notify_tracks("Added", inserted, "to queue");
+        let msg = (self.strings.added_to)(inserted, self.strings.queue);
+        self.notify(msg);
     }
 
     /// Insert tracks from `source` into the current playlist at the given
@@ -360,7 +362,7 @@ impl MusicPlayer {
         };
         let Some(sp) = active else {
             if !self.view_data().is_search_like() {
-                self.notify("Select a playlist to drop tracks into");
+                self.notify(self.strings.select_playlist_drop);
             }
             return;
         };
@@ -377,7 +379,8 @@ impl MusicPlayer {
         self.save_session();
         let name = self.playlists.playlists[sp].name.clone();
         if inserted > 0 {
-            self.notify_tracks("Added", inserted, &format!("to {name}"));
+            let msg = (self.strings.added_to)(inserted, &name);
+            self.notify(msg);
         }
     }
 
@@ -476,7 +479,7 @@ impl MusicPlayer {
                 entry.index = new_sp;
             }
         }
-        self.notify("Reordered playlist");
+        self.notify(self.strings.reordered_playlist);
     }
 
     fn handle_card_drop(&mut self, item: LibraryItem, target: DropTarget) {
@@ -498,7 +501,8 @@ impl MusicPlayer {
                 } else {
                     let title = item.title.clone();
                     self.library.insert(item, idx);
-                    self.notify(format!("Saved \"{title}\" to library"));
+                    let msg = (self.strings.saved_title)(&title);
+                    self.notify(msg);
                 }
             }
             _ => {}

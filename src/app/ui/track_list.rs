@@ -31,7 +31,7 @@ pub(super) fn view_track_list<'a>(
     index_offset: usize,
 ) -> Element<'a, Message, AppTheme> {
     if tracks.is_empty() {
-        return empty_state("No tracks found");
+        return empty_state(player.strings.no_tracks_found);
     }
 
     let show_album = list == TrackListKind::Active
@@ -273,7 +273,7 @@ fn track_row_layout_inner<'a>(
         let plays = track.play_count();
         if plays > 0 {
             trailing_children.push(
-                text(format!("{} plays", crate::util::format_count(plays)))
+                text((player.strings.n_plays)(plays as usize))
                     .size(theme::TEXT_SIZE_SM)
                     .width(Length::Fill)
                     .style(fg_secondary())

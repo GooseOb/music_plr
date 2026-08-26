@@ -7,6 +7,7 @@
 mod app;
 mod audio;
 mod data;
+mod i18n;
 mod icons;
 mod load_state;
 mod lyrics;

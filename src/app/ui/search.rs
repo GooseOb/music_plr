@@ -35,9 +35,20 @@ use super::{
 
 pub const SEARCH_INPUT_ID: Id = Id::new("search_input");
 
+fn scope_label(scope: crate::providers::SearchScope, player: &MusicPlayer) -> &str {
+    let tr = player.strings;
+    match scope {
+        crate::providers::SearchScope::Songs => tr.scope_songs,
+        crate::providers::SearchScope::Videos => tr.scope_videos,
+        crate::providers::SearchScope::Artists => tr.scope_artists,
+        crate::providers::SearchScope::Albums => tr.scope_albums,
+        crate::providers::SearchScope::Playlists => tr.scope_playlists,
+    }
+}
+
 pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let input = text_input(
-        player.search_provider.search_placeholder(),
+        (player.strings.search_placeholder)(player.search_provider).as_str(),
         &player.search_query,
     )
     .on_input(Message::SearchInputChanged)
@@ -78,7 +89,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
             .iter()
             .map(|&scope| {
                 (
-                    scope.label().to_string(),
+                    scope_label(scope, player).to_string(),
                     player.search_scope == scope,
                     Message::SearchScopeChanged(scope),
                 )
@@ -109,8 +120,8 @@ pub(super) fn view_search<'a>(
     let tab = &search.tab;
     let content = &player.view_data().content;
     match content {
-        LoadState::Failed(e) => empty_state(format!("Search failed: {e}")),
-        LoadState::Loading => loading_state(&player.app_theme.palette, "Searching..."),
+        LoadState::Failed(e) => empty_state((player.strings.search_failed)(e)),
+        LoadState::Loading => loading_state(&player.app_theme.palette, player.strings.searching),
         LoadState::Ready(results) if tab.is_track_tab() => {
             view_search_track_tab(player, search, results)
         }
@@ -127,15 +138,15 @@ fn view_search_track_tab<'a>(
     let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
 
     if results.is_empty() {
-        children.push(empty_state("No tracks found"));
+        children.push(empty_state(player.strings.no_tracks_found));
     } else {
         children.push(view_track_list(results, player, TrackListKind::Active, 0));
 
         if !search.exhausted {
             let btn = Button::new(text(if search.append_in_flight {
-                "Loading..."
+                player.strings.loading
             } else {
-                "Load More"
+                player.strings.load_more
             }))
             .padding(theme::SPACING_SM)
             .width(Length::Fill)
@@ -164,7 +175,7 @@ fn view_search_card_tab<'a>(
     };
 
     if items.is_empty() {
-        return empty_state("No results found");
+        return empty_state(player.strings.no_results_found);
     }
 
     let cards = items.iter().enumerate().map(|(i, c)| {
@@ -272,8 +283,8 @@ pub(super) fn view_browse<'a>(
     .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
     let track_list = match content {
-        LoadState::Failed(e) => empty_state(format!("Couldn't load: {e}")),
-        LoadState::Loading => loading_state(&player.app_theme.palette, "Loading..."),
+        LoadState::Failed(e) => empty_state((player.strings.couldnt_load)(e)),
+        LoadState::Loading => loading_state(&player.app_theme.palette, player.strings.loading),
         LoadState::Ready(tracks) => {
             view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
         }
@@ -304,7 +315,9 @@ pub(super) fn view_search_radio<'a>(
 
     let track_list = match content {
         LoadState::Failed(e) => empty_state(format!("Radio failed: {e}")),
-        LoadState::Loading => loading_state(&player.app_theme.palette, "Generating radio..."),
+        LoadState::Loading => {
+            loading_state(&player.app_theme.palette, player.strings.generating_radio)
+        }
         LoadState::Ready(tracks) => {
             view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
         }
@@ -323,7 +336,7 @@ pub(super) fn view_search_history(
 
     let content: Element<'_, Message, AppTheme> = if player.last_filtered_history.is_empty() {
         Container::new(
-            text("No recent searches")
+            text(player.strings.no_recent_searches)
                 .style(fg_secondary())
                 .width(Length::Fill),
         )

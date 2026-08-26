@@ -73,14 +73,4 @@ impl MusicPlayer {
         warn!("Backend error: {}", msg);
         self.notification = Some(msg.into());
     }
-
-    pub fn notify_tracks(&mut self, verb: &str, n: usize, suffix: &str) {
-        let plural = crate::util::plural_suffix(n);
-        let tail = if suffix.is_empty() {
-            String::new()
-        } else {
-            format!(" {suffix}")
-        };
-        self.notify(format!("{verb} {n} track{plural}{tail}"));
-    }
 }

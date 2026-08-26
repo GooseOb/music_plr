@@ -12,6 +12,7 @@ pub enum SettingsChange {
     MaxRecentlyPlayed(String),
     VolumeNormalization(bool),
     DefaultProvider(crate::providers::ProviderId),
+    Language(crate::i18n::Language),
 }
 
 impl MusicPlayer {
@@ -55,6 +56,10 @@ impl MusicPlayer {
             }
             SettingsChange::VolumeNormalization(enabled) => {
                 self.set_config(|c| c.volume_normalization = enabled);
+            }
+            SettingsChange::Language(language) => {
+                self.set_config(|c| c.language = language);
+                self.strings = language.strings();
             }
             SettingsChange::DefaultProvider(provider) => {
                 // Only providers that support both streaming and downloading are

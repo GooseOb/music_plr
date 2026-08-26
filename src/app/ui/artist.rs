@@ -27,9 +27,18 @@ const CARD_IMAGE_SIZE: f32 = 120.0;
 
 /// The artist page: header (picture, name, stats), then one section per row,
 /// each with its own "Provided by" provider picker.
+fn section_kind_label(kind: ArtistSectionKind, tr: &crate::i18n::Strings) -> &str {
+    match kind {
+        ArtistSectionKind::Popular => tr.most_popular_songs,
+        ArtistSectionKind::Albums => tr.albums,
+        ArtistSectionKind::Playlists => tr.playlists,
+        ArtistSectionKind::Related => tr.fans_also_like,
+    }
+}
+
 pub(super) fn view_artist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
     let ViewKind::Artist(entry) = &player.view_data().kind else {
-        return empty_state("Not an artist page");
+        return empty_state(player.strings.not_an_artist_page);
     };
     let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::new();
     children.push(header(
@@ -47,7 +56,7 @@ pub(super) fn view_artist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, A
         ArtistSectionKind::Related,
     ] {
         let section = entry.page.section(kind);
-        children.push(section_header(kind, section.provider));
+        children.push(section_header(kind, section.provider, player.strings));
         children.push(section_body(player, section, kind));
     }
 
@@ -72,9 +81,12 @@ pub(crate) fn header_thumb_key(id: &str, provider: ProviderId) -> String {
 
 /// "Provided by [YT | SC]" picker for the header block (thumbnail /
 /// description source).
-fn header_provider_picker(selected: Option<ProviderId>) -> Element<'static, Message, AppTheme> {
+fn header_provider_picker(
+    selected: Option<ProviderId>,
+    tr: &'static crate::i18n::Strings,
+) -> Element<'static, Message, AppTheme> {
     Row::with_children([
-        text("Provided by")
+        text(tr.provided_by)
             .size(theme::TEXT_SIZE_XS)
             .style(fg_secondary())
             .into(),
@@ -159,7 +171,7 @@ fn header<'a>(
             .width(Length::Fill)
             .into(),
         Column::with_children([
-            header_provider_picker(header_provider),
+            header_provider_picker(header_provider, player.strings),
             Space::new().height(Length::Fill).into(),
             library_button(player),
         ])
@@ -175,6 +187,7 @@ fn header<'a>(
 fn section_header(
     kind: ArtistSectionKind,
     selected: Option<ProviderId>,
+    tr: &'static crate::i18n::Strings,
 ) -> Element<'static, Message, AppTheme> {
     let picker = scope_tab_row(kind.providers().iter().map(|&provider| {
         (
@@ -185,12 +198,12 @@ fn section_header(
     }));
     Container::new(
         Row::with_children([
-            text(kind.label())
+            text(section_kind_label(kind, tr))
                 .style(fg_accent())
                 .size(theme::TEXT_SIZE_LG)
                 .into(),
             Space::new().width(Length::Fill).into(),
-            text("Provided by")
+            text(tr.provided_by)
                 .size(theme::TEXT_SIZE_SM)
                 .style(fg_secondary())
                 .into(),
@@ -279,11 +292,12 @@ fn failed_state<'a>(
     provider: Option<ProviderId>,
     kind: ArtistSectionKind,
     e: &str,
+    tr: &'a crate::i18n::Strings,
 ) -> Element<'a, Message, AppTheme> {
     Container::new(
         Column::with_children([
-            text(format!("Couldn't load: {e}")).into(),
-            Button::new("Retry")
+            text((tr.couldnt_load)(e)).into(),
+            Button::new(tr.retry)
                 .padding([theme::SPACING_2XS, theme::SPACING_SM])
                 .on_press_maybe(provider.map(|p| Message::ArtistSectionProviderChanged(kind, p)))
                 .into(),
@@ -308,34 +322,42 @@ fn section_body<'a>(
         return match &view_data.content {
             LoadState::Ready(tracks) => {
                 if tracks.is_empty() {
-                    empty_state("Nothing here")
+                    empty_state(player.strings.nothing_here)
                 } else {
                     view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
                 }
             }
-            LoadState::Failed(e) => return failed_state(section.provider, kind, e),
-            LoadState::Loading => return loading_state(&player.app_theme.palette, "Loading..."),
+            LoadState::Failed(e) => {
+                return failed_state(section.provider, kind, e, player.strings);
+            }
+            LoadState::Loading => {
+                return loading_state(&player.app_theme.palette, player.strings.loading);
+            }
         };
     }
 
     // Failed sections offer an in-place retry (re-requesting the provider).
     let content = match &section.state {
         LoadState::Ready(content) => content,
-        LoadState::Failed(e) => return failed_state(section.provider, kind, e),
-        LoadState::Loading => return loading_state(&player.app_theme.palette, "Loading..."),
+        LoadState::Failed(e) => {
+            return failed_state(section.provider, kind, e, player.strings);
+        }
+        LoadState::Loading => {
+            return loading_state(&player.app_theme.palette, player.strings.loading);
+        }
     };
     let provider = section.provider.unwrap_or_default();
-    h_scroll_cards(cards(player, provider, content))
+    h_scroll_cards(cards(player, provider, content), player.strings)
 }
 
 /// A horizontal row of square art cards (pic on top, text below).
-fn h_scroll_cards<'a, I>(cards: I) -> Element<'a, Message, AppTheme>
+fn h_scroll_cards<'a, I>(cards: I, tr: &'a crate::i18n::Strings) -> Element<'a, Message, AppTheme>
 where
     I: IntoIterator<Item = Element<'a, Message, AppTheme>>,
 {
     let row: Vec<Element<'a, Message, AppTheme>> = cards.into_iter().collect();
     if row.is_empty() {
-        return empty_state("Nothing here");
+        return empty_state(tr.nothing_here);
     }
     scrollable(
         Row::with_children(row)

@@ -43,9 +43,9 @@ fn provider_row<'a>(
     let header = Row::with_children([
         text(provider.label()).into(),
         if provider == source {
-            text("(current)").style(fg_secondary()).into()
+            text(player.strings.current).style(fg_secondary()).into()
         } else {
-            Button::new(text("select"))
+            Button::new(text(player.strings.select))
                 .padding([theme::SPACING_XS, theme::SPACING_MD])
                 .on_press(Message::EditTrackSelectProvider(provider))
                 .into()
@@ -55,21 +55,24 @@ fn provider_row<'a>(
     .align_y(alignment::Vertical::Center);
 
     let props = Column::with_children([
-        disabled_text_input_row("Id", &pt.id),
-        disabled_text_input_row("Url", &pt.url),
-        disabled_text_input_row("Artist ID", &pt.artist_id.clone().unwrap_or_default()),
-        disabled_text_input_row("Duration (in seconds)", &pt.duration.to_string()),
+        disabled_text_input_row(player.strings.lbl_id, &pt.id),
+        disabled_text_input_row(player.strings.lbl_url, &pt.url),
+        disabled_text_input_row(
+            player.strings.lbl_artist_id,
+            &pt.artist_id.clone().unwrap_or_default(),
+        ),
+        disabled_text_input_row(player.strings.lbl_duration_secs, &pt.duration.to_string()),
         Row::with_children([
             thumbnail(
                 &player.app_theme.palette,
                 theme::PLAYBAR_THUMBNAIL_SIZE,
                 player.thumbnail_index.get(&pt.id),
             ),
-            disabled_text_input_row("Thumbnail", &pt.thumbnail),
+            disabled_text_input_row(player.strings.lbl_thumbnail, &pt.thumbnail),
         ])
         .spacing(theme::SPACING_SM)
         .into(),
-        disabled_text_input_row("Album", &album),
+        disabled_text_input_row(player.strings.lbl_album, &album),
     ])
     .spacing(theme::SPACING_XS);
 
@@ -118,7 +121,7 @@ pub(super) fn view_context_menu(player: &MusicPlayer) -> Element<'_, Message, Ap
         .iter()
         .enumerate()
         .map(|(i, action)| {
-            let (label, icon) = action_label(*action, n);
+            let (label, icon) = action_label(*action, n, player.strings);
             let focused = menu.hovered == Some(ContextMenuFocus::Item(i));
             let chevron = action.submenu().is_some();
             menu_item(
@@ -157,7 +160,7 @@ pub(super) fn view_context_menu(player: &MusicPlayer) -> Element<'_, Message, Ap
     let mut anchor_x = pos_x;
 
     if let Some(kind) = menu.open_submenu_kind() {
-        let entries = submenu_entries(kind, menu, p, row_len);
+        let entries = submenu_entries(kind, menu, p, row_len, player.strings);
         // Skip until the capture task has delivered geometry, so the submenu
         // doesn't render at the panel top and jump once bounds arrive.
         let geo = player
@@ -224,42 +227,46 @@ pub(super) fn view_context_menu(player: &MusicPlayer) -> Element<'_, Message, Ap
 }
 
 /// Label and icon shown for a main-menu entry (`n` = selected track count).
-fn action_label<'a>(action: CtxAction, n: usize) -> (Cow<'a, str>, &'static [u8]) {
+fn action_label(
+    action: CtxAction,
+    n: usize,
+    tr: &crate::i18n::Strings,
+) -> (Cow<'_, str>, &'static [u8]) {
     match action {
-        CtxAction::Play => (Cow::Borrowed("Play"), icons::PLAY_ICON),
-        CtxAction::Edit => (Cow::Borrowed("Edit"), icons::EDIT_ICON),
-        CtxAction::GoToArtist => (Cow::Borrowed("Go to artist"), icons::ARTIST_ICON),
+        CtxAction::Play => (Cow::Borrowed(tr.ctx_play), icons::PLAY_ICON),
+        CtxAction::Edit => (Cow::Borrowed(tr.ctx_edit), icons::EDIT_ICON),
+        CtxAction::GoToArtist => (Cow::Borrowed(tr.ctx_go_to_artist), icons::ARTIST_ICON),
         CtxAction::AddToPlaylist => (
             if n > 1 {
-                Cow::Owned(format!("Add {n} tracks to Playlist"))
+                Cow::Owned(format!("{} {n}", tr.ctx_add_to_playlist))
             } else {
-                Cow::Borrowed("Add to Playlist")
+                Cow::Borrowed(tr.ctx_add_to_playlist)
             },
             icons::FOLDER_ICON,
         ),
         CtxAction::Download => (
             if n > 1 {
-                Cow::Owned(format!("Download {n} tracks"))
+                Cow::Owned(format!("{} {n}", tr.ctx_download))
             } else {
-                Cow::Borrowed("Download")
+                Cow::Borrowed(tr.ctx_download)
             },
             icons::DOWNLOAD_ICON,
         ),
-        CtxAction::SongRadio => (Cow::Borrowed("Song Radio"), icons::RADIO_ICON),
-        CtxAction::ArtistRadio => (Cow::Borrowed("Artist Radio"), icons::RADIO_ICON),
+        CtxAction::SongRadio => (Cow::Borrowed(tr.ctx_song_radio), icons::RADIO_ICON),
+        CtxAction::ArtistRadio => (Cow::Borrowed(tr.ctx_artist_radio), icons::RADIO_ICON),
         CtxAction::RemoveFromQueue => (
             if n > 1 {
-                Cow::Owned(format!("Remove {n} tracks from queue"))
+                Cow::Owned(format!("{} {n}", tr.ctx_remove_from_queue))
             } else {
-                Cow::Borrowed("Remove from Queue")
+                Cow::Borrowed(tr.ctx_remove_from_queue)
             },
             icons::DELETE_ICON,
         ),
         CtxAction::RemoveFromPlaylist => (
             if n > 1 {
-                Cow::Owned(format!("Remove {n} tracks from playlist"))
+                Cow::Owned(format!("{} {n}", tr.ctx_remove_from_playlist))
             } else {
-                Cow::Borrowed("Remove from Playlist")
+                Cow::Borrowed(tr.ctx_remove_from_playlist)
             },
             icons::DELETE_ICON,
         ),
@@ -336,6 +343,7 @@ fn submenu_entries<'a>(
     menu: &'a ContextMenuState,
     p: &'a Palette,
     row_len: Length,
+    tr: &'a crate::i18n::Strings,
 ) -> Vec<Element<'a, Message, AppTheme>> {
     kind.providers()
         .into_iter()
@@ -346,22 +354,22 @@ fn submenu_entries<'a>(
             // whether a missing id falls back to search)`.
             let (base, icon, has_id, search_fallback) = match kind {
                 SubmenuKind::Play => (
-                    "Play via",
+                    tr.sub_play_via,
                     icons::PLAY_ICON,
                     menu.track.has_provider(provider),
                     true,
                 ),
                 SubmenuKind::Download => (
-                    "Download from",
+                    tr.sub_download_from,
                     icons::DOWNLOAD_ICON,
                     menu.track.has_provider(provider),
                     true,
                 ),
                 SubmenuKind::SongRadio | SubmenuKind::ArtistRadio => {
-                    ("Via", icons::RADIO_ICON, true, false)
+                    (tr.sub_via, icons::RADIO_ICON, true, false)
                 }
                 SubmenuKind::GoToArtist => (
-                    "On",
+                    tr.sub_on,
                     icons::ARTIST_ICON,
                     menu.track.provider_artist_id(provider).is_some(),
                     true,
@@ -369,7 +377,12 @@ fn submenu_entries<'a>(
             };
             let by_search = search_fallback && !has_id;
             let label = if by_search {
-                Cow::Owned(format!("{} {} (search)", base, provider.label()))
+                Cow::Owned(format!(
+                    "{} {} {}",
+                    base,
+                    provider.label(),
+                    tr.via_search_suffix
+                ))
             } else {
                 Cow::Owned(format!("{} {}", base, provider.label()))
             };
@@ -412,12 +425,12 @@ pub(super) fn view_edit_track(player: &MusicPlayer) -> Element<'_, Message, AppT
         .collect();
 
     let providers_block = Column::with_children([
-        text("Providers")
+        text(player.strings.providers)
             .style(fg_accent())
             .size(theme::TEXT_SIZE_LG)
             .into(),
         if provider_rows.is_empty() {
-            text("This track has no provider data.")
+            text(player.strings.no_provider_data)
                 .style(fg_secondary())
                 .into()
         } else {
@@ -429,23 +442,30 @@ pub(super) fn view_edit_track(player: &MusicPlayer) -> Element<'_, Message, AppT
     .spacing(theme::SPACING_SM)
     .into();
 
-    let save_btn = Button::new(Container::new(text("Save")).center_x(Length::Fill))
+    let save_btn = Button::new(Container::new(text(player.strings.save)).center_x(Length::Fill))
         .padding(theme::SPACING_SM)
         .style(button_style_primary())
         .on_press(Message::SaveEditTrack);
 
-    let cancel_btn = Button::new(Container::new(text("Cancel")).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
-        .on_press(Message::CloseEditTrack);
+    let cancel_btn =
+        Button::new(Container::new(text(player.strings.cancel)).center_x(Length::Fill))
+            .padding(theme::SPACING_SM)
+            .on_press(Message::CloseEditTrack);
 
     let body = Column::with_children([
         Column::with_children([
-            text_input_row("Title", &edit.title, "Track title", |v| {
-                Message::EditTrackField(EditTrackField::Title, v)
-            }),
-            text_input_row("Artist", &edit.artist, "Track artist", |v| {
-                Message::EditTrackField(EditTrackField::Artist, v)
-            }),
+            text_input_row(
+                player.strings.lbl_title,
+                &edit.title,
+                player.strings.ph_track_title,
+                |v| Message::EditTrackField(EditTrackField::Title, v),
+            ),
+            text_input_row(
+                player.strings.lbl_artist,
+                &edit.artist,
+                player.strings.ph_track_artist,
+                |v| Message::EditTrackField(EditTrackField::Artist, v),
+            ),
         ])
         .spacing(theme::SPACING_SM)
         .into(),
@@ -455,7 +475,9 @@ pub(super) fn view_edit_track(player: &MusicPlayer) -> Element<'_, Message, AppT
     .padding(scroll_padding());
 
     let dialog = Column::with_children([
-        text("Edit Track").size(theme::TEXT_SIZE_LG).into(),
+        text(player.strings.edit_track)
+            .size(theme::TEXT_SIZE_LG)
+            .into(),
         scrollable(body).height(Length::Fill).into(),
         Row::with_children([cancel_btn.into(), save_btn.into()])
             .spacing(theme::SPACING_SM)
@@ -501,14 +523,17 @@ pub(super) fn view_playlist_picker(player: &MusicPlayer) -> Element<'_, Message,
         });
 
     let cancel_btn = Button::new(
-        Container::new(text("Cancel").size(theme::TEXT_SIZE_SM)).center_x(Length::Fill),
+        Container::new(text(player.strings.cancel).size(theme::TEXT_SIZE_SM))
+            .center_x(Length::Fill),
     )
     .padding(theme::SPACING_SM)
     .on_press(Message::ClosePicker);
 
     view_dialog(
         Column::with_children([
-            text("Add to Playlist").size(theme::TEXT_SIZE_LG).into(),
+            text(player.strings.ctx_add_to_playlist)
+                .size(theme::TEXT_SIZE_LG)
+                .into(),
             Column::with_children(items)
                 .spacing(theme::SPACING_XS)
                 .width(Length::Fill)
@@ -535,20 +560,24 @@ fn view_dialog(
     Container::new(opaque(backdrop)).style(bg_overlay()).into()
 }
 
-pub(super) fn view_delete_confirm() -> Element<'static, Message, AppTheme> {
-    let cancel_btn = Button::new(Container::new(text("Cancel")).center_x(Length::Fill))
+pub(super) fn view_delete_confirm(
+    strings: &crate::i18n::Strings,
+) -> Element<'_, Message, AppTheme> {
+    let cancel_btn = Button::new(Container::new(text(strings.cancel)).center_x(Length::Fill))
         .padding(theme::SPACING_SM)
         .on_press(Message::HideDeleteConfirm);
 
-    let delete_btn = Button::new(Container::new(text("Delete")).center_x(Length::Fill))
+    let delete_btn = Button::new(Container::new(text(strings.delete)).center_x(Length::Fill))
         .padding(theme::SPACING_SM)
         .style(button_style_danger())
         .on_press(Message::ConfirmDeletePlaylist);
 
     view_dialog(
         Column::with_children([
-            text("Delete playlist?").size(theme::TEXT_SIZE_LG).into(),
-            text("Tracks will not be deleted.")
+            text(strings.delete_playlist_q)
+                .size(theme::TEXT_SIZE_LG)
+                .into(),
+            text(strings.tracks_wont_be_deleted)
                 .style(fg_secondary())
                 .into(),
             Row::with_children([cancel_btn.into(), delete_btn.into()])

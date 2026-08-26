@@ -20,7 +20,7 @@ pub(super) fn view_track_list_search(player: &MusicPlayer) -> Element<'_, Messag
         None => format!("0/{}", fs.matches.len()),
     };
 
-    let input = text_input("Find in list…", &fs.query)
+    let input = text_input(player.strings.find_in_list, &fs.query)
         .id(TRACK_LIST_SEARCH_ID)
         .on_input(Message::TrackListSearchInput)
         .padding([theme::SPACING_XS, theme::SPACING_SM]);

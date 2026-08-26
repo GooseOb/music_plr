@@ -25,7 +25,7 @@ pub(super) fn view_playlist<'a>(
     let p = &player.app_theme.palette;
 
     let Some(pl) = player.playlists.playlists.get(entry.index) else {
-        return empty_state("Playlist not found");
+        return empty_state(player.strings.playlist_not_found);
     };
 
     let header: Element<'a, Message, AppTheme> = Row::with_children([
@@ -37,7 +37,7 @@ pub(super) fn view_playlist<'a>(
         Button::new(
             Row::with_children([
                 icons::icon(icons::FOLDER_ICON, Color::WHITE, theme::ICON_SIZE_SM).into(),
-                text("Add local")
+                text(player.strings.add_local)
                     .align_y(alignment::Vertical::Center)
                     .color(Color::WHITE)
                     .into(),
@@ -72,7 +72,9 @@ pub(super) fn view_downloads(player: &MusicPlayer) -> Element<'_, Message, AppTh
 
     let header = Row::with_children([
         icons::icon(icons::DOWNLOAD_ICON, p.fg_muted, theme::ICON_SIZE_MD).into(),
-        text("Downloaded tracks").style(fg_secondary()).into(),
+        text(player.strings.downloaded_tracks)
+            .style(fg_secondary())
+            .into(),
     ])
     .spacing(theme::SPACING_SM)
     .align_y(alignment::Vertical::Center)
@@ -82,7 +84,7 @@ pub(super) fn view_downloads(player: &MusicPlayer) -> Element<'_, Message, AppTh
         LoadState::Ready(tracks) if !tracks.is_empty() => {
             view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
         }
-        _ => empty_state("No downloaded tracks"),
+        _ => empty_state(player.strings.no_downloaded_tracks),
     };
 
     Column::with_children([header.into(), track_list]).into()

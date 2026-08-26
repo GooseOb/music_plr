@@ -1,5 +1,4 @@
-use crate::data::JsonStore;
-use crate::providers::ProviderId;
+use crate::{data::JsonStore, i18n::Language, providers::ProviderId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -15,6 +14,7 @@ pub struct Config {
     /// at the UI level to providers that support both streaming and
     /// downloading.
     pub default_provider: ProviderId,
+    pub language: Language,
 }
 
 impl Default for Config {
@@ -27,6 +27,7 @@ impl Default for Config {
             max_recently_played: 50,
             volume_normalization: false,
             default_provider: ProviderId::YouTube,
+            language: Language::default(),
         }
     }
 }
@@ -70,6 +71,7 @@ mod tests {
             max_recently_played: 9,
             volume_normalization: true,
             default_provider: ProviderId::SoundCloud,
+            language: Language::Pl,
         };
 
         let json = serde_json::to_string(&cfg).unwrap();

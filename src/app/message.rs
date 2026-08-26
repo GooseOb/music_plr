@@ -154,6 +154,7 @@ pub enum Message {
     SettingsMaxRecentlyPlayedChanged(String),
     SettingsVolumeNormalizationToggled(bool),
     SettingsDefaultProviderChanged(ProviderId),
+    SettingsLanguageChanged(crate::i18n::Language),
     SettingsResetDefaults,
 
     ContextMenuPlayTrack(TrackPos),

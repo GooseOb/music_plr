@@ -55,15 +55,6 @@ pub fn urlencode(s: &str) -> String {
     out
 }
 
-/// Returns "" for 1 item, "s" otherwise, for simple English pluralization.
-pub const fn plural_suffix(count: usize) -> &'static str {
-    if count == 1 {
-        ""
-    } else {
-        "s"
-    }
-}
-
 /// Returns the duration of the audio file at `path` in seconds, or `None`
 /// on any failure (missing file, unsupported codec, corrupt header, zero rate).
 pub fn try_probe_duration(path: &str) -> Option<u32> {

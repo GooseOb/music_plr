@@ -91,6 +91,7 @@ impl LyricsState {
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
     pub config: crate::data::config::Config,
+    pub strings: &'static crate::i18n::Strings,
     /// Back/forward navigation history. Each entry is a full `View` snapshot;
     /// `nav_history_pos` indexes the active one, which is the single source of
     /// truth for which view is active and its data (see [`Self::view_data`]).
@@ -207,6 +208,7 @@ impl MusicPlayer {
         let (result_tx, result_rx) = mpsc::channel();
         let (mpris_cmd_tx, mpris_cmd_rx) = mpsc::channel();
 
+        let strings = config.language.strings();
         let mut player = Self {
             audio: AudioPlayer::new(0.8),
             search_history: SearchHistory::load(),
@@ -267,6 +269,7 @@ impl MusicPlayer {
             window_size: iced::Size::default(),
             clipboard: Vec::new(),
             last_click: None,
+            strings,
         };
 
         player.init_mpris();
@@ -407,7 +410,7 @@ impl MusicPlayer {
                 if text.is_empty() {
                     return Task::none();
                 }
-                self.notify("Lyrics copied to clipboard");
+                self.notify(self.strings.lyrics_copied);
                 iced::clipboard::write(text)
             }
             Message::SearchInputChanged(query) => {
@@ -447,9 +450,9 @@ impl MusicPlayer {
             Message::ToggleLibrarySave(item) => {
                 let saved = self.toggle_library_save(item);
                 self.notify(if saved {
-                    "Saved to library"
+                    self.strings.saved_to_library
                 } else {
-                    "Removed from library"
+                    self.strings.removed_from_library
                 });
                 Task::none()
             }
@@ -647,6 +650,10 @@ impl MusicPlayer {
             }
             Message::SettingsVolumeNormalizationToggled(enabled) => {
                 self.handle_settings_change(SettingsChange::VolumeNormalization(enabled));
+                Task::none()
+            }
+            Message::SettingsLanguageChanged(language) => {
+                self.handle_settings_change(SettingsChange::Language(language));
                 Task::none()
             }
             Message::SettingsDefaultProviderChanged(provider) => {

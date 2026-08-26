@@ -56,7 +56,8 @@ impl MusicPlayer {
         });
         let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
-        self.notify(format!("Opening artist: {name}..."));
+        let msg = (self.strings.opening_artist)(name);
+        self.notify(msg);
 
         // Source: everything it can serve. YouTube answers in one request;
         // SoundCloud runs all five endpoints concurrently.
@@ -89,6 +90,7 @@ impl MusicPlayer {
             entry.page.provider_ids.get(&provider).cloned()
         };
         let name = name.to_string();
+        let not_found = self.strings.could_not_find_on;
         let tx = self.result_tx.clone();
 
         thread::spawn(move || {
@@ -116,7 +118,7 @@ impl MusicPlayer {
                         id
                     }
                     Ok(None) => {
-                        fail_all(format!("Could not find {name} on {}", provider.label()));
+                        fail_all((not_found)(&name, provider.label()));
                         return;
                     }
                     Err(e) => {

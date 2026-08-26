@@ -6,6 +6,7 @@ use iced::{
 
 use crate::{
     app::ui::styles::fg_accent,
+    i18n::Language,
     providers::ProviderId,
     theme::{self, AppTheme},
 };
@@ -23,7 +24,7 @@ fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppThe
             Message::SettingsDefaultProviderChanged(provider),
         )
     }));
-    Column::with_children([text("Default stream & download provider").into(), row])
+    Column::with_children([text(player.strings.default_provider_lbl).into(), row])
         .spacing(theme::SPACING_SM)
         .align_x(alignment::Horizontal::Left)
         .into()
@@ -46,55 +47,76 @@ fn section<'a>(
     .into()
 }
 
+fn language_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let row = scope_tab_row(Language::ALL.iter().map(|&language| {
+        (
+            language.label().to_string(),
+            player.config.language == language,
+            Message::SettingsLanguageChanged(language),
+        )
+    }));
+    Column::with_children([text(player.strings.language_lbl).into(), row])
+        .spacing(theme::SPACING_SM)
+        .align_x(alignment::Horizontal::Left)
+        .into()
+}
+
 pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let cfg = &player.config;
 
     let normalize = checkbox(cfg.volume_normalization)
-        .label("Normalize volume across tracks")
+        .label(player.strings.normalize_volume_lbl)
         .on_toggle(Message::SettingsVolumeNormalizationToggled)
         .spacing(theme::SPACING_MD)
         .into();
 
     let download_dir = text_input_row(
-        "Download directory",
+        player.strings.download_dir_lbl,
         &cfg.download_dir,
         "",
         Message::SettingsDownloadDirChanged,
     );
 
     let cache_size = text_input_row(
-        "Max stream cache size (MB)",
+        player.strings.cache_size_lbl,
         &format!("{}", cfg.cache_max_size_mb),
         "1024",
         Message::SettingsCacheMaxSizeChanged,
     );
 
     let hist_visible = text_input_row(
-        "Search history rows shown",
+        player.strings.hist_rows_lbl,
         &format!("{}", cfg.max_search_history_visible),
         "10",
         Message::SettingsMaxHistoryVisibleChanged,
     );
 
     let hist_stored = text_input_row(
-        "Search history entries kept",
+        player.strings.hist_entries_lbl,
         &format!("{}", cfg.max_search_history_stored),
         "100",
         Message::SettingsMaxHistoryStoredChanged,
     );
 
     let recent = text_input_row(
-        "Recently played tracks kept",
+        player.strings.recent_kept_lbl,
         &format!("{}", cfg.max_recently_played),
         "50",
         Message::SettingsMaxRecentlyPlayedChanged,
     );
 
     let content = Column::with_children([
-        section("Playback", [normalize, default_provider_section(player)]),
-        section("Storage", [download_dir, cache_size]),
-        section("History", [hist_visible, hist_stored, recent]),
-        Button::new(text("Reset to defaults"))
+        section(
+            player.strings.sec_playback,
+            [normalize, default_provider_section(player)],
+        ),
+        section(player.strings.sec_storage, [download_dir, cache_size]),
+        section(
+            player.strings.sec_history,
+            [hist_visible, hist_stored, recent],
+        ),
+        section(player.strings.language_lbl, [language_section(player)]),
+        Button::new(text(player.strings.reset_defaults))
             .padding([theme::SPACING_SM, theme::SPACING_MD])
             .on_press(Message::SettingsResetDefaults)
             .into(),

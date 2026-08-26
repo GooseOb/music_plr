@@ -52,7 +52,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     if player.playlist_picker.is_some() {
         stack = stack.push(overlays::view_playlist_picker(player));
     } else if player.delete_confirm_index.is_some() {
-        stack = stack.push(overlays::view_delete_confirm());
+        stack = stack.push(overlays::view_delete_confirm(player.strings));
     } else if player.edit_track.is_some() {
         stack = stack.push(overlays::view_edit_track(player));
     } else if player.context_menu.is_some() {

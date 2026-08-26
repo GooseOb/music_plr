@@ -166,7 +166,8 @@ impl MusicPlayer {
             }
         }
         if !to_download.is_empty() {
-            self.notify(format!("Downloading {} track(s)...", to_download.len()));
+            let msg = (self.strings.downloading_n)(to_download.len());
+            self.notify(msg);
             for track in to_download {
                 self.spawn_download_thread_for(provider, track);
             }
@@ -182,11 +183,9 @@ impl MusicPlayer {
         pos: Option<TrackPos>,
         play: bool,
     ) {
-        self.notify(format!(
-            "Resolving \"{}\" on {}...",
-            track.title,
-            provider.label()
-        ));
+        let title = track.title.clone();
+        let msg = (self.strings.resolving_on)(&title, provider.label());
+        self.notify(msg);
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
             let resolved = crate::providers::resolve_id(provider, &track);
@@ -342,7 +341,9 @@ impl MusicPlayer {
         let removed = crate::util::remove_at(&mut self.queue.tracks, indices);
         self.save_session();
         self.mpris_dirty = true;
-        self.notify_tracks("Removed", removed, "from queue");
+        let tr = self.strings;
+        let msg = (tr.removed_from)(removed, tr.queue);
+        self.notify(msg);
         self.clear_selection_if_touched(indices, TrackListKind::Queue);
     }
 

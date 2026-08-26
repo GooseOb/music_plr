@@ -271,7 +271,8 @@ impl MusicPlayer {
                 // they appear as soon as we insert them.
                 if idx < self.playlists.playlists.len() {
                     let count = self.playlists.insert_tracks_at(idx, tracks.iter(), 0);
-                    self.notify_tracks("Added", count, &format!("to {name}"));
+                    let msg = (self.strings.added_to)(count, &name);
+                    self.notify(msg);
                 }
             }
             BackendResult::RadioResults(rid, label, tracks) => {
@@ -304,12 +305,8 @@ impl MusicPlayer {
                 provider,
                 message,
             } => {
-                self.notify_error(format!(
-                    "Failed to resolve \"{}\" on {}: {}",
-                    title,
-                    provider.label(),
-                    message
-                ));
+                let msg = (self.strings.failed_resolve_on)(&title, provider.label(), &message);
+                self.notify_error(msg);
             }
             BackendResult::ThumbnailsDownloaded(ids) => {
                 for id in &ids {
@@ -353,7 +350,8 @@ impl MusicPlayer {
     fn process_download_complete(&mut self, track: crate::types::Track) {
         let path = track.download_path.clone().unwrap_or_default();
         self.download_registry.register(track.clone());
-        self.notify(format!("Download complete! Saved to {path}"));
+        let msg = (self.strings.download_complete)(&path);
+        self.notify(msg);
         self.thumbnail_index.mark_downloaded(track.primary_id());
         if matches!(self.view_data().kind, ViewKind::Downloads) {
             if let Some(tracks) = self.view_data_mut().tracks_mut() {
@@ -403,34 +401,29 @@ impl MusicPlayer {
         pos: Option<crate::app::interaction::TrackPos>,
         play: bool,
     ) {
-        match resolved {
-            Some(resolved_track) => {
-                if let Some(pt) = resolved_track.providers.get(&provider) {
-                    original.set_provider(provider, pt.clone());
-                }
-                original.source = provider;
+        if let Some(resolved_track) = resolved {
+            if let Some(pt) = resolved_track.providers.get(&provider) {
+                original.set_provider(provider, pt.clone());
+            }
+            original.source = provider;
+            if let Some(p) = pos {
+                self.set_track_at(p, original.clone());
+            }
+            if play {
+                self.play_track_replacing_queue(original, provider);
                 if let Some(p) = pos {
-                    self.set_track_at(p, original.clone());
-                }
-                if play {
-                    self.play_track_replacing_queue(original, provider);
-                    if let Some(p) = pos {
-                        for t in self.tracks_after(p.index).to_vec() {
-                            self.queue.enqueue(t);
-                        }
+                    for t in self.tracks_after(p.index).to_vec() {
+                        self.queue.enqueue(t);
                     }
-                    self.save_session();
-                } else {
-                    self.spawn_download_thread_for(provider, original);
                 }
+                self.save_session();
+            } else {
+                self.spawn_download_thread_for(provider, original);
             }
-            None => {
-                self.notify_error(format!(
-                    "Could not find \"{}\" on {}",
-                    original.title,
-                    provider.label()
-                ));
-            }
+        } else {
+            let title = original.title.clone();
+            let msg = (self.strings.could_not_find_on)(&title, provider.label());
+            self.notify_error(msg);
         }
     }
 

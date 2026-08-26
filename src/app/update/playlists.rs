@@ -10,7 +10,8 @@ impl MusicPlayer {
         let name = self.playlist_create_name.trim().to_string();
         self.playlists.create(&name);
         self.playlist_create_name.clear();
-        self.notify(format!("Playlist \"{name}\" created"));
+        let msg = (self.strings.playlist_created)(&name);
+        self.notify(msg);
     }
 
     pub fn handle_select_playlist(&mut self, index: usize) {
@@ -132,17 +133,14 @@ impl MusicPlayer {
             _ => None,
         };
         let Some(idx) = active else {
-            let count = new_tracks.len();
-            self.notify(format!(
-                "Added {} local track{} (select a playlist to organize)",
-                count,
-                crate::util::plural_suffix(count)
-            ));
+            let msg = (self.strings.added_local)(new_tracks.len());
+            self.notify(msg);
             return;
         };
 
         let count = self.playlists.insert_tracks_at(idx, new_tracks.iter(), 0);
-        self.notify_tracks("Added", count, "");
+        let msg = (self.strings.added)(count);
+        self.notify(msg);
     }
 
     pub fn handle_add_to_playlist(
@@ -164,14 +162,16 @@ impl MusicPlayer {
             .insert_tracks_at(playlist_idx, tracks.iter(), 0);
         self.playlist_picker = None;
         let name = self.playlists.playlists[playlist_idx].name.clone();
-        self.notify_tracks("Added", count, &format!("to {name}"));
+        let msg = (self.strings.added_to)(count, &name);
+        self.notify(msg);
     }
 
     pub fn handle_remove_from_playlist_batch(&mut self, indices: &[usize]) {
         if let ViewKind::Playlist(p) = &self.view_data().kind {
             if p.index < self.playlists.playlists.len() {
                 let removed = self.playlists.remove_tracks_at(p.index, indices);
-                self.notify_tracks("Removed", removed, "");
+                let msg = (self.strings.removed_n)(removed);
+                self.notify(msg);
                 self.clear_selection_if_touched(indices, super::TrackListKind::Active);
             }
         }
@@ -229,7 +229,8 @@ impl MusicPlayer {
         self.playlists.save();
         let count = self.clipboard.len();
         let name = self.playlists.playlists[idx].name.clone();
-        self.notify_tracks("Pasted", count, &format!("into {name}"));
+        let msg = (self.strings.pasted_into)(count, &name);
+        self.notify(msg);
         self.clipboard.clear();
     }
 
@@ -243,7 +244,8 @@ impl MusicPlayer {
             if let ViewKind::Playlist(p) = &self.view_data().kind {
                 if p.index < self.playlists.playlists.len() {
                     let removed = self.playlists.remove_tracks_at(p.index, &indices);
-                    self.notify_tracks("Removed", removed, "");
+                    let msg = (self.strings.removed_n)(removed);
+                    self.notify(msg);
                 }
             }
         } else if let ViewKind::Downloads = &self.view_data().kind {
@@ -253,7 +255,9 @@ impl MusicPlayer {
                     .filter_map(|&i| tracks.get(i).map(|t| t.primary_url().to_string()))
                     .collect();
                 let removed = crate::util::remove_at(tracks, &indices);
-                self.notify_tracks("Removed", removed, "from downloads");
+                let tr = self.strings;
+                let msg = (tr.removed_from)(removed, tr.downloads);
+                self.notify(msg);
                 for url in removed_urls {
                     self.download_registry.remove(&url);
                 }

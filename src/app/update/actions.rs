@@ -151,10 +151,11 @@ impl MusicPlayer {
         state.lyrics = crate::load_state::LoadState::Loading;
         state.track_id = Some(id.clone());
         self.sync_lyrics_editor();
+        let no_lyrics = self.strings.no_lyrics_found;
         std::thread::spawn(move || {
             let result = match client.fetch(&req) {
                 Ok(Some(lyrics)) => Ok(lyrics),
-                Ok(None) => Err("No lyrics found for this track.".to_string()),
+                Ok(None) => Err(no_lyrics.to_string()),
                 Err(e) => {
                     tracing::warn!("Lyrics lookup failed: {e}");
                     Err(e.to_string())

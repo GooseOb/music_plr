@@ -59,8 +59,12 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
 
 fn view_queue_tabs(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     Row::with_children([
-        queue_tab(player, "Queue", QueueTab::Queue),
-        queue_tab(player, "Recently played", QueueTab::RecentlyPlayed),
+        queue_tab(player, player.strings.queue, QueueTab::Queue),
+        queue_tab(
+            player,
+            player.strings.recently_played,
+            QueueTab::RecentlyPlayed,
+        ),
     ])
     .into()
 }
@@ -92,7 +96,10 @@ fn queue_tab<'a>(
     .into()
 }
 
-pub fn now_playing_source_label(kind: &ViewKind) -> Option<&str> {
+pub fn now_playing_source_label<'a>(
+    kind: &'a ViewKind,
+    tr: &'a crate::i18n::Strings,
+) -> Option<&'a str> {
     match kind {
         ViewKind::Search(s) => (!s.query.is_empty()).then_some(s.query.as_str()),
         ViewKind::SongRadio(label) | ViewKind::ArtistRadio(label) => Some(label),
@@ -100,7 +107,7 @@ pub fn now_playing_source_label(kind: &ViewKind) -> Option<&str> {
         ViewKind::Album(r) => Some(&r.name),
         ViewKind::PlaylistView(r) => Some(&r.name),
         ViewKind::Playlist(e) => Some(e.name.as_str()),
-        ViewKind::Downloads => Some("Downloads"),
+        ViewKind::Downloads => Some(tr.downloads),
         ViewKind::Settings => None,
     }
 }
@@ -111,10 +118,10 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let now_playing_header: Element<'_, Message, AppTheme> = match player
         .now_playing_from
         .as_ref()
-        .and_then(|v| now_playing_source_label(&v.kind))
+        .and_then(|v| now_playing_source_label(&v.kind, player.strings))
     {
         Some(source) => Row::with_children([
-            text("Now playing from")
+            text(player.strings.now_playing_from)
                 .size(theme::TEXT_SIZE_XS)
                 .color(p.accent)
                 .into(),
@@ -128,7 +135,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .padding([theme::SPACING_SM, theme::SPACING_MD])
         .align_y(alignment::Vertical::Center)
         .into(),
-        None => section_header("Now playing", p).into(),
+        None => section_header(player.strings.now_playing, p).into(),
     };
 
     let now_playing_row: Element<'_, Message, AppTheme> =
@@ -138,7 +145,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                 .into()
         } else {
             Container::new(
-                text("No track playing")
+                text(player.strings.no_track_playing)
                     .size(theme::TEXT_SIZE_SM)
                     .style(fg_secondary()),
             )
@@ -146,7 +153,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             .into()
         };
 
-    let up_next_header = section_header("Up next", p);
+    let up_next_header = section_header(player.strings.up_next, p);
 
     let offset = 1;
     let upcoming = if offset <= player.queue.tracks.len() {
@@ -157,7 +164,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let up_next: Element<'_, Message, AppTheme> = if upcoming.is_empty() {
         Container::new(
-            text("No more tracks in queue")
+            text(player.strings.no_more_tracks_in_queue)
                 .size(theme::TEXT_SIZE_SM)
                 .style(fg_secondary()),
         )
@@ -191,7 +198,7 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
     let tracks = &player.queue.recently_played;
 
     if tracks.is_empty() {
-        return empty_state("No recently played tracks");
+        return empty_state(player.strings.no_recently_played_tracks);
     }
 
     virtual_scrollable(tracks.len(), TrackListKind::Recent, player, |i| {
