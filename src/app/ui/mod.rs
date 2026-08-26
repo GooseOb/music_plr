@@ -55,8 +55,8 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         stack = stack.push(overlays::view_delete_confirm(player.strings));
     } else if player.edit_track.is_some() {
         stack = stack.push(overlays::view_edit_track(player));
-    } else if player.context_menu.is_some() {
-        stack = stack.push(overlays::view_context_menu(player));
+    } else if let Some(context_menu) = &player.context_menu {
+        stack = stack.push(overlays::view_context_menu(player, context_menu));
     } else if let Some(rect) = player.drop_indicator_rect() {
         stack = stack.push(overlays::view_drop_indicator(rect));
     }

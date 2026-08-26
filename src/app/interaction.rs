@@ -111,9 +111,7 @@ impl SubmenuKind {
         use super::message::Message;
         match self {
             SubmenuKind::Play => Message::ContextMenuPlayViaProvider(provider, menu.pos),
-            SubmenuKind::Download => {
-                Message::ContextMenuDownloadViaProvider(provider, menu.target_indices.clone())
-            }
+            SubmenuKind::Download => Message::ContextMenuDownloadViaProvider(provider),
             SubmenuKind::SongRadio => Message::ContextMenuSongRadioProvider(provider),
             SubmenuKind::ArtistRadio => Message::ContextMenuArtistRadioProvider(provider),
             SubmenuKind::GoToArtist => Message::ContextMenuGoToArtistProvider(provider),

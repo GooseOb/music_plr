@@ -101,9 +101,11 @@ pub(super) fn view_drop_indicator(rect: Rectangle) -> Element<'static, Message, 
 }
 
 #[allow(clippy::too_many_lines)]
-pub(super) fn view_context_menu(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+pub(super) fn view_context_menu<'a>(
+    player: &'a MusicPlayer,
+    menu: &'a ContextMenuState,
+) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let menu = player.context_menu.as_ref().expect("context menu open");
     let (pos_x, pos_y) = menu.position;
     let n = menu.target_indices.len();
 
@@ -377,14 +379,9 @@ fn submenu_entries<'a>(
             };
             let by_search = search_fallback && !has_id;
             let label = if by_search {
-                Cow::Owned(format!(
-                    "{} {} {}",
-                    base,
-                    provider.label(),
-                    tr.via_search_suffix
-                ))
+                format!("{} {} {}", base, provider.label(), tr.via_search_suffix)
             } else {
-                Cow::Owned(format!("{} {}", base, provider.label()))
+                format!("{} {}", base, provider.label())
             };
             let icon = if by_search { icons::SEARCH_ICON } else { icon };
             let message = kind.entry_message(provider, menu);

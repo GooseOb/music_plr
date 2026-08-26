@@ -11,7 +11,7 @@ use crate::{
 impl MusicPlayer {
     /// Take the open menu, clearing its captured geometry so a reopened
     /// menu never renders against stale measurements.
-    fn take_context_menu(&mut self) -> Option<ContextMenuState> {
+    pub(crate) fn take_context_menu(&mut self) -> Option<ContextMenuState> {
         self.bounds.context_menu = None;
         self.context_menu.take()
     }

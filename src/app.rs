@@ -678,7 +678,6 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuGoToArtistProvider(provider) => {
-                self.close_context_menu();
                 self.handle_context_menu_go_to_artist(provider);
                 Task::none()
             }
@@ -687,9 +686,8 @@ impl MusicPlayer {
                 self.play_track_via_provider(provider, pos);
                 Task::none()
             }
-            Message::ContextMenuDownloadViaProvider(provider, indices) => {
-                self.close_context_menu();
-                self.download_track_via_provider(provider, &indices);
+            Message::ContextMenuDownloadViaProvider(provider) => {
+                self.download_track_via_provider(provider);
                 Task::none()
             }
             Message::ContextMenuSongRadioProvider(provider) => {
@@ -759,11 +757,9 @@ impl MusicPlayer {
                     return Task::none();
                 };
                 let provider = menu.default_provider(action, self.config.default_provider);
-                let indices = menu.target_indices.clone();
-                self.close_context_menu();
                 match action {
                     DefaultCtxAction::Download => {
-                        self.download_track_via_provider(provider, &indices);
+                        self.download_track_via_provider(provider);
                     }
                     DefaultCtxAction::SongRadio => self.handle_context_menu_song_radio(provider),
                     DefaultCtxAction::ArtistRadio => {

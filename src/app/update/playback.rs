@@ -147,21 +147,23 @@ impl MusicPlayer {
         }
     }
 
-    /// Download `indices` from `provider`. Tracks lacking the provider id are
-    /// resolved first (best-effort; the resolve flow stores the id and then
-    /// downloads).
-    pub fn download_track_via_provider(&mut self, provider: ProviderId, indices: &[usize]) {
-        let list = self.context_menu.as_ref().map(|m| m.pos.list);
+    /// Download the context menu's target tracks from `provider`. Tracks
+    /// lacking the provider id are resolved first (best-effort; the resolve
+    /// flow stores the id and then downloads).
+    pub fn download_track_via_provider(&mut self, provider: ProviderId) {
+        let Some(menu) = self.take_context_menu() else {
+            return;
+        };
+        let list = menu.pos.list;
+        let indices = menu.target_indices;
         let mut to_download: Vec<Track> = Vec::new();
-        if let Some(list) = list {
-            for &idx in indices {
-                if let Some(track) = self.get_track_at(TrackPos::new(idx, list)) {
-                    if track.can_download_from(provider) {
-                        to_download.push(track);
-                    } else {
-                        let pos = TrackPos::new(idx, list);
-                        self.resolve_provider(provider, track, Some(pos), false);
-                    }
+        for &idx in &indices {
+            if let Some(track) = self.get_track_at(TrackPos::new(idx, list)) {
+                if track.can_download_from(provider) {
+                    to_download.push(track);
+                } else {
+                    let pos = TrackPos::new(idx, list);
+                    self.resolve_provider(provider, track, Some(pos), false);
                 }
             }
         }

@@ -163,7 +163,7 @@ pub enum Message {
     ContextMenuGoToArtistProvider(ProviderId),
     ContextMenuDefault(DefaultCtxAction),
     ContextMenuPlayViaProvider(ProviderId, TrackPos),
-    ContextMenuDownloadViaProvider(ProviderId, Vec<usize>),
+    ContextMenuDownloadViaProvider(ProviderId),
     ContextMenuSongRadioProvider(ProviderId),
     ContextMenuArtistRadioProvider(ProviderId),
     ContextMenuRemoveFromPlaylist(Vec<usize>),

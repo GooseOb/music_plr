@@ -133,7 +133,7 @@ pub const STRINGS: Strings = Strings {
             pl_tracks(n)
         )
     },
-    downloading_n: |n| format!("Pobieranie {}...", pl_tracks(n)),
+    downloading_n: |n| format!("Pobieranie {}...", pl_gen_tracks(n)),
     resolving_on: |title, p| format!("Rozwiązywanie \"{title}\" na {p}..."),
     provider_no_radio: |p| format!("{p} nie obsługuje radia"),
     generating_radio_for: |w, name| format!("Generowanie radia ({w}): {name}..."),
@@ -152,6 +152,13 @@ fn pl_tracks(n: usize) -> String {
     match n {
         1 => "1 utwór".into(),
         2..=4 => format!("{n} utwory"),
+        _ => format!("{n} utworów"),
+    }
+}
+
+fn pl_gen_tracks(n: usize) -> String {
+    match n {
+        1 => "1 utworu".into(),
         _ => format!("{n} utworów"),
     }
 }
