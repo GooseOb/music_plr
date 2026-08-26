@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{data::JsonStore, i18n::Language, providers::ProviderId};
+use crate::{data::JsonStore, i18n::Language, providers::ProviderId, theme::ThemeKind};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
@@ -16,6 +16,7 @@ pub struct Config {
     /// downloading.
     pub default_provider: ProviderId,
     pub language: Language,
+    pub theme_kind: ThemeKind,
 }
 
 impl Default for Config {
@@ -29,6 +30,7 @@ impl Default for Config {
             volume_normalization: false,
             default_provider: ProviderId::YouTube,
             language: Language::default(),
+            theme_kind: ThemeKind::Dark,
         }
     }
 }
@@ -73,6 +75,7 @@ mod tests {
             volume_normalization: true,
             default_provider: ProviderId::SoundCloud,
             language: Language::Pl,
+            theme_kind: ThemeKind::Light,
         };
 
         let json = serde_json::to_string(&cfg).unwrap();

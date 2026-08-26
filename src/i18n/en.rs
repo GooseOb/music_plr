@@ -87,6 +87,8 @@ pub const STRINGS: Strings = Strings {
     sec_playback: "Playback",
     sec_storage: "Storage",
     sec_history: "History",
+    sec_appearance: "Appearance",
+    theme_lbl: "Theme",
     language_lbl: "Language",
     default_provider_lbl: "Default stream & download provider",
     normalize_volume_lbl: "Normalize volume across tracks",

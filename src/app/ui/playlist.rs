@@ -1,7 +1,7 @@
 use iced::{
     alignment,
     widget::{text, text_input, Button, Column, Row},
-    Color, Element, Length,
+    Element, Length,
 };
 
 use super::{
@@ -35,10 +35,10 @@ pub(super) fn view_playlist<'a>(
             .into(),
         Button::new(
             Row::with_children([
-                icons::icon(icons::FOLDER_ICON, Color::WHITE, theme::ICON_SIZE_SM).into(),
+                icons::icon(icons::FOLDER_ICON, p.fg_secondary, theme::ICON_SIZE_SM).into(),
                 text(player.strings.add_local)
                     .align_y(alignment::Vertical::Center)
-                    .color(Color::WHITE)
+                    .style(fg_secondary())
                     .into(),
             ])
             .spacing(theme::SPACING_SM)

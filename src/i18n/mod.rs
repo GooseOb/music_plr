@@ -139,6 +139,8 @@ pub struct Strings {
     pub sec_playback: &'static str,
     pub sec_storage: &'static str,
     pub sec_history: &'static str,
+    pub sec_appearance: &'static str,
+    pub theme_lbl: &'static str,
     pub language_lbl: &'static str,
     pub default_provider_lbl: &'static str,
     pub normalize_volume_lbl: &'static str,

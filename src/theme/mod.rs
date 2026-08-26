@@ -3,11 +3,40 @@
 //! [`layout`].
 
 use iced::{theme, Color, Theme};
+use serde::{Deserialize, Serialize};
 
 mod catalog;
 pub mod layout;
 
 pub use layout::*;
+
+/// Which [`Palette`] the [`AppTheme`] should use. Persisted in [`Config`]
+/// so the user's choice survives restarts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ThemeKind {
+    #[default]
+    Dark,
+    Light,
+}
+
+impl ThemeKind {
+    pub const ALL: [ThemeKind; 2] = [ThemeKind::Dark, ThemeKind::Light];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ThemeKind::Dark => "Dark",
+            ThemeKind::Light => "Light",
+        }
+    }
+
+    pub fn palette(self) -> Palette {
+        match self {
+            ThemeKind::Dark => Palette::dark(),
+            ThemeKind::Light => Palette::light(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Palette {
@@ -53,6 +82,32 @@ impl Palette {
             danger: Color::from_rgb8(0xc0, 0x40, 0x40),
             danger_hover: Color::from_rgb8(0xc0, 0x30, 0x30),
         }
+    }
+
+    pub const fn light() -> Self {
+        Self {
+            bg: Color::from_rgb8(0xf6, 0xf6, 0xfa),
+            bg_secondary: Color::from_rgb8(0xea, 0xea, 0xf0),
+            bg_tertiary: Color::from_rgb8(0xdf, 0xdf, 0xe8),
+            bg_hover: Color::from_rgb8(0xd5, 0xd5, 0xe0),
+            bg_current: Color::from_rgb8(0x90, 0xf0, 0xa0),
+            accent: Color::from_rgb8(0x14, 0xc8, 0x84),
+            accent_hover: Color::from_rgb8(0x10, 0xba, 0x70),
+            button: Color::from_rgb8(0xd8, 0xd8, 0xe2),
+            button_hover: Color::from_rgb8(0xc8, 0xc8, 0xd6),
+            fg: Color::from_rgb8(0x18, 0x18, 0x20),
+            fg_secondary: Color::from_rgb8(0x55, 0x55, 0x66),
+            fg_muted: Color::from_rgb8(0x88, 0x88, 0x99),
+            overlay: Color::from_rgba8(0, 0, 0, 0.5),
+            danger: Color::from_rgb8(0xc0, 0x40, 0x40),
+            danger_hover: Color::from_rgb8(0xc0, 0x30, 0x30),
+        }
+    }
+}
+
+impl From<ThemeKind> for Palette {
+    fn from(kind: ThemeKind) -> Self {
+        kind.palette()
     }
 }
 /// A custom iced theme that wraps the built-in [`iced::Theme`] for

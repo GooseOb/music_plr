@@ -60,6 +60,20 @@ fn language_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .into()
 }
 
+fn theme_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let row = scope_tab_row(theme::ThemeKind::ALL.iter().map(|&kind| {
+        (
+            kind.label().to_string(),
+            player.config.theme_kind == kind,
+            Message::SettingsThemeChanged(kind),
+        )
+    }));
+    Column::with_children([text(player.strings.theme_lbl).into(), row])
+        .spacing(theme::SPACING_SM)
+        .align_x(alignment::Horizontal::Left)
+        .into()
+}
+
 pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let cfg = &player.config;
 
@@ -115,6 +129,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
             [hist_visible, hist_stored, recent],
         ),
         section(player.strings.language_lbl, [language_section(player)]),
+        section(player.strings.sec_appearance, [theme_section(player)]),
         Button::new(text(player.strings.reset_defaults))
             .padding([theme::SPACING_SM, theme::SPACING_MD])
             .on_press(Message::SettingsResetDefaults)

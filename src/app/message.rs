@@ -155,6 +155,7 @@ pub enum Message {
     SettingsVolumeNormalizationToggled(bool),
     SettingsDefaultProviderChanged(ProviderId),
     SettingsLanguageChanged(crate::i18n::Language),
+    SettingsThemeChanged(crate::theme::ThemeKind),
     SettingsResetDefaults,
 
     ContextMenuPlayTrack(TrackPos),

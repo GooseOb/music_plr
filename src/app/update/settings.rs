@@ -1,5 +1,8 @@
 use super::MusicPlayer;
-use crate::data::{config, JsonStore};
+use crate::{
+    data::{config, JsonStore},
+    theme::AppTheme,
+};
 
 /// One settings change from the Settings view. Every variant applies a field
 /// of [`config::Config`] and persists the store.
@@ -13,6 +16,7 @@ pub enum SettingsChange {
     VolumeNormalization(bool),
     DefaultProvider(crate::providers::ProviderId),
     Language(crate::i18n::Language),
+    Theme(crate::theme::ThemeKind),
 }
 
 impl MusicPlayer {
@@ -68,11 +72,16 @@ impl MusicPlayer {
                     self.set_config(|c| c.default_provider = provider);
                 }
             }
+            SettingsChange::Theme(kind) => {
+                self.set_config(|c| c.theme_kind = kind);
+                self.app_theme = AppTheme::new(kind.palette());
+            }
         }
     }
 
     pub fn handle_settings_reset_defaults(&mut self) {
         self.config = config::Config::default();
         self.set_config(|_| {});
+        self.app_theme = AppTheme::new(self.config.theme_kind.palette());
     }
 }

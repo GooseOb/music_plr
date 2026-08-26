@@ -209,6 +209,7 @@ impl MusicPlayer {
         let (mpris_cmd_tx, mpris_cmd_rx) = mpsc::channel();
 
         let strings = config.language.strings();
+        let app_theme = AppTheme::new(Palette::from(config.theme_kind));
         let mut player = Self {
             audio: AudioPlayer::new(0.8),
             search_history: SearchHistory::load(),
@@ -264,7 +265,7 @@ impl MusicPlayer {
             queue_selected_indices: Vec::new(),
             now_playing_from: None,
             track_list_search: None,
-            app_theme: AppTheme::new(Palette::dark()),
+            app_theme,
             bounds: crate::app::update::operation::CaptureBounds::default(),
             window_size: iced::Size::default(),
             clipboard: Vec::new(),
@@ -658,6 +659,10 @@ impl MusicPlayer {
             }
             Message::SettingsDefaultProviderChanged(provider) => {
                 self.handle_settings_change(SettingsChange::DefaultProvider(provider));
+                Task::none()
+            }
+            Message::SettingsThemeChanged(kind) => {
+                self.handle_settings_change(SettingsChange::Theme(kind));
                 Task::none()
             }
             Message::SettingsResetDefaults => {
