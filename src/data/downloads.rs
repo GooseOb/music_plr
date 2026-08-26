@@ -27,6 +27,10 @@ impl DownloadRegistry {
         result
     }
 
+    pub fn len(&self) -> usize {
+        self.tracks.len()
+    }
+
     pub fn contains(&self, key: &str) -> bool {
         self.tracks.contains_key(key)
     }

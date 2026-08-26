@@ -3,10 +3,10 @@ use crate::providers::ProviderId;
 
 pub const STRINGS: Strings = Strings {
     search: "Szukaj",
-    downloads: "Pobieranie",
+    downloads: "Pobrane",
     settings: "Ustawienia",
     library: "Biblioteka",
-    nothing_saved_yet: "Nic jeszcze nie zapisano",
+    nothing_saved_yet: "Nic jeszcze nie pobrano",
     new_playlist_name: "Nazwa nowej playlisty",
 
     queue: "Kolejka",
@@ -30,7 +30,7 @@ pub const STRINGS: Strings = Strings {
 
     not_an_artist_page: "To nie jest strona wykonawcy",
     provided_by: "Dostarcza",
-    retry: "Ponów",
+    retry: "Spróbuj ponownie",
     nothing_here: "Tu nic nie ma",
     most_popular_songs: "Najpopularniejsze utwory",
     albums: "Albumy",

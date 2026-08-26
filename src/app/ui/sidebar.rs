@@ -212,13 +212,20 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             player.strings.search,
             ViewData::new_search(String::new(), player.search_provider, player.search_scope),
             player,
+            None,
         ),
         sidebar_nav_item(
             player.strings.downloads,
-            downloads_view_data(player),
+            ViewData::new_downloads(Vec::new()),
             player,
+            Some(player.download_registry.len()),
         ),
-        sidebar_nav_item(player.strings.settings, ViewData::new_settings(), player),
+        sidebar_nav_item(
+            player.strings.settings,
+            ViewData::new_settings(),
+            player,
+            None,
+        ),
     ];
 
     let playlist_items: Vec<Element<'_, Message, AppTheme>> = player
@@ -350,6 +357,7 @@ fn sidebar_nav_item<'a>(
     name: &'a str,
     target: ViewData,
     player: &'a MusicPlayer,
+    count: Option<usize>,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let is_active = player.view_data().same_kind(&target);
@@ -362,15 +370,16 @@ fn sidebar_nav_item<'a>(
         _ => icons::MUSIC_ICON,
     };
 
-    sidebar_button(Row::with_children([
+    let mut children = vec![
         icons::icon(icon_name, icon_color, theme::ICON_SIZE_MD).into(),
         text(name).color(text_color).into(),
-    ]))
-    .style(button_style_panel_item(is_active, text_color))
-    .on_press(Message::NavigateTo(target))
-    .into()
-}
+    ];
+    if let Some(count) = count {
+        children.push(iced::widget::right(text(count).style(fg_secondary())).into());
+    }
 
-fn downloads_view_data(_player: &MusicPlayer) -> ViewData {
-    ViewData::new_downloads(Vec::new())
+    sidebar_button(Row::with_children(children))
+        .style(button_style_panel_item(is_active, text_color))
+        .on_press(Message::NavigateTo(target))
+        .into()
 }
