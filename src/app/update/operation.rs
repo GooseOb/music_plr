@@ -242,7 +242,6 @@ pub struct ContextMenuGeometry {
     pub panel: Rectangle,
     /// Main-menu row tops relative to the panel top, in display order.
     pub row_offsets: Vec<f32>,
-    pub row_height: f32,
     /// True once two consecutive captures agree, i.e. the measured width was
     /// not clipped by the window edge; rows only stretch to full width then.
     pub stable: bool,
@@ -278,7 +277,6 @@ impl Operation<Message> for CaptureContextMenu {
         Outcome::Some(Message::ContextMenuBoundsCaptured {
             panel,
             row_offsets: self.rows.iter().map(|r| r.y - panel.y).collect(),
-            row_height: self.rows.first().map_or(0.0, |r| r.height),
         })
     }
 }

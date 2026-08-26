@@ -77,7 +77,6 @@ pub enum Message {
     ContextMenuBoundsCaptured {
         panel: Rectangle,
         row_offsets: Vec<f32>,
-        row_height: f32,
     },
     ListScrolled {
         list: TrackListKind,

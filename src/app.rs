@@ -704,11 +704,7 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Message::ContextMenuBoundsCaptured {
-                panel,
-                row_offsets,
-                row_height,
-            } => {
+            Message::ContextMenuBoundsCaptured { panel, row_offsets } => {
                 let prev = self.bounds.context_menu.take();
                 let width_changed = prev
                     .as_ref()
@@ -741,7 +737,6 @@ impl MusicPlayer {
                 self.bounds.context_menu = Some(ContextMenuGeometry {
                     panel,
                     row_offsets,
-                    row_height,
                     stable,
                 });
                 // Re-measure after a flip or a clipped-width correction; the
