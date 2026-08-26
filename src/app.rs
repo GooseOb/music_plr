@@ -53,6 +53,8 @@ pub struct EditTrackState {
     pub source: crate::providers::ProviderId,
     pub original: Track,
     pub pos: TrackPos,
+    /// The provider whose "Find" action is currently in flight, if any.
+    pub finding: Option<crate::providers::ProviderId>,
 }
 
 impl LyricsViewMode {
@@ -800,6 +802,10 @@ impl MusicPlayer {
                 if let Some(edit) = &mut self.edit_track {
                     edit.source = provider;
                 }
+                Task::none()
+            }
+            Message::EditTrackFindProvider(provider) => {
+                self.handle_edit_track_find_provider(provider);
                 Task::none()
             }
             Message::CloseEditTrack => {

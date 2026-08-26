@@ -295,6 +295,15 @@ impl MusicPlayer {
                 self.notify_error(msg);
             }
             BackendResult::SearchError(msg) => self.process_search_error(msg),
+            BackendResult::EditTrackProviderResolved(provider, resolved) => {
+                self.apply_edit_track_provider_resolution(provider, resolved);
+            }
+            BackendResult::EditTrackProviderError(_provider, message) => {
+                if let Some(edit) = &mut self.edit_track {
+                    edit.finding = None;
+                }
+                self.notify_error(message);
+            }
             BackendResult::ProviderResolved {
                 original,
                 provider,

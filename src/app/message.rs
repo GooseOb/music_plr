@@ -63,6 +63,9 @@ pub enum BackendResult {
         provider: ProviderId,
         message: String,
     },
+    EditTrackProviderResolved(ProviderId, Option<Track>),
+    /// The Edit Track "Find" action failed to resolve `provider`.
+    EditTrackProviderError(ProviderId, String),
 }
 
 #[derive(Debug, Clone)]
@@ -172,6 +175,7 @@ pub enum Message {
     ContextMenuEditTrack,
     EditTrackField(EditTrackField, String),
     EditTrackSelectProvider(ProviderId),
+    EditTrackFindProvider(ProviderId),
     SaveEditTrack,
     CloseEditTrack,
     CloseContextMenu,

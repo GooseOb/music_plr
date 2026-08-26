@@ -243,7 +243,58 @@ impl MusicPlayer {
             source: track.source,
             original: track,
             pos,
+            finding: None,
         });
+    }
+
+    /// Resolve an unresolved provider for the track being edited: the "Find"
+    /// button in the Edit Track popup. Searches the provider for the track's
+    /// title/artist and, on success, merges the resolved identity into the
+    /// working copy so it can later be selected as the source.
+    pub fn handle_edit_track_find_provider(&mut self, provider: ProviderId) {
+        let Some(edit) = &mut self.edit_track else {
+            return;
+        };
+        if edit.finding.is_some() {
+            return;
+        }
+        edit.finding = Some(provider);
+        let original = edit.original.clone();
+        let tx = self.result_tx.clone();
+        std::thread::spawn(move || {
+            let msg = match crate::providers::resolve_id(provider, &original) {
+                Ok(resolved) => {
+                    crate::app::BackendResult::EditTrackProviderResolved(provider, resolved)
+                }
+                Err(e) => {
+                    crate::app::BackendResult::EditTrackProviderError(provider, e.to_string())
+                }
+            };
+            let _ = tx.send(msg);
+        });
+    }
+
+    /// Merge a resolved provider identity (from the Edit Track "Find" action)
+    /// into the working copy. `None` means no match was found; `Some(track)`
+    /// carries that provider's identity (and its rich metadata).
+    pub fn apply_edit_track_provider_resolution(
+        &mut self,
+        provider: ProviderId,
+        resolved: Option<Track>,
+    ) {
+        let Some(edit) = &mut self.edit_track else {
+            return;
+        };
+        edit.finding = None;
+        if let Some(track) = resolved {
+            if let Some(pt) = track.providers.get(&provider) {
+                edit.original.set_provider(provider, pt.clone());
+            }
+            self.notify((self.strings.found_on)(provider.label()));
+        } else {
+            let msg = (self.strings.could_not_find_on)(&edit.title, provider.label());
+            self.notify_error(msg);
+        }
     }
 
     /// Apply the edited fields back to the track's source list and close the

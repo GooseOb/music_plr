@@ -30,52 +30,79 @@ use crate::{
 fn provider_row<'a>(
     player: &'a MusicPlayer,
     provider: ProviderId,
-    pt: &'a ProviderTrack,
+    pt: Option<&'a ProviderTrack>,
     source: ProviderId,
+    finding: bool,
 ) -> Element<'a, Message, AppTheme> {
-    let album = pt
-        .album
-        .as_ref()
-        .map(|a| a.name.clone())
-        .unwrap_or_default();
-
-    let header = Row::with_children([
-        text(provider.label()).into(),
-        if provider == source {
-            text(player.strings.current).style(fg_secondary()).into()
-        } else {
-            Button::new(text(player.strings.select))
-                .padding([theme::SPACING_XS, theme::SPACING_MD])
-                .on_press(Message::EditTrackSelectProvider(provider))
-                .into()
-        },
-    ])
-    .spacing(theme::SPACING_SM)
-    .align_y(alignment::Vertical::Center);
-
-    let props = Column::with_children([
-        disabled_text_input_row(player.strings.lbl_id, &pt.id),
-        disabled_text_input_row(player.strings.lbl_url, &pt.url),
-        disabled_text_input_row(
-            player.strings.lbl_artist_id,
-            &pt.artist_id.clone().unwrap_or_default(),
-        ),
-        disabled_text_input_row(player.strings.lbl_duration_secs, &pt.duration.to_string()),
-        Row::with_children([
-            thumbnail(
-                &player.app_theme.palette,
-                theme::PLAYBAR_THUMBNAIL_SIZE,
-                player.thumbnail_index.get(&pt.id),
-            ),
-            disabled_text_input_row(player.strings.lbl_thumbnail, &pt.thumbnail),
+    let header: Element<'a, Message, AppTheme> = match pt {
+        Some(_pt) => Row::with_children([
+            text(provider.label()).into(),
+            if provider == source {
+                text(player.strings.current).style(fg_secondary()).into()
+            } else {
+                Button::new(text(player.strings.select))
+                    .padding([theme::SPACING_XS, theme::SPACING_MD])
+                    .on_press(Message::EditTrackSelectProvider(provider))
+                    .into()
+            },
         ])
         .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center)
         .into(),
-        disabled_text_input_row(player.strings.lbl_album, &album),
-    ])
-    .spacing(theme::SPACING_XS);
+        None if provider.capabilities().search => Row::with_children([
+            text(provider.label()).into(),
+            if finding {
+                Button::new(text(player.strings.finding))
+                    .padding([theme::SPACING_XS, theme::SPACING_MD])
+                    .into()
+            } else {
+                Button::new(text(player.strings.find))
+                    .padding([theme::SPACING_XS, theme::SPACING_MD])
+                    .on_press(Message::EditTrackFindProvider(provider))
+                    .into()
+            },
+        ])
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center)
+        .into(),
+        None => text(provider.label()).into(),
+    };
 
-    Column::with_children([header.into(), props.into()])
+    let body: Element<'a, Message, AppTheme> = match pt {
+        Some(pt) => {
+            let album = pt
+                .album
+                .as_ref()
+                .map(|a| a.name.clone())
+                .unwrap_or_default();
+
+            Column::with_children([
+                disabled_text_input_row(player.strings.lbl_id, &pt.id),
+                disabled_text_input_row(player.strings.lbl_url, &pt.url),
+                disabled_text_input_row(
+                    player.strings.lbl_artist_id,
+                    &pt.artist_id.clone().unwrap_or_default(),
+                ),
+                disabled_text_input_row(player.strings.lbl_duration_secs, &pt.duration.to_string()),
+                Row::with_children([
+                    thumbnail(
+                        &player.app_theme.palette,
+                        theme::PLAYBAR_THUMBNAIL_SIZE,
+                        player.thumbnail_index.get(&pt.id),
+                    ),
+                    disabled_text_input_row(player.strings.lbl_thumbnail, &pt.thumbnail),
+                ])
+                .spacing(theme::SPACING_SM)
+                .into(),
+                disabled_text_input_row(player.strings.lbl_album, &album),
+            ])
+            .spacing(theme::SPACING_XS)
+            .into()
+        }
+        None => text(player.strings.not_linked).style(fg_secondary()).into(),
+    };
+
+    Column::with_children([header, body])
         .spacing(theme::SPACING_SM)
         .into()
 }
@@ -397,8 +424,15 @@ fn submenu_entries<'a>(
 
 pub(super) fn view_edit_track(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let edit = player.edit_track.as_ref().expect("edit_track present");
-    // Providers the track carries an id for, in a stable order.
-    let mut provider_ids: Vec<ProviderId> = edit.original.providers.keys().copied().collect();
+    // List every searchable provider plus any extra provider the track
+    // already carries an identity for (e.g. Local for imported files), so
+    // unresolved providers show a "Find" action next to them.
+    let mut provider_ids: Vec<ProviderId> = ProviderId::searchable().to_vec();
+    for key in edit.original.providers.keys() {
+        if !provider_ids.contains(key) {
+            provider_ids.push(*key);
+        }
+    }
     provider_ids.sort_by_key(|p| p.label());
 
     let provider_rows: Vec<Element<'_, Message, AppTheme>> = provider_ids
@@ -407,8 +441,9 @@ pub(super) fn view_edit_track(player: &MusicPlayer) -> Element<'_, Message, AppT
             provider_row(
                 player,
                 provider,
-                &edit.original.providers[&provider],
+                edit.original.providers.get(&provider),
                 edit.source,
+                edit.finding == Some(provider),
             )
         })
         .collect();

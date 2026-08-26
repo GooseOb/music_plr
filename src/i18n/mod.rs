@@ -117,6 +117,10 @@ pub struct Strings {
 
     pub current: &'static str,
     pub select: &'static str,
+    pub find: &'static str,
+    pub finding: &'static str,
+    pub found_on: fn(&str) -> String,
+    pub not_linked: &'static str,
     pub providers: &'static str,
     pub no_provider_data: &'static str,
     pub save: &'static str,

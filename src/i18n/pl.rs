@@ -65,6 +65,10 @@ pub const STRINGS: Strings = Strings {
 
     current: "(bieżący)",
     select: "wybierz",
+    find: "Znajdź",
+    finding: "Wyszukiwanie…",
+    found_on: |p| format!("Znaleziono na {p}"),
+    not_linked: "Nie połączono",
     providers: "Dostawcy",
     no_provider_data: "Ten utwór nie ma danych dostawców.",
     save: "Zapisz",

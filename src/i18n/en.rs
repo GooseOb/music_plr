@@ -65,6 +65,10 @@ pub const STRINGS: Strings = Strings {
 
     current: "(current)",
     select: "select",
+    find: "Find",
+    finding: "Finding…",
+    found_on: |p| format!("Found on {p}"),
+    not_linked: "Not linked",
     providers: "Providers",
     no_provider_data: "This track has no provider data.",
     save: "Save",
