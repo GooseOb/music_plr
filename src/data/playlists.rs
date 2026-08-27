@@ -145,7 +145,6 @@ mod tests {
         Track {
             title: id.to_string(),
             artist: String::new(),
-            download_path: None,
             source: ProviderId::YouTube,
             providers,
         }
@@ -173,7 +172,6 @@ mod tests {
                     Track {
                         title: s.to_string(),
                         artist: String::new(),
-                        download_path: None,
                         source: crate::providers::ProviderId::YouTube,
                         providers,
                     }

@@ -10,7 +10,7 @@ use super::{
     shared_components::{
         empty_state, inner_row_layout, play_pause_button, subtitle_artist, thumbnail, track_row,
     },
-    styles::{button_style_album, button_style_primary, fg_secondary, icon_accent, icon_black},
+    styles::{button_style_album, button_style_primary, fg_secondary, icon_accent, icon_primary},
     theme, Message, MusicPlayer,
 };
 use crate::{
@@ -133,7 +133,7 @@ pub(super) fn leading_control<'a>(
             .on_press(Message::TogglePlayPause)
             .into()
     } else if is_hovered {
-        Button::new(icons::icon(icons::PLAY_ICON, theme::ICON_SIZE_LG).style(icon_black()))
+        Button::new(icons::icon(icons::PLAY_ICON, theme::ICON_SIZE_LG).style(icon_primary()))
             .padding(theme::SPACING_2XS)
             .style(button_style_primary())
             .on_press(Message::PlayTrackAt(pos))

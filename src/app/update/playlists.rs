@@ -1,7 +1,13 @@
-use std::path::PathBuf;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use super::{MusicPlayer, Track, ViewData};
-use crate::{app::ViewKind, data::JsonStore};
+use crate::{
+    app::{ImportMethod, ImportPlaylistDialog, ViewKind},
+    data::JsonStore,
+};
 
 impl MusicPlayer {
     pub fn handle_create_playlist(&mut self) {
@@ -122,7 +128,6 @@ impl MusicPlayer {
                 new_tracks.push(Track {
                     title: filename.to_string(),
                     artist: "Unknown Artist".to_string(),
-                    download_path: None,
                     source: crate::providers::ProviderId::Local,
                     providers,
                 });
@@ -265,6 +270,192 @@ impl MusicPlayer {
             }
         }
         self.clear_selection();
+    }
+
+    /// Open the file/folder picker for the current import method. The picked
+    /// path is delivered back through `BackendResult::ImportPathsPicked`.
+    pub fn handle_import_pick(&mut self) {
+        let Some(dialog) = &self.import_dialog else {
+            return;
+        };
+        let method = dialog.method;
+        let tx = self.result_tx.clone();
+        std::thread::spawn(move || {
+            let paths = match method {
+                ImportMethod::Native => rfd::FileDialog::new()
+                    .add_filter("Playlists", &["json"])
+                    .pick_file()
+                    .map(|p| vec![p]),
+                ImportMethod::Csv => rfd::FileDialog::new()
+                    .add_filter("CSV", &["csv"])
+                    .pick_file()
+                    .map(|p| vec![p]),
+                ImportMethod::FileList => rfd::FileDialog::new().pick_folder().map(|p| vec![p]),
+            };
+            if let Some(paths) = paths.filter(|p| !p.is_empty()) {
+                let _ = tx
+                    .send(crate::app::message::BackendResult::ImportPathsPicked { method, paths });
+            }
+        });
+    }
+
+    /// Apply an import once the user has picked a source. Returns whether the
+    /// dialog should close (true on success, false on a readable error so the
+    /// user can correct and retry).
+    pub fn handle_import_paths(&mut self, method: ImportMethod, paths: &[PathBuf]) -> bool {
+        let Some(dialog) = self.import_dialog.clone() else {
+            return false;
+        };
+        let ok = match method {
+            ImportMethod::Native => self.import_native(&paths[0]),
+            ImportMethod::Csv => self.import_csv(&paths[0], &dialog),
+            ImportMethod::FileList => self.import_file_list(&paths[0], &dialog),
+        };
+        if ok {
+            self.import_dialog = None;
+        }
+        ok
+    }
+
+    fn import_native(&mut self, path: &Path) -> bool {
+        let content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(e) => {
+                self.notify_error(format!("{}: {e}", self.strings.import_bad_file));
+                return false;
+            }
+        };
+        let imported: crate::data::playlists::PlaylistStore = match serde_json::from_str(&content) {
+            Ok(s) => s,
+            Err(e) => {
+                self.notify_error(format!("{}: {e}", self.strings.import_bad_file));
+                return false;
+            }
+        };
+        if imported.playlists.is_empty() {
+            self.notify(self.strings.import_no_tracks);
+            return false;
+        }
+        let count = imported.playlists.len();
+        for pl in imported.playlists {
+            let idx = self
+                .playlists
+                .create_at(&pl.name, self.playlists.playlists.len());
+            self.playlists.playlists[idx].tracks = pl.tracks;
+            self.playlists.save();
+        }
+        self.notify((self.strings.import_playlists_imported)(count));
+        true
+    }
+
+    fn import_csv(&mut self, path: &Path, dialog: &ImportPlaylistDialog) -> bool {
+        let mut rdr = match csv::Reader::from_path(path) {
+            Ok(r) => r,
+            Err(e) => {
+                self.notify_error(format!("{}: {e}", self.strings.import_bad_file));
+                return false;
+            }
+        };
+        let headers: Vec<String> = match rdr.headers() {
+            Ok(h) => h.iter().map(|s| s.trim().to_lowercase()).collect(),
+            Err(e) => {
+                self.notify_error(format!("{}: {e}", self.strings.import_bad_file));
+                return false;
+            }
+        };
+        let col_index = |name: &str| -> Option<usize> {
+            if name.trim().is_empty() {
+                return None;
+            }
+            let n = name.trim().to_lowercase();
+            headers.iter().position(|h| h == &n)
+        };
+        let name_i = col_index(&dialog.csv_name_col);
+        let artist_i = col_index(&dialog.csv_artist_col);
+        let album_i = col_index(&dialog.csv_album_col);
+        let mut tracks = Vec::new();
+        for rec in rdr.records() {
+            let Ok(rec) = rec else { continue };
+            let get = |i: Option<usize>| -> String {
+                i.and_then(|i| rec.get(i)).unwrap_or("").trim().to_string()
+            };
+            let title = get(name_i);
+            let artist = get(artist_i);
+            let album = get(album_i);
+            if title.is_empty() && artist.is_empty() && album.is_empty() {
+                continue;
+            }
+            tracks.push(crate::app::import::build_reference_track(
+                title, artist, album,
+            ));
+        }
+        if tracks.is_empty() {
+            self.notify(self.strings.import_no_tracks);
+            return false;
+        }
+        let name = Self::import_playlist_name(dialog, path.file_stem().and_then(|s| s.to_str()));
+        let idx = self
+            .playlists
+            .create_at(&name, self.playlists.playlists.len());
+        self.playlists.insert_tracks_at(idx, tracks.iter(), 0);
+        let label = self.playlists.playlists[idx].name.clone();
+        self.notify((self.strings.import_imported_into)(tracks.len(), &label));
+        self.open_imported_playlist(idx);
+        true
+    }
+
+    fn import_file_list(&mut self, dir: &Path, dialog: &ImportPlaylistDialog) -> bool {
+        let mut files = Vec::new();
+        crate::app::import::gather_audio_files(dir, &mut files);
+        if files.is_empty() {
+            self.notify(self.strings.import_no_tracks);
+            return false;
+        }
+        let mut tracks = Vec::new();
+        for file in &files {
+            let filename = file.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            if let Some((name, artist, album)) =
+                crate::app::import::parse_filename(&dialog.patterns, filename)
+            {
+                tracks.push(crate::app::import::build_file_track(
+                    file, name, artist, album,
+                ));
+            }
+        }
+        if tracks.is_empty() {
+            self.notify(self.strings.import_no_match);
+            return false;
+        }
+        let name = Self::import_playlist_name(dialog, dir.file_name().and_then(|s| s.to_str()));
+        let idx = self
+            .playlists
+            .create_at(&name, self.playlists.playlists.len());
+        self.playlists.insert_tracks_at(idx, tracks.iter(), 0);
+        let label = self.playlists.playlists[idx].name.clone();
+        self.notify((self.strings.import_imported_into)(tracks.len(), &label));
+        self.open_imported_playlist(idx);
+        true
+    }
+
+    /// Resolve the playlist name: the user's override if set, else the source
+    /// file/folder stem, else a generic fallback.
+    fn import_playlist_name(dialog: &ImportPlaylistDialog, stem: Option<&str>) -> String {
+        if !dialog.playlist_name.trim().is_empty() {
+            return dialog.playlist_name.trim().to_string();
+        }
+        stem.filter(|s| !s.is_empty())
+            .map_or_else(|| "Imported".to_string(), std::string::ToString::to_string)
+    }
+
+    fn open_imported_playlist(&mut self, index: usize) {
+        if index >= self.playlists.playlists.len() {
+            return;
+        }
+        let name = self.playlists.playlists[index].name.clone();
+        self.clear_selection();
+        self.drag.cleanup();
+        self.push_new_view(ViewData::new_playlist(index, name));
+        self.save_session();
     }
 }
 

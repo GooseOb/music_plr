@@ -19,7 +19,6 @@ pub struct TrackAlbum {
 pub struct Track {
     pub title: String,
     pub artist: String,
-    pub download_path: Option<String>,
     pub source: ProviderId,
     pub providers: ProviderMap,
 }
@@ -99,6 +98,26 @@ impl Track {
     /// Whether this track carries an identity for `provider`.
     pub fn has_provider(&self, provider: ProviderId) -> bool {
         self.providers.contains_key(&provider)
+    }
+
+    /// The on-disk path of this track's local audio file, if it has been
+    /// imported or downloaded. For the `Local` provider the file path lives
+    /// in `url` (a local file has no remote URL).
+    pub fn local_path(&self) -> Option<String> {
+        let local = self.providers.get(&ProviderId::Local)?;
+        (!local.url.is_empty()).then(|| local.url.clone())
+    }
+
+    /// Alias of [`local_path`]: the on-disk path of this track's local audio
+    /// file, used by the download registry.
+    pub fn download_path(&self) -> Option<String> {
+        self.local_path()
+    }
+
+    /// Record the on-disk path of this track's local audio file. Adds/updates
+    /// the `Local` provider entry's `url`; does not change `source`.
+    pub fn set_download_path(&mut self, path: String) {
+        self.providers.entry(ProviderId::Local).or_default().url = path;
     }
 
     /// Insert or replace the provider-specific data on this track. Updates
@@ -201,7 +220,6 @@ impl Track {
         Self {
             title: title.into(),
             artist: artist_name.into(),
-            download_path: None,
             source: provider,
             providers,
         }
@@ -292,7 +310,6 @@ mod tests {
         let mut t = Track {
             title: format!("Track {id}"),
             artist: "Artist".into(),
-            download_path: None,
             source: ProviderId::YouTube,
             providers: HashMap::new(),
         };

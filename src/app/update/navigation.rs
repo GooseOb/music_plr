@@ -257,7 +257,6 @@ mod tests {
         let track = crate::types::Track {
             title: "Song".into(),
             artist: "Artist".into(),
-            download_path: None,
             source: crate::providers::ProviderId::YouTube,
             providers,
         };

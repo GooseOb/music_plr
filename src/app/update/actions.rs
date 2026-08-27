@@ -30,7 +30,7 @@ impl MusicPlayer {
             match result {
                 Ok(path) => {
                     let mut downloaded = track;
-                    downloaded.download_path = Some(path);
+                    downloaded.set_download_path(path);
                     let _ = tx.send(BackendResult::DownloadComplete(
                         downloaded,
                         provider.label().to_string(),

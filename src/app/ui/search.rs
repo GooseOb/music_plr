@@ -14,7 +14,7 @@ use super::{
     },
     styles::{
         bg_search_hist, bg_secondary, button_style_hist, button_style_primary, fg_secondary,
-        icon_black, icon_color, icon_fg_secondary, scroll_padding,
+        icon_color, icon_fg_secondary, icon_primary, scroll_padding,
     },
     theme, view_track_list, Message, MusicPlayer,
 };
@@ -58,7 +58,7 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
     .into();
 
     let search_btn =
-        Button::new(icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_MD).style(icon_black()))
+        Button::new(icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_MD).style(icon_primary()))
             .padding(theme::SPACING_SM)
             .style(button_style_primary())
             .width(theme::SEARCH_BTN_SIZE)

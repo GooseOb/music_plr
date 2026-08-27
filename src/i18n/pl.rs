@@ -49,6 +49,7 @@ pub const STRINGS: Strings = Strings {
     no_downloaded_tracks: "Brak pobranych utworów",
 
     ctx_play: "Odtwórz",
+    ctx_play_local: "Odtwórz lokalnie",
     ctx_edit: "Edytuj",
     ctx_go_to_artist: "Przejdź do wykonawcy",
     ctx_add_to_playlist: "Dodaj do playlisty",
@@ -156,6 +157,30 @@ pub const STRINGS: Strings = Strings {
     ctx_download_n: |n| format!("Pobierz {}", pl_tracks(n)),
     ctx_remove_from_queue_n: |n| format!("Usuń {} z kolejki", pl_tracks(n)),
     ctx_remove_from_playlist_n: |n| format!("Usuń {} z playlisty", pl_tracks(n)),
+
+    import_playlist: "Importuj playlistę",
+    import_method_native: "Natywna",
+    import_method_filelist: "Lista plików",
+    import_method_csv: "CSV",
+    import_native_hint: "Importuje playlisty z pliku playlists.json.",
+    import_csv_name_col: "Kolumna tytułu",
+    import_csv_artist_col: "Kolumna wykonawcy",
+    import_csv_album_col: "Kolumna albumu",
+    import_pattern_lbl: "Wzór nazwy pliku",
+    import_playlist_name: "Nazwa playlisty",
+    import_add_pattern: "Dodaj wzór",
+    import_select_file: "Wybierz plik",
+    import_select_folder: "Wybierz folder",
+    import_pattern_conflict: |a, b| {
+        format!(
+            "Wzory \"{a}\" i \"{b}\" mogą pasować do tego samego pliku z konfliktowymi polami. Usuń lub popraw jeden."
+        )
+    },
+    import_playlists_imported: |n| format!("Zaimportowano {}", pl_tracks(n)),
+    import_imported_into: |n, into| format!("Zaimportowano {} do: {}", pl_tracks(n), into),
+    import_no_tracks: "Nie znaleziono utworów do importu.",
+    import_no_match: "Żaden plik nie pasuje do wzorów.",
+    import_bad_file: "Nie można odczytać wybranego pliku.",
 };
 
 fn pl_tracks(n: usize) -> String {

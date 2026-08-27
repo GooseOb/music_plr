@@ -14,7 +14,8 @@ impl MusicPlayer {
         let TrackPos { index, list } = pos;
         if list == TrackListKind::Recent {
             if let Some(track) = self.get_track_at(pos) {
-                self.play_track_replacing_queue(track, self.config.default_provider);
+                let source = track.source;
+                self.play_track_replacing_queue(track, source);
             }
             return;
         }
@@ -32,7 +33,7 @@ impl MusicPlayer {
                 self.queue.tracks.drain(0..index);
                 if let Some(t) = self.queue.current() {
                     let t = t.clone();
-                    self.play_track_internal(&t, self.config.default_provider);
+                    self.play_track_internal(&t, t.source);
                 }
                 self.save_session();
                 self.mpris_dirty = true;
@@ -40,7 +41,8 @@ impl MusicPlayer {
             return;
         }
         if let Some(track) = self.get_track_at(TrackPos::new(index, TrackListKind::Active)) {
-            self.play_and_queue_rest(track, self.config.default_provider, index);
+            let source = track.source;
+            self.play_and_queue_rest(track, source, index);
         }
     }
 
@@ -229,34 +231,38 @@ impl MusicPlayer {
         let mut analysis_path: Option<PathBuf> = None;
         let mut streaming = false;
 
-        let provider = track.best_stream_provider(preferred);
-
-        match provider {
-            None => {
-                // No streamable provider for this track: resolve it on the
-                // default provider, then stream from there.
-                let track = track.clone();
+        // Prefer an on-disk local file (downloaded or imported) over
+        // streaming. A track may carry its own local path on its `Local`
+        // provider entry even while also being streamable from another
+        // provider, so this check runs before any streaming resolution.
+        let dl_key = track.cache_key();
+        let local_path = track
+            .local_path()
+            .or_else(|| self.download_registry.path_for(&dl_key));
+        if let Some(dl_path) = local_path {
+            let path = PathBuf::from(&dl_path);
+            if path.exists() {
+                debug!("Playing local file: {}", path.display());
+                self.audio
+                    .play_cached(path.clone(), track.duration() as f32, gain);
                 self.pending_cache_id = None;
-                self.resolve_provider(self.config.default_provider, track, None, true);
-                return;
+                analysis_path = Some(path);
             }
-            Some(provider) => {
-                let id = track.provider_id(provider).unwrap_or_default().to_string();
+        }
 
-                // Prefer a downloaded file on disk over streaming.
-                let dl_key = track.cache_key();
-                if let Some(dl_path) = self.download_registry.path_for(&dl_key) {
-                    let path = PathBuf::from(&dl_path);
-                    if path.exists() {
-                        debug!("Playing downloaded file: {}", path.display());
-                        self.audio
-                            .play_cached(path.clone(), track.duration() as f32, gain);
-                        self.pending_cache_id = None;
-                        analysis_path = Some(path);
-                    }
+        if analysis_path.is_none() {
+            match track.best_stream_provider(preferred) {
+                None => {
+                    // No streamable provider for this track: resolve it on the
+                    // default provider, then stream from there.
+                    let track = track.clone();
+                    self.pending_cache_id = None;
+                    self.resolve_provider(self.config.default_provider, track, None, true);
+                    return;
                 }
+                Some(provider) => {
+                    let id = track.provider_id(provider).unwrap_or_default().to_string();
 
-                if analysis_path.is_none() {
                     if self.stream_cache.contains(provider, &id) {
                         let path = StreamCache::path_for(provider, &id);
                         debug!("Playing from cache: {}", path.display());

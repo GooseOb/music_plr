@@ -116,14 +116,23 @@ impl SubmenuKind {
     }
 
     /// Providers listed in this submenu, in display order.
-    pub fn providers(self) -> Vec<crate::providers::ProviderId> {
+    pub fn providers(self, track: &Track) -> Vec<crate::providers::ProviderId> {
         use crate::providers::ProviderId;
         match self {
-            SubmenuKind::Play => ProviderId::searchable()
-                .iter()
-                .copied()
-                .filter(|p| p.capabilities().stream)
-                .collect(),
+            SubmenuKind::Play => {
+                let mut v: Vec<ProviderId> = ProviderId::searchable()
+                    .iter()
+                    .copied()
+                    .filter(|p| p.capabilities().stream)
+                    .collect();
+                // A local file (imported or downloaded) is playable directly,
+                // so it appears in the "Play" submenu alongside the stream
+                // providers when one is available.
+                if track.local_path().is_some() {
+                    v.push(ProviderId::Local);
+                }
+                v
+            }
             SubmenuKind::Download => ProviderId::defaultable()
                 .iter()
                 .copied()

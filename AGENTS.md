@@ -49,6 +49,7 @@ src/
 ├── app/view_data.rs   # ViewData / ViewKind / NavEntry (per-view state)
 ├── app/message.rs     # Message + BackendResult
 ├── app/interaction.rs # TrackListKind, TrackPos, DragState, ContextMenuState
+├── app/import.rs     # ImportPlaylistDialog + filename-pattern matching/conflict engine
 ├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, track_list)
 ├── app/update/        # Handlers (mod, actions, drag, input, navigation, playback, playlists, search, selection, session, tick)
 ├── audio/mod.rs       # AudioPlayer: rodio sink + yt-dlp process management

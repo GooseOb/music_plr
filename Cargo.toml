@@ -29,6 +29,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 musicbrainz_rs = { version = "0.13", features = ["sync"] }
 rsoundcloud = "0.2"
+csv = "1"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

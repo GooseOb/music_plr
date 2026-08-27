@@ -37,7 +37,7 @@ impl MusicPlayer {
                         menu.actions().get(i).map(|a| a.to_message(menu))
                     }
                     Some(ContextMenuFocus::Sub(kind, i)) => kind
-                        .providers()
+                        .providers(&menu.track)
                         .get(i)
                         .map(|p| kind.entry_message(*p, menu)),
                     None => None,
@@ -60,7 +60,7 @@ impl MusicPlayer {
             };
             let (_in_submenu, kind, count, current) = match menu.hovered {
                 Some(ContextMenuFocus::Sub(kind, i)) => {
-                    (true, Some(kind), kind.providers().len(), Some(i))
+                    (true, Some(kind), kind.providers(&menu.track).len(), Some(i))
                 }
                 other => {
                     let i = match other {

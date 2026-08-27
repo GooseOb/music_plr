@@ -15,12 +15,14 @@ use crate::{
     types::{PlayQueue, Track},
 };
 
+mod import;
 mod interaction;
 mod message;
 mod ui;
 mod update;
 mod view_data;
 
+pub use import::{ImportCsvField, ImportMethod, ImportPlaylistDialog};
 pub use interaction::{
     ContextMenuState, DefaultCtxAction, DragState, TrackListKind, TrackListSearch, TrackPos,
 };
@@ -138,6 +140,7 @@ pub struct MusicPlayer {
     pub playlist_create_name: String,
     pub playlist_picker: Option<PlaylistPicker>,
     pub delete_confirm_index: Option<usize>,
+    pub import_dialog: Option<ImportPlaylistDialog>,
 
     pub library: crate::data::library::LibraryStore,
     pub library_expanded: bool,
@@ -246,6 +249,7 @@ impl MusicPlayer {
             thumbnail_index: crate::data::thumbnails::ThumbnailIndex::load(),
             playlist_picker: None,
             delete_confirm_index: None,
+            import_dialog: None,
             library: crate::data::library::LibraryStore::load(),
             library_expanded: false,
             nav_history: vec![ViewData::default()],
@@ -573,6 +577,62 @@ impl MusicPlayer {
             }
             Message::HideDeleteConfirm => {
                 self.delete_confirm_index = None;
+                Task::none()
+            }
+            Message::OpenImportPlaylist => {
+                self.import_dialog = Some(ImportPlaylistDialog::default());
+                Task::none()
+            }
+            Message::CloseImportPlaylist => {
+                self.import_dialog = None;
+                Task::none()
+            }
+            Message::ImportMethodChanged(method) => {
+                if let Some(dialog) = &mut self.import_dialog {
+                    dialog.method = method;
+                }
+                Task::none()
+            }
+            Message::ImportCsvColChanged(field, value) => {
+                if let Some(dialog) = &mut self.import_dialog {
+                    match field {
+                        ImportCsvField::Name => dialog.csv_name_col = value,
+                        ImportCsvField::Artist => dialog.csv_artist_col = value,
+                        ImportCsvField::Album => dialog.csv_album_col = value,
+                    }
+                }
+                Task::none()
+            }
+            Message::ImportPlaylistNameChanged(value) => {
+                if let Some(dialog) = &mut self.import_dialog {
+                    dialog.playlist_name = value;
+                }
+                Task::none()
+            }
+            Message::ImportPatternChanged(index, value) => {
+                if let Some(dialog) = &mut self.import_dialog {
+                    if let Some(slot) = dialog.patterns.get_mut(index) {
+                        *slot = value;
+                    }
+                }
+                Task::none()
+            }
+            Message::ImportAddPattern => {
+                if let Some(dialog) = &mut self.import_dialog {
+                    dialog.patterns.push(String::new());
+                }
+                Task::none()
+            }
+            Message::ImportRemovePattern(index) => {
+                if let Some(dialog) = &mut self.import_dialog {
+                    if index < dialog.patterns.len() {
+                        dialog.patterns.remove(index);
+                    }
+                }
+                Task::none()
+            }
+            Message::ImportSelectFiles => {
+                self.handle_import_pick();
                 Task::none()
             }
             Message::OpenAndPlayPlaylist(index) => {

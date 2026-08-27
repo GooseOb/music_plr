@@ -49,6 +49,7 @@ pub const STRINGS: Strings = Strings {
     no_downloaded_tracks: "No downloaded tracks",
 
     ctx_play: "Play",
+    ctx_play_local: "Play local",
     ctx_edit: "Edit",
     ctx_go_to_artist: "Go to artist",
     ctx_add_to_playlist: "Add to Playlist",
@@ -151,6 +152,30 @@ pub const STRINGS: Strings = Strings {
     ctx_download_n: |n| format!("Download {}", en_tracks(n)),
     ctx_remove_from_queue_n: |n| format!("Remove {} from queue", en_tracks(n)),
     ctx_remove_from_playlist_n: |n| format!("Remove {} from playlist", en_tracks(n)),
+
+    import_playlist: "Import playlist",
+    import_method_native: "Native",
+    import_method_filelist: "File list",
+    import_method_csv: "CSV",
+    import_native_hint: "Imports playlists from a playlists.json file.",
+    import_csv_name_col: "Name column",
+    import_csv_artist_col: "Artist column",
+    import_csv_album_col: "Album column",
+    import_pattern_lbl: "Filename pattern",
+    import_playlist_name: "Playlist name",
+    import_add_pattern: "Add pattern",
+    import_select_file: "Select file",
+    import_select_folder: "Select folder",
+    import_pattern_conflict: |a, b| {
+        format!(
+            "Patterns \"{a}\" and \"{b}\" can match the same file with conflicting fields. Remove or fix one."
+        )
+    },
+    import_playlists_imported: |n| format!("Imported {} playlists", en_tracks(n)),
+    import_imported_into: |n, into| format!("Imported {} into {}", en_tracks(n), into),
+    import_no_tracks: "No tracks found to import.",
+    import_no_match: "No files matched the patterns.",
+    import_bad_file: "Could not read the selected file.",
 };
 
 fn en_tracks(n: usize) -> String {

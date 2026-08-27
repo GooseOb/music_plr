@@ -305,7 +305,6 @@ mod tests {
                 Track {
                     title: format!("Track {i}"),
                     artist: "Artist".into(),
-                    download_path: None,
                     source: crate::providers::ProviderId::YouTube,
                     providers,
                 }

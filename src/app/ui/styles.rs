@@ -112,7 +112,7 @@ pub fn icon_accent() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static 
     }
 }
 
-pub fn icon_black() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+pub fn icon_primary() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
     |_, _| svg::Style {
         color: Some(Color::BLACK),
     }

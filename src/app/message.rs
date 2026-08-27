@@ -7,7 +7,7 @@ use crate::{
     app::{
         interaction::{self, ContextMenuFocus, DefaultCtxAction, TrackListKind, TrackPos},
         update::operation::CaptureBounds,
-        ViewKind,
+        ImportCsvField, ImportMethod, ViewKind,
     },
     data::library,
     lyrics::Lyrics,
@@ -45,6 +45,14 @@ pub enum BackendResult {
         data: Box<Result<crate::providers::ArtistKindData, String>>,
     },
     LocalFilesPicked(Vec<std::path::PathBuf>),
+    /// Playlist import: the user picked a source (single file for Native/CSV,
+    /// a folder for File-list) and the dialog's current settings should be
+    /// applied. `method` is captured so the result stays correct even if the
+    /// dialog was closed before the picker thread replied.
+    ImportPathsPicked {
+        method: ImportMethod,
+        paths: Vec<std::path::PathBuf>,
+    },
     ProviderResolved {
         original: Track,
         provider: ProviderId,
@@ -129,6 +137,16 @@ pub enum Message {
     ConfirmDeletePlaylist,
     HideDeleteConfirm,
     OpenAndPlayPlaylist(usize),
+
+    OpenImportPlaylist,
+    CloseImportPlaylist,
+    ImportMethodChanged(ImportMethod),
+    ImportCsvColChanged(ImportCsvField, String),
+    ImportPlaylistNameChanged(String),
+    ImportPatternChanged(usize, String),
+    ImportAddPattern,
+    ImportRemovePattern(usize),
+    ImportSelectFiles,
 
     TrackListSearchInput(String),
     TrackListSearchNext,

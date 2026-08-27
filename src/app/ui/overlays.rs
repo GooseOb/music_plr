@@ -3,14 +3,14 @@ use std::borrow::Cow;
 use iced::{
     alignment,
     widget::{
-        column, container, opaque, row, scrollable, text, Button, Column, Container, MouseArea,
-        Row, Space,
+        column, container, opaque, row, scrollable, text, text_input, Button, Column, Container,
+        MouseArea, Row, Space,
     },
     Element, Length, Rectangle,
 };
 
 use super::{
-    shared_components::{disabled_text_input_row, text_input_row, thumbnail},
+    shared_components::{disabled_text_input_row, scope_tab_row, text_input_row, thumbnail},
     styles::{
         bg_overlay, bg_popup, button_style_danger, button_style_popup_item, button_style_primary,
         context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted, icon_fg_secondary,
@@ -21,7 +21,7 @@ use super::{
 use crate::{
     app::{
         interaction::{ContextMenuFocus, CtxAction, SubmenuKind},
-        EditTrackField,
+        EditTrackField, ImportCsvField, ImportMethod,
     },
     icons,
     providers::{ProviderId, ProviderTrack},
@@ -361,7 +361,7 @@ fn submenu_entries<'a>(
     row_len: Length,
     tr: &'a crate::i18n::Strings,
 ) -> Vec<Element<'a, Message, AppTheme>> {
-    kind.providers()
+    kind.providers(&menu.track)
         .into_iter()
         .enumerate()
         .map(|(i, provider)| {
@@ -372,7 +372,11 @@ fn submenu_entries<'a>(
                 SubmenuKind::Play => (
                     tr.sub_play_via,
                     icons::PLAY_ICON,
-                    menu.track.has_provider(provider),
+                    if provider == ProviderId::Local {
+                        menu.track.local_path().is_some()
+                    } else {
+                        menu.track.has_provider(provider)
+                    },
                     true,
                 ),
                 SubmenuKind::Download => (
@@ -392,7 +396,9 @@ fn submenu_entries<'a>(
                 ),
             };
             let by_search = search_fallback && !has_id;
-            let label = if by_search {
+            let label = if provider == ProviderId::Local {
+                tr.ctx_play_local.to_string()
+            } else if by_search {
                 format!("{} {} {}", base, provider.label(), tr.via_search_suffix)
             } else {
                 format!("{} {}", base, provider.label())
@@ -613,4 +619,142 @@ pub(super) fn view_delete_confirm(
         .into(),
         Message::HideDeleteConfirm,
     )
+}
+
+/// The "Import playlist" popup: pick a source format, fill in its settings,
+/// then select the file/folder to import.
+#[allow(clippy::too_many_lines)]
+pub(super) fn view_import_playlist(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let dialog = player
+        .import_dialog
+        .as_ref()
+        .expect("import_dialog present");
+    let tr = player.strings;
+
+    let method_row = scope_tab_row([
+        (
+            tr.import_method_native,
+            dialog.method == ImportMethod::Native,
+            Message::ImportMethodChanged(ImportMethod::Native),
+        ),
+        (
+            tr.import_method_filelist,
+            dialog.method == ImportMethod::FileList,
+            Message::ImportMethodChanged(ImportMethod::FileList),
+        ),
+        (
+            tr.import_method_csv,
+            dialog.method == ImportMethod::Csv,
+            Message::ImportMethodChanged(ImportMethod::Csv),
+        ),
+    ]);
+
+    let content: Element<'_, Message, AppTheme> = match dialog.method {
+        ImportMethod::Native => text(tr.import_native_hint).style(fg_secondary()).into(),
+        ImportMethod::Csv => Column::with_children([
+            text_input_row(tr.import_csv_name_col, &dialog.csv_name_col, "name", |v| {
+                Message::ImportCsvColChanged(ImportCsvField::Name, v)
+            }),
+            text_input_row(
+                tr.import_csv_artist_col,
+                &dialog.csv_artist_col,
+                "artist",
+                |v| Message::ImportCsvColChanged(ImportCsvField::Artist, v),
+            ),
+            text_input_row(
+                tr.import_csv_album_col,
+                &dialog.csv_album_col,
+                "album",
+                |v| Message::ImportCsvColChanged(ImportCsvField::Album, v),
+            ),
+        ])
+        .spacing(theme::SPACING_SM)
+        .into(),
+        ImportMethod::FileList => {
+            let pattern_rows: Vec<Element<'_, Message, AppTheme>> = dialog
+                .patterns
+                .iter()
+                .enumerate()
+                .map(|(i, pat)| {
+                    let input = text_input(tr.import_pattern_lbl, pat)
+                        .on_input(move |v| Message::ImportPatternChanged(i, v))
+                        .padding(theme::SPACING_SM)
+                        .into();
+                    let remove = Button::new(
+                        icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM).style(icon_fg_muted()),
+                    )
+                    .padding(theme::SPACING_XS)
+                    .on_press(Message::ImportRemovePattern(i))
+                    .into();
+                    Row::with_children([input, remove])
+                        .spacing(theme::SPACING_SM)
+                        .align_y(alignment::Vertical::Center)
+                        .into()
+                })
+                .collect();
+            let add = Button::new(text(tr.import_add_pattern))
+                .padding([theme::SPACING_XS, theme::SPACING_MD])
+                .on_press(Message::ImportAddPattern)
+                .into();
+            Column::with_children([
+                Column::with_children(pattern_rows)
+                    .spacing(theme::SPACING_XS)
+                    .into(),
+                add,
+            ])
+            .spacing(theme::SPACING_SM)
+            .into()
+        }
+    };
+
+    let mut children: Vec<Element<'_, Message, AppTheme>> = vec![
+        text(tr.import_playlist).size(theme::TEXT_SIZE_LG).into(),
+        method_row,
+    ];
+    if matches!(dialog.method, ImportMethod::Csv | ImportMethod::FileList) {
+        children.push(text_input_row(
+            tr.import_playlist_name,
+            &dialog.playlist_name,
+            "",
+            Message::ImportPlaylistNameChanged,
+        ));
+    }
+    children.push(content);
+    if let Some((a, b)) = dialog.conflict_pair() {
+        children.push(
+            text((tr.import_pattern_conflict)(&a, &b))
+                .style(fg_secondary())
+                .into(),
+        );
+    }
+
+    let select_label = match dialog.method {
+        ImportMethod::FileList => tr.import_select_folder,
+        ImportMethod::Native | ImportMethod::Csv => tr.import_select_file,
+    };
+    let select_btn = Button::new(Container::new(text(select_label)).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .style(button_style_primary())
+        .on_press_maybe(if dialog.can_select() {
+            Some(Message::ImportSelectFiles)
+        } else {
+            None
+        });
+    let cancel_btn = Button::new(Container::new(text(tr.cancel)).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .on_press(Message::CloseImportPlaylist);
+
+    children.push(
+        Row::with_children([cancel_btn.into(), select_btn.into()])
+            .spacing(theme::SPACING_SM)
+            .align_y(alignment::Vertical::Center)
+            .into(),
+    );
+
+    let dialog_col = Column::with_children(children)
+        .spacing(theme::SPACING_MD)
+        .padding(theme::SPACING_MD)
+        .width(theme::DIALOG_WIDTH * 2.0);
+
+    view_dialog(dialog_col.into(), Message::CloseImportPlaylist)
 }

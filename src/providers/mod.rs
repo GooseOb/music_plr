@@ -486,6 +486,9 @@ pub fn download(provider: ProviderId, track: &Track, download_dir: &str) -> Resu
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderTrack {
     pub id: String,
+    /// For remote providers, the streamable/playable URL. For the `Local`
+    /// provider this is the on-disk path of the imported/downloaded audio
+    /// file (a local file has no remote URL).
     pub url: String,
     pub artist_id: Option<String>,
     pub duration: u32,

@@ -38,7 +38,7 @@ impl DownloadRegistry {
     /// Returns the on-disk path of the downloaded audio file for `key`, if the
     /// track is registered and was downloaded to a known location.
     pub fn path_for(&self, key: &str) -> Option<String> {
-        self.tracks.get(key).and_then(|t| t.download_path.clone())
+        self.tracks.get(key).and_then(Track::download_path)
     }
 
     pub fn clone_tracks(&self) -> Vec<Track> {

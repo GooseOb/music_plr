@@ -227,6 +227,7 @@ impl MusicPlayer {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn process_result(&mut self, result: BackendResult) {
         match result {
             BackendResult::SearchResults(rid, tracks, tab) => {
@@ -332,6 +333,11 @@ impl MusicPlayer {
                     self.handle_add_local_music(&paths);
                 }
             }
+            BackendResult::ImportPathsPicked { method, paths } => {
+                if !paths.is_empty() {
+                    self.handle_import_paths(method, &paths);
+                }
+            }
             BackendResult::LyricsFetched(result, track_id) => {
                 self.process_lyrics_fetched(result, &track_id);
             }
@@ -359,7 +365,7 @@ impl MusicPlayer {
     }
 
     fn process_download_complete(&mut self, track: crate::types::Track) {
-        let path = track.download_path.clone().unwrap_or_default();
+        let path = track.download_path().unwrap_or_default();
         self.download_registry.register(track.clone());
         let msg = (self.strings.download_complete)(&path);
         self.notify(msg);

@@ -8,14 +8,14 @@ use super::{
     shared_components::{thumbnail, toggle_bookmark_button},
     styles::{
         bg_secondary, button_style_list_item, button_style_nav, button_style_panel_item,
-        button_style_primary, fg_secondary, icon_black, icon_color, icon_fg_muted,
+        button_style_primary, fg_secondary, icon_color, icon_fg_muted, icon_primary,
     },
     theme, widget, Message, MusicPlayer,
 };
 use crate::{
     app::{
         interaction::{DropTarget, HoverTarget, Pressed},
-        ui::styles::{fg_tab, icon_tab},
+        ui::styles::{fg_tab, icon_fg_secondary, icon_tab},
         ViewData, ViewKind,
     },
     data::library::LibraryItem,
@@ -317,7 +317,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .on_input(Message::NewPlaylistNameChanged)
         .padding(theme::SPACING_SM)
         .into(),
-        Button::new(icons::icon(icons::ADD_ICON, theme::ICON_SIZE_SM).style(icon_black()))
+        Button::new(icons::icon(icons::ADD_ICON, theme::ICON_SIZE_SM).style(icon_primary()))
             .padding(theme::SPACING_SM)
             .style(button_style_primary())
             .on_press(Message::CreatePlaylist)
@@ -326,6 +326,26 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .align_y(alignment::Vertical::Center)
     .spacing(theme::SPACING_SM)
     .padding([theme::SPACING_XS, theme::SPACING_SM]);
+
+    let import_btn = Container::new(
+        Button::new(
+            Row::with_children([
+                icons::icon(icons::FOLDER_ICON, theme::ICON_SIZE_MD)
+                    .style(icon_fg_secondary())
+                    .into(),
+                text(player.strings.import_playlist)
+                    .style(fg_secondary())
+                    .into(),
+            ])
+            .spacing(theme::SPACING_SM)
+            .align_y(alignment::Vertical::Center),
+        )
+        .width(Length::Fill)
+        .padding([theme::SPACING_XS, theme::SPACING_SM])
+        .on_press(Message::OpenImportPlaylist),
+    )
+    .padding([theme::SPACING_XS, theme::SPACING_XS])
+    .into();
 
     let sidebar_content = Column::with_children([
         nav_buttons.into(),
@@ -339,6 +359,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             .id(iced::widget::Id::new("sidebar_playlist_list"))
             .height(Length::FillPortion(2))
             .into(),
+        import_btn,
         widget::rule::horizontal(1).into(),
         library_header,
         library_section,

@@ -5,7 +5,7 @@ use iced::{
 };
 
 use super::styles::{
-    button_style_primary, button_style_scope, fg_secondary, icon_black, icon_fg_muted,
+    button_style_primary, button_style_scope, fg_secondary, icon_fg_muted, icon_primary,
 };
 use crate::{
     app::{
@@ -139,7 +139,7 @@ pub fn play_pause_button(is_playing: bool) -> Button<'static, Message, AppTheme>
             },
             theme::ICON_SIZE_LG,
         )
-        .style(icon_black()),
+        .style(icon_primary()),
     )
     .style(button_style_primary())
 }
