@@ -25,10 +25,6 @@ impl From<TrackListKind> for Id {
 }
 
 impl TrackListKind {
-    pub const fn is_interactive(self) -> bool {
-        !matches!(self, TrackListKind::Recent)
-    }
-
     pub const fn first_index(self) -> usize {
         match self {
             TrackListKind::Queue => 1,
@@ -477,11 +473,5 @@ mod tests {
         assert_eq!(Queue.first_index(), 1);
         assert_eq!(Active.first_index(), 0);
         assert_eq!(Recent.first_index(), 0);
-    }
-
-    #[test]
-    fn recent_is_read_only() {
-        assert!(Queue.is_interactive() && Active.is_interactive());
-        assert!(!Recent.is_interactive());
     }
 }

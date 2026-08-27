@@ -64,6 +64,7 @@ cargo test
 | ↑ / ↓ (search bar buttons) | In the in-list search: move to the next / previous match, relative to the hovered row (wraps around). The hovered track is the current match. |
 | <kbd>Ctrl</kbd>+<kbd>C</kbd> | Copy selected tracks to clipboard |
 | <kbd>Ctrl</kbd>+<kbd>V</kbd> | Paste clipboard tracks into the current playlist |
+| <kbd>Ctrl</kbd>+<kbd>A</kbd> | Select all tracks in the focused list (queue or main) |
 
 <kbd>Esc</kbd> applies the first action that matches, in the order listed. The context menu and
 dialogs are dismissed by clicking outside them.

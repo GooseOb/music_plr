@@ -222,6 +222,10 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
+            Physical::Code(Code::KeyA) if modifiers.control() || modifiers.logo() => {
+                self.handle_select_all();
+                Task::none()
+            }
             Physical::Code(Code::KeyC) if modifiers.control() || modifiers.logo() => {
                 self.handle_copy_selected();
                 Task::none()
@@ -362,9 +366,6 @@ impl MusicPlayer {
         let Some(pos) = self.drag.hovered_track() else {
             return Task::none();
         };
-        if !pos.list.is_interactive() {
-            return Task::none();
-        }
         let list = pos.list;
         let matches: Vec<usize> = (0..self.track_count(list)).collect();
         self.track_list_search = Some(TrackListSearch {

@@ -170,6 +170,7 @@ pub struct MusicPlayer {
     pub edit_track: Option<EditTrackState>,
 
     pub queue_selected_indices: Vec<usize>,
+    pub recent_selected_indices: Vec<usize>,
 
     pub now_playing_from: Option<ViewData>,
 
@@ -265,6 +266,7 @@ impl MusicPlayer {
             context_menu: None,
             edit_track: None,
             queue_selected_indices: Vec::new(),
+            recent_selected_indices: Vec::new(),
             now_playing_from: None,
             track_list_search: None,
             app_theme,

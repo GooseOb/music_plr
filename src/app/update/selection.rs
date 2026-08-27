@@ -1,7 +1,7 @@
 //! Selection state and track-list access.
 //!
-//! `Recent` is read-only: `selection` yields an empty slice and mutations
-//! are no-ops.
+//! Selection is held per list: `Active` in `ViewData`, `Queue` and `Recent`
+//! in `MusicPlayer`.
 
 use super::{MusicPlayer, Track};
 use crate::app::{
@@ -14,15 +14,15 @@ impl MusicPlayer {
         match list {
             TrackListKind::Queue => &self.queue_selected_indices,
             TrackListKind::Active => &self.view_data().selection,
-            TrackListKind::Recent => &[],
+            TrackListKind::Recent => &self.recent_selected_indices,
         }
     }
 
-    fn selection_mut(&mut self, list: TrackListKind) -> Option<&mut Vec<usize>> {
+    fn selection_mut(&mut self, list: TrackListKind) -> &mut Vec<usize> {
         match list {
-            TrackListKind::Queue => Some(&mut self.queue_selected_indices),
-            TrackListKind::Active => Some(&mut self.view_data_mut().selection),
-            TrackListKind::Recent => None,
+            TrackListKind::Queue => &mut self.queue_selected_indices,
+            TrackListKind::Active => &mut self.view_data_mut().selection,
+            TrackListKind::Recent => &mut self.recent_selected_indices,
         }
     }
 
@@ -39,9 +39,7 @@ impl MusicPlayer {
     }
 
     pub fn toggle_selection(&mut self, pos: TrackPos) {
-        let Some(sel) = self.selection_mut(pos.list) else {
-            return;
-        };
+        let sel = self.selection_mut(pos.list);
         if let Some(at) = sel.iter().position(|&i| i == pos.index) {
             sel.remove(at);
         } else {
@@ -52,13 +50,12 @@ impl MusicPlayer {
     pub fn clear_selection(&mut self) {
         self.clear_selection_for(TrackListKind::Active);
         self.clear_selection_for(TrackListKind::Queue);
+        self.clear_selection_for(TrackListKind::Recent);
         self.playlist_picker = None;
     }
 
     pub fn clear_selection_for(&mut self, list: TrackListKind) {
-        if let Some(sel) = self.selection_mut(list) {
-            sel.clear();
-        }
+        self.selection_mut(list).clear();
         self.playlist_picker = None;
     }
 
@@ -66,6 +63,7 @@ impl MusicPlayer {
     pub fn has_selection(&self) -> bool {
         !self.selection(TrackListKind::Active).is_empty()
             || !self.selection(TrackListKind::Queue).is_empty()
+            || !self.selection(TrackListKind::Recent).is_empty()
     }
 
     /// Clear the selection if any of `indices` was selected — used after a
@@ -75,6 +73,17 @@ impl MusicPlayer {
         if indices.iter().any(|&i| sel.contains(&i)) {
             self.clear_selection();
         }
+    }
+
+    pub(crate) fn handle_select_all(&mut self) {
+        let list = self
+            .drag
+            .hovered_track()
+            .map_or(TrackListKind::Active, |h| h.list);
+        let count = self.track_count(list);
+        let sel = self.selection_mut(list);
+        sel.clear();
+        sel.extend(0..count);
     }
 
     pub fn get_track_at(&self, pos: TrackPos) -> Option<Track> {
@@ -149,15 +158,23 @@ mod tests {
     }
 
     #[test]
-    fn recent_selection_is_empty_and_mutations_noop() {
+    fn recent_selection_toggles_like_other_lists() {
         let mut p = player();
         p.queue.recently_played.push_back(track("1"));
-        let pos = TrackPos::new(0, TrackListKind::Recent);
+        p.queue.recently_played.push_back(track("2"));
+        let pos0 = TrackPos::new(0, TrackListKind::Recent);
+        let pos1 = TrackPos::new(1, TrackListKind::Recent);
 
         assert!(p.selection(TrackListKind::Recent).is_empty());
-        p.toggle_selection(pos);
-        assert!(p.selection(TrackListKind::Recent).is_empty());
+        p.toggle_selection(pos0);
+        assert_eq!(p.selection(TrackListKind::Recent), &[0]);
+        p.toggle_selection(pos1);
+        assert_eq!(p.selection(TrackListKind::Recent), &[0, 1]);
+        p.toggle_selection(pos0);
+        assert_eq!(p.selection(TrackListKind::Recent), &[1]);
         p.clear_selection_for(TrackListKind::Recent);
+        assert!(p.selection(TrackListKind::Recent).is_empty());
+        p.clear_selection();
         assert!(p.selection(TrackListKind::Recent).is_empty());
     }
 

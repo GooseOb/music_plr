@@ -309,6 +309,7 @@ impl MusicPlayer {
         track.artist = edit.artist;
         track.source = edit.source;
         self.set_track_at(edit.pos, track);
+        self.playlists.save();
         self.save_session();
     }
 }
