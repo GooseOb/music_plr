@@ -121,9 +121,10 @@ impl MusicPlayer {
     pub fn handle_cursor_moved(&mut self, pos: iced::Point) -> Task<Message> {
         self.drag.is_hover_controlled = false;
         self.drag.cursor_pos = pos;
-        if !self.drag.drag_active && self.drag.drag_origin.is_some() && self.drag.pressed.is_some()
-        {
-            let origin = self.drag.drag_origin.unwrap();
+        if self.drag.drag_active {
+            return self.handle_drag_update();
+        }
+        if let Some(origin) = self.drag.pressed.as_ref().map(|pd| pd.origin) {
             let dx = (pos.x - origin.x).abs();
             let dy = (pos.y - origin.y).abs();
             if dx > crate::theme::DRAG_THRESHOLD || dy > crate::theme::DRAG_THRESHOLD {
@@ -138,11 +139,7 @@ impl MusicPlayer {
                 ]);
             }
         }
-        if self.drag.drag_active {
-            self.handle_drag_update()
-        } else {
-            Task::none()
-        }
+        Task::none()
     }
 
     pub fn handle_key_press(

@@ -342,12 +342,17 @@ pub enum Pressed {
     Playlist(usize),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct PressedDrag {
+    pub what: Pressed,
+    pub origin: Point,
+}
+
 /// Mouse and drag interaction state
 #[derive(Debug, Clone, Default)]
 pub struct DragState {
     pub cursor_pos: Point,
-    pub pressed: Option<Pressed>,
-    pub drag_origin: Option<Point>,
+    pub pressed: Option<PressedDrag>,
     pub drag_active: bool,
     pub drop_target: Option<DropTarget>,
     /// Track indices carried by the current drag, resolved at press time:
@@ -364,7 +369,6 @@ pub struct DragState {
 impl DragState {
     pub fn stop(&mut self) {
         self.drag_active = false;
-        self.drag_origin = None;
         self.pressed = None;
         self.drop_target = None;
         self.dragged = None;
@@ -437,7 +441,13 @@ impl DragState {
 
     /// Whether a card (vs track) drag is active.
     pub fn is_pressed_card(&self) -> bool {
-        matches!(self.pressed, Some(Pressed::Card(_)))
+        matches!(
+            self.pressed,
+            Some(PressedDrag {
+                what: Pressed::Card(_),
+                ..
+            })
+        )
     }
 
     /// The hovered playlist row index, if any.

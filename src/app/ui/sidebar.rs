@@ -14,7 +14,7 @@ use super::{
 };
 use crate::{
     app::{
-        interaction::{DropTarget, HoverTarget, Pressed},
+        interaction::{DropTarget, HoverTarget, Pressed, PressedDrag},
         ui::styles::{fg_tab, icon_fg_secondary, icon_tab},
         ViewData, ViewKind,
     },
@@ -32,7 +32,10 @@ fn playlist_row<'a>(
     dragged_over: bool,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let is_dragging_this = matches!(player.drag.pressed, Some(Pressed::Playlist(i)) if i == index);
+    let is_dragging_this = matches!(
+        player.drag.pressed,
+        Some(PressedDrag { what: Pressed::Playlist(i), .. }) if i == index
+    );
     let is_hovered = player.drag.hovered_playlist() == Some(index);
     let interacting = active || dragged_over || is_hovered;
     let bg_color = if dragged_over {
@@ -88,7 +91,10 @@ fn library_row<'a>(
         ViewKind::PlaylistView(r) => r.id == item.id,
         _ => false,
     };
-    let is_dragging_this = player.drag.pressed.as_ref() == Some(&Pressed::Card(item.clone()));
+    let is_dragging_this = matches!(
+        player.drag.pressed,
+        Some(PressedDrag { what: Pressed::Card(ref c), .. }) if c == item
+    );
     let text_color = if is_active || is_dragging_this {
         p.fg
     } else {

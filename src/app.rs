@@ -467,6 +467,7 @@ impl MusicPlayer {
             }
             Message::ToggleLibraryExpanded => {
                 self.library_expanded = !self.library_expanded;
+                self.save_session();
                 Task::none()
             }
             Message::SearchLoadMore => {

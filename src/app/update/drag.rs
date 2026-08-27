@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     app::{
-        interaction::{DropTarget, Pressed},
+        interaction::{DropTarget, Pressed, PressedDrag},
         ui::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, TRACK_LIST_ID},
         ViewKind,
     },
@@ -31,7 +31,7 @@ impl MusicPlayer {
             return self.activate_search_input();
         }
 
-        let Some(pressed) = self.drag.pressed.take() else {
+        let Some(pressed) = self.drag.pressed.take().map(|pd| pd.what) else {
             self.drag.stop();
             return Task::none();
         };
@@ -74,7 +74,7 @@ impl MusicPlayer {
     pub fn handle_drag_update(&mut self) -> Task<Message> {
         self.drag.drop_target = None;
 
-        let Some(pressed) = &self.drag.pressed else {
+        let Some(pressed) = self.drag.pressed.as_ref().map(|pd| &pd.what) else {
             return Task::none();
         };
 
@@ -542,7 +542,6 @@ impl MusicPlayer {
                 self.last_click = Some((pos, now));
                 if is_double {
                     self.drag.pressed = None;
-                    self.drag.drag_origin = None;
                     self.handle_play_track(pos);
                     return;
                 }
@@ -553,13 +552,18 @@ impl MusicPlayer {
                     vec![pos.index]
                 };
                 self.drag.dragged = Some((pos.list, indices));
-                self.drag.pressed = Some(Pressed::Track(pos));
+                self.drag.pressed = Some(PressedDrag {
+                    what: Pressed::Track(pos),
+                    origin: self.drag.cursor_pos,
+                });
             }
             _ => {
-                self.drag.pressed = Some(pressed);
+                self.drag.pressed = Some(PressedDrag {
+                    what: pressed,
+                    origin: self.drag.cursor_pos,
+                });
             }
         }
-        self.drag.drag_origin = Some(self.drag.cursor_pos);
         self.drag.drag_active = false;
     }
 }

@@ -20,7 +20,7 @@ use super::{
 };
 use crate::{
     app::{
-        interaction::{HoverTarget, Pressed, TrackListKind},
+        interaction::{HoverTarget, Pressed, PressedDrag, TrackListKind},
         ui::overlays::pos_absolute,
         view_data::SearchData,
     },
@@ -218,7 +218,10 @@ fn card_row<'a>(
         .into();
     let main = inner_row_layout(leading.into(), thumb, title, subtitle_el, toggle);
     let is_hovered = player.drag.is_hovered_card(item);
-    let is_dragging_this = player.drag.pressed.as_ref() == Some(&Pressed::Card(item.clone()));
+    let is_dragging_this = matches!(
+        player.drag.pressed,
+        Some(PressedDrag { what: Pressed::Card(ref c), .. }) if c == item
+    );
     let hover_item = item.clone();
     let main = MouseArea::new(main)
         .interaction(player.drag.clickable_cursor_interaction())
