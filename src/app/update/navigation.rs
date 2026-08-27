@@ -299,7 +299,7 @@ mod tests {
         origin.set_tracks(vec![track.clone()]);
         p.now_playing_from = Some(origin);
         p.queue = crate::types::PlayQueue::new();
-        p.queue.enqueue(track);
+        p.queue.set_queue(vec![track], 1000);
 
         // The live view is a Playlist, so reveal must navigate first.
         assert!(matches!(p.view_data().kind, ViewKind::Playlist(_)));

@@ -42,19 +42,21 @@ impl MusicPlayer {
         }
         if let Some(track) = self.get_track_at(TrackPos::new(index, TrackListKind::Active)) {
             let source = track.source;
-            self.play_and_queue_rest(track, source, index);
+            self.play_and_queue_rest(&track, source, index);
         }
     }
 
     /// Play `track` through `provider`, replacing the queue, then enqueue the
     /// remaining view tracks after `index` and persist the session.
-    fn play_and_queue_rest(&mut self, track: Track, provider: ProviderId, index: usize) {
+    fn play_and_queue_rest(&mut self, track: &Track, provider: ProviderId, index: usize) {
         self.record_now_playing_origin();
-        self.play_track_replacing_queue(track, provider);
-        for t in self.tracks_after(index).to_vec() {
-            self.queue.enqueue(t);
-        }
+        let mut queue = Vec::with_capacity(self.tracks_after(index).len() + 1);
+        queue.push(track.clone());
+        queue.extend_from_slice(self.tracks_after(index));
+        self.queue.set_queue(queue, self.config.max_recently_played);
+        self.play_track_internal(track, provider);
         self.save_session();
+        self.mpris_dirty = true;
     }
 
     /// Snapshot the current view as the source of the track being played.
@@ -116,16 +118,9 @@ impl MusicPlayer {
     }
 
     pub fn play_track_replacing_queue(&mut self, track: Track, preferred: ProviderId) {
-        let key = track.cache_key();
-        if let Some(old) = self.queue.current().cloned() {
-            if old.cache_key() != key {
-                self.queue
-                    .record_played(&old, self.config.max_recently_played);
-            }
-        }
         self.play_track_internal(&track, preferred);
-        self.queue.clear();
-        self.queue.enqueue(track);
+        self.queue
+            .set_queue(vec![track], self.config.max_recently_played);
         self.save_session();
         self.mpris_dirty = true;
     }
@@ -146,7 +141,7 @@ impl MusicPlayer {
             // playlist is written to disk; the queue is saved via the session)
             // so the chosen provider survives a restart.
             self.set_track_at(pos, t.clone());
-            self.play_and_queue_rest(t, provider, pos.index);
+            self.play_and_queue_rest(&t, provider, pos.index);
         } else {
             self.resolve_provider(provider, track, Some(pos), true);
         }

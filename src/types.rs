@@ -286,19 +286,15 @@ impl PlayQueue {
         }
     }
 
-    pub fn enqueue(&mut self, track: Track) {
-        self.tracks.push(track);
-    }
-
     pub fn set_queue(&mut self, tracks: Vec<Track>, max_len: usize) {
-        if let Some(old) = self.current().cloned() {
-            self.record_played(&old, max_len);
+        let old = self.current().cloned();
+        let new_key = tracks.first().map(Track::cache_key);
+        if let (Some(old), Some(new_key)) = (old, new_key) {
+            if old.cache_key() != new_key {
+                self.record_played(&old, max_len);
+            }
         }
         self.tracks = tracks;
-    }
-
-    pub fn clear(&mut self) {
-        self.tracks.clear();
     }
 }
 
