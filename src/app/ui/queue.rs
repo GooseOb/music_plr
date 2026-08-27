@@ -15,6 +15,7 @@ use super::{
 use crate::{
     app::{
         interaction::{TrackListKind, TrackPos},
+        ui::styles::{fg_accent, fg_tab, icon_tab},
         ViewKind,
     },
     icons,
@@ -73,16 +74,14 @@ fn queue_tab<'a>(
     label: &'a str,
     queue_tab: QueueTab,
 ) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
     let active = player.queue.queue_tab == queue_tab;
-
-    let icon_color = if active { p.accent } else { p.fg_muted };
-    let text_color = if active { p.fg } else { p.fg_secondary };
 
     Button::new(
         Row::with_children([
-            icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_SM).into(),
-            text(label).color(text_color).into(),
+            icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_SM)
+                .style(icon_tab(active))
+                .into(),
+            text(label).style(fg_tab(active)).into(),
         ])
         .spacing(theme::SPACING_SM)
         .padding([theme::SPACING_SM, theme::SPACING_MD])
@@ -90,7 +89,7 @@ fn queue_tab<'a>(
         .width(Length::Fill),
     )
     .padding(0)
-    .style(button_style_panel_item(active, text_color))
+    .style(button_style_panel_item(active))
     .on_press(Message::SwitchQueueTab(queue_tab))
     .into()
 }
@@ -112,8 +111,6 @@ pub fn now_playing_source_label<'a>(
 }
 
 fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let p = &player.app_theme.palette;
-
     let now_playing_header: Element<'_, Message, AppTheme> = match player
         .now_playing_from
         .as_ref()
@@ -122,7 +119,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         Some(source) => Row::with_children([
             text(player.strings.now_playing_from)
                 .size(theme::TEXT_SIZE_XS)
-                .color(p.accent)
+                .style(fg_accent())
                 .into(),
             Button::new(text(source).size(theme::TEXT_SIZE_XS))
                 .padding(0)
@@ -134,7 +131,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .padding([theme::SPACING_SM, theme::SPACING_MD])
         .align_y(alignment::Vertical::Center)
         .into(),
-        None => section_header(player.strings.now_playing, p).into(),
+        None => section_header(player.strings.now_playing).into(),
     };
 
     let now_playing_row: Element<'_, Message, AppTheme> =
@@ -152,7 +149,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             .into()
         };
 
-    let up_next_header = section_header(player.strings.up_next, p);
+    let up_next_header = section_header(player.strings.up_next);
 
     let offset = 1;
     let upcoming = if offset <= player.queue.tracks.len() {
@@ -177,8 +174,8 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         now_playing_header,
         now_playing_row,
         rule::horizontal(1)
-            .style(move |_| rule::Style {
-                color: p.fg_muted,
+            .style(move |theme: &AppTheme| rule::Style {
+                color: theme.palette.fg_muted,
                 radius: iced::border::Radius::new(0),
                 fill_mode: rule::FillMode::Padded(theme::SPACING_MD as u16),
                 snap: true,

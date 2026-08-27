@@ -1,21 +1,10 @@
 use iced::{
     border,
-    widget::{button, container, text},
+    widget::{button, container, svg, text},
     Color,
 };
 
 use crate::theme::{self, AppTheme, Palette};
-
-/// Row background for list rows: `current` is `(idle_alpha, hovered_alpha)`
-/// applied to `bg_current` for the current/active row (alpha 1.0 = solid),
-/// otherwise `bg_hover` when hovered, else `base`.
-pub fn row_bg(p: &Palette, current: Option<(f32, f32)>, hovered: bool, base: Color) -> Color {
-    match current {
-        Some((idle, hot)) => p.bg_current.scale_alpha(if hovered { hot } else { idle }),
-        None if hovered => p.bg_hover,
-        None => base,
-    }
-}
 
 /// Button style skeleton: `bg`/`text_color` receive the palette and whether
 /// the button is hovered or pressed; `None` bg means transparent.
@@ -84,8 +73,75 @@ pub fn fg_secondary() -> impl Fn(&AppTheme) -> text::Style + 'static {
 
 pub fn fg_accent() -> impl Fn(&AppTheme) -> text::Style + 'static {
     |theme| text::Style {
-        color: theme.palette.accent.into(),
+        color: theme.palette.fg_accent.into(),
     }
+}
+
+pub fn fg_tab(active: bool) -> impl Fn(&AppTheme) -> text::Style + 'static {
+    move |theme| text::Style {
+        color: if active {
+            theme.palette.fg
+        } else {
+            theme.palette.fg_muted
+        }
+        .into(),
+    }
+}
+
+pub fn icon_fg() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    |theme, _| svg::Style {
+        color: Some(theme.palette.fg),
+    }
+}
+
+pub fn icon_fg_muted() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    |theme, _| svg::Style {
+        color: Some(theme.palette.fg_muted),
+    }
+}
+
+pub fn icon_fg_secondary() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    |theme, _| svg::Style {
+        color: Some(theme.palette.fg_secondary),
+    }
+}
+
+pub fn icon_accent() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    |theme, _| svg::Style {
+        color: Some(theme.palette.fg_accent),
+    }
+}
+
+pub fn icon_black() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    |_, _| svg::Style {
+        color: Some(Color::BLACK),
+    }
+}
+
+pub fn icon_playbar_button(
+    active: bool,
+) -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    move |theme, _| svg::Style {
+        color: Some(if active {
+            Color::BLACK
+        } else {
+            theme.palette.fg_secondary
+        }),
+    }
+}
+
+pub fn icon_tab(active: bool) -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    move |theme, _| svg::Style {
+        color: Some(if active {
+            theme.palette.fg_accent
+        } else {
+            theme.palette.fg_muted
+        }),
+    }
+}
+
+pub fn icon_color(color: Color) -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    move |_, _| svg::Style { color: Some(color) }
 }
 
 pub fn button_style_primary() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
@@ -96,7 +152,7 @@ pub fn button_style_primary() -> impl Fn(&AppTheme, button::Status) -> button::S
     )
 }
 
-pub fn button_style_queue(
+pub fn button_style_playbar(
     enabled: bool,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
     button_style(
@@ -201,23 +257,19 @@ pub fn button_style_popup_item() -> impl Fn(&AppTheme, button::Status) -> button
 }
 
 pub fn context_menu_item_style(active: bool) -> impl Fn(&AppTheme) -> container::Style + 'static {
-    move |theme| {
-        let p = &theme.palette;
-        container::Style {
-            background: if active {
-                Some(p.bg_hover.into())
-            } else {
-                None
-            },
-            border: border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        }
+    move |theme| container::Style {
+        background: if active {
+            Some(theme.palette.bg_hover.into())
+        } else {
+            None
+        },
+        border: border::rounded(theme::RADIUS_SM),
+        ..Default::default()
     }
 }
 
 pub fn button_style_panel_item(
     active: bool,
-    text_color: Color,
 ) -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
     button_style(
         move |p, hot| {
@@ -229,7 +281,7 @@ pub fn button_style_panel_item(
                 None
             }
         },
-        move |_, _| text_color,
+        move |p, _| if active { p.fg } else { p.fg_secondary },
         theme::RADIUS_MD,
     )
 }

@@ -1,4 +1,4 @@
-use iced::{widget::svg, Color};
+use iced::widget::svg;
 
 use crate::theme::AppTheme;
 
@@ -29,9 +29,8 @@ pub const SKIP_BACK_ICON: &[u8] = include_bytes!("../icons/skip-back.svg");
 pub const SKIP_FORWARD_ICON: &[u8] = include_bytes!("../icons/skip-forward.svg");
 pub const VOLUME_ICON: &[u8] = include_bytes!("../icons/volume.svg");
 
-pub fn icon(icon_data: &'static [u8], color: Color, size: f32) -> svg::Svg<'static, AppTheme> {
+pub fn icon(icon_data: &'static [u8], size: f32) -> svg::Svg<'static, AppTheme> {
     svg::Svg::new(svg::Handle::from_memory(icon_data))
         .width(size)
         .height(size)
-        .style(move |_, _| svg::Style { color: Some(color) })
 }

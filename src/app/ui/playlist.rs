@@ -5,7 +5,7 @@ use iced::{
 };
 
 use super::{
-    styles::{button_style_danger, fg_secondary},
+    styles::{button_style_danger, fg_secondary, icon_fg, icon_fg_muted, icon_fg_secondary},
     theme, view_track_list, Message, MusicPlayer,
 };
 use crate::{
@@ -21,8 +21,6 @@ pub(super) fn view_playlist<'a>(
     player: &'a MusicPlayer,
     entry: &'a PlaylistEntry,
 ) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
-
     let Some(pl) = player.playlists.playlists.get(entry.index) else {
         return empty_state(player.strings.playlist_not_found);
     };
@@ -35,7 +33,9 @@ pub(super) fn view_playlist<'a>(
             .into(),
         Button::new(
             Row::with_children([
-                icons::icon(icons::FOLDER_ICON, p.fg_secondary, theme::ICON_SIZE_SM).into(),
+                icons::icon(icons::FOLDER_ICON, theme::ICON_SIZE_SM)
+                    .style(icon_fg_secondary())
+                    .into(),
                 text(player.strings.add_local)
                     .align_y(alignment::Vertical::Center)
                     .style(fg_secondary())
@@ -48,7 +48,7 @@ pub(super) fn view_playlist<'a>(
         .height(theme::BUTTON_HEIGHT)
         .on_press(Message::AddLocalMusic)
         .into(),
-        Button::new(icons::icon(icons::DELETE_ICON, p.fg, theme::ICON_SIZE_SM))
+        Button::new(icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM).style(icon_fg()))
             .padding(theme::SPACING_SM)
             .height(theme::BUTTON_HEIGHT)
             .width(theme::BUTTON_HEIGHT)
@@ -67,10 +67,10 @@ pub(super) fn view_playlist<'a>(
 }
 
 pub(super) fn view_downloads(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let p = &player.app_theme.palette;
-
     let header = Row::with_children([
-        icons::icon(icons::DOWNLOAD_ICON, p.fg_muted, theme::ICON_SIZE_MD).into(),
+        icons::icon(icons::DOWNLOAD_ICON, theme::ICON_SIZE_MD)
+            .style(icon_fg_muted())
+            .into(),
         text(player.strings.downloaded_tracks)
             .style(fg_secondary())
             .into(),

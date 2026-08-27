@@ -17,6 +17,7 @@ mod search;
 mod settings;
 mod shared_components;
 mod sidebar;
+pub(crate) mod spinner;
 mod styles;
 mod track_list;
 pub(super) mod track_list_search;

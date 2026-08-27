@@ -4,7 +4,7 @@ use iced::{
         button, container, opaque, scrollable, text, text_input, Button, Column, Container, Id,
         MouseArea, Row, Space,
     },
-    Color, Element, Length, Rectangle,
+    Element, Length, Rectangle,
 };
 
 use super::{
@@ -14,7 +14,7 @@ use super::{
     },
     styles::{
         bg_search_hist, bg_secondary, button_style_hist, button_style_primary, fg_secondary,
-        scroll_padding,
+        icon_black, icon_color, icon_fg_secondary, scroll_padding,
     },
     theme, view_track_list, Message, MusicPlayer,
 };
@@ -57,17 +57,14 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
     .width(Length::Fill)
     .into();
 
-    let search_btn = Button::new(icons::icon(
-        icons::SEARCH_ICON,
-        Color::BLACK,
-        theme::ICON_SIZE_MD,
-    ))
-    .padding(theme::SPACING_SM)
-    .style(button_style_primary())
-    .width(theme::SEARCH_BTN_SIZE)
-    .height(theme::SEARCH_BTN_SIZE)
-    .on_press(Message::SearchExecute)
-    .into();
+    let search_btn =
+        Button::new(icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_MD).style(icon_black()))
+            .padding(theme::SPACING_SM)
+            .style(button_style_primary())
+            .width(theme::SEARCH_BTN_SIZE)
+            .height(theme::SEARCH_BTN_SIZE)
+            .on_press(Message::SearchExecute)
+            .into();
 
     let controls = Row::with_children([input, search_btn])
         .spacing(theme::SPACING_SM)
@@ -120,7 +117,7 @@ pub(super) fn view_search<'a>(
     let content = &player.view_data().content;
     match content {
         LoadState::Failed(e) => empty_state((player.strings.search_failed)(e)),
-        LoadState::Loading => loading_state(&player.app_theme.palette, player.strings.searching),
+        LoadState::Loading => loading_state(player.strings.searching),
         LoadState::Ready(results) if tab.is_track_tab() => {
             view_search_track_tab(player, search, results)
         }
@@ -210,9 +207,9 @@ fn card_row<'a>(
         .style(fg_secondary())
         .width(theme::TRACK_LEADING_WIDTH)
         .center();
-    let thumb = thumbnail(p, theme::THUMBNAIL_SIZE, thumb);
+    let thumb = thumbnail(theme::THUMBNAIL_SIZE, thumb);
     let saved = player.library.contains(item.kind, &item.id);
-    let toggle = toggle_bookmark_button(p, saved)
+    let toggle = toggle_bookmark_button(saved)
         .on_press(Message::ToggleLibrarySave(item.clone()))
         .into();
     let subtitle_el = text(subtitle)
@@ -229,6 +226,7 @@ fn card_row<'a>(
         .on_move(move |_| Message::HoverStart(HoverTarget::Card(hover_item.clone())));
     track_row(
         main,
+        // TODO: make consistent
         if is_dragging_this || is_hovered {
             p.bg_hover
         } else {
@@ -257,10 +255,8 @@ pub(super) fn view_browse<'a>(
     meta: Option<String>,
 ) -> Element<'a, Message, AppTheme> {
     let content = &player.view_data().content;
-    let p = &player.app_theme.palette;
 
     let image = thumbnail(
-        p,
         theme::PAGE_THUMBNAIL_SIZE,
         player.thumbnail_index.get(thumb_key),
     );
@@ -283,7 +279,7 @@ pub(super) fn view_browse<'a>(
 
     let track_list = match content {
         LoadState::Failed(e) => empty_state((player.strings.couldnt_load)(e)),
-        LoadState::Loading => loading_state(&player.app_theme.palette, player.strings.loading),
+        LoadState::Loading => loading_state(player.strings.loading),
         LoadState::Ready(tracks) => {
             view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
         }
@@ -293,12 +289,11 @@ pub(super) fn view_browse<'a>(
 }
 
 fn view_library_button(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let p = &player.app_theme.palette;
     let item = player
         .current_library_item()
         .expect("view_library_button should only be called when a library item is present");
     let saved = player.library.contains(item.kind, &item.id);
-    toggle_bookmark_button(p, saved)
+    toggle_bookmark_button(saved)
         .on_press(Message::ToggleLibrarySave(item))
         .into()
 }
@@ -314,9 +309,7 @@ pub(super) fn view_search_radio<'a>(
 
     let track_list = match content {
         LoadState::Failed(e) => empty_state(format!("Radio failed: {e}")),
-        LoadState::Loading => {
-            loading_state(&player.app_theme.palette, player.strings.generating_radio)
-        }
+        LoadState::Loading => loading_state(player.strings.generating_radio),
         LoadState::Ready(tracks) => {
             view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
         }
@@ -353,7 +346,8 @@ pub(super) fn view_search_history(
                     Row::with_children([
                         Button::new(
                             Row::with_children([
-                                icons::icon(icons::SEARCH_ICON, text_color, theme::ICON_SIZE_SM)
+                                icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_SM)
+                                    .style(icon_color(text_color))
                                     .into(),
                                 text(q).size(theme::TEXT_SIZE_SM).into(),
                             ])
@@ -370,11 +364,10 @@ pub(super) fn view_search_history(
                         })
                         .on_press(Message::SearchHistorySelected(i))
                         .into(),
-                        Button::new(icons::icon(
-                            icons::DELETE_ICON,
-                            p.fg_secondary,
-                            theme::ICON_SIZE_SM,
-                        ))
+                        Button::new(
+                            icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM)
+                                .style(icon_fg_secondary()),
+                        )
                         .padding(theme::SPACING_XS)
                         .style(button_style_hist())
                         .on_press(Message::DeleteSearchHistory(i))

@@ -104,14 +104,11 @@ fn header_provider_picker(
 
 /// Library bookmark toggle for this artist.
 fn library_button(player: &MusicPlayer) -> Element<'static, Message, AppTheme> {
-    let p = &player.app_theme.palette;
     match player.current_library_item() {
         Some(item) => {
             let saved = player.library.contains(item.kind, &item.id);
-            Container::new(
-                toggle_bookmark_button(p, saved).on_press(Message::ToggleLibrarySave(item)),
-            )
-            .into()
+            Container::new(toggle_bookmark_button(saved).on_press(Message::ToggleLibrarySave(item)))
+                .into()
         }
         None => Space::new().width(theme::ICON_SIZE_SM).into(),
     }
@@ -126,11 +123,10 @@ fn header<'a>(
     header: Option<&'a crate::providers::ArtistHeader>,
     header_provider: Option<ProviderId>,
 ) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
     let thumb = player
         .thumbnail_index
         .get(&header_thumb_key(id, header_provider.unwrap_or_default()));
-    let image = thumbnail(p, theme::PAGE_THUMBNAIL_SIZE, thumb);
+    let image = thumbnail(theme::PAGE_THUMBNAIL_SIZE, thumb);
 
     let stats_line = header
         .as_ref()
@@ -330,7 +326,7 @@ fn section_body<'a>(
                 return failed_state(section.provider, kind, e, player.strings);
             }
             LoadState::Loading => {
-                return loading_state(&player.app_theme.palette, player.strings.loading);
+                return loading_state(player.strings.loading);
             }
         };
     }
@@ -342,7 +338,7 @@ fn section_body<'a>(
             return failed_state(section.provider, kind, e, player.strings);
         }
         LoadState::Loading => {
-            return loading_state(&player.app_theme.palette, player.strings.loading);
+            return loading_state(player.strings.loading);
         }
     };
     let provider = section.provider.unwrap_or_default();
@@ -378,9 +374,8 @@ fn h_card<'a>(
     subtitle: &str,
     on_press: Message,
 ) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
     let thumb_path = player.thumbnail_index.get(thumb_id);
-    let image = Container::new(thumbnail(p, CARD_IMAGE_SIZE, thumb_path)).height(CARD_IMAGE_SIZE);
+    let image = Container::new(thumbnail(CARD_IMAGE_SIZE, thumb_path)).height(CARD_IMAGE_SIZE);
     let mut body = vec![image.into()];
     body.push(
         text(title)

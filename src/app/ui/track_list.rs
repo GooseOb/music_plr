@@ -1,7 +1,7 @@
 use iced::{
     alignment,
     widget::{scrollable, text, Button, Column, Container, Id, MouseArea, Row, Space},
-    Color, Element, Length,
+    Element, Length,
 };
 
 pub const TRACK_LIST_ID: Id = Id::new("track_list");
@@ -10,16 +10,17 @@ use super::{
     shared_components::{
         empty_state, inner_row_layout, play_pause_button, subtitle_artist, thumbnail, track_row,
     },
-    styles::{button_style_album, button_style_primary, fg_secondary, row_bg},
+    styles::{button_style_album, button_style_primary, fg_secondary, icon_accent, icon_black},
     theme, Message, MusicPlayer,
 };
 use crate::{
     app::{
         interaction::{row_id, HoverTarget, Pressed, TrackListKind, TrackPos},
+        ui::styles::fg_accent,
         update::operation::ListGeometry,
     },
     icons,
-    theme::{AppTheme, Palette},
+    theme::AppTheme,
     types::Track,
 };
 
@@ -132,15 +133,11 @@ pub(super) fn leading_control<'a>(
             .on_press(Message::TogglePlayPause)
             .into()
     } else if is_hovered {
-        Button::new(icons::icon(
-            icons::PLAY_ICON,
-            Color::BLACK,
-            theme::ICON_SIZE_LG,
-        ))
-        .padding(theme::SPACING_2XS)
-        .style(button_style_primary())
-        .on_press(Message::PlayTrackAt(pos))
-        .into()
+        Button::new(icons::icon(icons::PLAY_ICON, theme::ICON_SIZE_LG).style(icon_black()))
+            .padding(theme::SPACING_2XS)
+            .style(button_style_primary())
+            .on_press(Message::PlayTrackAt(pos))
+            .into()
     } else {
         text((pos.index + 1).to_string())
             .size(theme::TEXT_SIZE_SM)
@@ -176,19 +173,25 @@ fn view_track_row_inner<'a>(
         .current()
         .is_some_and(|t| t.cache_key() == track.cache_key());
     let is_match = player.is_track_list_match(pos);
+    let is_interacting = is_hovered || is_dragging;
 
-    let row_bg = row_bg(
-        p,
-        if is_selected {
+    let row_bg = {
+        let current = if is_selected {
             Some((1.0, 1.0))
         } else if is_current {
             Some((0.6, 0.8))
         } else {
             None
-        },
-        is_hovered || is_dragging,
-        p.bg,
-    );
+        };
+        if let Some((idle, hot)) = current {
+            p.bg_current
+                .scale_alpha(if is_interacting { hot } else { idle })
+        } else if is_interacting {
+            p.bg_hover
+        } else {
+            p.bg
+        }
+    };
 
     let leading = leading_control(pos, track, player);
 
@@ -201,11 +204,7 @@ fn view_track_row_inner<'a>(
         .on_move(move |_| Message::HoverStart(HoverTarget::Track(pos)));
 
     let border = if is_match || is_dragging {
-        Some(if is_hovered || is_dragging {
-            p.accent
-        } else {
-            p.fg_muted
-        })
+        Some(if is_interacting { p.accent } else { p.fg_muted })
     } else {
         None
     };
@@ -239,7 +238,6 @@ fn track_row_layout_inner<'a>(
     show_album: bool,
     show_plays: bool,
 ) -> Row<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
     let thumb = player.thumbnail_index.get(track.primary_id());
     let is_downloaded = player.download_registry.contains(&track.cache_key());
     let is_cached = player
@@ -282,9 +280,13 @@ fn track_row_layout_inner<'a>(
     }
 
     trailing_children.push(if is_downloaded {
-        icons::icon(icons::DOWNLOAD_ICON, p.accent, theme::ICON_SIZE_MD).into()
+        icons::icon(icons::DOWNLOAD_ICON, theme::ICON_SIZE_MD)
+            .style(icon_accent())
+            .into()
     } else if is_cached {
-        icons::icon(icons::CACHE_ICON, p.accent, theme::ICON_SIZE_MD).into()
+        icons::icon(icons::CACHE_ICON, theme::ICON_SIZE_MD)
+            .style(icon_accent())
+            .into()
     } else {
         Space::new().width(theme::ICON_SIZE_MD).into()
     });
@@ -314,7 +316,7 @@ fn track_row_layout_inner<'a>(
 
     inner_row_layout(
         leading,
-        thumbnail(p, theme::THUMBNAIL_SIZE, thumb),
+        thumbnail(theme::THUMBNAIL_SIZE, thumb),
         &track.title,
         artist_subtitle,
         Row::with_children(trailing_children)
@@ -323,15 +325,11 @@ fn track_row_layout_inner<'a>(
     )
 }
 
-/// A centered section header (e.g. "NOW PLAYING", "UP NEXT").
-pub(super) fn section_header<'a>(
-    label: &'a str,
-    p: &'a Palette,
-) -> Container<'a, Message, AppTheme> {
+pub(super) fn section_header(label: &str) -> Container<'_, Message, AppTheme> {
     Container::new(
         text(label)
             .size(theme::TEXT_SIZE_XS)
-            .color(p.accent)
+            .style(fg_accent())
             .width(Length::Fill),
     )
     .padding([theme::SPACING_SM, theme::SPACING_MD])

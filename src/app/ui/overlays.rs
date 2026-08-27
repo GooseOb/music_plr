@@ -13,7 +13,8 @@ use super::{
     shared_components::{disabled_text_input_row, text_input_row, thumbnail},
     styles::{
         bg_overlay, bg_popup, button_style_danger, button_style_popup_item, button_style_primary,
-        context_menu_item_style, fg_accent, fg_secondary, scroll_padding,
+        context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted, icon_fg_secondary,
+        scroll_padding,
     },
     theme, ContextMenuState, Message, MusicPlayer,
 };
@@ -24,7 +25,7 @@ use crate::{
     },
     icons,
     providers::{ProviderId, ProviderTrack},
-    theme::{AppTheme, Palette},
+    theme::AppTheme,
 };
 
 fn provider_row<'a>(
@@ -86,7 +87,6 @@ fn provider_row<'a>(
                 disabled_text_input_row(player.strings.lbl_duration_secs, &pt.duration.to_string()),
                 Row::with_children([
                     thumbnail(
-                        &player.app_theme.palette,
                         theme::PLAYBAR_THUMBNAIL_SIZE,
                         player.thumbnail_index.get(&pt.id),
                     ),
@@ -131,7 +131,6 @@ pub(super) fn view_context_menu<'a>(
     player: &'a MusicPlayer,
     menu: &'a ContextMenuState,
 ) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
     let (pos_x, pos_y) = menu.position;
     let n = menu.target_indices.len();
 
@@ -159,7 +158,6 @@ pub(super) fn view_context_menu<'a>(
                 focused,
                 chevron,
                 action.to_message(menu),
-                p,
                 row_len,
             )
         })
@@ -188,7 +186,7 @@ pub(super) fn view_context_menu<'a>(
     let mut anchor_x = pos_x;
 
     if let Some(kind) = menu.open_submenu_kind() {
-        let entries = submenu_entries(kind, menu, p, row_len, player.strings);
+        let entries = submenu_entries(kind, menu, row_len, player.strings);
         // Skip until the capture task has delivered geometry, so the submenu
         // doesn't render at the panel top and jump once bounds arrive.
         let geo = player
@@ -304,22 +302,20 @@ fn menu_item<'a>(
     focused: bool,
     chevron: bool,
     on_press: Message,
-    p: &'a Palette,
     row_len: Length,
 ) -> Element<'a, Message, AppTheme> {
     let mut children = vec![
-        icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
+        icons::icon(icon, theme::ICON_SIZE_SM)
+            .style(icon_fg_muted())
+            .into(),
         text(label).into(),
     ];
     if chevron {
         children.push(Space::new().width(row_len).into());
         children.push(
-            icons::icon(
-                icons::CHEVRON_RIGHT_ICON,
-                p.fg_secondary,
-                theme::ICON_SIZE_SM,
-            )
-            .into(),
+            icons::icon(icons::CHEVRON_RIGHT_ICON, theme::ICON_SIZE_SM)
+                .style(icon_fg_secondary())
+                .into(),
         );
     }
     let item = context_menu_item(children, focused, row_len);
@@ -362,7 +358,6 @@ fn context_menu_button<'a>(
 fn submenu_entries<'a>(
     kind: SubmenuKind,
     menu: &'a ContextMenuState,
-    p: &'a Palette,
     row_len: Length,
     tr: &'a crate::i18n::Strings,
 ) -> Vec<Element<'a, Message, AppTheme>> {
@@ -406,7 +401,9 @@ fn submenu_entries<'a>(
             let message = kind.entry_message(provider, menu);
             let item = context_menu_item(
                 [
-                    icons::icon(icon, p.fg_muted, theme::ICON_SIZE_SM).into(),
+                    icons::icon(icon, theme::ICON_SIZE_SM)
+                        .style(icon_fg_muted())
+                        .into(),
                     text(label).into(),
                 ],
                 focused,

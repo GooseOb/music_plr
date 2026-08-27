@@ -22,7 +22,6 @@ pub(super) fn view_lyrics<'a>(
     lyrics_state: &'a LyricsState,
 ) -> Element<'a, Message, AppTheme> {
     let track = player.queue.current();
-    let p = &player.app_theme.palette;
 
     let lyrics_ready = matches!(&lyrics_state.lyrics, LoadState::Ready(_));
 
@@ -48,7 +47,7 @@ pub(super) fn view_lyrics<'a>(
             )
             .padding(theme::SPACING_LG)
             .into(),
-            (Some(_), LoadState::Loading) => loading_state(p, player.strings.looking_up_lyrics),
+            (Some(_), LoadState::Loading) => loading_state(player.strings.looking_up_lyrics),
             (Some(_), LoadState::Failed(e)) => empty_state((player.strings.couldnt_load_lyrics)(e)),
             (None, _) => empty_state(player.strings.play_a_track_for_lyrics),
         }
@@ -144,19 +143,17 @@ fn view_synced<'a>(
     player: &'a MusicPlayer,
     lyrics: &'a crate::lyrics::Lyrics,
 ) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
     let position = player.progress * player.duration;
     let active = lyrics.active_index(position);
 
     let lines = lyrics.timed.iter().enumerate().map(|(i, (secs, line))| {
         let is_active = active == Some(i);
-        let fg = if is_active { p.fg } else { p.fg_secondary };
 
         let centered = Container::new(text(line).size(theme::TEXT_SIZE_XL)).center(Length::Fill);
 
         Button::new(centered)
             .padding([theme::SPACING_SM, theme::SPACING_LG])
-            .style(button_style_panel_item(is_active, fg))
+            .style(button_style_panel_item(is_active))
             .on_press(Message::LyricsLineClicked(*secs))
             .into()
     });

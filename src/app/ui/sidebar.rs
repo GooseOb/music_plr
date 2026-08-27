@@ -1,20 +1,21 @@
 use iced::{
     alignment,
     widget::{scrollable, text, text_input, Button, Column, Container, MouseArea, Row},
-    Color, Element, Length,
+    Element, Length,
 };
 
 use super::{
     shared_components::{thumbnail, toggle_bookmark_button},
     styles::{
         bg_secondary, button_style_list_item, button_style_nav, button_style_panel_item,
-        button_style_primary, fg_secondary,
+        button_style_primary, fg_secondary, icon_black, icon_color, icon_fg_muted,
     },
     theme, widget, Message, MusicPlayer,
 };
 use crate::{
     app::{
         interaction::{DropTarget, HoverTarget, Pressed},
+        ui::styles::{fg_tab, icon_tab},
         ViewData, ViewKind,
     },
     data::library::LibraryItem,
@@ -43,12 +44,11 @@ fn playlist_row<'a>(
     } else {
         p.bg_secondary
     };
-    let icon_color = if interacting { p.accent } else { p.fg_muted };
-    let text_color = if interacting { p.fg } else { p.fg_secondary };
-
     let row = Row::with_children([
-        icons::icon(icons::MUSIC_ICON, icon_color, theme::ICON_SIZE_MD).into(),
-        text(name).color(text_color).into(),
+        icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_MD)
+            .style(icon_tab(interacting))
+            .into(),
+        text(name).style(fg_tab(interacting)).into(),
         iced::widget::right(text(track_count).style(fg_secondary())).into(),
     ])
     .spacing(theme::SPACING_MD)
@@ -57,12 +57,12 @@ fn playlist_row<'a>(
     MouseArea::new(
         Container::new(row)
             .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .style(move |_| iced::widget::container::Style {
+            .style(move |theme: &AppTheme| iced::widget::container::Style {
                 background: Some(bg_color.into()),
                 border: if is_dragging_this {
                     iced::border::rounded(theme::RADIUS_MD)
                         .width(2.0)
-                        .color(p.accent)
+                        .color(theme.palette.accent)
                 } else {
                     iced::border::rounded(theme::RADIUS_MD)
                 },
@@ -95,14 +95,14 @@ fn library_row<'a>(
         p.fg_secondary
     };
     let thumb = player.thumbnail_index.get(&item.id);
-    let thumb = thumbnail(p, theme::ICON_SIZE_LG + 4.0, thumb);
+    let thumb = thumbnail(theme::ICON_SIZE_LG + 4.0, thumb);
     let is_hovered = player.drag.is_hovered_library_card(item);
     let hover_item = item.clone();
     let row = Row::with_children([thumb, text(&item.title).color(text_color).into()])
         .spacing(theme::SPACING_MD)
         .align_y(alignment::Vertical::Center)
         .width(Length::Fill);
-    let toggle_btn = toggle_bookmark_button(p, true)
+    let toggle_btn = toggle_bookmark_button(true)
         .padding(theme::SPACING_XS)
         .on_press(Message::ToggleLibrarySave(item.clone()));
 
@@ -123,12 +123,12 @@ fn library_row<'a>(
         )
         .id(iced::widget::Id::from(format!("library:{index}")))
         .padding([theme::SPACING_SM, theme::SPACING_MD])
-        .style(move |_| iced::widget::container::Style {
+        .style(move |theme| iced::widget::container::Style {
             background: Some(bg.into()),
             border: if is_dragging_this {
                 iced::border::rounded(theme::RADIUS_MD)
                     .width(2.0)
-                    .color(p.accent)
+                    .color(theme.palette.accent)
             } else {
                 iced::border::rounded(theme::RADIUS_MD)
             },
@@ -173,11 +173,13 @@ fn nav_icon_button(
     on_press: Message,
 ) -> Element<'static, Message, AppTheme> {
     Button::new(
-        Container::new(icons::icon(
-            icon,
-            if can { p.fg } else { p.fg_muted },
-            theme::ICON_SIZE_MD,
-        ))
+        Container::new(
+            icons::icon(icon, theme::ICON_SIZE_MD).style(icon_color(if can {
+                p.fg
+            } else {
+                p.fg_muted
+            })),
+        )
         .center(Length::Fill),
     )
     .padding(theme::SPACING_XS)
@@ -281,15 +283,20 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
 
     let library_header = Button::new(
         Row::with_children([
-            icons::icon(icons::BOOKMARK_ICON, p.fg_muted, theme::ICON_SIZE_MD).into(),
+            icons::icon(icons::BOOKMARK_ICON, theme::ICON_SIZE_LG)
+                .style(icon_fg_muted())
+                .into(),
             text(player.strings.library).style(fg_secondary()).into(),
             iced::widget::right(
-                text(if player.library_expanded {
-                    "▾"
-                } else {
-                    "▸"
-                })
-                .color(p.fg_muted),
+                icons::icon(
+                    if player.library_expanded {
+                        icons::CHEVRON_RIGHT_ICON
+                    } else {
+                        icons::CHEVRON_DOWN_ICON
+                    },
+                    theme::ICON_SIZE_LG,
+                )
+                .style(icon_fg_muted()),
             )
             .into(),
         ])
@@ -310,15 +317,11 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .on_input(Message::NewPlaylistNameChanged)
         .padding(theme::SPACING_SM)
         .into(),
-        Button::new(icons::icon(
-            icons::ADD_ICON,
-            Color::BLACK,
-            theme::ICON_SIZE_SM,
-        ))
-        .padding(theme::SPACING_SM)
-        .style(button_style_primary())
-        .on_press(Message::CreatePlaylist)
-        .into(),
+        Button::new(icons::icon(icons::ADD_ICON, theme::ICON_SIZE_SM).style(icon_black()))
+            .padding(theme::SPACING_SM)
+            .style(button_style_primary())
+            .on_press(Message::CreatePlaylist)
+            .into(),
     ])
     .align_y(alignment::Vertical::Center)
     .spacing(theme::SPACING_SM)
@@ -357,10 +360,7 @@ fn sidebar_nav_item<'a>(
     player: &'a MusicPlayer,
     count: Option<usize>,
 ) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
     let is_active = player.view_data().same_kind(&target);
-    let icon_color = if is_active { p.accent } else { p.fg_muted };
-    let text_color = if is_active { p.fg } else { p.fg_secondary };
     let icon_name: &[u8] = match target.kind {
         ViewKind::Search { .. } => icons::SEARCH_ICON,
         ViewKind::Downloads => icons::DOWNLOAD_ICON,
@@ -369,15 +369,17 @@ fn sidebar_nav_item<'a>(
     };
 
     let mut children = vec![
-        icons::icon(icon_name, icon_color, theme::ICON_SIZE_MD).into(),
-        text(name).color(text_color).into(),
+        icons::icon(icon_name, theme::ICON_SIZE_MD)
+            .style(icon_tab(is_active))
+            .into(),
+        text(name).style(fg_tab(is_active)).into(),
     ];
     if let Some(count) = count {
         children.push(iced::widget::right(text(count).style(fg_secondary())).into());
     }
 
     sidebar_button(Row::with_children(children))
-        .style(button_style_panel_item(is_active, text_color))
+        .style(button_style_panel_item(is_active))
         .on_press(Message::NavigateTo(target))
         .into()
 }

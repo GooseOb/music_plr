@@ -1,15 +1,17 @@
 use iced::{
     alignment,
     widget::{slider, text, Button, Column, Container, Row},
-    Color, Element, Length,
+    Element, Length,
 };
 
 use super::{
     shared_components::{play_pause_button, subtitle_artist, thumbnail},
-    styles::{bg_tertiary, button_style_queue, fg_secondary},
+    styles::{
+        bg_tertiary, button_style_playbar, fg_secondary, icon_fg, icon_fg_muted, icon_fg_secondary,
+    },
     theme, Message, MusicPlayer,
 };
-use crate::{icons, theme::AppTheme, util::format_duration};
+use crate::{app::ui::styles::icon_playbar_button, icons, theme::AppTheme, util::format_duration};
 
 fn time_text(time: u32) -> Element<'static, Message, AppTheme> {
     text(format_duration(time))
@@ -22,8 +24,6 @@ fn time_text(time: u32) -> Element<'static, Message, AppTheme> {
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let p = &player.app_theme.palette;
-
     let track = player.queue.current();
     let title = track.map_or(player.strings.not_playing, |t| t.title.as_str());
     let artist = track.map_or("", |t| t.artist.as_str());
@@ -31,9 +31,11 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     let track_thumb: Element<'a, Message, AppTheme> = if let Some(t) = track {
         let thumb = player.thumbnail_index.get(t.primary_id());
 
-        thumbnail(p, theme::PLAYBAR_THUMBNAIL_SIZE, thumb)
+        thumbnail(theme::PLAYBAR_THUMBNAIL_SIZE, thumb)
     } else {
-        icons::icon(icons::MUSIC_ICON, p.fg_muted, theme::PLAYBAR_THUMBNAIL_SIZE).into()
+        icons::icon(icons::MUSIC_ICON, theme::PLAYBAR_THUMBNAIL_SIZE)
+            .style(icon_fg_muted())
+            .into()
     };
 
     let artist_target = track.and_then(|t| {
@@ -50,23 +52,17 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
 
     let controls = Container::new(
         Row::with_children([
-            Button::new(icons::icon(
-                icons::SKIP_BACK_ICON,
-                p.fg,
-                theme::ICON_SIZE_MD,
-            ))
-            .padding(theme::SPACING_2XS)
-            .on_press(Message::PreviousTrack)
-            .into(),
+            Button::new(icons::icon(icons::SKIP_BACK_ICON, theme::ICON_SIZE_MD).style(icon_fg()))
+                .padding(theme::SPACING_2XS)
+                .on_press(Message::PreviousTrack)
+                .into(),
             play_pause_button(player.is_playing)
                 .padding(theme::SPACING_SM)
                 .on_press(Message::TogglePlayPause)
                 .into(),
-            Button::new(icons::icon(
-                icons::SKIP_FORWARD_ICON,
-                p.fg,
-                theme::ICON_SIZE_MD,
-            ))
+            Button::new(
+                icons::icon(icons::SKIP_FORWARD_ICON, theme::ICON_SIZE_MD).style(icon_fg()),
+            )
             .padding(theme::SPACING_2XS)
             .on_press(Message::NextTrack)
             .into(),
@@ -87,47 +83,32 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         .width(theme::VOLUME_SLIDER_WIDTH)
         .step(0.01f32);
 
-    let queue_btn = Button::new(icons::icon(
-        icons::QUEUE_ICON,
-        if player.show_queue {
-            Color::BLACK
-        } else {
-            p.fg_secondary
-        },
-        theme::ICON_SIZE_MD,
-    ))
+    let queue_btn = Button::new(
+        icons::icon(icons::QUEUE_ICON, theme::ICON_SIZE_MD)
+            .style(icon_playbar_button(player.show_queue)),
+    )
     .padding(theme::SPACING_XS)
-    .style(button_style_queue(player.show_queue))
+    .style(button_style_playbar(player.show_queue))
     .on_press(Message::ToggleQueue)
     .width(theme::QUEUE_BTN_WIDTH)
     .height(theme::QUEUE_BTN_WIDTH);
 
-    let repeat_btn = Button::new(icons::icon(
-        icons::REPEAT_ICON,
-        if player.repeat {
-            Color::BLACK
-        } else {
-            p.fg_secondary
-        },
-        theme::ICON_SIZE_MD,
-    ))
+    let repeat_btn = Button::new(
+        icons::icon(icons::REPEAT_ICON, theme::ICON_SIZE_MD)
+            .style(icon_playbar_button(player.repeat)),
+    )
     .padding(theme::SPACING_XS)
-    .style(button_style_queue(player.repeat))
+    .style(button_style_playbar(player.repeat))
     .on_press(Message::ToggleRepeat)
     .width(theme::QUEUE_BTN_WIDTH)
     .height(theme::QUEUE_BTN_WIDTH);
 
-    let lyrics_btn = Button::new(icons::icon(
-        icons::LYRICS_ICON,
-        if player.lyrics.is_some() {
-            Color::BLACK
-        } else {
-            p.fg_secondary
-        },
-        theme::ICON_SIZE_MD,
-    ))
+    let lyrics_btn = Button::new(
+        icons::icon(icons::LYRICS_ICON, theme::ICON_SIZE_MD)
+            .style(icon_playbar_button(player.lyrics.is_some())),
+    )
     .padding(theme::SPACING_XS)
-    .style(button_style_queue(player.lyrics.is_some()))
+    .style(button_style_playbar(player.lyrics.is_some()))
     .on_press(Message::ShowLyrics)
     .width(theme::QUEUE_BTN_WIDTH)
     .height(theme::QUEUE_BTN_WIDTH);
@@ -146,7 +127,9 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
                 .width(Length::Fill)
                 .into(),
             Container::new(total_text).into(),
-            icons::icon(icons::VOLUME_ICON, p.fg_secondary, theme::ICON_SIZE_SM).into(),
+            icons::icon(icons::VOLUME_ICON, theme::ICON_SIZE_SM)
+                .style(icon_fg_secondary())
+                .into(),
             volume_slider.into(),
             repeat_btn.into(),
             queue_btn.into(),
