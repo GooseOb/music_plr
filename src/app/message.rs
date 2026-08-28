@@ -24,7 +24,7 @@ pub enum BackendResult {
     DownloadComplete(Track, String),
     DownloadError(String),
     SearchError(String),
-    ThumbnailsDownloaded(Vec<String>),
+    ThumbnailDownloaded(String),
     LyricsFetched(Result<Lyrics, String>, String),
     NormalizationComputed(String, f32),
     CardPlaylistReady(usize, String, Vec<Track>),

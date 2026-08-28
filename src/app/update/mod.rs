@@ -25,18 +25,14 @@ const DOUBLE_CLICK_MS: u128 = 300;
 /// file; `url` is the source (empty falls back to the default `YouTube` still).
 pub fn spawn_thumbnail_download(entries: Vec<(String, String)>, tx: mpsc::Sender<BackendResult>) {
     tracing::debug!(
-        "Spawning thumbnail download thread for {} entries",
+        "Spawning thumbnail download threads for {} entries",
         entries.len()
     );
-    if entries.is_empty() {
-        return;
+    for (id, thumb) in entries {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            crate::data::thumbnails::download(&id, &thumb);
+            let _ = tx.send(BackendResult::ThumbnailDownloaded(id));
+        });
     }
-    thread::spawn(move || {
-        let mut downloaded = Vec::with_capacity(entries.len());
-        for (id, thumb) in &entries {
-            crate::data::thumbnails::download(id, thumb);
-            downloaded.push(id.clone());
-        }
-        let _ = tx.send(BackendResult::ThumbnailsDownloaded(downloaded));
-    });
 }

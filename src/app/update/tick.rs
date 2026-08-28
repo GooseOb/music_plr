@@ -344,10 +344,8 @@ impl MusicPlayer {
                 self.notify_error(msg);
                 Task::none()
             }
-            BackendResult::ThumbnailsDownloaded(ids) => {
-                for id in &ids {
-                    self.thumbnail_index.mark_downloaded(id);
-                }
+            BackendResult::ThumbnailDownloaded(id) => {
+                self.thumbnail_index.mark_downloaded(&id);
                 Task::none()
             }
             BackendResult::NormalizationComputed(id, gain) => {

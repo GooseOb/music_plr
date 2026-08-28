@@ -85,15 +85,14 @@ impl ThumbnailIndex {
         self.entries.get(id).and_then(|p| p.as_ref())
     }
 
-    pub fn ensure(&mut self, id: &str, url: &str) -> Option<PathBuf> {
-        if let Some(Some(path)) = self.entries.get(id) {
-            return Some(path.clone());
+    pub fn ensure(&mut self, id: &str, url: &str) {
+        if let Some(Some(_)) = self.entries.get(id) {
+            return;
         }
         if !url.is_empty() && !self.entries.contains_key(id) {
             self.entries.insert(id.to_string(), None);
             self.pending.push((id.to_string(), url.to_string()));
         }
-        None
     }
 
     pub fn mark_downloaded(&mut self, id: &str) {
