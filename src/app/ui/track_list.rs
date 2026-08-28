@@ -99,7 +99,17 @@ where
             }
             items
         }
-        _ => (0..count).map(render_row).collect(),
+        // Bounds known and the list fits within the viewport: render every row
+        // directly (no virtualization needed).
+        Some(_) => (0..count).map(render_row).collect(),
+        // Bounds not known yet
+        None => {
+            if count == 0 {
+                Vec::new()
+            } else {
+                vec![row_spacer(count as f32 * crate::theme::ROW_HEIGHT)]
+            }
+        }
     };
 
     scrollable(Column::with_children(children))
@@ -201,7 +211,8 @@ fn view_track_row_inner<'a>(
         .interaction(player.drag.clickable_cursor_interaction())
         .on_press(Message::DragPress(Pressed::Track(pos)))
         .on_right_press(Message::TrackRightClicked(pos))
-        .on_move(move |_| Message::HoverStart(HoverTarget::Track(pos)));
+        .on_enter(Message::HoverStart(HoverTarget::Track(pos)))
+        .on_exit(Message::HoverEnd(HoverTarget::Track(pos)));
 
     let border = if is_match || is_dragging {
         Some(if is_interacting { p.accent } else { p.fg_muted })

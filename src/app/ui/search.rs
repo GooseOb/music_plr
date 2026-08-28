@@ -226,7 +226,8 @@ fn card_row<'a>(
     let main = MouseArea::new(main)
         .interaction(player.drag.clickable_cursor_interaction())
         .on_press(Message::DragPress(Pressed::Card(item.clone())))
-        .on_move(move |_| Message::HoverStart(HoverTarget::Card(hover_item.clone())));
+        .on_enter(Message::HoverStart(HoverTarget::Card(hover_item.clone())))
+        .on_exit(Message::HoverEnd(HoverTarget::Card(hover_item.clone())));
     track_row(
         main,
         // TODO: make consistent
@@ -388,7 +389,8 @@ pub(super) fn view_search_history(
                 })
                 .id(iced::widget::Id::from(format!("search_history:{i}")));
                 MouseArea::new(row)
-                    .on_move(move |_| Message::HoverStart(HoverTarget::SearchHistory(i)))
+                    .on_enter(Message::HoverStart(HoverTarget::SearchHistory(i)))
+                    .on_exit(Message::HoverEnd(HoverTarget::SearchHistory(i)))
                     .into()
             });
 

@@ -468,8 +468,14 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::HoverStart(target) => {
-                if !self.drag.is_hover_controlled {
+                if !self.drag.is_hover_controlled && self.drag.hovered.as_ref() != Some(&target) {
                     self.drag.set_hovered(target);
+                }
+                Task::none()
+            }
+            Message::HoverEnd(target) => {
+                if !self.drag.is_hover_controlled && self.drag.hovered.as_ref() == Some(&target) {
+                    self.drag.hovered = None;
                 }
                 Task::none()
             }

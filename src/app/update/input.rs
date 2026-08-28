@@ -261,10 +261,10 @@ impl MusicPlayer {
         {
             return Task::none();
         }
-        let index = self.drag.recall_focus(target).map_or_else(
-            || target.first_index(),
-            |i| i.clamp(target.first_index(), self.track_count(target) - 1),
-        );
+        let index = self
+            .drag
+            .recall_focus(target)
+            .clamp(target.first_index(), self.track_count(target) - 1);
         self.move_hovered(TrackPos::new(index, target))
     }
 
@@ -317,10 +317,7 @@ impl MusicPlayer {
                 ((pos.index - first).cast_signed() + dir).rem_euclid(span.cast_signed()) as usize
                     + first
             }
-            _ => self
-                .drag
-                .recall_focus(list)
-                .map_or(first, |i| i.clamp(first, count - 1)),
+            _ => self.drag.recall_focus(list).clamp(first, count - 1),
         };
         self.move_hovered(TrackPos::new(new_idx, list))
     }

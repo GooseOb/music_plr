@@ -115,6 +115,7 @@ pub enum Message {
     ArtistHeaderProviderChanged(ProviderId),
     DragPress(interaction::Pressed),
     HoverStart(interaction::HoverTarget),
+    HoverEnd(interaction::HoverTarget),
     ToggleLibrarySave(library::LibraryItem),
     ToggleLibraryExpanded,
 

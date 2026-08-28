@@ -363,7 +363,7 @@ pub struct DragState {
     pub is_hover_controlled: bool,
     pub hovered: Option<HoverTarget>,
     /// Last focused row per list, so returning to a list restores focus.
-    pub last_focus: [Option<usize>; 3],
+    pub last_focus: [usize; 3],
 }
 
 impl DragState {
@@ -391,13 +391,13 @@ impl DragState {
     /// focused row.
     pub fn set_hovered(&mut self, target: HoverTarget) {
         if let HoverTarget::Track(pos) = &target {
-            self.last_focus[pos.list.slot()] = Some(pos.index);
+            self.last_focus[pos.list.slot()] = pos.index;
         }
         self.hovered = Some(target);
     }
 
     /// The last focused row index of `list`, if still meaningful-ish.
-    pub fn recall_focus(&self, list: TrackListKind) -> Option<usize> {
+    pub fn recall_focus(&self, list: TrackListKind) -> usize {
         self.last_focus[list.slot()]
     }
 
