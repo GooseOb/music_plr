@@ -56,7 +56,7 @@ impl MusicPlayer {
                 Pressed::Card(item) => {
                     let provider = item.provider;
                     if item.kind == crate::data::library::LibraryKind::Artist {
-                        self.open_artist(&item.id, &item.title, provider);
+                        self.open_artist(Some(&item.id), &item.title, provider);
                     } else {
                         self.handle_browse(&item.into(), provider);
                     }

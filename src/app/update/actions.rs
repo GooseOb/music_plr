@@ -249,11 +249,7 @@ impl MusicPlayer {
         let Some(track) = self.take_context_menu().map(|m| m.track) else {
             return;
         };
-        if let Some(artist_id) = track.provider_artist_id(provider) {
-            self.open_artist(artist_id, &track.artist, provider);
-        } else {
-            self.open_artist_by_name(&track.artist, provider);
-        }
+        self.open_artist(track.provider_artist_id(provider), &track.artist, provider)
     }
 
     pub fn handle_context_menu_song_radio(&mut self, provider: ProviderId) {

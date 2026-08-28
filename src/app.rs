@@ -445,7 +445,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::OpenArtist { id, name, source } => {
-                self.open_artist(&id, &name, source);
+                self.open_artist(Some(&id), &name, source);
                 Task::none()
             }
             Message::ArtistSectionProviderChanged(section, provider) => {
