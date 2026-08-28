@@ -423,6 +423,8 @@ impl MusicPlayer {
                 original.set_provider(provider, pt.clone());
             }
             original.source = provider;
+            self.thumbnail_index
+                .ensure(original.primary_id(), original.thumbnail());
             if let Some(p) = pos {
                 self.set_track_at(p, original.clone());
             }

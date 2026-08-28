@@ -62,7 +62,7 @@ impl From<YouTubeVideo> for Track {
 struct YTDLPSearchResult {
     id: String,
     title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_flexible_duration")]
     duration: u32,
     channel: String,
     #[serde(default)]
@@ -70,8 +70,6 @@ struct YTDLPSearchResult {
     #[serde(default)]
     view_count: Option<u64>,
 }
-
-const YTM_SEARCH_URL: &str = "https://music.youtube.com/search?q=";
 
 /// Durations beyond a week are garbage (e.g. "1e30"), not tracks.
 const MAX_TRACK_SECS: f64 = 7.0 * 24.0 * 3600.0;
@@ -332,8 +330,8 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
 }
 
 fn search_ytdlp(query: &str, offset: usize, page_size: usize) -> Result<Vec<YouTubeVideo>> {
-    let (mut videos, valid_ids) = flat_search(query, offset + 1, offset + page_size)?;
-    enrich_with_metadata(&mut videos, &valid_ids);
+    // flat_search returns full metadata in a single yt-dlp pass.
+    let (videos, _) = flat_search(query, offset + 1, offset + page_size)?;
     Ok(videos)
 }
 
@@ -345,24 +343,30 @@ pub fn search_more(query: &str, offset: usize) -> Result<Vec<Track>> {
     Ok(videos.into_iter().map(Track::from).collect())
 }
 
-// yt-dlp --flat-playlist pass: collect lightweight video stubs plus the ids
-// that need a second, more expensive metadata pass. Playlist offsets are
-// 1-based per yt-dlp's --playlist-start/--playlist-end convention; callers
-// must convert 0-based offsets to 1-based before calling.
+// yt-dlp search pass. The `ytsearchN:` prefix requests up to N results;
+// `--playlist-start/--playlist-end` then slice the requested window. (The old
+// `--default-search <music-url> --flat-playlist` combo now resolves to channel
+// browse ids — `UC...` — which is_video_id() rejects, so every search returned
+// zero results.) Each dumped entry already carries duration/channel/views, so
+// no second metadata pass is required. Playlist offsets are 1-based per
+// yt-dlp's --playlist-start/--playlist-end convention; callers must convert
+// 0-based offsets to 1-based before calling.
 fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVideo>, Vec<String>)> {
     let start_str = start.to_string();
     let end_str = end.to_string();
+    // `ytsearchN:` caps how many results yt-dlp fetches; use `end` (the upper
+    // bound of the requested window) as N so the slice below is always within
+    // what was actually fetched.
+    let search_spec = format!("ytsearch{end}:{query}");
     let args: Vec<&str> = vec![
-        "--default-search",
-        YTM_SEARCH_URL,
-        "--flat-playlist",
         "--dump-json",
         "--no-warnings",
+        "--skip-download",
         "--playlist-start",
         &start_str,
         "--playlist-end",
         &end_str,
-        query,
+        &search_spec,
     ];
 
     let mut cmd = Command::new("yt-dlp");
@@ -392,48 +396,22 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
             videos.push(YouTubeVideo {
                 id: id.clone(),
                 title: item.title,
-                // Reuse the flat pass's real webpage_url (preserves Music URLs)
                 url: if item.webpage_url.is_empty() {
                     format!("https://youtube.com/watch?v={id}")
                 } else {
                     item.webpage_url
                 },
-                duration: 0,
-                channel: String::new(),
+                duration: item.duration,
+                channel: item.channel,
                 thumbnail: format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg"),
                 album: None,
-                views: 0,
+                views: item.view_count.unwrap_or(0),
                 artist_id: None,
             });
         }
     }
 
     Ok((videos, valid_ids))
-}
-
-// Second yt-dlp pass (--batch-file) filling duration/channel/url for the
-// given ids. Keyed by video id (not position) so that a silently dropped id
-// in yt-dlp's batch output can't mis-assign metadata to the wrong video.
-fn enrich_with_metadata(videos: &mut [YouTubeVideo], valid_ids: &[String]) {
-    if valid_ids.is_empty() {
-        return;
-    }
-
-    let metadata = fetch_batch_metadata(valid_ids);
-    for video in videos.iter_mut() {
-        if let Some(item) = metadata.get(&video.id) {
-            video.duration = item.duration;
-            video.channel = item.channel.clone();
-            if video.views == 0 {
-                video.views = item.view_count.unwrap_or(0);
-            }
-            // Prefer the metadata pass's url (it may correct/normalize the
-            // flat pass's url); otherwise keep the already-set flat url.
-            if !item.webpage_url.is_empty() {
-                video.url = item.webpage_url.clone();
-            }
-        }
-    }
 }
 
 /// Fill missing duration/view-count data on YouTube-sourced tracks with one

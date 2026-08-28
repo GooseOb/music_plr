@@ -42,7 +42,11 @@ impl MusicPlayer {
         }
         if let Some(track) = self.get_track_at(TrackPos::new(index, TrackListKind::Active)) {
             let source = track.source;
-            self.play_and_queue_rest(&track, source, index);
+            if track.best_stream_provider(source).is_none() {
+                self.play_track_via_provider(self.config.default_provider, pos);
+            } else {
+                self.play_and_queue_rest(&track, source, index);
+            }
         }
     }
 
