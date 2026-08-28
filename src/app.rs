@@ -492,10 +492,7 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Message::TrackRightClicked(pos) => {
-                self.show_context_menu(pos);
-                iced_runtime::task::widget(update::operation::CaptureContextMenu::default())
-            }
+            Message::TrackRightClicked(pos) => self.show_context_menu_at(pos, self.drag.cursor_pos),
             Message::PlayTrackAt(pos) => {
                 self.handle_play_track(pos);
                 Task::none()

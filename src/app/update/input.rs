@@ -142,6 +142,7 @@ impl MusicPlayer {
         Task::none()
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn handle_key_press(
         &mut self,
         key: iced::keyboard::key::Physical,
@@ -166,6 +167,15 @@ impl MusicPlayer {
             Physical::Code(Code::Space) => {
                 self.toggle_play_pause();
                 Task::none()
+            }
+            Physical::Code(Code::ContextMenu) => self.open_context_menu_for_hovered_track(),
+            Physical::Code(Code::F10)
+                if modifiers.shift() && !modifiers.control() && !modifiers.logo() =>
+            {
+                self.open_context_menu_for_hovered_track()
+            }
+            Physical::Code(Code::Enter) if modifiers.control() || modifiers.logo() => {
+                self.open_context_menu_for_hovered_track()
             }
             Physical::Code(Code::Escape) => {
                 if self.track_list_search.is_some() {

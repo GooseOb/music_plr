@@ -1,8 +1,10 @@
+use iced::{Point, Task};
+
 use super::{BackendResult, ContextMenuState, MusicPlayer, Track};
 use crate::{
     app::{
         interaction::{TrackListKind, TrackPos},
-        EditTrackState, PlaylistPicker, ViewKind,
+        update, EditTrackState, Message, PlaylistPicker, ViewKind,
     },
     data::JsonStore,
     load_state::LoadState,
@@ -176,9 +178,12 @@ impl MusicPlayer {
         self.sync_lyrics_editor();
     }
 
-    pub fn show_context_menu(&mut self, pos: TrackPos) {
+    /// Open the context menu for `pos` anchored at `point` (absolute window
+    /// coordinates), instead of the live cursor. Used by the keyboard
+    /// shortcuts, which anchor at the center of the hovered row.
+    pub fn show_context_menu_at(&mut self, pos: TrackPos, point: Point) -> Task<Message> {
         let Some(track) = self.get_track_at(pos) else {
-            return;
+            return Task::none();
         };
         let TrackPos { index, list } = pos;
 
@@ -192,17 +197,50 @@ impl MusicPlayer {
         self.context_menu = Some(ContextMenuState {
             pos,
             target_indices,
-            position: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
-            cursor: (self.drag.cursor_pos.x, self.drag.cursor_pos.y),
+            position: (point.x, point.y),
+            cursor: (point.x, point.y),
             in_playlist: matches!(self.view_data().kind, ViewKind::Playlist(_)),
             track,
             hovered: None,
         });
+        iced_runtime::task::widget(update::operation::CaptureContextMenu::default())
     }
 
     pub fn close_context_menu(&mut self) {
         self.context_menu = None;
         self.bounds.context_menu = None;
+    }
+
+    fn track_center_point(&self, pos: TrackPos) -> Option<Point> {
+        let TrackPos { index, list } = pos;
+        let geo = match list {
+            TrackListKind::Queue => self.bounds.queue.as_ref(),
+            TrackListKind::Active => self.bounds.track.as_ref(),
+            TrackListKind::Recent => self.bounds.recent.as_ref(),
+        }?;
+        let scroll = geo.translation_y;
+        let visual_index = index - list.first_index().min(index);
+        Some(if let Some(row) = geo.rows.get(visual_index) {
+            Point::new(row.x + row.width / 2.0, row.y - scroll + row.height / 2.0)
+        } else {
+            let row_y = visual_index as f32 * crate::theme::ROW_HEIGHT - scroll;
+            Point::new(
+                geo.bounds.x + geo.bounds.width / 2.0,
+                geo.bounds.y + row_y + crate::theme::ROW_HEIGHT / 2.0,
+            )
+        })
+    }
+
+    /// Open the context menu for the hovered track, anchored at its row center
+    /// — the keyboard equivalent of right-clicking the row. No-op when nothing
+    /// is hovered (so the shortcut is inert outside a track list).
+    pub fn open_context_menu_for_hovered_track(&mut self) -> Task<Message> {
+        if let Some(pos) = self.drag.hovered_track() {
+            let point = self.track_center_point(pos).unwrap_or(self.drag.cursor_pos);
+            self.show_context_menu_at(pos, point)
+        } else {
+            Task::none()
+        }
     }
 
     /// Open the artist page on `provider`, using the track's stored artist
