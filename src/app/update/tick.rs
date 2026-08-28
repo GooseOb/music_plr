@@ -1,8 +1,8 @@
 use tracing::debug;
 
 use super::{
-    error, mpris, mpsc, spawn_thumbnail_download, BackendResult, MprisCommand, MprisUpdate,
-    MusicPlayer, ViewData,
+    error, mpris, mpsc, spawn_thumbnail_download, BackendResult, Message, MprisCommand,
+    MprisUpdate, MusicPlayer, Task, ViewData,
 };
 use crate::{
     app::ViewKind,
@@ -32,9 +32,10 @@ impl MusicPlayer {
         self.mpris_update_tx = Some(mpris_update_tx);
     }
 
-    pub fn handle_tick(&mut self) {
+    pub fn handle_tick(&mut self) -> Task<Message> {
+        let mut task = Task::none();
         while let Ok(result) = self.result_rx.try_recv() {
-            self.process_result(result);
+            task = task.chain(self.process_result(result));
         }
 
         while let Ok(cmd) = self.mpris_cmd_rx.try_recv() {
@@ -98,6 +99,7 @@ impl MusicPlayer {
         if self.lyrics.is_some() {
             self.ensure_lyrics_for_current();
         }
+        task
     }
 
     fn update_mpris_if_dirty(&mut self) {
@@ -228,10 +230,11 @@ impl MusicPlayer {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub fn process_result(&mut self, result: BackendResult) {
+    pub fn process_result(&mut self, result: BackendResult) -> Task<Message> {
         match result {
             BackendResult::SearchResults(rid, tracks, tab) => {
                 self.process_search_results(rid, tracks, tab);
+                Task::none()
             }
             BackendResult::SearchResultsAppend(rid, tracks) => {
                 let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
@@ -247,6 +250,7 @@ impl MusicPlayer {
                     slot.request_id = 0;
                     self.finalize_view(idx);
                 }
+                Task::none()
             }
             BackendResult::BrowseResults(rid, tracks, meta) => {
                 // Apply to the slot that issued the browse, matched by request id
@@ -256,18 +260,25 @@ impl MusicPlayer {
                         self.apply_album_meta(idx, meta);
                     }
                 }
+                Task::none()
             }
             BackendResult::ArtistIdResolved {
                 rid,
                 provider,
                 resolved_id,
-            } => self.apply_artist_id_resolved(rid, provider, &resolved_id),
+            } => {
+                self.apply_artist_id_resolved(rid, provider, &resolved_id);
+                Task::none()
+            }
             BackendResult::ArtistSectionLoaded {
                 rid,
                 provider,
                 kind,
                 data,
-            } => self.apply_artist_section(rid, provider, kind, *data),
+            } => {
+                self.apply_artist_section(rid, provider, kind, *data);
+                Task::none()
+            }
             BackendResult::CardPlaylistReady(idx, name, tracks) => {
                 // A dragged card turned into a playlist; the browse result
                 // fills it. The playlist view reads tracks from the store, so
@@ -277,6 +288,7 @@ impl MusicPlayer {
                     let msg = (self.strings.added_to)(count, &name);
                     self.notify(msg);
                 }
+                Task::none()
             }
             BackendResult::RadioResults(rid, label, tracks) => {
                 if let Some(idx) = self.slot_for_request(rid) {
@@ -287,23 +299,31 @@ impl MusicPlayer {
                     self.nav_history[idx].kind = kind;
                     self.install_results(idx, tracks);
                 }
+                Task::none()
             }
             BackendResult::DownloadComplete(track, _provider) => {
                 self.process_download_complete(track);
+                Task::none()
             }
             BackendResult::DownloadError(msg) => {
                 error!("Download error: {}", msg);
                 self.notify_error(msg);
+                Task::none()
             }
-            BackendResult::SearchError(msg) => self.process_search_error(msg),
+            BackendResult::SearchError(msg) => {
+                self.process_search_error(msg);
+                Task::none()
+            }
             BackendResult::EditTrackProviderResolved(provider, resolved) => {
                 self.apply_edit_track_provider_resolution(provider, resolved);
+                Task::none()
             }
             BackendResult::EditTrackProviderError(_provider, message) => {
                 if let Some(edit) = &mut self.edit_track {
                     edit.finding = None;
                 }
                 self.notify_error(message);
+                Task::none()
             }
             BackendResult::ProviderResolved {
                 original,
@@ -311,7 +331,10 @@ impl MusicPlayer {
                 resolved,
                 pos,
                 play,
-            } => self.apply_provider_resolution(original, provider, resolved, pos, play),
+            } => {
+                self.apply_provider_resolution(original, provider, resolved, pos, play);
+                Task::none()
+            }
             BackendResult::ProviderResolveError {
                 title,
                 provider,
@@ -319,27 +342,34 @@ impl MusicPlayer {
             } => {
                 let msg = (self.strings.failed_resolve_on)(&title, provider.label(), &message);
                 self.notify_error(msg);
+                Task::none()
             }
             BackendResult::ThumbnailsDownloaded(ids) => {
                 for id in &ids {
                     self.thumbnail_index.mark_downloaded(id);
                 }
+                Task::none()
             }
             BackendResult::NormalizationComputed(id, gain) => {
                 self.normalization_cache.insert(id, gain);
+                Task::none()
             }
             BackendResult::LocalFilesPicked(paths) => {
                 if !paths.is_empty() {
                     self.handle_add_local_music(&paths);
                 }
-            }
-            BackendResult::ImportPathsPicked { method, paths } => {
-                if !paths.is_empty() {
-                    self.handle_import_paths(method, &paths);
-                }
+                Task::none()
             }
             BackendResult::LyricsFetched(result, track_id) => {
                 self.process_lyrics_fetched(result, &track_id);
+                Task::none()
+            }
+            BackendResult::ImportPathsPicked { method, paths } => {
+                if paths.is_empty() {
+                    Task::none()
+                } else {
+                    self.handle_import_paths(method, &paths)
+                }
             }
         }
     }

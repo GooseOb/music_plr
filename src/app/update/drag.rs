@@ -36,6 +36,8 @@ impl MusicPlayer {
             return Task::none();
         };
 
+        let mut nav_task = Task::none();
+
         if self.drag.drag_active {
             match pressed {
                 Pressed::Track(pos) => self.handle_track_drop(pos),
@@ -43,7 +45,7 @@ impl MusicPlayer {
                     if let Some(target) = self
                         .card_drop_target(self.bounds.get_containing(self.drag.cursor_pos).as_ref())
                     {
-                        self.handle_card_drop(item, target);
+                        nav_task = self.handle_card_drop(item, target);
                     }
                 }
                 Pressed::Playlist(_) => self.handle_playlist_drop(),
@@ -55,20 +57,22 @@ impl MusicPlayer {
                 }
                 Pressed::Card(item) => {
                     let provider = item.provider;
-                    if item.kind == crate::data::library::LibraryKind::Artist {
-                        self.open_artist(Some(&item.id), &item.title, provider);
+                    nav_task = if item.kind == crate::data::library::LibraryKind::Artist {
+                        self.open_artist(Some(&item.id), &item.title, provider)
                     } else {
-                        self.handle_browse(&item.into(), provider);
+                        self.handle_browse(&item.into(), provider)
                     }
                 }
                 // A click without a drag selects the playlist (mirrors how a
                 // library card opens on a plain click).
-                Pressed::Playlist(i) => self.handle_select_playlist(i),
+                Pressed::Playlist(i) => {
+                    nav_task = self.handle_select_playlist(i);
+                }
             }
         }
 
         self.drag.stop();
-        Task::none()
+        nav_task
     }
 
     pub fn handle_drag_update(&mut self) -> Task<Message> {
@@ -464,7 +468,7 @@ impl MusicPlayer {
         self.notify(self.strings.reordered_playlist);
     }
 
-    fn handle_card_drop(&mut self, item: LibraryItem, target: DropTarget) {
+    fn handle_card_drop(&mut self, item: LibraryItem, target: DropTarget) -> Task<Message> {
         match target {
             DropTarget::Playlist(idx) => self.create_playlist_from_card(&item, idx),
             DropTarget::Library(idx) => {
@@ -486,15 +490,16 @@ impl MusicPlayer {
                     let msg = (self.strings.saved_title)(&title);
                     self.notify(msg);
                 }
+                Task::none()
             }
-            _ => {}
+            _ => Task::none(),
         }
     }
 
     /// Create a local playlist from a dragged card at `insert_at`: make a new
     /// uniquely-named playlist, then fetch its contents in the background and
     /// fill it once they arrive.
-    fn create_playlist_from_card(&mut self, item: &LibraryItem, insert_at: usize) {
+    fn create_playlist_from_card(&mut self, item: &LibraryItem, insert_at: usize) -> Task<Message> {
         let idx = self.playlists.create_at(&item.title, insert_at);
         let name = self.playlists.playlists[idx].name.clone();
 
@@ -521,8 +526,9 @@ impl MusicPlayer {
         // stream in as the browse result arrives. Select it directly (rather
         // than `handle_select_playlist`) so it activates even when the drop
         // index coincides with the currently selected playlist.
-        self.push_new_view(ViewData::new_playlist(idx, name));
+        let task = self.push_new_view(ViewData::new_playlist(idx, name));
         self.save_session();
+        task
     }
 
     /// Arm a press for dragging. A track row also supports double-click (play

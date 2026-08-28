@@ -1,4 +1,4 @@
-use super::{thread, BackendResult, MusicPlayer, ViewData};
+use super::{thread, BackendResult, Message, MusicPlayer, Task, ViewData};
 use crate::{
     app::{view_data::ArtistEntry, ViewKind},
     load_state::LoadState,
@@ -22,7 +22,12 @@ fn same_popular_ids(
 }
 
 impl MusicPlayer {
-    pub fn open_artist(&mut self, id: Option<&str>, name: &str, source: ProviderId) {
+    pub fn open_artist(
+        &mut self,
+        id: Option<&str>,
+        name: &str,
+        source: ProviderId,
+    ) -> Task<Message> {
         let kind = ViewKind::Artist(ArtistEntry {
             id: id.unwrap_or_default().to_string(),
             name: name.to_string(),
@@ -34,7 +39,7 @@ impl MusicPlayer {
         });
         // Popular tracks render from the view's track list; keep it in the
         // Loading state until they arrive instead of an empty "Nothing here".
-        self.push_new_view(ViewData {
+        let nav_task = self.push_new_view(ViewData {
             kind,
             content: LoadState::Loading,
             ..Default::default()
@@ -55,6 +60,7 @@ impl MusicPlayer {
         if source != ProviderId::SoundCloud {
             self.load_artist_page(rid, name, ProviderId::SoundCloud, &[ArtistDataKind::Header]);
         }
+        nav_task
     }
 
     /// Fetch each kind of `provider`'s artist data in the background,

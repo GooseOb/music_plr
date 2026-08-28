@@ -245,22 +245,26 @@ impl MusicPlayer {
 
     /// Open the artist page on `provider`, using the track's stored artist
     /// id when present and resolving by name otherwise.
-    pub fn handle_context_menu_go_to_artist(&mut self, provider: ProviderId) {
+    pub fn handle_context_menu_go_to_artist(&mut self, provider: ProviderId) -> Task<Message> {
         let Some(track) = self.take_context_menu().map(|m| m.track) else {
-            return;
+            return Task::none();
         };
         self.open_artist(track.provider_artist_id(provider), &track.artist, provider)
     }
 
-    pub fn handle_context_menu_song_radio(&mut self, provider: ProviderId) {
+    pub fn handle_context_menu_song_radio(&mut self, provider: ProviderId) -> Task<Message> {
         if let Some(track) = self.take_context_menu().map(|m| m.track) {
-            self.start_radio_provider(provider, &track, false);
+            self.start_radio_provider(provider, &track, false)
+        } else {
+            Task::none()
         }
     }
 
-    pub fn handle_context_menu_artist_radio(&mut self, provider: ProviderId) {
+    pub fn handle_context_menu_artist_radio(&mut self, provider: ProviderId) -> Task<Message> {
         if let Some(track) = self.take_context_menu().map(|m| m.track) {
-            self.start_radio_provider(provider, &track, true);
+            self.start_radio_provider(provider, &track, true)
+        } else {
+            Task::none()
         }
     }
 

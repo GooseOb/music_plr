@@ -32,6 +32,13 @@ impl MusicPlayer {
         }
     }
 
+    /// A widget operation task that re-captures scrollable/row geometry after
+    /// the view changes. Navigation swaps the whole view, so the cached
+    /// `bounds` are stale until the new layout is measured.
+    fn capture_bounds() -> Task<Message> {
+        iced_runtime::task::widget(super::operation::CaptureBounds::new())
+    }
+
     pub(super) fn restore_nav_entry(&mut self, data: ViewData) -> Task<Message> {
         // Scroll position is stored relative to the main track_list scrollable.
         // (Queue view uses a different Id and is not navigated via history.)
@@ -60,18 +67,19 @@ impl MusicPlayer {
     /// mirrors the old design where `view_data` was a separate field from the
     /// history clone: overwriting the live slot must not clobber the entry we
     /// can navigate Back to.
-    pub(super) fn push_new_view(&mut self, data: ViewData) {
+    pub(super) fn push_new_view(&mut self, data: ViewData) -> Task<Message> {
         self.nav_history.truncate(self.nav_history_pos + 1);
         self.nav_history.push(data);
         if self.nav_history.len() > 20 {
             self.nav_history.remove(0);
         }
         self.nav_history_pos = self.nav_history.len() - 1;
+        Self::capture_bounds()
     }
 
-    pub fn handle_navigate_to(&mut self, data: ViewData) {
+    pub fn handle_navigate_to(&mut self, data: ViewData) -> Task<Message> {
         if self.view_data().same_kind(&data) {
-            return;
+            return Task::none();
         }
         // Capture the live query into the outgoing `Search` entry (if any) so
         // Back navigation restores it.
@@ -83,7 +91,7 @@ impl MusicPlayer {
 
         // Push the destination as a fresh slot; the outgoing view stays at the
         // previous position.
-        self.push_new_view(data);
+        let nav_task = self.push_new_view(data);
         self.sync_search_query();
         self.sync_search_scope();
         self.sync_search_provider();
@@ -92,6 +100,7 @@ impl MusicPlayer {
         let view = self.view_data().clone();
         self.seed_view_thumbnails(&view);
         self.save_session();
+        nav_task
     }
 
     pub fn handle_navigate_back(&mut self) -> Task<Message> {
@@ -114,7 +123,7 @@ impl MusicPlayer {
         let entry = self.nav_history[self.nav_history_pos].clone();
         let task = self.restore_nav_entry(entry);
         self.save_session();
-        task
+        task.chain(Self::capture_bounds())
     }
 
     pub fn handle_reveal_now_playing(&mut self) -> Task<Message> {
@@ -124,13 +133,13 @@ impl MusicPlayer {
         let Some(track) = self.queue.current().cloned() else {
             return Task::none();
         };
-        self.handle_navigate_to(origin);
+        let nav_task = self.handle_navigate_to(origin);
         let key = track.cache_key();
         let index = self.view_tracks().iter().position(|t| t.cache_key() == key);
         let Some(index) = index else {
-            return Task::none();
+            return nav_task;
         };
-        self.move_hovered(TrackPos::new(index, TrackListKind::Active))
+        nav_task.chain(self.move_hovered(TrackPos::new(index, TrackListKind::Active)))
     }
 
     pub(super) fn slot_for_request(&self, rid: u64) -> Option<usize> {
@@ -164,7 +173,7 @@ mod tests {
         let first = p.request_ids.next();
         p.view_data_mut().request_id = first;
 
-        p.handle_navigate_to(ViewData::new_playlist(1, "Other".into()));
+        let _ = p.handle_navigate_to(ViewData::new_playlist(1, "Other".into()));
         let second = p.request_ids.next();
         p.view_data_mut().request_id = second;
 
@@ -176,12 +185,12 @@ mod tests {
     fn navigate_back_restores_outgoing_view() {
         let mut p = player();
         // Default view is Search. Navigate to a Playlist as the outgoing view.
-        p.handle_navigate_to(ViewData::new_playlist(2, "My List".into()));
+        let _ = p.handle_navigate_to(ViewData::new_playlist(2, "My List".into()));
         assert_eq!(p.nav_history.len(), 2);
         assert!(p.can_navigate_back());
 
         // Navigate to a Search view (simulates `run_search` pushing a slot).
-        p.handle_navigate_to(ViewData::new_search(
+        let _ = p.handle_navigate_to(ViewData::new_search(
             "song".into(),
             ProviderId::YouTube,
             SearchScope::Songs,
@@ -204,8 +213,8 @@ mod tests {
     #[test]
     fn replacing_view_keeps_outgoing_slot() {
         let mut p = player();
-        p.handle_navigate_to(ViewData::new_playlist(0, "A".into()));
-        p.handle_navigate_to(ViewData::new_playlist(1, "B".into()));
+        let _ = p.handle_navigate_to(ViewData::new_playlist(0, "A".into()));
+        let _ = p.handle_navigate_to(ViewData::new_playlist(1, "B".into()));
         // Three slots: initial Playlist (from PlaylistStore), Playlist(0), Playlist(1).
         assert_eq!(p.nav_history.len(), 3);
         let _ = p.handle_navigate_back();
@@ -227,7 +236,7 @@ mod tests {
         let mut p = player();
         // Replicates `run_search`'s slot stamping; the threaded version can't
         // run here.
-        p.handle_navigate_to(ViewData::new_search(
+        let _ = p.handle_navigate_to(ViewData::new_search(
             "song".into(),
             ProviderId::YouTube,
             SearchScope::Songs,
@@ -236,7 +245,7 @@ mod tests {
         p.view_data_mut().request_id = rid;
 
         // Navigate away to a different view before results arrive.
-        p.handle_navigate_to(ViewData::new_playlist(5, "Other".into()));
+        let _ = p.handle_navigate_to(ViewData::new_playlist(5, "Other".into()));
         assert!(matches!(p.view_data().kind, ViewKind::Playlist(_)));
         assert_eq!(p.view_data().request_id, 0);
 
@@ -260,7 +269,7 @@ mod tests {
             source: crate::providers::ProviderId::YouTube,
             providers,
         };
-        p.process_result(BackendResult::SearchResults(
+        let _ = p.process_result(BackendResult::SearchResults(
             rid,
             vec![track],
             crate::providers::SearchTab::Songs,

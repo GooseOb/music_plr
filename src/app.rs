@@ -360,10 +360,7 @@ impl MusicPlayer {
     #[allow(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Tick => {
-                self.handle_tick();
-                Task::none()
-            }
+            Message::Tick => self.handle_tick(),
             Message::WindowResized(size) => {
                 self.window_size = size;
                 iced_runtime::task::widget(update::operation::CaptureBounds::new())
@@ -428,26 +425,13 @@ impl MusicPlayer {
                 self.drag.clear_hovered_search_history();
                 iced_runtime::task::widget(update::operation::CaptureSearchHistoryRows::new())
             }
-            Message::SearchExecute => {
-                self.handle_search_execute();
-                Task::none()
-            }
-            Message::SearchScopeChanged(scope) => {
-                self.handle_search_scope_changed(scope);
-                Task::none()
-            }
+            Message::SearchExecute => self.handle_search_execute(),
+            Message::SearchScopeChanged(scope) => self.handle_search_scope_changed(scope),
             Message::SearchProviderChanged(provider) => {
-                self.handle_search_provider_changed(provider);
-                Task::none()
+                self.handle_search_provider_changed(provider)
             }
-            Message::Browse(kind, provider) => {
-                self.handle_browse(&kind, provider);
-                Task::none()
-            }
-            Message::OpenArtist { id, name, source } => {
-                self.open_artist(Some(&id), &name, source);
-                Task::none()
-            }
+            Message::Browse(kind, provider) => self.handle_browse(&kind, provider),
+            Message::OpenArtist { id, name, source } => self.open_artist(Some(&id), &name, source),
             Message::ArtistSectionProviderChanged(section, provider) => {
                 self.handle_artist_section_provider_changed(section, provider);
                 Task::none()
@@ -474,10 +458,7 @@ impl MusicPlayer {
                 self.handle_search_load_more();
                 Task::none()
             }
-            Message::SearchHistorySelected(index) => {
-                self.handle_search_history_select(index);
-                Task::none()
-            }
+            Message::SearchHistorySelected(index) => self.handle_search_history_select(index),
             Message::DeleteSearchHistory(index) => {
                 self.handle_delete_search_history(index);
                 Task::none()
@@ -567,11 +548,12 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ConfirmDeletePlaylist => {
+                let mut nav_task = Task::none();
                 if let Some(idx) = self.delete_confirm_index {
-                    self.handle_delete_playlist(idx);
+                    nav_task = self.handle_delete_playlist(idx);
                 }
                 self.delete_confirm_index = None;
-                Task::none()
+                nav_task
             }
             Message::HideDeleteConfirm => {
                 self.delete_confirm_index = None;
@@ -639,10 +621,7 @@ impl MusicPlayer {
                 self.handle_import_pick();
                 Task::none()
             }
-            Message::OpenAndPlayPlaylist(index) => {
-                self.handle_open_and_play_playlist(index);
-                Task::none()
-            }
+            Message::OpenAndPlayPlaylist(index) => self.handle_open_and_play_playlist(index),
             Message::TrackListSearchInput(query) => self.handle_track_list_search_input(&query),
             Message::TrackListSearchNext => self.handle_track_list_search_step(1),
             Message::TrackListSearchPrev => self.handle_track_list_search_step(-1),
@@ -685,8 +664,7 @@ impl MusicPlayer {
             }
             Message::NavigateTo(data) => {
                 self.lyrics = None;
-                self.handle_navigate_to(data);
-                Task::none()
+                self.handle_navigate_to(data)
             }
             Message::NavigateBack => {
                 if self.lyrics.is_some() {
@@ -747,12 +725,10 @@ impl MusicPlayer {
                     Some(menu) => menu.default_go_to_artist_provider(self.config.default_provider),
                     None => return Task::none(),
                 };
-                self.handle_context_menu_go_to_artist(provider);
-                Task::none()
+                self.handle_context_menu_go_to_artist(provider)
             }
             Message::ContextMenuGoToArtistProvider(provider) => {
-                self.handle_context_menu_go_to_artist(provider);
-                Task::none()
+                self.handle_context_menu_go_to_artist(provider)
             }
             Message::ContextMenuPlayViaProvider(provider, pos) => {
                 self.close_context_menu();
@@ -764,12 +740,10 @@ impl MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuSongRadioProvider(provider) => {
-                self.handle_context_menu_song_radio(provider);
-                Task::none()
+                self.handle_context_menu_song_radio(provider)
             }
             Message::ContextMenuArtistRadioProvider(provider) => {
-                self.handle_context_menu_artist_radio(provider);
-                Task::none()
+                self.handle_context_menu_artist_radio(provider)
             }
             Message::ContextMenuHover(focus) => {
                 if let Some(menu) = &mut self.context_menu {
@@ -828,13 +802,13 @@ impl MusicPlayer {
                 match action {
                     DefaultCtxAction::Download => {
                         self.download_track_via_provider(provider);
+                        Task::none()
                     }
                     DefaultCtxAction::SongRadio => self.handle_context_menu_song_radio(provider),
                     DefaultCtxAction::ArtistRadio => {
-                        self.handle_context_menu_artist_radio(provider);
+                        self.handle_context_menu_artist_radio(provider)
                     }
                 }
-                Task::none()
             }
             Message::ContextMenuRemoveFromPlaylist(indices) => {
                 self.close_context_menu();

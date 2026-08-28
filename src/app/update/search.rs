@@ -1,4 +1,4 @@
-use super::{mpsc, thread, BackendResult, MusicPlayer, ViewData};
+use super::{mpsc, thread, BackendResult, Message, MusicPlayer, Task, ViewData};
 use crate::{
     app::{update::operation::CaptureSearchHistoryRows, ViewKind},
     data::library::{LibraryItem, LibraryKind},
@@ -8,9 +8,9 @@ use crate::{
 };
 
 impl MusicPlayer {
-    pub fn run_search(&mut self) {
+    pub fn run_search(&mut self) -> Task<Message> {
         if self.search_query.is_empty() {
-            return;
+            return Task::none();
         }
         let query = self.search_query.clone();
         let scope = self.search_scope;
@@ -20,7 +20,7 @@ impl MusicPlayer {
         // state; clear the search-history dropdown.
         // Push as a fresh history slot so the outgoing view survives for Back.
         let new_view = ViewData::new_search(query.clone(), provider, scope);
-        self.push_new_view(new_view);
+        let nav_task = self.push_new_view(new_view);
         let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
         self.sync_search_scope();
@@ -36,6 +36,7 @@ impl MusicPlayer {
             move |(tracks, tab)| BackendResult::SearchResults(rid, tracks, tab),
             tx,
         );
+        nav_task
     }
 
     /// Spawn a background thread that runs `run` (or returns an error), maps
@@ -59,25 +60,31 @@ impl MusicPlayer {
         });
     }
 
-    pub fn handle_search_execute(&mut self) {
+    pub fn handle_search_execute(&mut self) -> Task<Message> {
         if self.show_search_history {
             if let Some(i) = self.drag.hovered_search_history() {
-                self.handle_search_history_select(i);
-                return;
+                return self.handle_search_history_select(i);
             }
         }
-        self.run_search();
+        self.run_search()
     }
 
-    pub fn handle_search_scope_changed(&mut self, scope: crate::providers::SearchScope) {
+    pub fn handle_search_scope_changed(
+        &mut self,
+        scope: crate::providers::SearchScope,
+    ) -> Task<Message> {
         if scope != self.search_scope {
             self.search_scope = scope;
             self.save_session();
-            self.run_search();
+            return self.run_search();
         }
+        Task::none()
     }
 
-    pub fn handle_search_provider_changed(&mut self, provider: crate::providers::ProviderId) {
+    pub fn handle_search_provider_changed(
+        &mut self,
+        provider: crate::providers::ProviderId,
+    ) -> Task<Message> {
         if provider != self.search_provider {
             self.search_provider = provider;
             // Clamp the scope to one the new provider supports.
@@ -85,8 +92,9 @@ impl MusicPlayer {
                 self.search_scope = provider.supported_scopes()[0];
             }
             self.save_session();
-            self.run_search();
+            return self.run_search();
         }
+        Task::none()
     }
 
     pub fn handle_search_load_more(&mut self) {
@@ -129,12 +137,14 @@ impl MusicPlayer {
         });
     }
 
-    pub fn handle_search_history_select(&mut self, index: usize) {
+    pub fn handle_search_history_select(&mut self, index: usize) -> Task<Message> {
         if index < self.last_filtered_history.len() {
             self.search_query = self.last_filtered_history[index].clone();
             self.show_search_history = false;
             self.drag.clear_hovered_search_history();
-            self.run_search();
+            self.run_search()
+        } else {
+            Task::none()
         }
     }
 
@@ -169,12 +179,12 @@ impl MusicPlayer {
         provider: crate::providers::ProviderId,
         track: &Track,
         artist: bool,
-    ) {
+    ) -> Task<Message> {
         if !provider.capabilities().radio {
             let p = format!("{provider:?}");
             let msg = (self.strings.provider_no_radio)(&p);
             self.notify(msg);
-            return;
+            return Task::none();
         }
         let name = if artist { &track.artist } else { &track.title };
         let word = if artist {
@@ -188,7 +198,7 @@ impl MusicPlayer {
         } else {
             ViewKind::SongRadio(label.clone())
         };
-        self.push_new_view(ViewData::new_radio(kind));
+        let nav_task = self.push_new_view(ViewData::new_radio(kind));
         let rid = self.request_ids.next();
         self.view_data_mut().request_id = rid;
         let word = if artist {
@@ -239,6 +249,7 @@ impl MusicPlayer {
             move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
             tx,
         );
+        nav_task
     }
 
     /// Shared drill-down: switch to the given browse view kind (loading),
@@ -247,11 +258,15 @@ impl MusicPlayer {
     /// `ViewKind::browse_params`; the originating `provider` selects which
     /// backend answers the browse (`YouTube` cards vs. `MusicBrainz` `artist`/
     /// `release` pages).
-    pub fn handle_browse(&mut self, kind: &ViewKind, provider: crate::providers::ProviderId) {
+    pub fn handle_browse(
+        &mut self,
+        kind: &ViewKind,
+        provider: crate::providers::ProviderId,
+    ) -> Task<Message> {
         let (id, kind_str, label) = kind
             .browse_params()
             .expect("start_browse called with a non-browse ViewKind");
-        self.push_new_view(ViewData {
+        let nav_task = self.push_new_view(ViewData {
             kind: kind.clone(),
             content: crate::load_state::LoadState::Loading,
             ..Default::default()
@@ -267,6 +282,7 @@ impl MusicPlayer {
             move |(tracks, meta)| BackendResult::BrowseResults(rid, tracks, meta),
             tx,
         );
+        nav_task
     }
 
     pub fn current_library_item(&self) -> Option<LibraryItem> {

@@ -188,7 +188,7 @@ impl MusicPlayer {
                 } else if self.has_selection() {
                     self.clear_selection();
                 } else {
-                    self.handle_navigate_to(ViewData::new_search(
+                    return self.handle_navigate_to(ViewData::new_search(
                         String::new(),
                         self.search_provider,
                         self.search_scope,
@@ -223,7 +223,7 @@ impl MusicPlayer {
             }
             Physical::Code(Code::Enter) => {
                 if let Some(i) = self.drag.hovered_search_history() {
-                    self.handle_search_history_select(i);
+                    return self.handle_search_history_select(i);
                 } else if let Some(hovered) = self.drag.hovered_track() {
                     self.handle_play_track(hovered);
                 }

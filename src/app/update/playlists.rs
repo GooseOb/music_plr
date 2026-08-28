@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{MusicPlayer, Track, ViewData};
+use super::{Message, MusicPlayer, Task, Track, ViewData};
 use crate::{
     app::{ImportMethod, ImportPlaylistDialog, ViewKind},
     data::JsonStore,
@@ -21,7 +21,7 @@ impl MusicPlayer {
         self.notify(msg);
     }
 
-    pub fn handle_select_playlist(&mut self, index: usize) {
+    pub fn handle_select_playlist(&mut self, index: usize) -> Task<Message> {
         let already_selected =
             matches!(&self.view_data().kind, ViewKind::Playlist(p) if p.index == index);
         if index < self.playlists.playlists.len() && !already_selected {
@@ -30,17 +30,19 @@ impl MusicPlayer {
             self.drag.cleanup();
 
             let playlist_name = self.playlists.playlists[index].name.clone();
-            self.push_new_view(ViewData::new_playlist(index, playlist_name));
+            let task = self.push_new_view(ViewData::new_playlist(index, playlist_name));
 
             self.save_session();
+            return task;
         }
+        Task::none()
     }
 
-    pub fn handle_open_and_play_playlist(&mut self, index: usize) {
-        self.handle_select_playlist(index);
+    pub fn handle_open_and_play_playlist(&mut self, index: usize) -> Task<Message> {
+        let task = self.handle_select_playlist(index);
         if let Some(playlist) = self.playlists.playlists.get(index) {
             if playlist.tracks.is_empty() {
-                return;
+                return task;
             }
             let tracks = playlist.tracks.clone();
             let first = tracks[0].clone();
@@ -51,6 +53,7 @@ impl MusicPlayer {
             self.save_session();
             self.mpris_dirty = true;
         }
+        task
     }
 
     pub fn handle_rename_playlist(&mut self, new_name: &str) {
@@ -65,7 +68,7 @@ impl MusicPlayer {
         }
     }
 
-    pub fn handle_delete_playlist(&mut self, index: usize) {
+    pub fn handle_delete_playlist(&mut self, index: usize) -> Task<Message> {
         self.playlists.delete(index);
 
         // The currently viewed playlist may be the one being deleted. A
@@ -88,8 +91,9 @@ impl MusicPlayer {
             }
         }
 
+        let mut nav_task = Task::none();
         if navigate_away {
-            self.push_new_view(ViewData::new_search(
+            nav_task = self.push_new_view(ViewData::new_search(
                 String::new(),
                 self.search_provider,
                 self.search_scope,
@@ -103,6 +107,7 @@ impl MusicPlayer {
         }
 
         self.delete_confirm_index = None;
+        nav_task
     }
 
     pub fn handle_add_local_music(&mut self, paths: &[PathBuf]) {
@@ -302,11 +307,15 @@ impl MusicPlayer {
     /// Apply an import once the user has picked a source. Returns whether the
     /// dialog should close (true on success, false on a readable error so the
     /// user can correct and retry).
-    pub fn handle_import_paths(&mut self, method: ImportMethod, paths: &[PathBuf]) -> bool {
+    pub fn handle_import_paths(
+        &mut self,
+        method: ImportMethod,
+        paths: &[PathBuf],
+    ) -> Task<Message> {
         let Some(dialog) = self.import_dialog.clone() else {
-            return false;
+            return Task::none();
         };
-        let ok = match method {
+        let (ok, task) = match method {
             ImportMethod::Native => self.import_native(&paths[0]),
             ImportMethod::Csv => self.import_csv(&paths[0], &dialog),
             ImportMethod::FileList => self.import_file_list(&paths[0], &dialog),
@@ -314,27 +323,27 @@ impl MusicPlayer {
         if ok {
             self.import_dialog = None;
         }
-        ok
+        task
     }
 
-    fn import_native(&mut self, path: &Path) -> bool {
+    fn import_native(&mut self, path: &Path) -> (bool, Task<Message>) {
         let content = match fs::read_to_string(path) {
             Ok(c) => c,
             Err(e) => {
                 self.notify_error(format!("{}: {e}", self.strings.import_bad_file));
-                return false;
+                return (false, Task::none());
             }
         };
         let imported: crate::data::playlists::PlaylistStore = match serde_json::from_str(&content) {
             Ok(s) => s,
             Err(e) => {
                 self.notify_error(format!("{}: {e}", self.strings.import_bad_file));
-                return false;
+                return (false, Task::none());
             }
         };
         if imported.playlists.is_empty() {
             self.notify(self.strings.import_no_tracks);
-            return false;
+            return (false, Task::none());
         }
         let count = imported.playlists.len();
         for pl in imported.playlists {
@@ -345,22 +354,22 @@ impl MusicPlayer {
             self.playlists.save();
         }
         self.notify((self.strings.import_playlists_imported)(count));
-        true
+        (true, Task::none())
     }
 
-    fn import_csv(&mut self, path: &Path, dialog: &ImportPlaylistDialog) -> bool {
+    fn import_csv(&mut self, path: &Path, dialog: &ImportPlaylistDialog) -> (bool, Task<Message>) {
         let mut rdr = match csv::Reader::from_path(path) {
             Ok(r) => r,
             Err(e) => {
                 self.notify_error(format!("{}: {e}", self.strings.import_bad_file));
-                return false;
+                return (false, Task::none());
             }
         };
         let headers: Vec<String> = match rdr.headers() {
             Ok(h) => h.iter().map(|s| s.trim().to_lowercase()).collect(),
             Err(e) => {
                 self.notify_error(format!("{}: {e}", self.strings.import_bad_file));
-                return false;
+                return (false, Task::none());
             }
         };
         let col_index = |name: &str| -> Option<usize> {
@@ -391,7 +400,7 @@ impl MusicPlayer {
         }
         if tracks.is_empty() {
             self.notify(self.strings.import_no_tracks);
-            return false;
+            return (false, Task::none());
         }
         let name = Self::import_playlist_name(dialog, path.file_stem().and_then(|s| s.to_str()));
         let idx = self
@@ -400,16 +409,20 @@ impl MusicPlayer {
         self.playlists.insert_tracks_at(idx, tracks.iter(), 0);
         let label = self.playlists.playlists[idx].name.clone();
         self.notify((self.strings.import_imported_into)(tracks.len(), &label));
-        self.open_imported_playlist(idx);
-        true
+        let task = self.open_imported_playlist(idx);
+        (true, task)
     }
 
-    fn import_file_list(&mut self, dir: &Path, dialog: &ImportPlaylistDialog) -> bool {
+    fn import_file_list(
+        &mut self,
+        dir: &Path,
+        dialog: &ImportPlaylistDialog,
+    ) -> (bool, Task<Message>) {
         let mut files = Vec::new();
         crate::app::import::gather_audio_files(dir, &mut files);
         if files.is_empty() {
             self.notify(self.strings.import_no_tracks);
-            return false;
+            return (false, Task::none());
         }
         let mut tracks = Vec::new();
         for file in &files {
@@ -424,7 +437,7 @@ impl MusicPlayer {
         }
         if tracks.is_empty() {
             self.notify(self.strings.import_no_match);
-            return false;
+            return (false, Task::none());
         }
         let name = Self::import_playlist_name(dialog, dir.file_name().and_then(|s| s.to_str()));
         let idx = self
@@ -433,8 +446,8 @@ impl MusicPlayer {
         self.playlists.insert_tracks_at(idx, tracks.iter(), 0);
         let label = self.playlists.playlists[idx].name.clone();
         self.notify((self.strings.import_imported_into)(tracks.len(), &label));
-        self.open_imported_playlist(idx);
-        true
+        let task = self.open_imported_playlist(idx);
+        (true, task)
     }
 
     /// Resolve the playlist name: the user's override if set, else the source
@@ -447,15 +460,16 @@ impl MusicPlayer {
             .map_or_else(|| "Imported".to_string(), std::string::ToString::to_string)
     }
 
-    fn open_imported_playlist(&mut self, index: usize) {
+    fn open_imported_playlist(&mut self, index: usize) -> Task<Message> {
         if index >= self.playlists.playlists.len() {
-            return;
+            return Task::none();
         }
         let name = self.playlists.playlists[index].name.clone();
         self.clear_selection();
         self.drag.cleanup();
-        self.push_new_view(ViewData::new_playlist(index, name));
+        let task = self.push_new_view(ViewData::new_playlist(index, name));
         self.save_session();
+        task
     }
 }
 
@@ -484,7 +498,7 @@ mod tests {
         p.nav_history_pos = 0;
 
         // Delete the playlist currently being viewed (B at index 1).
-        p.handle_delete_playlist(1);
+        let _ = p.handle_delete_playlist(1);
         match &p.view_data().kind {
             ViewKind::Playlist(entry) => {
                 assert_eq!(entry.index, 1);
@@ -496,7 +510,7 @@ mod tests {
         // Deleting a playlist above the selected one shifts the selection down.
         p.nav_history = vec![ViewData::new_playlist(1, "C".into())];
         p.nav_history_pos = 0;
-        p.handle_delete_playlist(0);
+        let _ = p.handle_delete_playlist(0);
         assert_eq!(
             p.view_data().kind,
             ViewKind::Playlist(crate::app::view_data::PlaylistEntry {
@@ -514,7 +528,7 @@ mod tests {
 
         // Deleting the only playlist (while viewing it) must leave the
         // Playlist view rather than leaving it with no selection.
-        p.handle_delete_playlist(0);
+        let _ = p.handle_delete_playlist(0);
         assert!(p.playlists.playlists.is_empty());
         assert!(!matches!(p.view_data().kind, ViewKind::Playlist(_)));
     }
