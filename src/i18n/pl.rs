@@ -166,6 +166,11 @@ pub const STRINGS: Strings = Strings {
     import_csv_name_col: "Kolumna tytułu",
     import_csv_artist_col: "Kolumna wykonawcy",
     import_csv_album_col: "Kolumna albumu",
+    import_csv_preset: "Wzór",
+    import_csv_preset_default: "Domyślny",
+    import_csv_preset_exportify: "Exportify",
+    import_csv_exportify_note:
+        "Obsługuje playlisty Spotify wyeksportowane z https://exportify.net/.",
     import_pattern_lbl: "Wzór nazwy pliku",
     import_playlist_name: "Nazwa playlisty",
     import_add_pattern: "Dodaj wzór",

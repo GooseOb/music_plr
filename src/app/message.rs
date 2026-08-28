@@ -7,7 +7,7 @@ use crate::{
     app::{
         interaction::{self, ContextMenuFocus, DefaultCtxAction, TrackListKind, TrackPos},
         update::operation::CaptureBounds,
-        ImportCsvField, ImportMethod, ViewKind,
+        CsvPreset, ImportCsvField, ImportMethod, ViewKind,
     },
     data::library,
     lyrics::Lyrics,
@@ -142,6 +142,7 @@ pub enum Message {
     CloseImportPlaylist,
     ImportMethodChanged(ImportMethod),
     ImportCsvColChanged(ImportCsvField, String),
+    ImportCsvPresetChanged(CsvPreset),
     ImportPlaylistNameChanged(String),
     ImportPatternChanged(usize, String),
     ImportAddPattern,

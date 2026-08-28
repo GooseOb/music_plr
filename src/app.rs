@@ -22,7 +22,7 @@ mod ui;
 mod update;
 mod view_data;
 
-pub use import::{ImportCsvField, ImportMethod, ImportPlaylistDialog};
+pub use import::{CsvPreset, ImportCsvField, ImportMethod, ImportPlaylistDialog};
 pub use interaction::{
     ContextMenuState, DefaultCtxAction, DragState, TrackListKind, TrackListSearch, TrackPos,
 };
@@ -601,6 +601,12 @@ impl MusicPlayer {
                         ImportCsvField::Artist => dialog.csv_artist_col = value,
                         ImportCsvField::Album => dialog.csv_album_col = value,
                     }
+                }
+                Task::none()
+            }
+            Message::ImportCsvPresetChanged(preset) => {
+                if let Some(dialog) = &mut self.import_dialog {
+                    dialog.apply_csv_preset(preset);
                 }
                 Task::none()
             }

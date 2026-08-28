@@ -21,7 +21,7 @@ use super::{
 use crate::{
     app::{
         interaction::{ContextMenuFocus, CtxAction, SubmenuKind},
-        EditTrackField, ImportCsvField, ImportMethod,
+        CsvPreset, EditTrackField, ImportCsvField, ImportMethod,
     },
     icons,
     providers::{ProviderId, ProviderTrack},
@@ -651,25 +651,52 @@ pub(super) fn view_import_playlist(player: &MusicPlayer) -> Element<'_, Message,
 
     let content: Element<'_, Message, AppTheme> = match dialog.method {
         ImportMethod::Native => text(tr.import_native_hint).style(fg_secondary()).into(),
-        ImportMethod::Csv => Column::with_children([
-            text_input_row(tr.import_csv_name_col, &dialog.csv_name_col, "name", |v| {
-                Message::ImportCsvColChanged(ImportCsvField::Name, v)
-            }),
-            text_input_row(
-                tr.import_csv_artist_col,
-                &dialog.csv_artist_col,
-                "artist",
-                |v| Message::ImportCsvColChanged(ImportCsvField::Artist, v),
-            ),
-            text_input_row(
-                tr.import_csv_album_col,
-                &dialog.csv_album_col,
-                "album",
-                |v| Message::ImportCsvColChanged(ImportCsvField::Album, v),
-            ),
-        ])
-        .spacing(theme::SPACING_SM)
-        .into(),
+        ImportMethod::Csv => {
+            let preset_row = text(tr.import_csv_preset).into();
+            let preset_tabs = scope_tab_row([
+                (
+                    tr.import_csv_preset_default,
+                    dialog.csv_preset == CsvPreset::Default,
+                    Message::ImportCsvPresetChanged(CsvPreset::Default),
+                ),
+                (
+                    tr.import_csv_preset_exportify,
+                    dialog.csv_preset == CsvPreset::Exportify,
+                    Message::ImportCsvPresetChanged(CsvPreset::Exportify),
+                ),
+            ]);
+            let mut csv_children: Vec<Element<'_, Message, AppTheme>> = vec![
+                Row::with_children([preset_row, preset_tabs])
+                    .spacing(theme::SPACING_SM)
+                    .align_y(alignment::Vertical::Center)
+                    .into(),
+                text_input_row(tr.import_csv_name_col, &dialog.csv_name_col, "name", |v| {
+                    Message::ImportCsvColChanged(ImportCsvField::Name, v)
+                }),
+                text_input_row(
+                    tr.import_csv_artist_col,
+                    &dialog.csv_artist_col,
+                    "artist",
+                    |v| Message::ImportCsvColChanged(ImportCsvField::Artist, v),
+                ),
+                text_input_row(
+                    tr.import_csv_album_col,
+                    &dialog.csv_album_col,
+                    "album",
+                    |v| Message::ImportCsvColChanged(ImportCsvField::Album, v),
+                ),
+            ];
+            if dialog.csv_preset == CsvPreset::Exportify {
+                csv_children.push(
+                    text(tr.import_csv_exportify_note)
+                        .style(fg_secondary())
+                        .into(),
+                );
+            }
+            Column::with_children(csv_children)
+                .spacing(theme::SPACING_SM)
+                .into()
+        }
         ImportMethod::FileList => {
             let pattern_rows: Vec<Element<'_, Message, AppTheme>> = dialog
                 .patterns

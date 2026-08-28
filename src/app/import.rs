@@ -37,10 +37,41 @@ pub enum ImportCsvField {
     Album,
 }
 
+/// Known CSV column-header presets. Selecting one fills the column fields with
+/// a recognised export's headers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CsvPreset {
+    /// Generic lowercase headers (`name`/`artist`/`album`).
+    #[default]
+    Default,
+    /// Spotify playlists exported from <https://exportify.net/>
+    /// (columns "Track Name","Album Name","Artist Name(s)").
+    Exportify,
+}
+
+impl CsvPreset {
+    /// The (name, artist, album) column headers this preset fills in.
+    pub fn columns(self) -> (String, String, String) {
+        match self {
+            CsvPreset::Default => (
+                "name".to_string(),
+                "artist".to_string(),
+                "album".to_string(),
+            ),
+            CsvPreset::Exportify => (
+                "Track Name".to_string(),
+                "Artist Name(s)".to_string(),
+                "Album Name".to_string(),
+            ),
+        }
+    }
+}
+
 /// Live state of the "Import playlist" popup.
 #[derive(Debug, Clone)]
 pub struct ImportPlaylistDialog {
     pub method: ImportMethod,
+    pub csv_preset: CsvPreset,
     /// CSV column headers mapped onto the track fields. Empty means "skip".
     pub csv_name_col: String,
     pub csv_artist_col: String,
@@ -56,6 +87,7 @@ impl Default for ImportPlaylistDialog {
     fn default() -> Self {
         Self {
             method: ImportMethod::default(),
+            csv_preset: CsvPreset::default(),
             csv_name_col: "name".to_string(),
             csv_artist_col: "artist".to_string(),
             csv_album_col: "album".to_string(),
@@ -85,6 +117,15 @@ impl ImportPlaylistDialog {
             }
         }
         None
+    }
+
+    /// Fill the CSV column fields with the selected preset's headers.
+    pub fn apply_csv_preset(&mut self, preset: CsvPreset) {
+        self.csv_preset = preset;
+        let (name, artist, album) = preset.columns();
+        self.csv_name_col = name;
+        self.csv_artist_col = artist;
+        self.csv_album_col = album;
     }
 
     /// Whether the Select action is currently allowed.
