@@ -1,4 +1,4 @@
-# honkhorn
+# goosemusic
 
 YouTube-search music player with local playback and MPRIS, built with iced.
 

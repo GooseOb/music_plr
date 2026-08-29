@@ -25,7 +25,7 @@ pub mod thumbnails;
 /// The app's platform directories. Falls back to the current directory when
 /// the OS can't provide them (e.g. a stripped-down container).
 fn project_dirs() -> Option<directories::ProjectDirs> {
-    directories::ProjectDirs::from("", "", "honkhorn")
+    directories::ProjectDirs::from("", "", "goosemusic")
 }
 
 /// Absolute path to `file` inside the config directory, or a bare relative
@@ -48,11 +48,11 @@ pub fn data_path(file: &str) -> PathBuf {
 
 /// Which XDG base directory a [`JsonStore`] lives in.
 pub enum StoreLocation {
-    /// User-specific *settings* (`~/.config/honkhorn`).
+    /// User-specific *settings* (`~/.config/goosemusic`).
     Config,
-    /// Persistent user *data* (`~/.local/share/honkhorn`).
+    /// Persistent user *data* (`~/.local/share/goosemusic`).
     Data,
-    /// Regenerable *cache* (`~/.cache/honkhorn`).
+    /// Regenerable *cache* (`~/.cache/goosemusic`).
     Cache,
 }
 

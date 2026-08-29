@@ -7,8 +7,8 @@
 /// Display name of the application (window title, settings header, MPRIS
 /// identity). The short lowercase identifier used for internal identifiers
 /// (package name, D-Bus service name, config/data/cache directories, iced
-/// theme name) is `"honkhorn"`.
-pub const APP_NAME: &str = "Honkhorn Music Player";
+/// theme name) is `"goosemusic"`.
+pub const APP_NAME: &str = "GooseOb's Music Player";
 
 mod app;
 mod audio;

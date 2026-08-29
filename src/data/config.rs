@@ -39,7 +39,7 @@ fn default_download_dir() -> String {
     if let Some(dirs) = directories::UserDirs::new() {
         dirs.home_dir()
             .join("Music")
-            .join("honkhorn")
+            .join("goosemusic")
             .to_string_lossy()
             .to_string()
     } else {

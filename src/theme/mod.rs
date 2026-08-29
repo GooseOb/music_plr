@@ -131,7 +131,7 @@ impl AppTheme {
     pub fn new(palette: Palette) -> Self {
         Self {
             inner: Theme::custom_with_fn(
-                "honkhorn",
+                "goosemusic",
                 iced::theme::Palette {
                     background: palette.bg,
                     text: palette.fg,
@@ -184,7 +184,7 @@ impl theme::Base for AppTheme {
     }
 
     fn name(&self) -> &'static str {
-        "honkhorn"
+        "goosemusic"
     }
 }
 
