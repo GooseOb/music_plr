@@ -82,7 +82,7 @@ pub fn fg_tab(active: bool) -> impl Fn(&AppTheme) -> text::Style + 'static {
         color: if active {
             theme.palette.fg
         } else {
-            theme.palette.fg_muted
+            theme.palette.fg_secondary
         }
         .into(),
     }

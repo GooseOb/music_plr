@@ -666,7 +666,7 @@ impl MusicPlayer {
                 self.queue.queue_tab = tab;
                 self.drag.clear_hovered_track();
                 self.save_session();
-                Task::none()
+                iced_runtime::task::widget(update::operation::CaptureBounds::new())
             }
             Message::NavigateTo(data) => {
                 self.lyrics = None;
