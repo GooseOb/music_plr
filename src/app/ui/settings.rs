@@ -1,7 +1,7 @@
 use iced::{
     alignment,
-    widget::{checkbox, scrollable, text, Button, Column, Container},
-    Element,
+    widget::{checkbox, scrollable, text, Button, Column, Container, Row, Space},
+    Element, Length,
 };
 
 use super::{
@@ -9,8 +9,9 @@ use super::{
     Message, MusicPlayer,
 };
 use crate::{
-    app::ui::styles::fg_accent,
+    app::ui::styles::{fg_accent, icon_accent},
     i18n::Language,
+    icons,
     providers::ProviderId,
     theme::{self, AppTheme},
 };
@@ -77,6 +78,14 @@ fn theme_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let cfg = &player.config;
 
+    let footer = Container::new(
+        text(crate::APP_NAME)
+            .size(theme::TEXT_SIZE_XL)
+            .style(fg_accent()),
+    )
+    .width(Length::Fill)
+    .align_x(alignment::Horizontal::Center);
+
     let normalize = checkbox(cfg.volume_normalization)
         .label(player.strings.normalize_volume_lbl)
         .on_toggle(Message::SettingsVolumeNormalizationToggled)
@@ -119,6 +128,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
     );
 
     let content = Column::with_children([
+        footer.into(),
         section(
             player.strings.sec_playback,
             [normalize, default_provider_section(player)],
@@ -128,12 +138,26 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
             player.strings.sec_history,
             [hist_visible, hist_stored, recent],
         ),
-        section(player.strings.language_lbl, [language_section(player)]),
-        section(player.strings.sec_appearance, [theme_section(player)]),
-        Button::new(text(player.strings.reset_defaults))
-            .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .on_press(Message::SettingsResetDefaults)
+        Row::with_children([
+            Column::with_children([
+                section(player.strings.language_lbl, [language_section(player)]),
+                section(player.strings.sec_appearance, [theme_section(player)]),
+                Button::new(text(player.strings.reset_defaults))
+                    .padding([theme::SPACING_SM, theme::SPACING_MD])
+                    .on_press(Message::SettingsResetDefaults)
+                    .into(),
+            ])
+            .spacing(theme::SPACING_XL)
             .into(),
+            Space::new().width(Length::Fill).into(),
+            Row::with_children([icons::icon(icons::LOGO_ICON, 128.0)
+                .style(icon_accent())
+                .into()])
+            .height(Length::Fill)
+            .align_y(alignment::Vertical::Center)
+            .into(),
+        ])
+        .into(),
     ])
     .spacing(theme::SPACING_XL);
 

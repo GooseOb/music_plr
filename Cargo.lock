@@ -1936,6 +1936,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
+name = "honkhorn"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "csv",
+ "directories",
+ "iced",
+ "iced_core",
+ "iced_runtime",
+ "musicbrainz_rs",
+ "rfd",
+ "rodio",
+ "rsoundcloud",
+ "serde",
+ "serde_json",
+ "symphonia",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "ureq",
+ "zbus 4.4.0",
+]
+
+[[package]]
 name = "hound"
 version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2985,30 +3009,6 @@ dependencies = [
  "web-sys",
  "windows 0.62.2",
  "zbus 5.19.0",
-]
-
-[[package]]
-name = "music_plr"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "csv",
- "directories",
- "iced",
- "iced_core",
- "iced_runtime",
- "musicbrainz_rs",
- "rfd",
- "rodio",
- "rsoundcloud",
- "serde",
- "serde_json",
- "symphonia",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "ureq",
- "zbus 4.4.0",
 ]
 
 [[package]]

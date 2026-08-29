@@ -140,7 +140,7 @@ const PYTHON_TIMEOUT: Duration = Duration::from_secs(30);
 fn run_python(mode: &str, args: &[&str]) -> Result<String> {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let script_path = std::env::temp_dir().join(format!(
-        "music_plr_search_{}_{}.py",
+        "honkhorn_search_{}_{}.py",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::Relaxed)
     ));

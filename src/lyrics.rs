@@ -136,7 +136,7 @@ fn get_json_opt<T: serde::de::DeserializeOwned>(url: &str, what: &str) -> Result
         .get(url)
         .header(
             "User-Agent",
-            "music_plr/0.1 (https://github.com/gooseob/music_plr)",
+            "honkhorn/0.1 (https://github.com/gooseob/music_plr)",
         )
         .call()
     {

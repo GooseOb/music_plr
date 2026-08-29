@@ -54,11 +54,11 @@ impl MediaPlayer2 {
     }
 
     const fn identity(&self) -> &'static str {
-        "Music PLR"
+        "Honkhorn music player"
     }
 
     const fn desktop_entry(&self) -> &'static str {
-        "music_plr"
+        "honkhorn"
     }
 
     fn supported_uri_schemes(&self) -> Vec<&str> {
@@ -263,7 +263,7 @@ pub fn start(cmd_tx: mpsc::Sender<MprisCommand>, update_rx: mpsc::Receiver<Mpris
                 return;
             }
 
-            if let Err(e) = conn.request_name("org.mpris.MediaPlayer2.music_plr").await {
+            if let Err(e) = conn.request_name("org.mpris.MediaPlayer2.honkhorn").await {
                 error!("Failed to request D-Bus name: {}", e);
                 return;
             }

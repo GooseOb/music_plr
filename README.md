@@ -1,4 +1,4 @@
-# Music PLR
+# Honkhorn music player
 
 A music player with YouTube search, local playback, and MPRIS integration, built with the [iced](https://iced.rs) GUI framework.
 
@@ -71,11 +71,11 @@ dialogs are dismissed by clicking outside them.
 
 ## Configuration
 
-Config is stored as JSON at `~/.config/music_plr/config.json` and is also editable live from the in-app **Settings** view (sidebar → Settings):
+Config is stored as JSON at `~/.config/honkhorn/config.json` and is also editable live from the in-app **Settings** view (sidebar → Settings):
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `download_dir` | Directory for downloaded files | `~/Music/music_plr` |
+| `download_dir` | Directory for downloaded files | `~/Music/honkhorn` |
 | `cache_max_size_mb` | Max stream cache size, in MB | `1024` |
 | `max_search_history_stored` | Max search history entries kept on disk | `100` |
 | `max_search_history_visible` | Max entries shown in the dropdown | `10` |
@@ -85,20 +85,20 @@ Config is stored as JSON at `~/.config/music_plr/config.json` and is also editab
 ### Data locations
 
 Stores follow the XDG base-directory layout: **settings** in the config dir,
-**persistent user data** in the data dir (`~/.local/share/music_plr`), and
+**persistent user data** in the data dir (`~/.local/share/honkhorn`), and
 **regenerable caches** in the cache dir.
 
 | Path | Contents |
 |------|----------|
-| `~/.config/music_plr/config.json` | App config (download dir, cache size, history limits, normalization toggle) |
-| `~/.local/share/music_plr/playlists.json` | Playlists and their tracks |
-| `~/.local/share/music_plr/library.json` | Saved albums, artists, and playlists |
-| `~/.local/share/music_plr/downloads.json` | Registry of downloaded tracks |
-| `~/.local/share/music_plr/search_history.json` | Past search queries |
-| `~/.cache/music_plr/session.json` | Last view, queue, and volume (restored session) |
-| `~/.cache/music_plr/youtube/` | Streamed audio cache (LRU-evicted) |
-| `~/.cache/music_plr/thumbnails/` | Downloaded track thumbnails |
-| `~/.cache/music_plr/lyrics_cache.json` | Fetched lyrics, keyed by track id |
+| `~/.config/honkhorn/config.json` | App config (download dir, cache size, history limits, normalization toggle) |
+| `~/.local/share/honkhorn/playlists.json` | Playlists and their tracks |
+| `~/.local/share/honkhorn/library.json` | Saved albums, artists, and playlists |
+| `~/.local/share/honkhorn/downloads.json` | Registry of downloaded tracks |
+| `~/.local/share/honkhorn/search_history.json` | Past search queries |
+| `~/.cache/honkhorn/session.json` | Last view, queue, and volume (restored session) |
+| `~/.cache/honkhorn/youtube/` | Streamed audio cache (LRU-evicted) |
+| `~/.cache/honkhorn/thumbnails/` | Downloaded track thumbnails |
+| `~/.cache/honkhorn/lyrics_cache.json` | Fetched lyrics, keyed by track id |
 
 > Volume-normalization gains are computed in memory each session (not written to disk) and applied on a track's second play onward.
 

@@ -28,6 +28,7 @@ pub const SETTINGS_ICON: &[u8] = include_bytes!("../icons/settings.svg");
 pub const SKIP_BACK_ICON: &[u8] = include_bytes!("../icons/skip-back.svg");
 pub const SKIP_FORWARD_ICON: &[u8] = include_bytes!("../icons/skip-forward.svg");
 pub const VOLUME_ICON: &[u8] = include_bytes!("../icons/volume.svg");
+pub const LOGO_ICON: &[u8] = include_bytes!("../icons/logo.svg");
 
 pub fn icon(icon_data: &'static [u8], size: f32) -> svg::Svg<'static, AppTheme> {
     svg::Svg::new(svg::Handle::from_memory(icon_data))
