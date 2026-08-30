@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 description = "A music player with YouTube search, local playback, and MPRIS integration"
 license = "MIT"
+repository = "https://github.com/GooseOb/music_plr"
+readme = "README.md"
 
 [dependencies]
 iced = { version = "0.14", features = ["image", "svg", "tokio", "debug", "canvas", "advanced"] }
