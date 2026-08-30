@@ -203,7 +203,7 @@ impl MusicPlayer {
             track,
             hovered: None,
         });
-        iced_runtime::task::widget(update::operation::CaptureContextMenu::default())
+        update::operation::CaptureContextMenu::default().into()
     }
 
     pub fn close_context_menu(&mut self) {

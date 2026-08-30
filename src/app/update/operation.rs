@@ -28,7 +28,7 @@
 //! message without re-walking the whole widget tree (sidebar/library/queue/
 //! track/recent + search input). See that struct for details.
 
-use iced::{widget::Id, Rectangle};
+use iced::{widget::Id, Rectangle, Task};
 use iced_core::widget::operation::{Operation, Outcome, Scrollable};
 
 use crate::{
@@ -74,6 +74,12 @@ pub struct CaptureBounds {
     /// Captured by [`CaptureContextMenu`] when the context menu opens.
     pub context_menu: Option<ContextMenuGeometry>,
     current: Option<Id>,
+}
+
+impl From<CaptureBounds> for Task<Message> {
+    fn from(bounds: CaptureBounds) -> Self {
+        iced_runtime::task::widget(bounds)
+    }
 }
 
 impl CaptureBounds {
@@ -182,6 +188,12 @@ pub struct CaptureSearchHistoryRows {
     current: bool,
 }
 
+impl From<CaptureSearchHistoryRows> for Task<Message> {
+    fn from(capture: CaptureSearchHistoryRows) -> Self {
+        iced_runtime::task::widget(capture)
+    }
+}
+
 impl CaptureSearchHistoryRows {
     pub fn new() -> Self {
         Self::default()
@@ -254,6 +266,12 @@ pub struct ContextMenuGeometry {
 pub struct CaptureContextMenu {
     panel: Option<Rectangle>,
     rows: Vec<Rectangle>,
+}
+
+impl From<CaptureContextMenu> for Task<Message> {
+    fn from(capture: CaptureContextMenu) -> Self {
+        iced_runtime::task::widget(capture)
+    }
 }
 
 impl Operation<Message> for CaptureContextMenu {

@@ -199,14 +199,9 @@ impl Default for MusicPlayer {
 
 impl MusicPlayer {
     pub fn new() -> (Self, Task<Message>) {
-        // Capture scrollable geometry once on the first render so the track
-        // lists can virtualize immediately at startup (before any mouse move
-        // or scroll). Live scroll offsets are then kept fresh by `on_scroll`
-        // via `Message::ListScrolled`; `CursorMoved` re-captures for drag
-        // hit-testing.
         (
             Self::default(),
-            iced_runtime::task::widget(update::operation::CaptureBounds::new()),
+            update::operation::CaptureBounds::new().into(),
         )
     }
 
@@ -338,15 +333,10 @@ impl MusicPlayer {
                 physical_key,
                 modifiers,
                 ..
-            }) => {
-                if status == iced::event::Status::Captured {
-                    return None;
-                }
-                Some(Message::KeyPressed {
-                    key: physical_key,
-                    modifiers,
-                })
-            }
+            }) if status == iced::event::Status::Ignored => Some(Message::KeyPressed {
+                key: physical_key,
+                modifiers,
+            }),
             iced::Event::Window(iced::window::Event::CloseRequested) => Some(Message::WindowClose),
             iced::Event::Window(iced::window::Event::Resized(size)) => {
                 Some(Message::WindowResized(size))
@@ -363,7 +353,7 @@ impl MusicPlayer {
             Message::Tick => self.handle_tick(),
             Message::WindowResized(size) => {
                 self.window_size = size;
-                iced_runtime::task::widget(update::operation::CaptureBounds::new())
+                update::operation::CaptureBounds::new().into()
             }
             Message::WindowClose => {
                 self.flush_session();
@@ -423,7 +413,7 @@ impl MusicPlayer {
                 self.search_query = query;
                 self.update_search_history();
                 self.drag.clear_hovered_search_history();
-                iced_runtime::task::widget(update::operation::CaptureSearchHistoryRows::new())
+                update::operation::CaptureSearchHistoryRows::new().into()
             }
             Message::SearchExecute => self.handle_search_execute(),
             Message::SearchScopeChanged(scope) => self.handle_search_scope_changed(scope),
@@ -638,7 +628,11 @@ impl MusicPlayer {
             Message::ToggleQueue => {
                 self.show_queue = !self.show_queue;
                 self.save_session();
-                Task::none()
+                if self.show_queue {
+                    update::operation::CaptureBounds::new().into()
+                } else {
+                    Task::none()
+                }
             }
             Message::ToggleRepeat => {
                 self.repeat = !self.repeat;
@@ -666,7 +660,7 @@ impl MusicPlayer {
                 self.queue.queue_tab = tab;
                 self.drag.clear_hovered_track();
                 self.save_session();
-                iced_runtime::task::widget(update::operation::CaptureBounds::new())
+                update::operation::CaptureBounds::new().into()
             }
             Message::NavigateTo(data) => {
                 self.lyrics = None;
@@ -797,7 +791,7 @@ impl MusicPlayer {
                 if stable {
                     Task::none()
                 } else {
-                    iced_runtime::task::widget(update::operation::CaptureContextMenu::default())
+                    update::operation::CaptureContextMenu::default().into()
                 }
             }
             Message::ContextMenuDefault(action) => {

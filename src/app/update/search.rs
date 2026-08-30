@@ -168,7 +168,7 @@ impl MusicPlayer {
     pub fn activate_search_input(&mut self) -> iced::Task<crate::app::message::Message> {
         self.update_search_history();
         self.show_search_history = true;
-        iced_runtime::task::widget(CaptureSearchHistoryRows::new())
+        CaptureSearchHistoryRows::new().into()
     }
 
     /// Start a song or artist radio seeded by `provider`. When the track

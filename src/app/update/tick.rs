@@ -234,7 +234,7 @@ impl MusicPlayer {
         match result {
             BackendResult::SearchResults(rid, tracks, tab) => {
                 self.process_search_results(rid, tracks, tab);
-                Task::none()
+                super::operation::CaptureBounds::new().into()
             }
             BackendResult::SearchResultsAppend(rid, tracks) => {
                 let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
@@ -250,7 +250,7 @@ impl MusicPlayer {
                     slot.request_id = 0;
                     self.finalize_view(idx);
                 }
-                Task::none()
+                super::operation::CaptureBounds::new().into()
             }
             BackendResult::BrowseResults(rid, tracks, meta) => {
                 // Apply to the slot that issued the browse, matched by request id
@@ -260,7 +260,7 @@ impl MusicPlayer {
                         self.apply_album_meta(idx, meta);
                     }
                 }
-                Task::none()
+                super::operation::CaptureBounds::new().into()
             }
             BackendResult::ArtistIdResolved {
                 rid,
@@ -277,7 +277,7 @@ impl MusicPlayer {
                 data,
             } => {
                 self.apply_artist_section(rid, provider, kind, *data);
-                Task::none()
+                super::operation::CaptureBounds::new().into()
             }
             BackendResult::CardPlaylistReady(idx, name, tracks) => {
                 // A dragged card turned into a playlist; the browse result
@@ -288,7 +288,7 @@ impl MusicPlayer {
                     let msg = (self.strings.added_to)(count, &name);
                     self.notify(msg);
                 }
-                Task::none()
+                super::operation::CaptureBounds::new().into()
             }
             BackendResult::RadioResults(rid, label, tracks) => {
                 if let Some(idx) = self.slot_for_request(rid) {
@@ -299,7 +299,7 @@ impl MusicPlayer {
                     self.nav_history[idx].kind = kind;
                     self.install_results(idx, tracks);
                 }
-                Task::none()
+                super::operation::CaptureBounds::new().into()
             }
             BackendResult::DownloadComplete(track, _provider) => {
                 self.process_download_complete(track);

@@ -134,7 +134,7 @@ impl MusicPlayer {
                     self.library_expanded = true;
                 }
                 return Task::batch([
-                    iced_runtime::task::widget(super::operation::CaptureBounds::new()),
+                    super::operation::CaptureBounds::new().into(),
                     self.handle_drag_update(),
                 ]);
             }

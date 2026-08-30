@@ -32,13 +32,6 @@ impl MusicPlayer {
         }
     }
 
-    /// A widget operation task that re-captures scrollable/row geometry after
-    /// the view changes. Navigation swaps the whole view, so the cached
-    /// `bounds` are stale until the new layout is measured.
-    fn capture_bounds() -> Task<Message> {
-        iced_runtime::task::widget(super::operation::CaptureBounds::new())
-    }
-
     pub(super) fn restore_nav_entry(&mut self, data: ViewData) -> Task<Message> {
         // Scroll position is stored relative to the main track_list scrollable.
         // (Queue view uses a different Id and is not navigated via history.)
@@ -74,7 +67,7 @@ impl MusicPlayer {
             self.nav_history.remove(0);
         }
         self.nav_history_pos = self.nav_history.len() - 1;
-        Self::capture_bounds()
+        super::operation::CaptureBounds::new().into()
     }
 
     pub fn handle_navigate_to(&mut self, data: ViewData) -> Task<Message> {
@@ -123,7 +116,7 @@ impl MusicPlayer {
         let entry = self.nav_history[self.nav_history_pos].clone();
         let task = self.restore_nav_entry(entry);
         self.save_session();
-        task.chain(Self::capture_bounds())
+        task.chain(super::operation::CaptureBounds::new().into())
     }
 
     pub fn handle_reveal_now_playing(&mut self) -> Task<Message> {
