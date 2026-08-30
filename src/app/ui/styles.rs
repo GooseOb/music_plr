@@ -108,7 +108,11 @@ pub fn icon_fg_secondary() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 's
 
 pub fn icon_accent_dimmed() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
     |theme, _| svg::Style {
-        color: Some(blend_colors(theme.palette.fg_accent, theme.palette.bg, 0.8)),
+        color: Some(blend_colors(
+            theme.palette.fg_accent,
+            theme.palette.bg_secondary,
+            0.8,
+        )),
     }
 }
 

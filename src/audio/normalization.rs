@@ -3,7 +3,7 @@
 //! Decodes a complete audio file via symphonia (the same native decoder the
 //! player uses) and derives a linear sample-scaling gain that brings the
 //! track's perceived loudness (RMS) close to a target, clamped so it never
-//! clips and never makes extreme changes. No ffmpeg needed.
+//! clips and never makes extreme changes.
 
 use std::path::Path;
 

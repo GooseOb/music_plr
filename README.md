@@ -18,6 +18,27 @@ A YouTube/SoundCloud search music player with local playback, downloads, and MPR
 - **Lyrics** — Free, no-key LRCLib lyrics with synced lines that seek on click; cached per track.
 - **MPRIS** — Full D-Bus interface for media keys.
 - **More** — Search history, volume normalization, navigation history, session restore, right-click context menu, dark theme.
+- **Localization** — 12 languages: English, Polski, Español, Português (Brasil), 简体中文, العربية, Беларуская, Français, Deutsch, 日本語, Русский, हिन्दी.
+
+## Supported languages
+
+| Language                       | Code    |
+| ------------------------------ | ------- |
+| English                        | `en`    |
+| Polski (Polish)                | `pl`    |
+| Español (Spanish)              | `es`    |
+| Português (Brasil)             | `pt_br` |
+| 简体中文 (Chinese, Simplified) | `zh_cn` |
+| العربية (Arabic)               | `ar`    |
+| Беларуская (Belarusian)        | `be`    |
+| Français (French)              | `fr`    |
+| Deutsch (German)               | `de`    |
+| 日本語 (Japanese)              | `ja`    |
+| Русский (Russian)              | `ru`    |
+| हिन्दी (Hindi)                 | `hi`    |
+
+Pick a language from the in-app **Settings** view. To add one, copy `src/i18n/en.rs` to a new module, translate the strings, and append one entry
+to the `languages!` macro in `src/i18n/mod.rs` — the `Language` enum and picker are generated from that list.
 
 ## Install & run
 
@@ -28,8 +49,6 @@ A YouTube/SoundCloud search music player with local playback, downloads, and MPR
 - **Python 3** + `ytmusicapi` — YouTube Music search (optional; falls back to yt-dlp)
 - **D-Bus** session bus (Linux) — for MPRIS
 - Network access — lyrics fetch live from [LRCLib](https://lrclib.net) (no key)
-
-> ffmpeg is **not** required; audio is decoded natively via symphonia.
 
 ```sh
 cargo build

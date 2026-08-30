@@ -5,7 +5,7 @@ YouTube-search music player with local playback and MPRIS, built with iced.
 ## Stack
 
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`)
-- **Audio**: rodio + symphonia (native decode, no ffmpeg); **pipeline**: yt-dlp (stream/download)
+- **Audio**: rodio + symphonia; **pipeline**: yt-dlp (stream/download)
 - **MPRIS**: zbus 4 (D-Bus, tokio); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15
 - **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default; on-disk cache in `data/lyrics_cache.rs`
 - **Logging**: tracing + tracing-subscriber
@@ -128,7 +128,7 @@ src/
 
 ## Audio Pipeline
 
-`AudioPlayer` runs a dedicated output thread (mpsc command channel). **No ffmpeg** — decoding is fully native via symphonia.
+`AudioPlayer` runs a dedicated output thread (mpsc command channel). Decoding is fully native via symphonia.
 
 - **Stream+cache**: `yt-dlp -f bestaudio[ext=m4a]/bestaudio -o -` writes AAC-in-M4A to the cache file (`.cache`, owned by `StreamCache`); a copy thread drains stdout and flips `writer_alive` when done.
 - **Decoding**: a custom `SymphoniaStreamingSource` (rodio `Source` + `Iterator<Item=i16>`) wraps a non-seekable `GrowingMediaSource`, so symphonia demuxes sequentially and plays a still-growing file without `rodio::Decoder::new`'s `SeekError`. The reader blocks at EOF while `writer_alive`, so playback starts within a few KB.

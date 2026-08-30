@@ -10,7 +10,7 @@ pub const STRINGS: Strings = Strings {
     new_playlist_name: "Назва новага плэйліста",
 
     queue: "Чарга",
-    recently_played: "Нядаўна грала",
+    recently_played: "Нядаўнія",
     now_playing_from: "Зараз грае з",
     now_playing: "Зараз грае",
     up_next: "Далей",
