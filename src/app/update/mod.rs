@@ -1,12 +1,22 @@
-use std::thread;
+use std::{sync::mpsc, thread};
 
-use super::{
-    error, mpris, mpsc, warn, BackendResult, ContextMenuState, Message, MprisCommand, MprisUpdate,
-    MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData,
+use iced::Task;
+use tracing::{error, warn};
+
+use crate::{
+    app::{
+        interaction::{ContextMenuState, TrackListKind, TrackPos},
+        message::{BackendResult, Message},
+        view_data::ViewData,
+        MusicPlayer,
+    },
+    mpris::{self, MprisCommand, MprisUpdate},
+    types::Track,
 };
 
 mod actions;
 mod artist;
+mod dispatch;
 mod drag;
 mod input;
 mod navigation;

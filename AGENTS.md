@@ -35,7 +35,7 @@ Run `cargo +nightly fmt && cargo clippy && cargo test` before handing work back,
 ## Conventions
 
 - No comments in code, unless logic is really non-obvious. Comments describe _current_ state, not what's changed.
-- **Single source of truth**: `MusicPlayer` (`app.rs`) holds all state; `view()` is pure over `&MusicPlayer` — no `Rc<RefCell<Backend>>`, no sync methods. `MusicPlayer` is NOT `Clone` (channels).
+- **Single source of truth**: `MusicPlayer` (`app/state.rs`) holds all state; `view()` is pure over `&MusicPlayer` — no `Rc<RefCell<Backend>>`, no sync methods. `MusicPlayer` is NOT `Clone` (channels).
 - **Async**: `mpsc` channels for cross-thread results (backend, MPRIS); `Task`/`Subscription` for timer tick + raw events; shared state via `&mut self`.
 - `notify()` / `notify_error()` for user-facing errors; `notify_tracks(verb, n, suffix)` for pluralized counts.
 - Persistence goes through the `JsonStore` trait (`data/mod.rs`): implementors declare only `FILE`.
@@ -45,13 +45,17 @@ Run `cargo +nightly fmt && cargo clippy && cargo test` before handing work back,
 ```
 src/
 ├── main.rs            # Entry point
-├── app.rs             # MusicPlayer (all state) + subscription + update() dispatch
+├── app.rs             # Module index: declares submodules + re-exports public types (MusicPlayer, Message, …)
+├── app/state.rs       # MusicPlayer (all state) + new()/Default + view_data accessors + view()
+├── app/lyrics_state.rs # LyricsState + LyricsViewMode (lyrics overlay state)
+├── app/edit_track.rs   # EditTrackState (track-editing popup working copy)
+├── app/playlist_picker.rs # PlaylistPicker (add-to-playlist overlay state)
 ├── app/view_data.rs   # ViewData / ViewKind / NavEntry (per-view state)
 ├── app/message.rs     # Message + BackendResult
 ├── app/interaction.rs # TrackListKind, TrackPos, DragState, ContextMenuState
 ├── app/import.rs     # ImportPlaylistDialog + filename-pattern matching/conflict engine
 ├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, track_list)
-├── app/update/        # Handlers (mod, actions, drag, input, navigation, playback, playlists, search, selection, session, tick)
+├── app/update/        # Per-domain handlers; dispatch.rs holds the top-level update()/subscription() dispatcher
 ├── audio/mod.rs       # AudioPlayer: rodio sink + yt-dlp process management
 ├── audio/growing.rs   # GrowingMediaSource (the still-growing file reader)
 ├── audio/symphonia_source.rs # SymphoniaStreamingSource (rodio Source + Iterator); applies the normalization gain
@@ -72,7 +76,7 @@ src/
 
 ## State Management
 
-- **`MusicPlayer`** (`app.rs`): the single source of truth. Holds audio/queue/playlists/config,
+- **`MusicPlayer`** (`app/state.rs`): the single source of truth. Holds audio/queue/playlists/config,
   mpsc channels, `DragState`, context menu, `nav_history`, `download_registry`, `stream_cache`,
   `thumbnail_cache`, `picker` (resolved target indices for the playlist-picker overlay),
   `lyrics`/`lyrics_track_id`/`lyrics_loading`, and `track_list_search` (the in-list Ctrl+F overlay:
