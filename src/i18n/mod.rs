@@ -2,8 +2,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::providers::ProviderId;
 
+pub mod ar;
+pub mod be;
+pub mod de;
 pub mod en;
+pub mod es;
+pub mod fr;
+pub mod hi;
+pub mod ja;
 pub mod pl;
+pub mod pt_br;
+pub mod ru;
+pub mod zh_cn;
 
 /// Declares the `Language` enum and its `ALL` / `label` / `strings` machinery
 /// from a single list, so adding a language only requires creating its module
@@ -48,6 +58,16 @@ macro_rules! languages {
 languages! {
     En => ("English", en),
     Pl => ("Polski", pl),
+    Es => ("Español", es),
+    PtBr => ("Português (Brasil)", pt_br),
+    ZhCn => ("简体中文", zh_cn),
+    Ar => ("العربية", ar),
+    Be => ("Беларуская", be),
+    Fr => ("Français", fr),
+    De => ("Deutsch", de),
+    Ja => ("日本語", ja),
+    Ru => ("Русский", ru),
+    Hi => ("हिन्दी", hi),
 }
 
 /// All user-facing strings for one language. Simple labels are `&'static

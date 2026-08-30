@@ -148,10 +148,13 @@ fn run_python(mode: &str, args: &[&str]) -> Result<String> {
         .context("Failed to write ytmusicapi script")?;
 
     let result = (|| {
-        let mut cmd = Command::new("python3");
+        let py = crate::deps::python_exe().ok_or_else(|| {
+            anyhow::anyhow!("Python 3 not found; install it to search YouTube Music.")
+        })?;
+        let mut cmd = Command::new(py);
         cmd.arg(&script_path).arg(mode).args(args);
         let output = run_command_with_timeout(&mut cmd, PYTHON_TIMEOUT)
-            .context("Failed to run python3. Is it installed?")?;
+            .context("Failed to run Python. Is it installed?")?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             anyhow::bail!("ytmusicapi {mode} failed: {stderr}");

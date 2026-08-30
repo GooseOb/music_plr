@@ -193,7 +193,7 @@ pub const STRINGS: Strings = Strings {
     deps_installed_toast: "Selected dependencies installed.",
     deps_yt_dlp_desc: "Streams and downloads audio (required)",
     deps_ytmusicapi_desc: "YouTube Music search (optional, falls back to yt-dlp)",
-    deps_python3_desc: "Required by ytmusicapi and the yt-dlp script on Linux",
+    deps_python3_desc: "Required by ytmusicapi (YouTube Music search)",
     deps_python3_manual: "Install Python 3 manually, then restart the app",
     deps_ytmusicapi_requires_python: "Requires Python 3 (install it first)",
     deps_play_requires_yt_dlp: "Playback needs yt-dlp — install it from the startup dialog to play this.",

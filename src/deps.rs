@@ -97,20 +97,29 @@ fn yt_dlp_expected_sha256(asset: &str) -> &'static str {
     }
 }
 
-#[allow(clippy::unnecessary_map_or)]
-pub(crate) fn python3_present() -> bool {
-    Command::new("python3")
-        .arg("--version")
-        .output()
-        .map_or(false, |o| o.status.success())
+/// Resolve the Python 3 interpreter to invoke. On Windows the binary is
+/// typically `python` rather than `python3`, so both are probed (in order)
+/// and the first that answers `--version` wins.
+pub(crate) fn python_exe() -> Option<&'static str> {
+    ["python3", "python"].into_iter().find(|exe| {
+        Command::new(exe)
+            .arg("--version")
+            .output()
+            .is_ok_and(|o| o.status.success())
+    })
 }
 
-#[allow(clippy::unnecessary_map_or)]
+pub(crate) fn python3_present() -> bool {
+    python_exe().is_some()
+}
+
 fn ytmusicapi_present() -> bool {
-    Command::new("python3")
-        .args(["-c", "import ytmusicapi"])
-        .output()
-        .map_or(false, |o| o.status.success())
+    python_exe().is_some_and(|py| {
+        Command::new(py)
+            .args(["-c", "import ytmusicapi"])
+            .output()
+            .is_ok_and(|o| o.status.success())
+    })
 }
 
 /// The cached download path for the pinned `yt-dlp` build (if present).
@@ -244,8 +253,11 @@ pub fn uninstall(kind: DepKind) -> Result<()> {
             Ok(())
         }
         DepKind::YtMusicApi => {
+            let py = python_exe().ok_or_else(|| {
+                anyhow::anyhow!("Python 3 not found; install it to manage ytmusicapi.")
+            })?;
             let output = crate::providers::run_command_with_timeout(
-                Command::new("python3").args(["-m", "pip", "uninstall", "-y", "ytmusicapi"]),
+                Command::new(py).args(["-m", "pip", "uninstall", "-y", "ytmusicapi"]),
                 Duration::from_mins(5),
             )
             .context("Failed to run pip uninstall")?;
@@ -380,8 +392,10 @@ fn install_yt_dlp(progress: impl Fn(u64, u64) + 'static) -> Result<()> {
 }
 
 fn install_ytmusicapi() -> Result<()> {
+    let py = python_exe()
+        .ok_or_else(|| anyhow::anyhow!("Python 3 not found; install it to use pip."))?;
     let output = crate::providers::run_command_with_timeout(
-        Command::new("python3").args(["-m", "pip", "install", "--user", "ytmusicapi"]),
+        Command::new(py).args(["-m", "pip", "install", "--user", "ytmusicapi"]),
         Duration::from_mins(5),
     )
     .context("Failed to run pip")?;

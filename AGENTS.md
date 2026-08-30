@@ -149,3 +149,5 @@ src/
 ## Maintenance
 
 Keep `AGENTS.md` (and `README.md`) under ~150 lines and in sync after structural changes: new/removed files, renamed types/functions, module layout, keyboard shortcuts (`app/update/input.rs`), config fields (`data/config.rs`), on-disk paths (`data/*.rs` `FILE` consts), external tool requirements, or the audio pipeline.
+
+- **i18n** (`src/i18n/`): all UI strings live in one `Strings` struct (`mod.rs`); each locale is a module exposing `pub const STRINGS: Strings` (copy `en.rs` and translate). Add a language by creating `src/i18n/<code>.rs` and appending one entry to the `languages!` macro in `mod.rs` — the `Language` enum, `label()`, and `strings()` are generated from it, so `config.language`, the Settings picker, and `view()` need no other edits. Parameterized/pluralized messages are `fn` fields (e.g. `added`/`n_saved`) so each locale owns word order and plural forms.
