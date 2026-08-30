@@ -28,8 +28,8 @@ impl MusicPlayer {
         match key {
             Physical::Code(Code::ArrowUp) => self.step_context_menu_focus(-1),
             Physical::Code(Code::ArrowDown) => self.step_context_menu_focus(1),
-            Physical::Code(Code::ArrowLeft) => self.context_menu_horizontal(-1),
-            Physical::Code(Code::ArrowRight) => self.context_menu_horizontal(1),
+            Physical::Code(Code::ArrowLeft) => self.context_menu_horizontal(),
+            Physical::Code(Code::ArrowRight) => self.context_menu_horizontal(),
             Physical::Code(Code::Enter) => {
                 let menu = self.context_menu.as_ref().expect("checked above");
                 let message = match menu.hovered {
@@ -58,16 +58,16 @@ impl MusicPlayer {
             let Some(menu) = self.context_menu.as_ref() else {
                 return Task::none();
             };
-            let (_in_submenu, kind, count, current) = match menu.hovered {
+            let (kind, count, current) = match menu.hovered {
                 Some(ContextMenuFocus::Sub(kind, i)) => {
-                    (true, Some(kind), kind.providers(&menu.track).len(), Some(i))
+                    (Some(kind), kind.providers(&menu.track).len(), Some(i))
                 }
                 other => {
                     let i = match other {
                         Some(ContextMenuFocus::Item(i)) => Some(i),
                         _ => None,
                     };
-                    (false, None, menu.actions().len(), i)
+                    (None, menu.actions().len(), i)
                 }
             };
             if count == 0 {
@@ -87,21 +87,21 @@ impl MusicPlayer {
         Task::none()
     }
 
-    fn context_menu_horizontal(&mut self, dir: isize) -> Task<Message> {
+    fn context_menu_horizontal(&mut self) -> Task<Message> {
         let focus = {
             let Some(menu) = self.context_menu.as_ref() else {
                 return Task::none();
             };
-            match (menu.hovered, dir) {
+            match menu.hovered {
                 // Enter the open submenu from its parent row.
-                (Some(ContextMenuFocus::Item(i)), 1) => {
+                Some(ContextMenuFocus::Item(i)) => {
                     let Some(kind) = menu.actions().get(i).and_then(|a| a.submenu()) else {
                         return Task::none();
                     };
                     ContextMenuFocus::Sub(kind, 0)
                 }
                 // Leave the submenu back to its parent row.
-                (Some(ContextMenuFocus::Sub(kind, _)), -1) => {
+                Some(ContextMenuFocus::Sub(kind, _)) => {
                     let i = menu
                         .actions()
                         .iter()

@@ -34,22 +34,21 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
         .width(Length::Fill)
         .style(bg_secondary());
 
-    let body: Element<'_, Message, AppTheme> = match player.queue.queue_tab {
+    let mut children: Vec<Element<'_, Message, AppTheme>> = vec![tab_bar.into()];
+
+    if let Some(fs) = player.track_list_search.as_ref() {
+        if matches!(
+            fs.list,
+            crate::app::TrackListKind::Queue | crate::app::TrackListKind::Recent
+        ) {
+            children.push(super::track_list_search::view_track_list_search(player, fs));
+        }
+    }
+
+    children.push(match player.queue.queue_tab {
         QueueTab::Queue => view_queue_tab(player),
         QueueTab::RecentlyPlayed => view_recently_played_tab(player),
-    };
-
-    let track_list_search: Element<'_, Message, AppTheme> = if matches!(
-        player.track_list_search.as_ref().map(|fs| fs.list),
-        Some(crate::app::TrackListKind::Queue)
-    ) {
-        super::track_list_search::view_track_list_search(player)
-    } else {
-        Space::new().into()
-    };
-
-    let children: Vec<Element<'_, Message, AppTheme>> =
-        vec![tab_bar.into(), track_list_search, body];
+    });
 
     Container::new(Column::with_children(children))
         .width(queue_width)
@@ -136,7 +135,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let now_playing_row: Element<'_, Message, AppTheme> =
         if let Some(track) = player.queue.current() {
-            Container::new(track_row_layout(Row::new().into(), track, player, false))
+            Container::new(track_row_layout(Space::new().into(), track, player, false))
                 .height(theme::ROW_HEIGHT)
                 .into()
         } else {

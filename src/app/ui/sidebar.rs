@@ -153,16 +153,6 @@ fn library_row<'a>(
     .into()
 }
 
-fn view_notification(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    if let Some(msg) = &player.notification {
-        return Container::new(text(msg.as_ref()).center())
-            .width(Length::Fill)
-            .padding([theme::SPACING_XS, theme::SPACING_XL])
-            .into();
-    }
-    Row::new().into()
-}
-
 fn sidebar_button(row: Row<'_, Message, AppTheme>) -> Button<'_, Message, AppTheme> {
     Button::new(
         row.spacing(theme::SPACING_MD)
@@ -359,7 +349,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .padding([theme::SPACING_XS, theme::SPACING_XS])
     .into();
 
-    let sidebar_content = Column::with_children([
+    let mut sidebar_content = vec![
         nav_buttons.into(),
         widget::rule::horizontal(1).into(),
         Column::with_children(nav_items)
@@ -376,15 +366,25 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         library_header,
         library_section,
         widget::rule::horizontal(1).into(),
-        view_notification(player),
-    ])
-    .spacing(theme::SPACING_XS)
-    .padding([theme::SPACING_SM, theme::SPACING_XS]);
+    ];
 
-    Container::new(sidebar_content)
-        .width(theme::SIDEBAR_WIDTH)
-        .style(bg_secondary())
-        .into()
+    if let Some(msg) = &player.notification {
+        sidebar_content.push(
+            Container::new(text(msg.as_ref()).center())
+                .width(Length::Fill)
+                .padding([theme::SPACING_XS, theme::SPACING_XL])
+                .into(),
+        );
+    }
+
+    Container::new(
+        Column::with_children(sidebar_content)
+            .spacing(theme::SPACING_XS)
+            .padding([theme::SPACING_SM, theme::SPACING_XS]),
+    )
+    .width(theme::SIDEBAR_WIDTH)
+    .style(bg_secondary())
+    .into()
 }
 
 fn sidebar_nav_item<'a>(

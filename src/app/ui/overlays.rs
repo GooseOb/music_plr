@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use iced::{
     alignment,
     widget::{
-        column, container, opaque, row, scrollable, text, text_input, Button, Column, Container,
+        column, container, opaque, scrollable, text, text_input, Button, Column, Container,
         MouseArea, Row, Space,
     },
     Element, Length, Rectangle,
@@ -108,21 +108,20 @@ fn provider_row<'a>(
 }
 
 pub(super) fn view_drop_indicator(rect: Rectangle) -> Element<'static, Message, AppTheme> {
-    column![
-        Space::new().height(rect.y),
-        row![
-            Space::new().width(rect.x),
-            Container::new(
-                Space::new()
-                    .width(rect.width)
-                    .height(crate::theme::DROP_LINE_HEIGHT),
-            )
-            .style(|theme: &AppTheme| container::Style {
-                background: Some(theme.palette.accent.into()),
-                ..Default::default()
-            })
-        ]
-    ]
+    pos_absolute(
+        Container::new(
+            Space::new()
+                .width(rect.width)
+                .height(crate::theme::DROP_LINE_HEIGHT),
+        )
+        .style(|theme: &AppTheme| container::Style {
+            background: Some(theme.palette.accent.into()),
+            ..Default::default()
+        })
+        .into(),
+        rect.x,
+        rect.y,
+    )
     .into()
 }
 
@@ -238,7 +237,7 @@ pub(super) fn view_context_menu<'a>(
     let panels =
         MouseArea::new(Row::with_children(row_children)).on_exit(Message::ContextMenuHover(None));
 
-    let overlay = Container::new(pos_absolute(opaque(panels), anchor_x.max(0.0), pos_y))
+    let overlay = pos_absolute(opaque(panels), anchor_x.max(0.0), pos_y)
         .width(Length::Fill)
         .height(Length::Fill);
 
@@ -308,17 +307,16 @@ fn menu_item<'a>(
         icons::icon(icon, theme::ICON_SIZE_SM)
             .style(icon_fg_muted())
             .into(),
-        text(label).into(),
+        text(label).width(Length::Fill).into(),
     ];
     if chevron {
-        children.push(Space::new().width(row_len).into());
         children.push(
             icons::icon(icons::CHEVRON_RIGHT_ICON, theme::ICON_SIZE_SM)
                 .style(icon_fg_secondary())
                 .into(),
         );
     }
-    let item = context_menu_item(children, focused, row_len);
+    let item = context_menu_item(children, focused);
 
     context_menu_button(
         item.id(super::CONTEXT_MENU_ROW_ID).width(row_len),
@@ -330,14 +328,12 @@ fn menu_item<'a>(
 fn context_menu_item<'a>(
     children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
     focused: bool,
-    row_len: Length,
 ) -> Container<'a, Message, AppTheme> {
     Container::new(
         Row::with_children(children)
             .spacing(theme::SPACING_SM)
             .padding([theme::SPACING_XS, theme::SPACING_SM])
-            .align_y(alignment::Vertical::Center)
-            .width(row_len),
+            .align_y(alignment::Vertical::Center),
     )
     .style(context_menu_item_style(focused))
 }
@@ -413,7 +409,6 @@ fn submenu_entries<'a>(
                     text(label).into(),
                 ],
                 focused,
-                row_len,
             );
 
             context_menu_button(

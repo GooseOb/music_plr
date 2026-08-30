@@ -38,7 +38,6 @@ pub(super) fn view_playlist<'a>(
                     .into(),
                 text(player.strings.add_local)
                     .align_y(alignment::Vertical::Center)
-                    .style(fg_secondary())
                     .into(),
             ])
             .spacing(theme::SPACING_SM)

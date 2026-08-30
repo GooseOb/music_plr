@@ -5,16 +5,17 @@ use iced::{
 };
 
 use super::{styles::icon_fg, theme, Message, MusicPlayer};
-use crate::{app::ui::styles::fg_secondary, theme::AppTheme};
+use crate::{
+    app::{ui::styles::fg_secondary, TrackListSearch},
+    theme::AppTheme,
+};
 
 pub const TRACK_LIST_SEARCH_ID: Id = Id::new("track_list_search_input");
 
-pub(super) fn view_track_list_search(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let fs = player
-        .track_list_search
-        .as_ref()
-        .expect("view_track_list_search called without a floating search");
-
+pub(super) fn view_track_list_search<'a>(
+    player: &'a MusicPlayer,
+    fs: &'a TrackListSearch,
+) -> Element<'a, Message, AppTheme> {
     let count = match player.track_list_match_position() {
         Some(pos) => format!("{}/{}", pos, fs.matches.len()),
         None => format!("0/{}", fs.matches.len()),

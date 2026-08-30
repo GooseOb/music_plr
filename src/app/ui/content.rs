@@ -1,4 +1,4 @@
-use iced::widget::{Column, Space};
+use iced::widget::Column;
 
 use super::{
     artist, lyrics, playlist, search, settings, track_list_search, Element, Message, MusicPlayer,
@@ -9,9 +9,15 @@ use crate::{
 };
 
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let search_bar = search::view_search_bar(player);
+    let mut children: Vec<Element<'a, Message, AppTheme>> = vec![search::view_search_bar(player)];
 
-    let inner: Element<'a, Message, AppTheme> = if let Some(lyrics_state) = player.lyrics.as_ref() {
+    if let Some(fs) = player.track_list_search.as_ref() {
+        if fs.list == crate::app::TrackListKind::Active {
+            children.push(track_list_search::view_track_list_search(player, fs));
+        }
+    }
+
+    children.push(if let Some(lyrics_state) = player.lyrics.as_ref() {
         lyrics::view_lyrics(player, lyrics_state)
     } else {
         match &player.view_data().kind {
@@ -28,17 +34,7 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
             ViewKind::Downloads => playlist::view_downloads(player),
             ViewKind::Settings => settings::view_settings(player),
         }
-    };
+    });
 
-    let float_slot: Element<'a, Message, AppTheme> = if matches!(
-        player.track_list_search.as_ref().map(|fs| fs.list),
-        Some(crate::app::TrackListKind::Active)
-    ) {
-        track_list_search::view_track_list_search(player)
-    } else {
-        Space::new().into()
-    };
-
-    let children: Vec<Element<'a, Message, AppTheme>> = vec![search_bar, float_slot, inner];
     Column::with_children(children).into()
 }

@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, Button, Column, Container, Row, Space},
+    widget::{scrollable, text, Button, Column, Container, Row},
     Element, Length,
 };
 
@@ -102,18 +102,6 @@ fn header_provider_picker(
     .into()
 }
 
-/// Library bookmark toggle for this artist.
-fn library_button(player: &MusicPlayer) -> Element<'static, Message, AppTheme> {
-    match player.current_library_item() {
-        Some(item) => {
-            let saved = player.library.contains(item.kind, &item.id);
-            Container::new(toggle_bookmark_button(saved).on_press(Message::ToggleLibrarySave(item)))
-                .into()
-        }
-        None => Space::new().width(theme::ICON_SIZE_SM).into(),
-    }
-}
-
 /// Header block: picture, artist name and the "label: value" stat pairs of
 /// whichever provider's header arrived first.
 fn header<'a>(
@@ -159,22 +147,31 @@ fn header<'a>(
         );
     }
 
+    let mut actions = vec![header_provider_picker(header_provider, player.strings)];
+    if let Some(item) = player.current_library_item() {
+        let saved = player.library.contains(item.kind, &item.id);
+        actions.push(
+            Container::new(
+                toggle_bookmark_button(saved).on_press(Message::ToggleLibrarySave(item)),
+            )
+            .align_y(alignment::Vertical::Bottom)
+            .height(Length::Fill)
+            .into(),
+        );
+    }
+
     Row::with_children([
         image,
         Column::with_children(info)
             .spacing(theme::SPACING_2XS)
             .width(Length::Fill)
+            .height(Length::Fill)
             .into(),
-        Column::with_children([
-            header_provider_picker(header_provider, player.strings),
-            Space::new().height(Length::Fill).into(),
-            library_button(player),
-        ])
-        .align_x(alignment::Horizontal::Right)
-        .into(),
+        Column::with_children(actions)
+            .align_x(alignment::Horizontal::Right)
+            .into(),
     ])
     .spacing(theme::SPACING_LG)
-    .align_y(alignment::Vertical::Center)
     .padding([theme::SPACING_MD, theme::SPACING_XL])
     .into()
 }
@@ -196,8 +193,8 @@ fn section_header(
             text(section_kind_label(kind, tr))
                 .style(fg_accent())
                 .size(theme::TEXT_SIZE_LG)
+                .width(Length::Fill)
                 .into(),
-            Space::new().width(Length::Fill).into(),
             text(tr.provided_by)
                 .size(theme::TEXT_SIZE_SM)
                 .style(fg_secondary())
