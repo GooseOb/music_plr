@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::deps::DepKind;
+use crate::{deps::DepKind, i18n::Strings};
 
 /// Live status of a single dependency's install/delete operation, shared by the
 /// startup dialog and the Settings view so progress survives navigation.
@@ -31,15 +31,6 @@ pub struct DependencyDialog {
     /// Auto-installable missing deps the user has checked (all checked by
     /// default); the install action fetches exactly these.
     pub selected: HashSet<DepKind>,
-    /// Deps whose install thread is currently running.
-    pub installing: HashSet<DepKind>,
-    /// Deps that installed successfully.
-    pub done: HashSet<DepKind>,
-    /// Deps whose install failed, with the error message.
-    pub errors: HashMap<DepKind, String>,
-    /// Download progress (bytes fetched, total bytes) for deps currently
-    /// installing, so the dialog can render a live progress bar.
-    pub progress: HashMap<DepKind, (u64, u64)>,
 }
 
 impl DependencyDialog {
@@ -60,29 +51,40 @@ impl DependencyDialog {
             missing,
             found,
             selected,
-            ..Default::default()
         }
     }
 
     /// Auto-installable deps the user selected that haven't been attempted
-    /// yet (not installing, done, or errored).
-    pub fn pending(&self) -> Vec<DepKind> {
+    /// yet, read from the shared `ops` map (the single source of truth for
+    /// per-dependency install state).
+    pub fn pending(&self, ops: &HashMap<DepKind, DepOpState>) -> Vec<DepKind> {
         self.selected
             .iter()
             .copied()
             .filter(|d| {
-                !self.installing.contains(d)
-                    && !self.done.contains(d)
-                    && !self.errors.contains_key(d)
+                let op = ops.get(d);
+                !(op.is_some_and(|o| o.installing)
+                    || op.is_some_and(|o| o.install_result.is_some()))
             })
             .collect()
     }
 
     /// Whether every selected dep has finished (success or failure), so the
     /// install button can disable and the dialog can show completion.
-    pub fn all_resolved(&self) -> bool {
+    pub fn all_resolved(&self, ops: &HashMap<DepKind, DepOpState>) -> bool {
         self.selected
             .iter()
-            .all(|d| self.done.contains(d) || self.errors.contains_key(d))
+            .all(|d| ops.get(d).is_some_and(|o| o.install_result.is_some()))
+    }
+}
+
+/// Description line for a dependency kind, shown in both the startup dialog and
+/// the Settings Dependencies section. Single source for the `DepKind` → text
+/// mapping so the two views can't drift apart.
+pub fn dep_desc(tr: &Strings, kind: DepKind) -> &'static str {
+    match kind {
+        DepKind::YtDlp => tr.deps_yt_dlp_desc,
+        DepKind::YtMusicApi => tr.deps_ytmusicapi_desc,
+        DepKind::Python3 => tr.deps_python3_desc,
     }
 }

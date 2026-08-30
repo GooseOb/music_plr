@@ -5,13 +5,16 @@ use iced::{
 };
 
 use super::{
-    shared_components::{scope_tab_row, text_input_row},
+    shared_components::{dep_install_status, scope_tab_row, text_input_row},
     Message, MusicPlayer,
 };
 use crate::{
-    app::ui::styles::{bg_secondary, fg_accent, fg_secondary, icon_accent},
+    app::{
+        dependency_dialog::dep_desc,
+        ui::styles::{fg_accent, fg_secondary, icon_accent},
+    },
     deps::DepKind,
-    i18n::{Language, Strings},
+    i18n::Language,
     icons,
     providers::ProviderId,
     theme::{self, AppTheme},
@@ -171,14 +174,6 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         .into()
 }
 
-fn dep_desc(tr: &Strings, kind: DepKind) -> &'static str {
-    match kind {
-        DepKind::YtDlp => tr.deps_yt_dlp_desc,
-        DepKind::YtMusicApi => tr.deps_ytmusicapi_desc,
-        DepKind::Python3 => tr.deps_python3_desc,
-    }
-}
-
 fn dep_settings_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let rows: Vec<Element<'_, Message, AppTheme>> = DepKind::all()
         .iter()
@@ -198,42 +193,10 @@ fn dep_settings_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
     let installing = op.is_some_and(|o| o.installing);
     let deleting = op.is_some_and(|o| o.deleting);
 
-    let status: Element<'_, Message, AppTheme> = if installing {
-        if let Some((downloaded, total)) = op.and_then(|o| {
-            if o.progress.1 > 0 {
-                Some(o.progress)
-            } else {
-                None
-            }
-        }) {
-            let pct = ((downloaded as f64 / total as f64) * 100.0) as u16;
-            let bar = Container::new(iced::widget::ProgressBar::new(
-                std::ops::RangeInclusive::new(0.0, total as f32),
-                downloaded as f32,
-            ))
-            .height(8)
-            .style(bg_secondary());
-            Column::with_children([
-                bar.into(),
-                text(format!("{pct}%"))
-                    .size(theme::TEXT_SIZE_XS)
-                    .style(fg_secondary())
-                    .into(),
-            ])
-            .spacing(theme::SPACING_XS)
-            .into()
-        } else {
-            text(tr.deps_installing).style(fg_secondary()).into()
-        }
+    let status: Element<'_, Message, AppTheme> = if let Some(el) = dep_install_status(op, tr) {
+        el
     } else if deleting {
         text(tr.deps_deleting).style(fg_secondary()).into()
-    } else if let Some(res) = op.and_then(|o| o.install_result.as_ref()) {
-        match res {
-            Ok(()) => text(tr.deps_installed).style(fg_accent()).into(),
-            Err(e) => text(format!("{}: {}", tr.deps_failed, e))
-                .style(fg_secondary())
-                .into(),
-        }
     } else if let Some(res) = op.and_then(|o| o.delete_result.as_ref()) {
         match res {
             Ok(()) => text(tr.deps_deleted).style(fg_accent()).into(),

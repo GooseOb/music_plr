@@ -193,17 +193,15 @@ pub fn set_availability(a: DepAvailability) {
     *AVAILABILITY.lock().unwrap() = a;
 }
 
-/// Record that `yt-dlp` is now present (e.g. after a successful install).
-pub fn set_yt_dlp_available() {
+/// Record that `kind` is now present (e.g. after a successful install), updating
+/// the cached availability that drives per-provider capabilities.
+pub fn set_available(kind: DepKind) {
     let mut a = availability();
-    a.yt_dlp = true;
-    set_availability(a);
-}
-
-/// Record that `ytmusicapi` is now present (e.g. after a successful install).
-pub fn set_ytmusicapi_available() {
-    let mut a = availability();
-    a.ytmusicapi = true;
+    match kind {
+        DepKind::YtDlp => a.yt_dlp = true,
+        DepKind::YtMusicApi => a.ytmusicapi = true,
+        DepKind::Python3 => a.python3 = true,
+    }
     set_availability(a);
 }
 
@@ -220,19 +218,14 @@ pub fn is_available(kind: DepKind) -> bool {
 
 /// Whether the app has installed its own managed copy of `kind` (as opposed to
 /// relying on a system-provided one). For `yt-dlp` this is the cached binary;
-/// for `ytmusicapi` it's the app's `pip install` marker file.
+/// for `ytmusicapi` it's the app's `pip install` marker file. The app can only
+/// remove deps it manages itself, so this doubles as the uninstall guard.
 pub fn installed_via_app(kind: DepKind) -> bool {
     match kind {
         DepKind::YtDlp => yt_dlp_cache_path().exists(),
         DepKind::YtMusicApi => yt_music_api_marker().exists(),
         DepKind::Python3 => false,
     }
-}
-
-/// Whether the app can remove its managed copy of `kind` (i.e. it was
-/// installed by the app, not provided by the system).
-pub fn can_uninstall(kind: DepKind) -> bool {
-    installed_via_app(kind)
 }
 
 /// Remove the app-managed copy of `kind` (falls back to any system-provided
@@ -382,7 +375,7 @@ fn install_yt_dlp(progress: impl Fn(u64, u64) + 'static) -> Result<()> {
     std::fs::set_permissions(&tmp, std::os::unix::fs::PermissionsExt::from_mode(0o755))
         .context("Failed to mark yt-dlp executable")?;
     std::fs::rename(&tmp, &path).context("Failed to install yt-dlp")?;
-    set_yt_dlp_available();
+    set_available(DepKind::YtDlp);
     Ok(())
 }
 
@@ -398,7 +391,7 @@ fn install_ytmusicapi() -> Result<()> {
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    set_ytmusicapi_available();
+    set_available(DepKind::YtMusicApi);
     let marker = yt_music_api_marker();
     if let Some(parent) = marker.parent() {
         let _ = std::fs::create_dir_all(parent);

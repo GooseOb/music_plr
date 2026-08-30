@@ -233,34 +233,29 @@ impl MusicPlayer {
     pub fn process_result(&mut self, result: BackendResult) -> Task<Message> {
         match result {
             BackendResult::DependencyProgress(kind, downloaded, total) => {
-                if let Some(dialog) = &mut self.dep_dialog {
-                    dialog.progress.insert(kind, (downloaded, total));
-                }
                 if let Some(op) = self.dep_ops.get_mut(&kind) {
                     op.progress = (downloaded, total);
                 }
                 Task::none()
             }
             BackendResult::DependencyInstalled(kind, status) => {
-                if let Some(dialog) = &mut self.dep_dialog {
-                    dialog.installing.remove(&kind);
-                    dialog.progress.remove(&kind);
-                    match &status {
-                        Ok(()) => {
-                            dialog.done.insert(kind);
-                        }
-                        Err(e) => {
-                            dialog.errors.insert(kind, e.clone());
-                        }
-                    }
-                    if dialog.all_resolved() && !dialog.done.is_empty() {
-                        self.notify(self.strings.deps_installed_toast);
-                    }
-                }
                 if let Some(op) = self.dep_ops.get_mut(&kind) {
                     op.installing = false;
                     op.install_result = Some(status);
                     op.progress = (0, 0);
+                }
+                // The startup dialog reads its completion/toast state from the
+                // shared `dep_ops` map rather than keeping its own copies.
+                if let Some(dialog) = &self.dep_dialog {
+                    let any_ok = dialog.selected.iter().any(|k| {
+                        self.dep_ops
+                            .get(k)
+                            .and_then(|o| o.install_result.as_ref())
+                            .is_some_and(Result::is_ok)
+                    });
+                    if dialog.all_resolved(&self.dep_ops) && any_ok {
+                        self.notify(self.strings.deps_installed_toast);
+                    }
                 }
                 Task::none()
             }

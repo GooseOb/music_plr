@@ -579,28 +579,36 @@ impl crate::app::MusicPlayer {
         }
     }
 
+    /// Spawn a background install thread that reports download progress and the
+    /// final result back to the main thread through `tx` (as [`BackendResult`]).
+    /// Single helper for both the startup dialog and the Settings view so the
+    /// install/report plumbing lives in one place.
+    fn spawn_dep_install(tx: std::sync::mpsc::Sender<BackendResult>, kind: DepKind) {
+        std::thread::spawn(move || {
+            let tx_progress = tx.clone();
+            let result = crate::deps::install(kind, move |downloaded, total| {
+                let _ =
+                    tx_progress.send(BackendResult::DependencyProgress(kind, downloaded, total));
+            });
+            let _ = tx.send(BackendResult::DependencyInstalled(
+                kind,
+                result.map_err(|e| e.to_string()),
+            ));
+        });
+    }
+
     /// Spawn a background install thread for each selected, not-yet-attempted
     /// dependency. Results arrive via [`BackendResult::DependencyInstalled`],
     /// drained by the tick and applied in [`Self::process_result`].
     fn handle_install_dependencies(&mut self) -> Task<Message> {
-        if let Some(dialog) = &mut self.dep_dialog {
-            let pending: Vec<DepKind> = dialog.pending();
-            let tx = self.result_tx.clone();
-            for kind in pending {
-                dialog.installing.insert(kind);
-                let tx = tx.clone();
-                std::thread::spawn(move || {
-                    let tx_progress = tx.clone();
-                    let result = crate::deps::install(kind, move |downloaded, total| {
-                        let _ = tx_progress
-                            .send(BackendResult::DependencyProgress(kind, downloaded, total));
-                    });
-                    let _ = tx.send(BackendResult::DependencyInstalled(
-                        kind,
-                        result.map_err(|e| e.to_string()),
-                    ));
-                });
-            }
+        let pending = match &self.dep_dialog {
+            Some(dialog) => dialog.pending(&self.dep_ops),
+            None => return Task::none(),
+        };
+        let tx = self.result_tx.clone();
+        for kind in pending {
+            self.dep_ops.entry(kind).or_default().installing = true;
+            Self::spawn_dep_install(tx.clone(), kind);
         }
         Task::none()
     }
@@ -617,25 +625,14 @@ impl crate::app::MusicPlayer {
             return;
         }
         op.installing = true;
-        let tx = self.result_tx.clone();
-        std::thread::spawn(move || {
-            let tx_progress = tx.clone();
-            let result = crate::deps::install(kind, move |downloaded, total| {
-                let _ =
-                    tx_progress.send(BackendResult::DependencyProgress(kind, downloaded, total));
-            });
-            let _ = tx.send(BackendResult::DependencyInstalled(
-                kind,
-                result.map_err(|e| e.to_string()),
-            ));
-        });
+        Self::spawn_dep_install(self.result_tx.clone(), kind);
     }
 
     /// Remove the app-managed copy of a dependency from the Settings view.
     /// Result lands in [`BackendResult::DependencyDeleted`] and updates
     /// [`MusicPlayer::dep_ops`].
     fn handle_dep_settings_delete(&mut self, kind: DepKind) {
-        if !crate::deps::can_uninstall(kind) {
+        if !crate::deps::installed_via_app(kind) {
             return;
         }
         let op = self.dep_ops.entry(kind).or_default();

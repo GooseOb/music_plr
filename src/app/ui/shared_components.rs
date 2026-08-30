@@ -1,17 +1,20 @@
 use iced::{
     alignment,
-    widget::{container, image, text, text_input, Button, Column, Container, Id, Row},
+    widget::{container, image, text, text_input, Button, Column, Container, Id, ProgressBar, Row},
     Color, Element, Length,
 };
 
 use super::styles::{
-    button_style_primary, button_style_scope, fg_secondary, icon_fg_muted, icon_primary,
+    bg_secondary, button_style_primary, button_style_scope, fg_accent, fg_secondary, icon_fg_muted,
+    icon_primary,
 };
 use crate::{
     app::{
+        dependency_dialog::DepOpState,
         ui::{spinner::spinner, styles::icon_playbar_button},
         Message,
     },
+    i18n::Strings,
     icons,
     theme::{self, AppTheme},
 };
@@ -203,4 +206,55 @@ pub fn text_input_row<'a>(
     ])
     .spacing(theme::SPACING_XS)
     .into()
+}
+
+/// Download progress bar with a live percentage label, for dependency installs.
+/// Shared by the startup dialog and the Settings Dependencies section so the
+/// progress rendering can't drift between the two. Callers must ensure `total`
+/// is non-zero (otherwise a plain "installing" label is more appropriate).
+pub fn dep_progress_bar(downloaded: u64, total: u64) -> Element<'static, Message, AppTheme> {
+    let pct = ((downloaded as f64 / total as f64) * 100.0) as u16;
+    let bar = Container::new(ProgressBar::new(
+        std::ops::RangeInclusive::new(0.0, total as f32),
+        downloaded as f32,
+    ))
+    .height(8)
+    .style(bg_secondary());
+    Column::with_children([
+        bar.into(),
+        text(format!("{pct}%"))
+            .size(theme::TEXT_SIZE_XS)
+            .style(fg_secondary())
+            .into(),
+    ])
+    .spacing(theme::SPACING_XS)
+    .into()
+}
+
+/// Install-phase status (installing / installed / failed) for a dependency,
+/// shared by the startup dialog and the Settings Dependencies section so the
+/// status text can't drift. Returns `None` when there is no install state yet
+/// (e.g. an uninstalled dep, or a dep waiting on delete/base-state text), letting
+/// the caller layer its own branches on top.
+pub fn dep_install_status(
+    op: Option<&DepOpState>,
+    tr: &Strings,
+) -> Option<Element<'static, Message, AppTheme>> {
+    if op.is_some_and(|o| o.installing) {
+        return Some(
+            match op.and_then(|o| (o.progress.1 > 0).then_some(o.progress)) {
+                Some((downloaded, total)) => dep_progress_bar(downloaded, total),
+                None => text(tr.deps_installing).style(fg_secondary()).into(),
+            },
+        );
+    }
+    if let Some(res) = op.and_then(|o| o.install_result.as_ref()) {
+        return Some(match res {
+            Ok(()) => text(tr.deps_installed).style(fg_accent()).into(),
+            Err(e) => text(format!("{}: {}", tr.deps_failed, e))
+                .style(fg_secondary())
+                .into(),
+        });
+    }
+    None
 }

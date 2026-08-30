@@ -10,16 +10,19 @@ use iced::{
 };
 
 use super::{
-    shared_components::{disabled_text_input_row, scope_tab_row, text_input_row, thumbnail},
+    shared_components::{
+        dep_install_status, disabled_text_input_row, scope_tab_row, text_input_row, thumbnail,
+    },
     styles::{
-        bg_overlay, bg_popup, bg_secondary, button_style_danger, button_style_popup_item,
-        button_style_primary, context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted,
-        icon_fg_secondary, scroll_padding,
+        bg_overlay, bg_popup, button_style_danger, button_style_popup_item, button_style_primary,
+        context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted, icon_fg_secondary,
+        scroll_padding,
     },
     theme, ContextMenuState, Message, MusicPlayer,
 };
 use crate::{
     app::{
+        dependency_dialog::dep_desc,
         interaction::{ContextMenuFocus, CtxAction, SubmenuKind},
         CsvPreset, EditTrackField, ImportCsvField, ImportMethod,
     },
@@ -630,12 +633,13 @@ pub(super) fn view_dependency_dialog(player: &MusicPlayer) -> Element<'_, Messag
             .push(scrollable(Column::with_children(found_rows).spacing(theme::SPACING_SM)).into());
     }
 
-    let pending = dialog.pending();
+    let pending = dialog.pending(&player.dep_ops);
+    let installing_any = player.dep_ops.values().any(|o| o.installing);
     let install_btn =
         Button::new(Container::new(text(tr.deps_install_selected)).center_x(Length::Fill))
             .padding(theme::SPACING_SM)
             .style(button_style_primary())
-            .on_press_maybe(if pending.is_empty() && dialog.installing.is_empty() {
+            .on_press_maybe(if pending.is_empty() && !installing_any {
                 None
             } else {
                 Some(Message::DepInstall)
@@ -667,41 +671,9 @@ fn dep_checkbox_row<'a>(
     let tr = &player.strings;
     let dialog = player.dep_dialog.as_ref();
     let checked = dialog.is_some_and(|d| d.selected.contains(&kind));
+    let op = player.dep_ops.get(&kind);
     let status: Element<'_, Message, AppTheme> =
-        if dialog.is_some_and(|d| d.installing.contains(&kind)) {
-            if let Some((downloaded, total)) = dialog.and_then(|d| d.progress.get(&kind)) {
-                if *total > 0 {
-                    let pct = ((*downloaded as f64 / *total as f64) * 100.0) as u16;
-                    let bar = Container::new(iced::widget::ProgressBar::new(
-                        std::ops::RangeInclusive::new(0.0, *total as f32),
-                        *downloaded as f32,
-                    ))
-                    .height(8)
-                    .style(bg_secondary());
-                    Column::with_children([
-                        bar.into(),
-                        text(format!("{pct}%"))
-                            .size(theme::TEXT_SIZE_XS)
-                            .style(fg_secondary())
-                            .into(),
-                    ])
-                    .spacing(theme::SPACING_XS)
-                    .into()
-                } else {
-                    text(tr.deps_installing).style(fg_secondary()).into()
-                }
-            } else {
-                text(tr.deps_installing).style(fg_secondary()).into()
-            }
-        } else if dialog.is_some_and(|d| d.done.contains(&kind)) {
-            text(tr.deps_installed).style(fg_accent()).into()
-        } else if let Some(err) = dialog.and_then(|d| d.errors.get(&kind)) {
-            text(format!("{}: {}", tr.deps_failed, err))
-                .style(fg_secondary())
-                .into()
-        } else {
-            Space::new().into()
-        };
+        dep_install_status(op, tr).unwrap_or_else(|| Space::new().into());
 
     let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::with_capacity(4);
     children.push(
@@ -715,7 +687,7 @@ fn dep_checkbox_row<'a>(
         .align_y(alignment::Vertical::Center)
         .into(),
     );
-    children.push(text(dep_description(tr, kind)).style(fg_secondary()).into());
+    children.push(text(dep_desc(tr, kind)).style(fg_secondary()).into());
     if let Some(note) = note {
         children.push(text(note).style(fg_secondary()).into());
     }
@@ -723,14 +695,6 @@ fn dep_checkbox_row<'a>(
     Column::with_children(children)
         .spacing(theme::SPACING_XS)
         .into()
-}
-
-fn dep_description(tr: &crate::i18n::Strings, kind: DepKind) -> &'static str {
-    match kind {
-        DepKind::YtDlp => tr.deps_yt_dlp_desc,
-        DepKind::YtMusicApi => tr.deps_ytmusicapi_desc,
-        DepKind::Python3 => tr.deps_python3_desc,
-    }
 }
 
 /// A non-installable dependency row (e.g. Python 3) shown with a manual hint.
@@ -741,7 +705,7 @@ fn dep_manual_row<'a>(
 ) -> Element<'a, Message, AppTheme> {
     Column::with_children([
         text(kind.name()).style(fg_accent()).into(),
-        text(dep_description(&player.strings, kind))
+        text(dep_desc(player.strings, kind))
             .style(fg_secondary())
             .into(),
         text(note).style(fg_secondary()).into(),
