@@ -47,6 +47,11 @@ impl DepKind {
             DepKind::Python3 => false,
         }
     }
+
+    /// All dependency kinds, for iteration in the Settings / startup dialogs.
+    pub fn all() -> &'static [DepKind] {
+        &[DepKind::YtDlp, DepKind::YtMusicApi, DepKind::Python3]
+    }
 }
 
 /// The `yt-dlp` release asset for the current target (standalone binary).
@@ -113,6 +118,12 @@ fn yt_dlp_cache_path() -> PathBuf {
     crate::data::cache_path("yt-dlp")
         .join(YT_DLP_VERSION)
         .join(yt_dlp_asset())
+}
+
+/// Marker file written when the app installs `ytmusicapi` via `pip`, so the
+/// Settings view can tell an app-managed install from a system-provided one.
+fn yt_music_api_marker() -> PathBuf {
+    crate::data::cache_path("ytmusicapi")
 }
 
 /// Return the `yt-dlp` executable to use, preferring (in order):
@@ -194,6 +205,75 @@ pub fn set_ytmusicapi_available() {
     let mut a = availability();
     a.ytmusicapi = true;
     set_availability(a);
+}
+
+/// Whether `kind` is currently available (on PATH / importable), regardless of
+/// whether the app manages its own copy.
+pub fn is_available(kind: DepKind) -> bool {
+    let a = availability();
+    match kind {
+        DepKind::YtDlp => a.yt_dlp,
+        DepKind::YtMusicApi => a.ytmusicapi,
+        DepKind::Python3 => a.python3,
+    }
+}
+
+/// Whether the app has installed its own managed copy of `kind` (as opposed to
+/// relying on a system-provided one). For `yt-dlp` this is the cached binary;
+/// for `ytmusicapi` it's the app's `pip install` marker file.
+pub fn installed_via_app(kind: DepKind) -> bool {
+    match kind {
+        DepKind::YtDlp => yt_dlp_cache_path().exists(),
+        DepKind::YtMusicApi => yt_music_api_marker().exists(),
+        DepKind::Python3 => false,
+    }
+}
+
+/// Whether the app can remove its managed copy of `kind` (i.e. it was
+/// installed by the app, not provided by the system).
+pub fn can_uninstall(kind: DepKind) -> bool {
+    installed_via_app(kind)
+}
+
+/// Remove the app-managed copy of `kind` (falls back to any system-provided
+/// one). Returns an error for kinds the app cannot uninstall.
+pub fn uninstall(kind: DepKind) -> Result<()> {
+    match kind {
+        DepKind::YtDlp => {
+            let dir = crate::data::cache_path("yt-dlp");
+            if dir.exists() {
+                std::fs::remove_dir_all(&dir)
+                    .with_context(|| format!("Failed to remove {}", dir.display()))?;
+            }
+            let mut a = availability();
+            a.yt_dlp = resolve_yt_dlp().is_some();
+            set_availability(a);
+            Ok(())
+        }
+        DepKind::YtMusicApi => {
+            let output = crate::providers::run_command_with_timeout(
+                Command::new("python3").args(["-m", "pip", "uninstall", "-y", "ytmusicapi"]),
+                Duration::from_mins(5),
+            )
+            .context("Failed to run pip uninstall")?;
+            let python3 = python3_present();
+            let still_present = python3 && ytmusicapi_present();
+            let mut a = availability();
+            a.python3 = python3;
+            a.ytmusicapi = still_present;
+            set_availability(a);
+            // Clear the app-installed marker regardless of the pip outcome.
+            let _ = std::fs::remove_file(yt_music_api_marker());
+            if !output.status.success() && still_present {
+                anyhow::bail!(
+                    "pip uninstall ytmusicapi failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            Ok(())
+        }
+        DepKind::Python3 => anyhow::bail!("Python 3 must be removed manually (OS package)."),
+    }
 }
 
 pub fn detect_missing() -> Vec<DepKind> {
@@ -319,6 +399,11 @@ fn install_ytmusicapi() -> Result<()> {
         );
     }
     set_ytmusicapi_available();
+    let marker = yt_music_api_marker();
+    if let Some(parent) = marker.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(&marker, b"");
     Ok(())
 }
 

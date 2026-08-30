@@ -9,8 +9,9 @@ use super::{
     Message, MusicPlayer,
 };
 use crate::{
-    app::ui::styles::{fg_accent, icon_accent},
-    i18n::Language,
+    app::ui::styles::{bg_secondary, fg_accent, fg_secondary, icon_accent},
+    deps::DepKind,
+    i18n::{Language, Strings},
     icons,
     providers::ProviderId,
     theme::{self, AppTheme},
@@ -138,6 +139,10 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
             player.strings.sec_history,
             [hist_visible, hist_stored, recent],
         ),
+        section(
+            player.strings.sec_dependencies,
+            [dep_settings_section(player)],
+        ),
         Row::with_children([
             Column::with_children([
                 section(player.strings.language_lbl, [language_section(player)]),
@@ -164,4 +169,121 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
     scrollable(Container::new(content).padding([theme::SPACING_MD, theme::SPACING_XL]))
         .id(iced::widget::Id::new("settings_scroll"))
         .into()
+}
+
+fn dep_desc(tr: &Strings, kind: DepKind) -> &'static str {
+    match kind {
+        DepKind::YtDlp => tr.deps_yt_dlp_desc,
+        DepKind::YtMusicApi => tr.deps_ytmusicapi_desc,
+        DepKind::Python3 => tr.deps_python3_desc,
+    }
+}
+
+fn dep_settings_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let rows: Vec<Element<'_, Message, AppTheme>> = DepKind::all()
+        .iter()
+        .map(|&kind| dep_settings_row(player, kind))
+        .collect();
+    Column::with_children(rows)
+        .spacing(theme::SPACING_MD)
+        .into()
+}
+
+/// A row in the Settings Dependencies section: name, description, live status,
+/// and Install/Delete buttons. Even deps already present on the system can be
+/// (re)installed as a managed copy, with a "Found on system" note.
+fn dep_settings_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message, AppTheme> {
+    let tr = &player.strings;
+    let op = player.dep_ops.get(&kind);
+    let installing = op.is_some_and(|o| o.installing);
+    let deleting = op.is_some_and(|o| o.deleting);
+
+    let status: Element<'_, Message, AppTheme> = if installing {
+        if let Some((downloaded, total)) = op.and_then(|o| {
+            if o.progress.1 > 0 {
+                Some(o.progress)
+            } else {
+                None
+            }
+        }) {
+            let pct = ((downloaded as f64 / total as f64) * 100.0) as u16;
+            let bar = Container::new(iced::widget::ProgressBar::new(
+                std::ops::RangeInclusive::new(0.0, total as f32),
+                downloaded as f32,
+            ))
+            .height(8)
+            .style(bg_secondary());
+            Column::with_children([
+                bar.into(),
+                text(format!("{pct}%"))
+                    .size(theme::TEXT_SIZE_XS)
+                    .style(fg_secondary())
+                    .into(),
+            ])
+            .spacing(theme::SPACING_XS)
+            .into()
+        } else {
+            text(tr.deps_installing).style(fg_secondary()).into()
+        }
+    } else if deleting {
+        text(tr.deps_deleting).style(fg_secondary()).into()
+    } else if let Some(res) = op.and_then(|o| o.install_result.as_ref()) {
+        match res {
+            Ok(()) => text(tr.deps_installed).style(fg_accent()).into(),
+            Err(e) => text(format!("{}: {}", tr.deps_failed, e))
+                .style(fg_secondary())
+                .into(),
+        }
+    } else if let Some(res) = op.and_then(|o| o.delete_result.as_ref()) {
+        match res {
+            Ok(()) => text(tr.deps_deleted).style(fg_accent()).into(),
+            Err(e) => text(format!("{}: {}", tr.deps_delete_failed, e))
+                .style(fg_secondary())
+                .into(),
+        }
+    } else if crate::deps::installed_via_app(kind) {
+        text(tr.deps_managed_by_app).style(fg_accent()).into()
+    } else if crate::deps::is_available(kind) {
+        text(tr.deps_found_on_system).style(fg_accent()).into()
+    } else {
+        text(tr.deps_not_installed).style(fg_secondary()).into()
+    };
+
+    let app_managed = crate::deps::installed_via_app(kind);
+    let install_btn: Element<'_, Message, AppTheme> = if kind.auto_installable() && !app_managed {
+        Button::new(text(tr.deps_install))
+            .padding([theme::SPACING_XS, theme::SPACING_MD])
+            .on_press_maybe(if installing || deleting {
+                None
+            } else {
+                Some(Message::DepSettingsInstall(kind))
+            })
+            .into()
+    } else {
+        Space::new().into()
+    };
+
+    let delete_btn: Element<'_, Message, AppTheme> = if app_managed {
+        Button::new(text(tr.deps_delete))
+            .padding([theme::SPACING_XS, theme::SPACING_MD])
+            .on_press_maybe(if installing || deleting {
+                None
+            } else {
+                Some(Message::DepSettingsDelete(kind))
+            })
+            .into()
+    } else {
+        Space::new().into()
+    };
+
+    Column::with_children([
+        text(kind.name()).style(fg_accent()).into(),
+        text(dep_desc(tr, kind)).style(fg_secondary()).into(),
+        Row::with_children([install_btn, delete_btn])
+            .spacing(theme::SPACING_SM)
+            .into(),
+        status,
+    ])
+    .spacing(theme::SPACING_XS)
+    .into()
 }

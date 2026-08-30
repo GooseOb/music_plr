@@ -57,6 +57,7 @@ pub enum BackendResult {
     /// Background install of a dependency finished (success or error).
     DependencyInstalled(DepKind, Result<(), String>),
     DependencyProgress(DepKind, u64, u64),
+    DependencyDeleted(DepKind, Result<(), String>),
     ProviderResolved {
         original: Track,
         provider: ProviderId,
@@ -207,6 +208,8 @@ pub enum Message {
     DepToggle(DepKind),
     DepInstall,
     DepDismiss,
+    DepSettingsInstall(DepKind),
+    DepSettingsDelete(DepKind),
 }
 
 /// Editable text fields of a [`Track`](crate::types::Track) in the track

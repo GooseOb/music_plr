@@ -9,10 +9,25 @@ use std::collections::{HashMap, HashSet};
 
 use crate::deps::DepKind;
 
+/// Live status of a single dependency's install/delete operation, shared by the
+/// startup dialog and the Settings view so progress survives navigation.
+#[derive(Debug, Default)]
+pub struct DepOpState {
+    pub installing: bool,
+    pub install_result: Option<Result<(), String>>,
+    pub progress: (u64, u64),
+    pub deleting: bool,
+    pub delete_result: Option<Result<(), String>>,
+}
+
 #[derive(Debug, Default)]
 pub struct DependencyDialog {
     /// Dependencies detected as missing at startup.
     pub missing: Vec<DepKind>,
+    /// Dependencies available on the system but not managed by the app, shown in
+    /// a separate "found on system" section; the user may opt to install a managed
+    /// copy, unchecked by default.
+    pub found: Vec<DepKind>,
     /// Auto-installable missing deps the user has checked (all checked by
     /// default); the install action fetches exactly these.
     pub selected: HashSet<DepKind>,
@@ -28,10 +43,11 @@ pub struct DependencyDialog {
 }
 
 impl DependencyDialog {
-    pub fn new(missing: Vec<DepKind>) -> Self {
-        // Default-select every auto-installable dep. ytmusicapi is only
+    pub fn new(missing: Vec<DepKind>, found: Vec<DepKind>) -> Self {
+        // Default-select every auto-installable missing dep. ytmusicapi is only
         // selectable when Python 3 is present (otherwise its install would
-        // fail immediately).
+        // fail immediately). Found-on-system deps start unchecked: the user must
+        // explicitly opt to install a managed copy.
         let selected = missing
             .iter()
             .copied()
@@ -42,6 +58,7 @@ impl DependencyDialog {
             .collect();
         Self {
             missing,
+            found,
             selected,
             ..Default::default()
         }

@@ -93,6 +93,7 @@ pub const STRINGS: Strings = Strings {
     sec_storage: "Pamięć",
     sec_history: "Historia",
     sec_appearance: "Wygląd",
+    sec_dependencies: "Zależności",
     theme_lbl: "Motyw",
     language_lbl: "Język",
     default_provider_lbl: "Domyślny dostawca streamingu i pobierania",
@@ -189,7 +190,8 @@ pub const STRINGS: Strings = Strings {
 
     deps_title: "Brakujące zależności",
     deps_intro: "Brakuje niektórych narzędzi używanych przez aplikację. Wybierz, które zainstalować, lub odrzuć, aby kontynuować (wyszukiwanie i odtwarzanie mogą nie działać, dopóki nie będą obecne).",
-    deps_install: "Zainstaluj wybrane",
+    deps_install: "Zainstaluj",
+    deps_install_selected: "Zainstaluj wybrane",
     deps_discard: "Odrzuć",
     deps_installing: "Instalowanie…",
     deps_installed: "Zainstalowano",
@@ -202,6 +204,15 @@ pub const STRINGS: Strings = Strings {
     deps_ytmusicapi_requires_python: "Wymaga Pythona 3 (najpierw go zainstaluj)",
     deps_play_requires_yt_dlp: "Odtwarzanie wymaga yt-dlp — zainstaluj go z okna startowego, aby odtworzyć ten utwór.",
     deps_source_not_playable: "To źródło nie obsługuje odtwarzania.",
+    deps_found_section_title: "Znalezione w systemie",
+    deps_found_section_intro: "Są już dostępne. Zaznacz dowolne, aby zainstalować zarządzaną kopię przez aplikację (kopia aplikacji ma priorytet nad systemową).",
+    deps_found_on_system: "Znalezione w systemie",
+    deps_managed_by_app: "Zainstalowane (zarządzane przez aplikację)",
+    deps_not_installed: "Nie zainstalowane",
+    deps_delete: "Usuń",
+    deps_deleting: "Usuwanie…",
+    deps_deleted: "Usunięte",
+    deps_delete_failed: "Usuwanie nieudane",
 };
 
 fn pl_tracks(n: usize) -> String {

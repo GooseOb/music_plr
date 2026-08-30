@@ -568,6 +568,14 @@ impl crate::app::MusicPlayer {
                 }
                 Task::none()
             }
+            Message::DepSettingsInstall(kind) => {
+                self.handle_dep_settings_install(kind);
+                Task::none()
+            }
+            Message::DepSettingsDelete(kind) => {
+                self.handle_dep_settings_delete(kind);
+                Task::none()
+            }
         }
     }
 
@@ -595,6 +603,54 @@ impl crate::app::MusicPlayer {
             }
         }
         Task::none()
+    }
+
+    /// Install a single dependency from the Settings view into the app cache.
+    /// Progress/result land in [`BackendResult::DependencyInstalled`] and update
+    /// [`MusicPlayer::dep_ops`].
+    fn handle_dep_settings_install(&mut self, kind: DepKind) {
+        if !kind.auto_installable() {
+            return;
+        }
+        let op = self.dep_ops.entry(kind).or_default();
+        if op.installing || op.deleting {
+            return;
+        }
+        op.installing = true;
+        let tx = self.result_tx.clone();
+        std::thread::spawn(move || {
+            let tx_progress = tx.clone();
+            let result = crate::deps::install(kind, move |downloaded, total| {
+                let _ =
+                    tx_progress.send(BackendResult::DependencyProgress(kind, downloaded, total));
+            });
+            let _ = tx.send(BackendResult::DependencyInstalled(
+                kind,
+                result.map_err(|e| e.to_string()),
+            ));
+        });
+    }
+
+    /// Remove the app-managed copy of a dependency from the Settings view.
+    /// Result lands in [`BackendResult::DependencyDeleted`] and updates
+    /// [`MusicPlayer::dep_ops`].
+    fn handle_dep_settings_delete(&mut self, kind: DepKind) {
+        if !crate::deps::can_uninstall(kind) {
+            return;
+        }
+        let op = self.dep_ops.entry(kind).or_default();
+        if op.installing || op.deleting {
+            return;
+        }
+        op.deleting = true;
+        let tx = self.result_tx.clone();
+        std::thread::spawn(move || {
+            let result = crate::deps::uninstall(kind);
+            let _ = tx.send(BackendResult::DependencyDeleted(
+                kind,
+                result.map_err(|e| e.to_string()),
+            ));
+        });
     }
 
     #[allow(clippy::unused_self)]

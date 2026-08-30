@@ -93,6 +93,7 @@ pub const STRINGS: Strings = Strings {
     sec_storage: "Storage",
     sec_history: "History",
     sec_appearance: "Appearance",
+    sec_dependencies: "Dependencies",
     theme_lbl: "Theme",
     language_lbl: "Language",
     default_provider_lbl: "Default stream & download provider",
@@ -183,7 +184,8 @@ pub const STRINGS: Strings = Strings {
 
     deps_title: "Missing dependencies",
     deps_intro: "Some tools the app uses are missing. Select which to install, or discard to continue (search/streaming may not work until they are present).",
-    deps_install: "Install selected",
+    deps_install: "Install",
+    deps_install_selected: "Install selected",
     deps_discard: "Discard",
     deps_installing: "Installing…",
     deps_installed: "Installed",
@@ -196,6 +198,15 @@ pub const STRINGS: Strings = Strings {
     deps_ytmusicapi_requires_python: "Requires Python 3 (install it first)",
     deps_play_requires_yt_dlp: "Playback needs yt-dlp — install it from the startup dialog to play this.",
     deps_source_not_playable: "This source can't be played.",
+    deps_found_section_title: "Found on your system",
+    deps_found_section_intro: "These are already available. Check any to install a managed copy via the app (the app copy takes priority over the system one).",
+    deps_found_on_system: "Found on your system",
+    deps_managed_by_app: "Installed (managed by app)",
+    deps_not_installed: "Not installed",
+    deps_delete: "Delete",
+    deps_deleting: "Deleting…",
+    deps_deleted: "Deleted",
+    deps_delete_failed: "Delete failed",
 };
 
 fn en_tracks(n: usize) -> String {

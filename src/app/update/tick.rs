@@ -236,23 +236,38 @@ impl MusicPlayer {
                 if let Some(dialog) = &mut self.dep_dialog {
                     dialog.progress.insert(kind, (downloaded, total));
                 }
+                if let Some(op) = self.dep_ops.get_mut(&kind) {
+                    op.progress = (downloaded, total);
+                }
                 Task::none()
             }
             BackendResult::DependencyInstalled(kind, status) => {
                 if let Some(dialog) = &mut self.dep_dialog {
                     dialog.installing.remove(&kind);
                     dialog.progress.remove(&kind);
-                    match status {
+                    match &status {
                         Ok(()) => {
                             dialog.done.insert(kind);
                         }
                         Err(e) => {
-                            dialog.errors.insert(kind, e);
+                            dialog.errors.insert(kind, e.clone());
                         }
                     }
                     if dialog.all_resolved() && !dialog.done.is_empty() {
                         self.notify(self.strings.deps_installed_toast);
                     }
+                }
+                if let Some(op) = self.dep_ops.get_mut(&kind) {
+                    op.installing = false;
+                    op.install_result = Some(status);
+                    op.progress = (0, 0);
+                }
+                Task::none()
+            }
+            BackendResult::DependencyDeleted(kind, status) => {
+                if let Some(op) = self.dep_ops.get_mut(&kind) {
+                    op.deleting = false;
+                    op.delete_result = Some(status);
                 }
                 Task::none()
             }

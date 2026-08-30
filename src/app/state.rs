@@ -11,7 +11,7 @@ use iced::Task;
 
 use crate::{
     app::{
-        dependency_dialog::DependencyDialog,
+        dependency_dialog::{DepOpState, DependencyDialog},
         edit_track::EditTrackState,
         import::ImportPlaylistDialog,
         interaction::{ContextMenuState, DragState, TrackListSearch, TrackPos},
@@ -121,6 +121,9 @@ pub struct MusicPlayer {
     /// app needs are absent. `None` once dismissed or when everything is
     /// present.
     pub dep_dialog: Option<DependencyDialog>,
+    /// Live status of dependency install/delete operations triggered from the
+    /// Settings view (and mirrored from the startup dialog), keyed by dep.
+    pub dep_ops: std::collections::HashMap<crate::deps::DepKind, DepOpState>,
 
     pub queue_selected_indices: Vec<usize>,
     pub recent_selected_indices: Vec<usize>,
@@ -154,6 +157,11 @@ impl MusicPlayer {
         let strings = config.language.strings();
         let app_theme = AppTheme::new(Palette::from(config.theme_kind));
         let missing_deps = crate::deps::detect_missing();
+        let found_deps: Vec<crate::deps::DepKind> = crate::deps::DepKind::all()
+            .iter()
+            .copied()
+            .filter(|k| crate::deps::is_available(*k) && !crate::deps::installed_via_app(*k))
+            .collect();
         let mut player = Self {
             audio: AudioPlayer::new(0.8),
             search_history: SearchHistory::load(),
@@ -223,7 +231,9 @@ impl MusicPlayer {
             clipboard: Vec::new(),
             last_click: None,
             strings,
-            dep_dialog: (!missing_deps.is_empty()).then(|| DependencyDialog::new(missing_deps)),
+            dep_dialog: (!missing_deps.is_empty())
+                .then(|| DependencyDialog::new(missing_deps, found_deps)),
+            dep_ops: std::collections::HashMap::new(),
         };
 
         player.init_mpris();

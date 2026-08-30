@@ -591,49 +591,79 @@ pub(super) fn view_dependency_dialog(player: &MusicPlayer) -> Element<'_, Messag
     let tr = &player.strings;
     let python3_missing = dialog.missing.contains(&DepKind::Python3);
 
-    let rows: Vec<Element<'_, Message, AppTheme>> = dialog
+    let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
+
+    let missing_rows: Vec<Element<'_, Message, AppTheme>> = dialog
         .missing
         .iter()
         .map(|&kind| match kind {
-            DepKind::YtDlp => dep_checkbox_row(player, kind),
-            DepKind::YtMusicApi if !python3_missing => dep_checkbox_row(player, kind),
+            DepKind::YtDlp => dep_checkbox_row(player, kind, None),
+            DepKind::YtMusicApi if !python3_missing => dep_checkbox_row(player, kind, None),
             DepKind::YtMusicApi => dep_manual_row(player, kind, tr.deps_ytmusicapi_requires_python),
             DepKind::Python3 => dep_manual_row(player, kind, tr.deps_python3_manual),
         })
         .collect();
+    if !missing_rows.is_empty() {
+        children.push(text(tr.deps_title).size(theme::TEXT_SIZE_LG).into());
+        children.push(text(tr.deps_intro).style(fg_secondary()).into());
+        children.push(
+            scrollable(Column::with_children(missing_rows).spacing(theme::SPACING_SM)).into(),
+        );
+    }
 
-    let list = scrollable(Column::with_children(rows).spacing(theme::SPACING_SM));
+    if !dialog.found.is_empty() {
+        let found_rows = dialog.found.iter().map(|&kind| match kind {
+            DepKind::YtDlp | DepKind::YtMusicApi => dep_checkbox_row(player, kind, None),
+            DepKind::Python3 => dep_manual_row(player, kind, ""),
+        });
+        children.push(
+            text(tr.deps_found_section_title)
+                .size(theme::TEXT_SIZE_LG)
+                .into(),
+        );
+        children.push(
+            text(tr.deps_found_section_intro)
+                .style(fg_secondary())
+                .into(),
+        );
+        children
+            .push(scrollable(Column::with_children(found_rows).spacing(theme::SPACING_SM)).into());
+    }
 
     let pending = dialog.pending();
-    let install_btn = Button::new(Container::new(text(tr.deps_install)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
-        .style(button_style_primary())
-        .on_press_maybe(if pending.is_empty() && dialog.installing.is_empty() {
-            None
-        } else {
-            Some(Message::DepInstall)
-        });
+    let install_btn =
+        Button::new(Container::new(text(tr.deps_install_selected)).center_x(Length::Fill))
+            .padding(theme::SPACING_SM)
+            .style(button_style_primary())
+            .on_press_maybe(if pending.is_empty() && dialog.installing.is_empty() {
+                None
+            } else {
+                Some(Message::DepInstall)
+            });
     let discard_btn = Button::new(Container::new(text(tr.deps_discard)).center_x(Length::Fill))
         .padding(theme::SPACING_SM)
         .on_press(Message::DepDismiss);
 
-    let content = Column::with_children([
-        text(tr.deps_title).size(theme::TEXT_SIZE_LG).into(),
-        text(tr.deps_intro).style(fg_secondary()).into(),
-        list.into(),
+    children.push(
         Row::with_children([discard_btn.into(), install_btn.into()])
             .spacing(theme::SPACING_SM)
             .into(),
-    ])
-    .spacing(theme::SPACING_MD)
-    .padding(theme::SPACING_MD)
-    .width(theme::DIALOG_WIDTH * 2.0);
+    );
+
+    let content = Column::with_children(children)
+        .spacing(theme::SPACING_MD)
+        .padding(theme::SPACING_MD)
+        .width(theme::DIALOG_WIDTH * 2.0);
 
     view_dialog(content.into(), Message::DepDismiss)
 }
 
 /// A checkable dependency row with its name, description, and live status.
-fn dep_checkbox_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message, AppTheme> {
+fn dep_checkbox_row<'a>(
+    player: &'a MusicPlayer,
+    kind: DepKind,
+    note: Option<&'static str>,
+) -> Element<'a, Message, AppTheme> {
     let tr = &player.strings;
     let dialog = player.dep_dialog.as_ref();
     let checked = dialog.is_some_and(|d| d.selected.contains(&kind));
@@ -673,7 +703,8 @@ fn dep_checkbox_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
             Space::new().into()
         };
 
-    Column::with_children([
+    let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::with_capacity(4);
+    children.push(
         Row::with_children([
             checkbox(checked)
                 .on_toggle(move |_| Message::DepToggle(kind))
@@ -683,11 +714,15 @@ fn dep_checkbox_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)
         .into(),
-        text(dep_description(tr, kind)).style(fg_secondary()).into(),
-        status,
-    ])
-    .spacing(theme::SPACING_XS)
-    .into()
+    );
+    children.push(text(dep_description(tr, kind)).style(fg_secondary()).into());
+    if let Some(note) = note {
+        children.push(text(note).style(fg_secondary()).into());
+    }
+    children.push(status);
+    Column::with_children(children)
+        .spacing(theme::SPACING_XS)
+        .into()
 }
 
 fn dep_description(tr: &crate::i18n::Strings, kind: DepKind) -> &'static str {
@@ -704,10 +739,11 @@ fn dep_manual_row<'a>(
     kind: DepKind,
     note: &'a str,
 ) -> Element<'a, Message, AppTheme> {
-    let tr = &player.strings;
     Column::with_children([
         text(kind.name()).style(fg_accent()).into(),
-        text(dep_description(tr, kind)).style(fg_secondary()).into(),
+        text(dep_description(&player.strings, kind))
+            .style(fg_secondary())
+            .into(),
         text(note).style(fg_secondary()).into(),
     ])
     .spacing(theme::SPACING_XS)
