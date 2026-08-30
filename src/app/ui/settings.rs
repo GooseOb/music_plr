@@ -11,11 +11,10 @@ use super::{
 use crate::{
     app::{
         dependency_dialog::dep_desc,
-        ui::styles::{fg_accent, fg_secondary, icon_accent},
+        ui::styles::{fg_accent, fg_secondary},
     },
     deps::DepKind,
     i18n::Language,
-    icons,
     providers::ProviderId,
     theme::{self, AppTheme},
 };
@@ -146,25 +145,15 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
             player.strings.sec_dependencies,
             [dep_settings_section(player)],
         ),
-        Row::with_children([
-            Column::with_children([
-                section(player.strings.language_lbl, [language_section(player)]),
-                section(player.strings.sec_appearance, [theme_section(player)]),
-                Button::new(text(player.strings.reset_defaults))
-                    .padding([theme::SPACING_SM, theme::SPACING_MD])
-                    .on_press(Message::SettingsResetDefaults)
-                    .into(),
-            ])
-            .spacing(theme::SPACING_XL)
-            .into(),
-            Space::new().width(Length::Fill).into(),
-            Row::with_children([icons::icon(icons::LOGO_ICON, 128.0)
-                .style(icon_accent())
-                .into()])
-            .height(Length::Fill)
-            .align_y(alignment::Vertical::Center)
-            .into(),
+        Column::with_children([
+            section(player.strings.language_lbl, [language_section(player)]),
+            section(player.strings.sec_appearance, [theme_section(player)]),
+            Button::new(text(player.strings.reset_defaults))
+                .padding([theme::SPACING_SM, theme::SPACING_MD])
+                .on_press(Message::SettingsResetDefaults)
+                .into(),
         ])
+        .spacing(theme::SPACING_XL)
         .into(),
     ])
     .spacing(theme::SPACING_XL);

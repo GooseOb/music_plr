@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, text_input, Button, Column, Container, MouseArea, Row},
+    widget::{scrollable, text, text_input, Button, Column, Container, MouseArea, Row, Stack},
     Element, Length,
 };
 
@@ -15,13 +15,37 @@ use super::{
 use crate::{
     app::{
         interaction::{DropTarget, HoverTarget, Pressed, PressedDrag},
-        ui::styles::{fg_tab, icon_fg_secondary, icon_tab},
+        ui::styles::{fg_tab, icon_accent_dimmed, icon_fg_secondary, icon_tab},
         ViewData, ViewKind,
     },
     data::library::LibraryItem,
     icons,
     theme::AppTheme,
 };
+
+fn shared_row<'a>(
+    children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
+    background: Option<iced::Background>,
+    is_dragging_this: bool,
+) -> Container<'a, Message, AppTheme> {
+    Container::new(
+        Row::with_children(children)
+            .spacing(theme::SPACING_MD)
+            .align_y(alignment::Vertical::Center),
+    )
+    .padding([theme::SPACING_SM, theme::SPACING_MD])
+    .style(move |theme: &AppTheme| iced::widget::container::Style {
+        background,
+        border: if is_dragging_this {
+            iced::border::rounded(theme::RADIUS_MD)
+                .width(2.0)
+                .color(theme.palette.accent)
+        } else {
+            iced::border::rounded(theme::RADIUS_MD)
+        },
+        ..Default::default()
+    })
+}
 
 fn playlist_row<'a>(
     player: &'a MusicPlayer,
@@ -38,40 +62,27 @@ fn playlist_row<'a>(
     );
     let is_hovered = player.drag.hovered_playlist() == Some(index);
     let interacting = active || dragged_over || is_hovered;
-    let bg_color = if dragged_over {
-        p.bg_current
+    let background = if dragged_over {
+        Some(p.bg_current.into())
     } else if active {
-        p.bg_current.scale_alpha(0.7)
+        Some(p.bg_current.scale_alpha(0.7).into())
     } else if is_hovered {
-        p.bg_hover
+        Some(p.bg_hover.scale_alpha(0.7).into())
     } else {
-        p.bg_secondary
+        None
     };
-    let row = Row::with_children([
-        icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_MD)
-            .style(icon_tab(interacting))
-            .into(),
-        text(name).style(fg_tab(interacting)).into(),
-        iced::widget::right(text(track_count).style(fg_secondary())).into(),
-    ])
-    .spacing(theme::SPACING_MD)
-    .align_y(alignment::Vertical::Center);
 
-    MouseArea::new(
-        Container::new(row)
-            .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .style(move |theme: &AppTheme| iced::widget::container::Style {
-                background: Some(bg_color.into()),
-                border: if is_dragging_this {
-                    iced::border::rounded(theme::RADIUS_MD)
-                        .width(2.0)
-                        .color(theme.palette.accent)
-                } else {
-                    iced::border::rounded(theme::RADIUS_MD)
-                },
-                ..Default::default()
-            }),
-    )
+    MouseArea::new(shared_row(
+        [
+            icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_MD)
+                .style(icon_tab(interacting))
+                .into(),
+            text(name).style(fg_tab(interacting)).into(),
+            iced::widget::right(text(track_count).style(fg_secondary())).into(),
+        ],
+        background,
+        is_dragging_this,
+    ))
     .interaction(player.drag.clickable_cursor_interaction())
     .on_press(Message::DragPress(Pressed::Playlist(index)))
     .on_double_click(Message::OpenAndPlayPlaylist(index))
@@ -113,34 +124,22 @@ fn library_row<'a>(
         .padding(theme::SPACING_XS)
         .on_press(Message::ToggleLibrarySave(item.clone()));
 
-    let bg = if is_dragging_this {
-        p.bg_current
+    let background = if is_dragging_this {
+        Some(p.bg_current.into())
     } else if is_active {
-        p.bg_current.scale_alpha(0.7)
+        Some(p.bg_current.scale_alpha(0.7).into())
     } else if is_hovered {
-        p.bg_hover
+        Some(p.bg_hover.scale_alpha(0.7).into())
     } else {
-        p.bg_secondary
+        None
     };
     MouseArea::new(
-        Container::new(
-            Row::with_children([row.into(), toggle_btn.into()])
-                .spacing(theme::SPACING_MD)
-                .align_y(alignment::Vertical::Center),
+        shared_row(
+            [row.into(), toggle_btn.into()],
+            background,
+            is_dragging_this,
         )
-        .id(iced::widget::Id::from(format!("library:{index}")))
-        .padding([theme::SPACING_SM, theme::SPACING_MD])
-        .style(move |theme| iced::widget::container::Style {
-            background: Some(bg.into()),
-            border: if is_dragging_this {
-                iced::border::rounded(theme::RADIUS_MD)
-                    .width(2.0)
-                    .color(theme.palette.accent)
-            } else {
-                iced::border::rounded(theme::RADIUS_MD)
-            },
-            ..Default::default()
-        }),
+        .id(iced::widget::Id::from(format!("library:{index}"))),
     )
     .interaction(player.drag.clickable_cursor_interaction())
     .on_press(Message::DragPress(Pressed::Card(item.clone())))
@@ -377,14 +376,24 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         );
     }
 
-    Container::new(
+    let stack = Stack::with_children([
+        Container::new(icons::icon(icons::LOGO_ICON, 200.0).style(icon_accent_dimmed()))
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .align_x(alignment::Horizontal::Center)
+            .align_y(alignment::Vertical::Center)
+            .padding(theme::SPACING_MD)
+            .into(),
         Column::with_children(sidebar_content)
             .spacing(theme::SPACING_XS)
-            .padding([theme::SPACING_SM, theme::SPACING_XS]),
-    )
-    .width(theme::SIDEBAR_WIDTH)
-    .style(bg_secondary())
-    .into()
+            .padding([theme::SPACING_SM, theme::SPACING_XS])
+            .into(),
+    ]);
+
+    Container::new(stack)
+        .width(theme::SIDEBAR_WIDTH)
+        .style(bg_secondary())
+        .into()
 }
 
 fn sidebar_nav_item<'a>(

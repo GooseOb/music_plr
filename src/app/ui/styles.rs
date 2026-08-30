@@ -4,7 +4,7 @@ use iced::{
     Color,
 };
 
-use crate::theme::{self, AppTheme, Palette};
+use crate::theme::{self, blend_colors, AppTheme, Palette};
 
 /// Button style skeleton: `bg`/`text_color` receive the palette and whether
 /// the button is hovered or pressed; `None` bg means transparent.
@@ -103,6 +103,12 @@ pub fn icon_fg_muted() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'stati
 pub fn icon_fg_secondary() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
     |theme, _| svg::Style {
         color: Some(theme.palette.fg_secondary),
+    }
+}
+
+pub fn icon_accent_dimmed() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    |theme, _| svg::Style {
+        color: Some(blend_colors(theme.palette.fg_accent, theme.palette.bg, 0.8)),
     }
 }
 

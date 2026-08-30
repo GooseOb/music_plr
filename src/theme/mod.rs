@@ -64,6 +64,19 @@ impl Default for Palette {
     }
 }
 
+fn blend_channels(c1: f32, c2: f32, ratio: f32) -> f32 {
+    c1 * (1.0 - ratio) + c2 * ratio
+}
+
+pub fn blend_colors(c1: Color, c2: Color, ratio: f32) -> Color {
+    Color::from_rgba(
+        blend_channels(c1.r, c2.r, ratio),
+        blend_channels(c1.g, c2.g, ratio),
+        blend_channels(c1.b, c2.b, ratio),
+        blend_channels(c1.a, c2.a, ratio),
+    )
+}
+
 impl Palette {
     pub const fn dark() -> Self {
         Self {
