@@ -42,11 +42,17 @@ impl MusicPlayer {
         }
         if let Some(track) = self.get_track_at(TrackPos::new(index, TrackListKind::Active)) {
             let source = track.source;
-            if track.best_stream_provider(source).is_none() {
-                self.play_track_via_provider(self.config.default_provider, pos);
+            // Prefer the track's own source when it can stream; otherwise fall
+            // back to the configured default provider. `play_track_internal`
+            // still checks for a local file / cached copy *first*, so a
+            // downloaded or previously-streamed track plays without yt-dlp
+            // even when no provider can stream right now.
+            let preferred = if track.best_stream_provider(source).is_some() {
+                source
             } else {
-                self.play_and_queue_rest(&track, source, index);
-            }
+                self.config.default_provider
+            };
+            self.play_and_queue_rest(&track, preferred, index);
         }
     }
 
@@ -252,12 +258,31 @@ impl MusicPlayer {
         if analysis_path.is_none() {
             match track.best_stream_provider(preferred) {
                 None => {
-                    // No streamable provider for this track: resolve it on the
-                    // default provider, then stream from there.
-                    let track = track.clone();
-                    self.pending_cache_id = None;
-                    self.resolve_provider(self.config.default_provider, track, None, true);
-                    return;
+                    // No stream-capable provider right now (e.g. yt-dlp is
+                    // missing). A track that was previously streamed may still
+                    // have a complete copy in the stream cache, and
+                    // downloaded/imported tracks carry a local path — both play
+                    // without yt-dlp, so try them before giving up.
+                    let cached = track.providers.keys().find_map(|p| {
+                        let id = track.provider_id(*p)?;
+                        (self.stream_cache.contains(*p, id)).then(|| StreamCache::path_for(*p, id))
+                    });
+                    if let Some(path) = cached.filter(|p| p.exists()) {
+                        debug!("Playing cached copy (no yt-dlp needed): {}", path.display());
+                        self.audio
+                            .play_cached(path.clone(), track.duration() as f32, gain);
+                        self.pending_cache_id = None;
+                        analysis_path = Some(path);
+                    }
+                    if analysis_path.is_none() {
+                        // Truly nothing playable: explain why.
+                        if track.providers.keys().any(|p| p.uses_ytdlp()) {
+                            self.notify(self.strings.deps_play_requires_yt_dlp);
+                        } else {
+                            self.notify(self.strings.deps_source_not_playable);
+                        }
+                        return;
+                    }
                 }
                 Some(provider) => {
                     let id = track.provider_id(provider).unwrap_or_default().to_string();

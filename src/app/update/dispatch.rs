@@ -21,7 +21,9 @@ use crate::{
             settings::SettingsChange,
         },
     },
+    deps::DepKind,
     load_state::LoadState,
+    providers::ProviderId,
 };
 
 impl crate::app::MusicPlayer {
@@ -540,7 +542,59 @@ impl crate::app::MusicPlayer {
                 self.close_context_menu();
                 Task::none()
             }
+            Message::DepToggle(kind) => {
+                if let Some(dialog) = &mut self.dep_dialog {
+                    if kind.auto_installable() {
+                        if dialog.selected.contains(&kind) {
+                            dialog.selected.remove(&kind);
+                        } else {
+                            dialog.selected.insert(kind);
+                        }
+                    }
+                }
+                Task::none()
+            }
+            Message::DepInstall => self.handle_install_dependencies(),
+            Message::DepDismiss => {
+                self.dep_dialog = None;
+                // If the active source is no longer searchable (its tools were
+                // not installed), fall back to one that is.
+                if !self.search_provider.capabilities().search {
+                    self.search_provider = ProviderId::searchable()
+                        .iter()
+                        .copied()
+                        .find(|p| p.capabilities().search)
+                        .unwrap_or(ProviderId::SoundCloud);
+                }
+                Task::none()
+            }
         }
+    }
+
+    /// Spawn a background install thread for each selected, not-yet-attempted
+    /// dependency. Results arrive via [`BackendResult::DependencyInstalled`],
+    /// drained by the tick and applied in [`Self::process_result`].
+    fn handle_install_dependencies(&mut self) -> Task<Message> {
+        if let Some(dialog) = &mut self.dep_dialog {
+            let pending: Vec<DepKind> = dialog.pending();
+            let tx = self.result_tx.clone();
+            for kind in pending {
+                dialog.installing.insert(kind);
+                let tx = tx.clone();
+                std::thread::spawn(move || {
+                    let tx_progress = tx.clone();
+                    let result = crate::deps::install(kind, move |downloaded, total| {
+                        let _ = tx_progress
+                            .send(BackendResult::DependencyProgress(kind, downloaded, total));
+                    });
+                    let _ = tx.send(BackendResult::DependencyInstalled(
+                        kind,
+                        result.map_err(|e| e.to_string()),
+                    ));
+                });
+            }
+        }
+        Task::none()
     }
 
     #[allow(clippy::unused_self)]

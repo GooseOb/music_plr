@@ -33,7 +33,7 @@ const DOUBLE_CLICK_MS: u128 = 300;
 
 /// Download thumbnails for the given `(id, url)` pairs. `id` names the cache
 /// file; `url` is the source (empty falls back to the default `YouTube` still).
-pub fn spawn_thumbnail_download(entries: Vec<(String, String)>, tx: mpsc::Sender<BackendResult>) {
+pub fn spawn_thumbnail_download(entries: Vec<(String, String)>, tx: &mpsc::Sender<BackendResult>) {
     tracing::debug!(
         "Spawning thumbnail download threads for {} entries",
         entries.len()

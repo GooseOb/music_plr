@@ -123,14 +123,17 @@ jobs:
           body: |
             ## Runtime prerequisites
 
-            `goosemusic` is a self-contained binary, but it shells out to external
-            tools at runtime:
+            `goosemusic` is a self-contained binary. On first launch it checks
+            for its external tools and can **download `yt-dlp` for you** — a
+            standalone binary needing no Python — just accept the prompt. Only
+            optional extras remain:
 
-            - **yt-dlp** — YouTube audio streaming & downloads
-            - **Python 3** with `ytmusicapi` — YouTube Music search (falls back to yt-dlp)
-            - **D-Bus** session bus (Linux) — MPRIS media-key integration
+            - **`yt-dlp`** — YouTube audio streaming & downloads (auto-downloaded if missing)
+            - **Python 3** + `ytmusicapi` — nicer YouTube Music search; without it the app
+              falls back to `yt-dlp` (these are *not* auto-installed)
+            - **D-Bus** session bus (Linux) — MPRIS media-key integration (OS-provided)
 
-            Install them separately; they are **not** bundled in the archives above.
+            Nothing needs installing manually to play, stream, or download.
 
   # Publishes the crate to crates.io. Requires a repo secret CARGO_REGISTRY_TOKEN
   # (an API token from https://crates.io/settings/tokens). The tag must match the

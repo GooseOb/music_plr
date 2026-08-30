@@ -180,6 +180,22 @@ pub const STRINGS: Strings = Strings {
     import_no_tracks: "No tracks found to import.",
     import_no_match: "No files matched the patterns.",
     import_bad_file: "Could not read the selected file.",
+
+    deps_title: "Missing dependencies",
+    deps_intro: "Some tools the app uses are missing. Select which to install, or discard to continue (search/streaming may not work until they are present).",
+    deps_install: "Install selected",
+    deps_discard: "Discard",
+    deps_installing: "Installing…",
+    deps_installed: "Installed",
+    deps_failed: "Failed",
+    deps_installed_toast: "Selected dependencies installed.",
+    deps_yt_dlp_desc: "Streams and downloads audio (required)",
+    deps_ytmusicapi_desc: "YouTube Music search (optional, falls back to yt-dlp)",
+    deps_python3_desc: "Required by ytmusicapi and the yt-dlp script on Linux",
+    deps_python3_manual: "Install Python 3 manually, then restart the app",
+    deps_ytmusicapi_requires_python: "Requires Python 3 (install it first)",
+    deps_play_requires_yt_dlp: "Playback needs yt-dlp — install it from the startup dialog to play this.",
+    deps_source_not_playable: "This source can't be played.",
 };
 
 fn en_tracks(n: usize) -> String {

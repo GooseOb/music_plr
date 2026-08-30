@@ -63,20 +63,29 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
             .style(button_style_primary())
             .width(theme::SEARCH_BTN_SIZE)
             .height(theme::SEARCH_BTN_SIZE)
-            .on_press(Message::SearchExecute)
+            .on_press_maybe(if player.search_provider.capabilities().search {
+                Some(Message::SearchExecute)
+            } else {
+                None
+            })
             .into();
 
     let controls = Row::with_children([input, search_btn])
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center);
 
-    let provider_row = scope_tab_row(ProviderId::searchable().iter().map(|&provider| {
-        (
-            provider.label().to_string(),
-            player.search_provider == provider,
-            Message::SearchProviderChanged(provider),
-        )
-    }));
+    let provider_row = scope_tab_row(
+        ProviderId::searchable()
+            .iter()
+            .filter(|p| p.capabilities().search)
+            .map(|&provider| {
+                (
+                    provider.label().to_string(),
+                    player.search_provider == provider,
+                    Message::SearchProviderChanged(provider),
+                )
+            }),
+    );
 
     let scope_row = scope_tab_row(
         player

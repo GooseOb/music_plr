@@ -11,6 +11,7 @@ use iced::Task;
 
 use crate::{
     app::{
+        dependency_dialog::DependencyDialog,
         edit_track::EditTrackState,
         import::ImportPlaylistDialog,
         interaction::{ContextMenuState, DragState, TrackListSearch, TrackPos},
@@ -116,6 +117,11 @@ pub struct MusicPlayer {
     pub context_menu: Option<ContextMenuState>,
     pub edit_track: Option<EditTrackState>,
 
+    /// Startup "missing dependencies" dialog, open when external tools the
+    /// app needs are absent. `None` once dismissed or when everything is
+    /// present.
+    pub dep_dialog: Option<DependencyDialog>,
+
     pub queue_selected_indices: Vec<usize>,
     pub recent_selected_indices: Vec<usize>,
 
@@ -147,6 +153,7 @@ impl MusicPlayer {
 
         let strings = config.language.strings();
         let app_theme = AppTheme::new(Palette::from(config.theme_kind));
+        let missing_deps = crate::deps::detect_missing();
         let mut player = Self {
             audio: AudioPlayer::new(0.8),
             search_history: SearchHistory::load(),
@@ -159,7 +166,15 @@ impl MusicPlayer {
             config,
             search_query: String::new(),
             search_scope: SearchScope::Songs,
-            search_provider: ProviderId::YouTube,
+            search_provider: if ProviderId::YouTube.capabilities().search {
+                ProviderId::YouTube
+            } else {
+                ProviderId::searchable()
+                    .iter()
+                    .copied()
+                    .find(|p| p.capabilities().search)
+                    .unwrap_or(ProviderId::SoundCloud)
+            },
             show_search_history: false,
             last_filtered_history: Vec::new(),
             queue: PlayQueue::new(),
@@ -208,6 +223,7 @@ impl MusicPlayer {
             clipboard: Vec::new(),
             last_click: None,
             strings,
+            dep_dialog: (!missing_deps.is_empty()).then(|| DependencyDialog::new(missing_deps)),
         };
 
         player.init_mpris();

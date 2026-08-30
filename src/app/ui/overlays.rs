@@ -3,8 +3,8 @@ use std::borrow::Cow;
 use iced::{
     alignment,
     widget::{
-        column, container, opaque, scrollable, text, text_input, Button, Column, Container,
-        MouseArea, Row, Space,
+        checkbox, column, container, opaque, scrollable, text, text_input, Button, Column,
+        Container, MouseArea, Row, Space,
     },
     Element, Length, Rectangle,
 };
@@ -12,9 +12,9 @@ use iced::{
 use super::{
     shared_components::{disabled_text_input_row, scope_tab_row, text_input_row, thumbnail},
     styles::{
-        bg_overlay, bg_popup, button_style_danger, button_style_popup_item, button_style_primary,
-        context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted, icon_fg_secondary,
-        scroll_padding,
+        bg_overlay, bg_popup, bg_secondary, button_style_danger, button_style_popup_item,
+        button_style_primary, context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted,
+        icon_fg_secondary, scroll_padding,
     },
     theme, ContextMenuState, Message, MusicPlayer,
 };
@@ -23,6 +23,7 @@ use crate::{
         interaction::{ContextMenuFocus, CtxAction, SubmenuKind},
         CsvPreset, EditTrackField, ImportCsvField, ImportMethod,
     },
+    deps::DepKind,
     icons,
     providers::{ProviderId, ProviderTrack},
     theme::AppTheme,
@@ -580,6 +581,137 @@ fn view_dialog(
     let backdrop = MouseArea::new(Container::new(dialog).center(Length::Fill)).on_press(close_msg);
 
     Container::new(opaque(backdrop)).style(bg_overlay()).into()
+}
+
+/// Startup dialog listing missing external dependencies. Each auto-installable
+/// dep is a checkbox (default-checked); the user installs the checked ones or
+/// discards. `Python3` (when missing) is shown as a manual step with no box.
+pub(super) fn view_dependency_dialog(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let dialog = player.dep_dialog.as_ref().expect("dep_dialog present");
+    let tr = &player.strings;
+    let python3_missing = dialog.missing.contains(&DepKind::Python3);
+
+    let rows: Vec<Element<'_, Message, AppTheme>> = dialog
+        .missing
+        .iter()
+        .map(|&kind| match kind {
+            DepKind::YtDlp => dep_checkbox_row(player, kind),
+            DepKind::YtMusicApi if !python3_missing => dep_checkbox_row(player, kind),
+            DepKind::YtMusicApi => dep_manual_row(player, kind, tr.deps_ytmusicapi_requires_python),
+            DepKind::Python3 => dep_manual_row(player, kind, tr.deps_python3_manual),
+        })
+        .collect();
+
+    let list = scrollable(Column::with_children(rows).spacing(theme::SPACING_SM));
+
+    let pending = dialog.pending();
+    let install_btn = Button::new(Container::new(text(tr.deps_install)).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .style(button_style_primary())
+        .on_press_maybe(if pending.is_empty() && dialog.installing.is_empty() {
+            None
+        } else {
+            Some(Message::DepInstall)
+        });
+    let discard_btn = Button::new(Container::new(text(tr.deps_discard)).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .on_press(Message::DepDismiss);
+
+    let content = Column::with_children([
+        text(tr.deps_title).size(theme::TEXT_SIZE_LG).into(),
+        text(tr.deps_intro).style(fg_secondary()).into(),
+        list.into(),
+        Row::with_children([discard_btn.into(), install_btn.into()])
+            .spacing(theme::SPACING_SM)
+            .into(),
+    ])
+    .spacing(theme::SPACING_MD)
+    .padding(theme::SPACING_MD)
+    .width(theme::DIALOG_WIDTH * 2.0);
+
+    view_dialog(content.into(), Message::DepDismiss)
+}
+
+/// A checkable dependency row with its name, description, and live status.
+fn dep_checkbox_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message, AppTheme> {
+    let tr = &player.strings;
+    let dialog = player.dep_dialog.as_ref();
+    let checked = dialog.is_some_and(|d| d.selected.contains(&kind));
+    let status: Element<'_, Message, AppTheme> =
+        if dialog.is_some_and(|d| d.installing.contains(&kind)) {
+            if let Some((downloaded, total)) = dialog.and_then(|d| d.progress.get(&kind)) {
+                if *total > 0 {
+                    let pct = ((*downloaded as f64 / *total as f64) * 100.0) as u16;
+                    let bar = Container::new(iced::widget::ProgressBar::new(
+                        std::ops::RangeInclusive::new(0.0, *total as f32),
+                        *downloaded as f32,
+                    ))
+                    .height(8)
+                    .style(bg_secondary());
+                    Column::with_children([
+                        bar.into(),
+                        text(format!("{pct}%"))
+                            .size(theme::TEXT_SIZE_XS)
+                            .style(fg_secondary())
+                            .into(),
+                    ])
+                    .spacing(theme::SPACING_XS)
+                    .into()
+                } else {
+                    text(tr.deps_installing).style(fg_secondary()).into()
+                }
+            } else {
+                text(tr.deps_installing).style(fg_secondary()).into()
+            }
+        } else if dialog.is_some_and(|d| d.done.contains(&kind)) {
+            text(tr.deps_installed).style(fg_accent()).into()
+        } else if let Some(err) = dialog.and_then(|d| d.errors.get(&kind)) {
+            text(format!("{}: {}", tr.deps_failed, err))
+                .style(fg_secondary())
+                .into()
+        } else {
+            Space::new().into()
+        };
+
+    Column::with_children([
+        Row::with_children([
+            checkbox(checked)
+                .on_toggle(move |_| Message::DepToggle(kind))
+                .into(),
+            text(kind.name()).style(fg_accent()).into(),
+        ])
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center)
+        .into(),
+        text(dep_description(tr, kind)).style(fg_secondary()).into(),
+        status,
+    ])
+    .spacing(theme::SPACING_XS)
+    .into()
+}
+
+fn dep_description(tr: &crate::i18n::Strings, kind: DepKind) -> &'static str {
+    match kind {
+        DepKind::YtDlp => tr.deps_yt_dlp_desc,
+        DepKind::YtMusicApi => tr.deps_ytmusicapi_desc,
+        DepKind::Python3 => tr.deps_python3_desc,
+    }
+}
+
+/// A non-installable dependency row (e.g. Python 3) shown with a manual hint.
+fn dep_manual_row<'a>(
+    player: &'a MusicPlayer,
+    kind: DepKind,
+    note: &'a str,
+) -> Element<'a, Message, AppTheme> {
+    let tr = &player.strings;
+    Column::with_children([
+        text(kind.name()).style(fg_accent()).into(),
+        text(dep_description(tr, kind)).style(fg_secondary()).into(),
+        text(note).style(fg_secondary()).into(),
+    ])
+    .spacing(theme::SPACING_XS)
+    .into()
 }
 
 pub(super) fn view_delete_confirm(

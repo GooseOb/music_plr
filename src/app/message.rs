@@ -10,6 +10,7 @@ use crate::{
         CsvPreset, ImportCsvField, ImportMethod, ViewKind,
     },
     data::library,
+    deps::DepKind,
     lyrics::Lyrics,
     providers::ProviderId,
     types::{QueueTab, Track},
@@ -53,6 +54,9 @@ pub enum BackendResult {
         method: ImportMethod,
         paths: Vec<std::path::PathBuf>,
     },
+    /// Background install of a dependency finished (success or error).
+    DependencyInstalled(DepKind, Result<(), String>),
+    DependencyProgress(DepKind, u64, u64),
     ProviderResolved {
         original: Track,
         provider: ProviderId,
@@ -199,6 +203,10 @@ pub enum Message {
     SaveEditTrack,
     CloseEditTrack,
     CloseContextMenu,
+
+    DepToggle(DepKind),
+    DepInstall,
+    DepDismiss,
 }
 
 /// Editable text fields of a [`Track`](crate::types::Track) in the track

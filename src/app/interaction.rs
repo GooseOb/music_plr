@@ -143,7 +143,11 @@ impl SubmenuKind {
                 .copied()
                 .filter(|p| p.capabilities().radio)
                 .collect(),
-            SubmenuKind::GoToArtist => ProviderId::searchable().to_vec(),
+            SubmenuKind::GoToArtist => ProviderId::searchable()
+                .iter()
+                .copied()
+                .filter(|p| p.capabilities().search)
+                .collect(),
         }
     }
 

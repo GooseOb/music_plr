@@ -48,7 +48,9 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let mut stack = Stack::new().push(layout);
 
-    if player.playlist_picker.is_some() {
+    if player.dep_dialog.is_some() {
+        stack = stack.push(overlays::view_dependency_dialog(player));
+    } else if player.playlist_picker.is_some() {
         stack = stack.push(overlays::view_playlist_picker(player));
     } else if player.delete_confirm_index.is_some() {
         stack = stack.push(overlays::view_delete_confirm(player.strings));

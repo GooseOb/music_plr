@@ -28,8 +28,7 @@ impl MusicPlayer {
         match key {
             Physical::Code(Code::ArrowUp) => self.step_context_menu_focus(-1),
             Physical::Code(Code::ArrowDown) => self.step_context_menu_focus(1),
-            Physical::Code(Code::ArrowLeft) => self.context_menu_horizontal(),
-            Physical::Code(Code::ArrowRight) => self.context_menu_horizontal(),
+            Physical::Code(Code::ArrowLeft | Code::ArrowRight) => self.context_menu_horizontal(),
             Physical::Code(Code::Enter) => {
                 let menu = self.context_menu.as_ref().expect("checked above");
                 let message = match menu.hovered {

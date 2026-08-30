@@ -533,7 +533,13 @@ fn spawn_stream_to_cache(
     // neither rodio's `symphonia-all` nor the standalone `symphonia` 0.5 crate
     // can decode), and YouTube serves it as a fast-start DASH stream (moov at
     // the front) that demuxes sequentially — ideal for streaming.
-    let mut child = match Command::new("yt-dlp")
+    let Some(path) = crate::deps::resolve_yt_dlp() else {
+        warn!(
+            "yt-dlp not found; install it from the Dependencies dialog (or place yt-dlp on PATH)"
+        );
+        return None;
+    };
+    let mut child = match Command::new(path)
         .args([
             "-f",
             "bestaudio[ext=m4a]/bestaudio",

@@ -21,6 +21,19 @@ impl widget::container::Catalog for AppTheme {
     }
 }
 
+impl widget::progress_bar::Catalog for AppTheme {
+    type Class<'a> = widget::progress_bar::StyleFn<'a, AppTheme>;
+
+    fn default<'a>() -> Self::Class<'a> {
+        let inner = <iced::Theme as widget::progress_bar::Catalog>::default();
+        Box::new(move |theme: &AppTheme| widget::progress_bar::Catalog::style(&theme.inner, &inner))
+    }
+
+    fn style(&self, class: &Self::Class<'_>) -> widget::progress_bar::Style {
+        class(self)
+    }
+}
+
 impl widget::rule::Catalog for AppTheme {
     type Class<'a> = widget::rule::StyleFn<'a, AppTheme>;
 

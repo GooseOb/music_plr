@@ -186,6 +186,22 @@ pub const STRINGS: Strings = Strings {
     import_no_tracks: "Nie znaleziono utworów do importu.",
     import_no_match: "Żaden plik nie pasuje do wzorów.",
     import_bad_file: "Nie można odczytać wybranego pliku.",
+
+    deps_title: "Brakujące zależności",
+    deps_intro: "Brakuje niektórych narzędzi używanych przez aplikację. Wybierz, które zainstalować, lub odrzuć, aby kontynuować (wyszukiwanie i odtwarzanie mogą nie działać, dopóki nie będą obecne).",
+    deps_install: "Zainstaluj wybrane",
+    deps_discard: "Odrzuć",
+    deps_installing: "Instalowanie…",
+    deps_installed: "Zainstalowano",
+    deps_failed: "Nieudane",
+    deps_installed_toast: "Wybrane zależności zostały zainstalowane.",
+    deps_yt_dlp_desc: "Strumieniuje i pobiera dźwięk (wymagane)",
+    deps_ytmusicapi_desc: "Wyszukiwanie w YouTube Music (opcjonalne, powrót do yt-dlp)",
+    deps_python3_desc: "Wymagane przez ytmusicapi i skrypt yt-dlp w systemie Linux",
+    deps_python3_manual: "Zainstaluj Pythona 3 ręcznie, a następnie uruchom aplikację ponownie",
+    deps_ytmusicapi_requires_python: "Wymaga Pythona 3 (najpierw go zainstaluj)",
+    deps_play_requires_yt_dlp: "Odtwarzanie wymaga yt-dlp — zainstaluj go z okna startowego, aby odtworzyć ten utwór.",
+    deps_source_not_playable: "To źródło nie obsługuje odtwarzania.",
 };
 
 fn pl_tracks(n: usize) -> String {

@@ -144,7 +144,7 @@ impl MusicPlayer {
 
     fn update_thumbnails(&mut self) {
         if let Some(entries) = self.thumbnail_index.drain_pending() {
-            spawn_thumbnail_download(entries, self.result_tx.clone());
+            spawn_thumbnail_download(entries, &self.result_tx);
         }
     }
 
@@ -232,6 +232,30 @@ impl MusicPlayer {
     #[allow(clippy::too_many_lines)]
     pub fn process_result(&mut self, result: BackendResult) -> Task<Message> {
         match result {
+            BackendResult::DependencyProgress(kind, downloaded, total) => {
+                if let Some(dialog) = &mut self.dep_dialog {
+                    dialog.progress.insert(kind, (downloaded, total));
+                }
+                Task::none()
+            }
+            BackendResult::DependencyInstalled(kind, status) => {
+                if let Some(dialog) = &mut self.dep_dialog {
+                    dialog.installing.remove(&kind);
+                    dialog.progress.remove(&kind);
+                    match status {
+                        Ok(()) => {
+                            dialog.done.insert(kind);
+                        }
+                        Err(e) => {
+                            dialog.errors.insert(kind, e);
+                        }
+                    }
+                    if dialog.all_resolved() && !dialog.done.is_empty() {
+                        self.notify(self.strings.deps_installed_toast);
+                    }
+                }
+                Task::none()
+            }
             BackendResult::SearchResults(rid, tracks, tab) => {
                 self.process_search_results(rid, tracks, tab);
                 super::operation::CaptureBounds::new().into()

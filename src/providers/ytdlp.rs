@@ -1,6 +1,6 @@
 //! Shared `yt-dlp` invocation helpers used by the provider backends.
 
-use std::{process::Command, time::Duration};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 
@@ -15,7 +15,7 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
 /// the final path with any `%(ext)s` template resolved.
 pub(crate) fn download_audio(url: &str, output_path: &str, extra_args: &[&str]) -> Result<String> {
     let ext = "mp3";
-    let mut cmd = Command::new("yt-dlp");
+    let mut cmd = crate::deps::yt_dlp_command().context("Failed to download audio")?;
     cmd.args([
         "--extract-audio",
         "--audio-format",

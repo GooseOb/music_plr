@@ -13,6 +13,7 @@ pub const APP_NAME: &str = "GooseOb's Music Player";
 mod app;
 mod audio;
 mod data;
+mod deps;
 mod i18n;
 mod icons;
 mod load_state;

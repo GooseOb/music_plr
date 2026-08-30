@@ -5,6 +5,7 @@
 //! in `ui`. This file only declares the submodules and re-exports the public
 //! types so callers can keep using `crate::app::*`.
 
+mod dependency_dialog;
 mod edit_track;
 mod import;
 mod interaction;

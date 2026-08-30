@@ -369,7 +369,8 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
         &search_spec,
     ];
 
-    let mut cmd = Command::new("yt-dlp");
+    let mut cmd =
+        crate::deps::yt_dlp_command().context("Failed to run yt-dlp. Is it installed?")?;
     cmd.args(&args);
     let flat_output = run_command_with_timeout(&mut cmd, SEARCH_TIMEOUT)
         .context("Failed to run yt-dlp. Is it installed?")?;
@@ -455,7 +456,10 @@ fn fetch_batch_metadata(
     use std::collections::HashMap;
     let mut results: HashMap<String, YTDLPSearchResult> = HashMap::new();
 
-    let Ok(mut child) = Command::new("yt-dlp")
+    let Some(path) = crate::deps::resolve_yt_dlp() else {
+        return results;
+    };
+    let Ok(mut child) = Command::new(path)
         .args([
             "--batch-file",
             "-",

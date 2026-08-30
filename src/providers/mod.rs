@@ -139,17 +139,20 @@ impl ProviderId {
     }
 
     pub fn capabilities(self) -> ProviderCaps {
+        let a = crate::deps::availability();
         match self {
             ProviderId::YouTube => ProviderCaps {
-                search: true,
-                stream: true,
-                download: true,
-                radio: true,
+                search: a.yt_dlp || a.ytmusicapi,
+                stream: a.yt_dlp,
+                download: a.yt_dlp,
+                radio: a.yt_dlp,
             },
             ProviderId::SoundCloud => ProviderCaps {
+                // SoundCloud search is crate-based (no external tool); only
+                // streaming/downloading route through yt-dlp.
                 search: true,
-                stream: true,
-                download: true,
+                stream: a.yt_dlp,
+                download: a.yt_dlp,
                 radio: false,
             },
             ProviderId::MusicBrainz => ProviderCaps {
