@@ -31,6 +31,8 @@ impl MusicPlayer {
 
             let playlist_name = self.playlists.playlists[index].name.clone();
             let task = self.push_new_view(ViewData::new_playlist(index, playlist_name));
+            let view = self.view_data().clone();
+            self.seed_view_thumbnails(&view);
 
             self.save_session();
             return task;

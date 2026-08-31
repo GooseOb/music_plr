@@ -130,6 +130,18 @@ impl MusicPlayer {
             }
         }
         match &view.kind {
+            // A local playlist backs its tracks from the store, not from
+            // `ViewData`, so seed from the store or its artwork never drains.
+            ViewKind::Playlist(entry) => {
+                if let Some(playlist) = self.playlists.playlists.get(entry.index) {
+                    for track in &playlist.tracks {
+                        if !track.thumbnail().is_empty() {
+                            self.thumbnail_index
+                                .ensure(track.primary_id(), track.thumbnail());
+                        }
+                    }
+                }
+            }
             ViewKind::Album(r) => {
                 self.thumbnail_index.ensure(&r.id, &r.thumbnail);
             }
@@ -327,6 +339,13 @@ impl MusicPlayer {
                 // they appear as soon as we insert them.
                 if idx < self.playlists.playlists.len() {
                     let count = self.playlists.insert_tracks_at(idx, tracks.iter(), 0);
+                    // The tick only drains thumbnail ids it already knows
+                    // about, so the freshly inserted tracks must be seeded
+                    // here or their artwork never downloads.
+                    for track in tracks.iter().filter(|t| !t.thumbnail().is_empty()) {
+                        self.thumbnail_index
+                            .ensure(track.primary_id(), track.thumbnail());
+                    }
                     let msg = (self.strings.added_to)(count, &name);
                     self.notify(msg);
                 }
