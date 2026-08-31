@@ -53,7 +53,66 @@ def _yt():
     return YTMusic()
 
 
+def _charts_items(scope, limit=20):
+    """Global charts for blank searches: the top music-video chart playlist for
+    the Songs/Videos scopes, chart artists for Artists, nothing for Albums and
+    Playlists. The Songs/Videos charts fetch is a one-shot page (no pagination),
+    so it over-fetches to give the browse some depth."""
+    yt = _yt()
+    try:
+        charts = yt.get_charts("ZZ")
+    except Exception:
+        return []
+    if scope in ("songs", "videos"):
+        vids = charts.get("videos") or []
+        if not vids:
+            return []
+        pid = vids[0].get("playlistId") or ""
+        if not pid:
+            return []
+        want = max(limit, 60)
+        try:
+            pl = yt.get_playlist(pid, limit=want)
+        except Exception:
+            return []
+        out = []
+        for e in pl.get("tracks", []):
+            t = _track_from_album_entry(e)
+            if t:
+                out.append(t)
+            if len(out) >= want:
+                break
+        return out
+    if scope == "artists":
+        out = []
+        for a in charts.get("artists") or []:
+            bid = a.get("browseId") or ""
+            if not bid:
+                continue
+            thumbs = a.get("thumbnails") or []
+            rank = a.get("rank") or ""
+            out.append({
+                "kind": "artist",
+                "resultType": "artist",
+                "id": bid,
+                "title": a.get("title") or "",
+                "subtitle": f"#{rank}" if rank else "",
+                "url": f"https://music.youtube.com/channel/{bid}",
+                "duration": 0,
+                "thumbnail": thumbs[-1].get("url", "") if thumbs else "",
+                "channel": a.get("title") or "",
+            })
+            if len(out) >= limit:
+                break
+        return out
+    return []
+
+
 def search(query, scope="all", limit=20):
+    # A blank query is a browse, not a search: ytmusicapi rejects empty
+    # queries (HTTP 400), so surface the global charts instead.
+    if not query.strip():
+        return _charts_items(scope, limit)
     filt = SCOPE_FILTER.get(scope, None)
     if filt is None:
         # General search: over-fetch so we can still trim to `limit` after we
@@ -450,9 +509,6 @@ def main():
     query = sys.argv[2] if len(sys.argv) > 2 else ""
     scope = sys.argv[3] if len(sys.argv) > 3 else "all"
     limit = int(sys.argv[4]) if len(sys.argv) > 4 else 20
-    if not query:
-        print(json.dumps([]))
-        return
     print(json.dumps(search(query, scope, limit)))
 
 

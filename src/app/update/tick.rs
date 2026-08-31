@@ -242,7 +242,9 @@ impl MusicPlayer {
                 } else {
                     tab.card_count().unwrap_or(0)
                 };
-                s.exhausted = count < crate::theme::SEARCH_PAGE_SIZE;
+                // A blank query is a one-shot browse (charts/trending) with no
+                // pagination, so it is always exhausted.
+                s.exhausted = s.query.trim().is_empty() || count < crate::theme::SEARCH_PAGE_SIZE;
                 s.tab = tab;
                 self.install_results(idx, tracks);
             }

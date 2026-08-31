@@ -333,6 +333,12 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
 }
 
 fn search_ytdlp(query: &str, offset: usize, page_size: usize) -> Result<Vec<YouTubeVideo>> {
+    // yt-dlp cannot parse an empty/blank query ("ytsearchN:" alone is an
+    // unsupported url scheme); blank queries are served by the ytmusicapi
+    // charts path, so degrade to an empty page instead of erroring.
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
     // flat_search returns full metadata in a single yt-dlp pass.
     let (videos, _) = flat_search(query, offset + 1, offset + page_size)?;
     Ok(videos)

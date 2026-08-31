@@ -62,7 +62,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> (Vec<Track>, Se
     let offset = offset as u16;
     match scope {
         SearchScope::Artists => {
-            let cards = Artist::search(format!("artist:{query}"))
+            let cards = Artist::search(format!("artist:{}", query.trim()))
                 .limit(limit)
                 .offset(offset)
                 .execute()
@@ -81,7 +81,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> (Vec<Track>, Se
             (Vec::new(), SearchTab::Artists(cards))
         }
         SearchScope::Albums => {
-            let cards = Release::search(format!("release:{query}"))
+            let cards = Release::search(format!("release:{}", query.trim()))
                 .limit(limit)
                 .offset(offset)
                 .execute()
@@ -109,7 +109,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> (Vec<Track>, Se
             (Vec::new(), SearchTab::Albums(cards))
         }
         _ => {
-            let tracks = Recording::search(format!("recording:{query}"))
+            let tracks = Recording::search(format!("recording:{}", query.trim()))
                 .limit(limit)
                 .offset(offset)
                 .execute()

@@ -9,9 +9,6 @@ use crate::{
 
 impl MusicPlayer {
     pub fn run_search(&mut self) -> Task<Message> {
-        if self.search_query.is_empty() {
-            return Task::none();
-        }
         let query = self.search_query.clone();
         let scope = self.search_scope;
         let provider = self.search_provider;
@@ -27,8 +24,12 @@ impl MusicPlayer {
         self.show_search_history = false;
         self.drag.clear_hovered_track();
 
-        self.search_history
-            .push(query.clone(), self.config.max_search_history_stored);
+        // A blank query is a browse (charts/trending), not a real search, so
+        // it doesn't belong in search history.
+        if !query.trim().is_empty() {
+            self.search_history
+                .push(query.clone(), self.config.max_search_history_stored);
+        }
 
         let tx = self.result_tx.clone();
         Self::spawn_backend_thread(
