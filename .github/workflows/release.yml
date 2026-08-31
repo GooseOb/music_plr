@@ -23,12 +23,6 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      # Warm the default-branch cargo cache so release (tag) builds can reuse it.
-      # actions/cache only restores from the current ref, the default branch, or a
-      # PR base branch, so without this the cache written at the end of one tag run
-      # is invisible to the next tag run.
-      - "master"
 
 # Default read-only; the GitHub-release job widens this to `write`.
 permissions:
