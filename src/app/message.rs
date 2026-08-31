@@ -86,6 +86,10 @@ pub enum Message {
     Tick,
     WindowClose,
     WindowResized(iced::Size),
+    /// A window was opened; carries its id so the Windows HWND can be resolved.
+    WindowOpened(iced::window::Id),
+    /// The OS window handle (HWND on Windows) resolved for media controls.
+    MprisHwnd(Option<u64>),
     CursorMoved(Point),
     LeftButtonReleased,
     ListBoundsCaptured(Box<CaptureBounds>),

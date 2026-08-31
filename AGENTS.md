@@ -6,14 +6,14 @@ YouTube-search music player with local playback and MPRIS, built with iced.
 
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`)
 - **Audio**: rodio + symphonia; **pipeline**: yt-dlp (stream/download)
-- **MPRIS**: zbus 4 (D-Bus, tokio); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15
+- **MPRIS**: souvlaki (cross-platform: MPRIS/D-Bus on Linux, SMTC on Windows, Now Playing on macOS; pure-Rust zbus backend on Linux); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15
 - **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default; on-disk cache in `data/lyrics_cache.rs`
 - **Logging**: tracing + tracing-subscriber
 
 ## Prerequisites
 
 - **yt-dlp** (stream/download, serves AAC-in-M4A which symphonia decodes)
-- **Python 3** + `ytmusicapi` for search (falls back to yt-dlp); **D-Bus** session bus (Linux) for MPRIS
+- **Python 3** + `ytmusicapi` for search (falls back to yt-dlp); **D-Bus** session bus (Linux) for MPRIS; Windows/macOS use their native media controls (no extra deps)
 
 ## Build & Run
 
@@ -66,7 +66,7 @@ src/
 ├── theme/layout.rs    # Spacing / size / geometry constants (re-exported from theme)
 ├── theme/catalog.rs   # widget::*::Catalog impls for AppTheme
 ├── providers/         # Provider types + dispatch (mod.rs) and per-provider backends (musicbrainz, soundcloud, youtube)
-├── mpris.rs           # MPRIS D-Bus (MediaPlayer2 + Player)
+├── mpris.rs           # OS media controls via souvlaki (MPRIS/SMTC/Now Playing)
 ├── types.rs           # Track, TrackSource, PlayQueue
 ├── lyrics.rs          # LyricsProvider enum + LyricsClient (provider registry)
 ├── icons.rs           # SVG embedding via include_bytes! + icon()
@@ -99,7 +99,7 @@ src/
   Cleaned via `cleanup()`; accessors `pressed_track()`/`hovered_track()`/`set_hovered*`.
 - **Selection / list access** (`app/update/selection.rs`): `selection`, `toggle_selection`, `clear_selection`, `view_tracks`, `get_track_at`, `track_count` — all keyed by a `TrackListKind`. `Recent` has no selection: `selection` returns `&[]` and mutations are no-ops.
 - **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailsDownloaded` (clears `thumbnail_cache`), `LyricsFetched(Option<Lyrics>, String)` (sets `lyrics`, caches to `lyrics_cache.json`, auto-cleared on track change), `NormalizationComputed(String, f32)` (caches a per-track gain in memory; read on subsequent plays), `CardPlaylistReady(usize, String, Vec<Track>)` (a dragged card became a playlist; fills the playlist at the given index with the browsed tracks). 250ms tick drains → `process_result`.
-- **MPRIS**: D-Bus thread → `MprisCommand` → `process_mpris_command` (tick); `MprisUpdate` flows main → thread.
+- **MPRIS**: media-control thread → `MprisCommand` → `process_mpris_command` (tick); `MprisUpdate` flows main → thread.
 - **Nav history**: full `ViewData` in `NavEntry.data` (no separate `view`/`snapshot`); capped at 20. `push_nav_entry()` snapshots live `view_data`.
 
 ## Data Flow & Navigation

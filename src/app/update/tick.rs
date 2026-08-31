@@ -26,10 +26,18 @@ fn parse_cache_key(key: &str) -> (ProviderId, String) {
 }
 
 impl MusicPlayer {
-    pub fn init_mpris(&mut self) {
+    /// Start OS media controls (MPRIS/SMTC/Now Playing via souvlaki). `hwnd` is
+    /// the window handle, required on Windows and ignored elsewhere. Idempotent:
+    /// the first successful call wins, so the deferred Windows HWND resolution
+    /// can't double-initialize.
+    pub fn init_mpris(&mut self, hwnd: Option<*mut std::ffi::c_void>) {
+        if self.mpris_started {
+            return;
+        }
         let (mpris_update_tx, mpris_update_rx) = mpsc::channel();
-        mpris::start(self.mpris_cmd_tx.clone(), mpris_update_rx);
+        mpris::start(self.mpris_cmd_tx.clone(), mpris_update_rx, hwnd);
         self.mpris_update_tx = Some(mpris_update_tx);
+        self.mpris_started = true;
     }
 
     pub fn handle_tick(&mut self) -> Task<Message> {
@@ -529,8 +537,6 @@ impl MusicPlayer {
                 title: track.map(|t| t.title.clone()).unwrap_or_default(),
                 artist: track.map(|t| t.artist.clone()).unwrap_or_default(),
                 duration_secs: self.duration,
-                position_us: (self.progress * self.duration * 1_000_000.0) as i64,
-                volume: self.volume,
                 has_track: track.is_some(),
             };
             let _ = tx.send(update);

@@ -109,6 +109,9 @@ pub struct MusicPlayer {
     pub mpris_cmd_rx: mpsc::Receiver<MprisCommand>,
     pub mpris_update_tx: Option<mpsc::Sender<MprisUpdate>>,
     pub mpris_dirty: bool,
+    /// Guards `init_mpris` so it runs at most once (the Windows HWND is
+    /// resolved asynchronously after the window opens).
+    pub mpris_started: bool,
     pub session_dirty: bool,
     pub last_session_flush: Instant,
 
@@ -213,6 +216,7 @@ impl MusicPlayer {
             mpris_cmd_rx,
             mpris_update_tx: None,
             mpris_dirty: true,
+            mpris_started: false,
             session_dirty: true,
             // Backdate so the first `flush_session` isn't throttled.
             last_session_flush: Instant::now()
@@ -236,7 +240,11 @@ impl MusicPlayer {
             dep_ops: std::collections::HashMap::new(),
         };
 
-        player.init_mpris();
+        // Linux and macOS need no window handle, so start immediately. Windows
+        // requires the HWND, which arrives later via the window-opened
+        // subscription (see `mpris_hwnd_subscription` in dispatch).
+        #[cfg(not(target_os = "windows"))]
+        player.init_mpris(None);
         player.restore_session();
         player.resume_playback();
         for item in &player.library.items {

@@ -1,6 +1,6 @@
 [package]
 name = "goosemusic"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "A music player with YouTube search, local playback, and MPRIS integration"
 license = "MIT"
@@ -26,7 +26,10 @@ directories = "6"
 anyhow = "1"
 ureq = { version = "3", features = ["json"] }
 rfd = "0.15"
-zbus = { version = "4", default-features = false, features = ["tokio"] }
+# Cross-platform OS media controls: MPRIS (Linux), SMTC (Windows), Now Playing
+# (macOS). `use_zbus` selects the pure-Rust zbus backend on Linux; on the other
+# platforms that feature is inert and the native backend is always compiled.
+souvlaki = { version = "0.8", default-features = false, features = ["use_zbus"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 musicbrainz_rs = { version = "0.13", features = ["sync"] }

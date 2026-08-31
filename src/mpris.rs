@@ -1,7 +1,17 @@
-use std::{borrow::Cow, collections::HashMap, sync::mpsc, time::Duration};
+//! Cross-platform OS media controls via [souvlaki].
+//!
+//! souvlaki unifies the three platform mechanisms behind one API: MPRIS over
+//! D-Bus on Linux, System Media Transport Controls on Windows, and the Now
+//! Playing center on macOS. Inbound OS events are mapped to [`MprisCommand`]
+//! and forwarded over `mpris_cmd_tx`; outbound state is pushed through
+//! [`MprisUpdate`] drained from `update_rx`.
 
+use std::{borrow::Cow, ffi::c_void, sync::mpsc, thread, time::Duration};
+
+use souvlaki::{
+    MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig, SeekDirection,
+};
 use tracing::{error, info, warn};
-use zbus::{connection, interface, zvariant};
 
 #[derive(Debug, Clone, Copy)]
 pub enum MprisCommand {
@@ -21,278 +31,92 @@ pub struct MprisUpdate {
     pub title: String,
     pub artist: String,
     pub duration_secs: f32,
-    pub position_us: i64,
-    pub volume: f32,
     pub has_track: bool,
 }
 
-struct MprisData {
-    playback_status: Cow<'static, str>,
-    title: String,
-    artist: String,
-    duration_us: i64,
-    position_us: i64,
-    volume: f64,
-    has_track: bool,
-}
-
-struct MediaPlayer2;
-
-#[interface(name = "org.mpris.MediaPlayer2")]
-#[allow(clippy::unused_async, clippy::unused_self)]
-impl MediaPlayer2 {
-    const fn can_quit(&self) -> bool {
-        false
-    }
-
-    const fn can_raise(&self) -> bool {
-        false
-    }
-
-    const fn has_track_list(&self) -> bool {
-        false
-    }
-
-    const fn identity(&self) -> &'static str {
-        "GooseOb's music player"
-    }
-
-    const fn desktop_entry(&self) -> &'static str {
-        "goosemusic"
-    }
-
-    fn supported_uri_schemes(&self) -> Vec<&str> {
-        vec!["file", "https"]
-    }
-
-    const fn supported_mime_types(&self) -> Vec<&str> {
-        vec![]
-    }
-}
-
-struct PlayerInterface {
-    data: std::sync::Mutex<MprisData>,
+/// Spawn the OS media-control server. `hwnd` is required on Windows (the handle
+/// of the application window); it is ignored elsewhere.
+pub fn start(
     cmd_tx: mpsc::Sender<MprisCommand>,
-}
-
-#[interface(name = "org.mpris.MediaPlayer2.Player")]
-#[allow(clippy::unused_async, clippy::unnecessary_wraps, clippy::unused_self)]
-impl PlayerInterface {
-    async fn next(&self) {
-        let _ = self.cmd_tx.send(MprisCommand::NextTrack);
-    }
-
-    async fn previous(&self) {
-        let _ = self.cmd_tx.send(MprisCommand::PreviousTrack);
-    }
-
-    async fn pause(&self) {
-        let _ = self.cmd_tx.send(MprisCommand::Pause);
-    }
-
-    async fn play_pause(&self) {
-        let _ = self.cmd_tx.send(MprisCommand::TogglePlayPause);
-    }
-
-    async fn stop(&self) {
-        let _ = self.cmd_tx.send(MprisCommand::Stop);
-    }
-
-    async fn play(&self) {
-        let _ = self.cmd_tx.send(MprisCommand::Play);
-    }
-
-    async fn seek(&self, offset: i64) {
-        let _ = self.cmd_tx.send(MprisCommand::Seek(offset));
-    }
-
-    #[zbus(property)]
-    fn playback_status(&self) -> String {
-        self.data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .playback_status
-            .to_string()
-    }
-
-    #[zbus(property)]
-    fn metadata(&self) -> HashMap<String, zvariant::Value<'static>> {
-        let d = self
-            .data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut map = HashMap::new();
-        if d.has_track {
-            map.insert(
-                "mpris:trackid".into(),
-                zvariant::Value::from("/org/mpris/MediaPlayer2/Track/1"),
-            );
-            map.insert("xesam:title".into(), zvariant::Value::from(d.title.clone()));
-            map.insert(
-                "xesam:artist".into(),
-                zvariant::Value::from(vec![d.artist.clone()]),
-            );
-            if d.duration_us > 0 {
-                map.insert("mpris:length".into(), zvariant::Value::from(d.duration_us));
-            }
-        }
-        map
-    }
-
-    #[zbus(property)]
-    fn volume(&self) -> f64 {
-        self.data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .volume
-    }
-
-    #[zbus(property)]
-    async fn set_volume(&self, vol: f64) {
-        if let Ok(mut d) = self.data.lock() {
-            d.volume = vol;
-        }
-        let _ = self.cmd_tx.send(MprisCommand::SetVolume(vol as f32));
-    }
-
-    #[zbus(property)]
-    fn position(&self) -> i64 {
-        self.data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .position_us
-    }
-
-    #[zbus(property)]
-    const fn minimum_rate(&self) -> f64 {
-        1.0
-    }
-
-    #[zbus(property)]
-    const fn maximum_rate(&self) -> f64 {
-        1.0
-    }
-
-    #[zbus(property)]
-    const fn can_control(&self) -> bool {
-        true
-    }
-
-    #[zbus(property)]
-    const fn can_play(&self) -> bool {
-        true
-    }
-
-    #[zbus(property)]
-    const fn can_pause(&self) -> bool {
-        true
-    }
-
-    #[zbus(property)]
-    const fn can_seek(&self) -> bool {
-        true
-    }
-
-    #[zbus(property)]
-    const fn can_go_next(&self) -> bool {
-        true
-    }
-
-    #[zbus(property)]
-    const fn can_go_previous(&self) -> bool {
-        true
-    }
-}
-
-pub fn start(cmd_tx: mpsc::Sender<MprisCommand>, update_rx: mpsc::Receiver<MprisUpdate>) {
-    std::thread::spawn(move || {
-        let rt = match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
-            Ok(rt) => rt,
+    update_rx: mpsc::Receiver<MprisUpdate>,
+    hwnd: Option<*mut c_void>,
+) {
+    // Raw pointers aren't `Send`; carry the handle as an integer across the
+    // thread boundary and rebuild it inside the worker thread.
+    let hwnd_raw = hwnd.map(|p| p as usize);
+    thread::spawn(move || {
+        let hwnd = hwnd_raw.map(|p| p as *mut c_void);
+        let config = PlatformConfig {
+            dbus_name: "goosemusic",
+            display_name: "GooseOb's Music Player",
+            hwnd,
+        };
+        let mut controls = match MediaControls::new(config) {
+            Ok(controls) => controls,
             Err(e) => {
-                warn!("Failed to create tokio runtime: {}", e);
+                error!("Failed to create media controls: {}", e);
                 return;
             }
         };
 
-        rt.block_on(async move {
-            let conn = match connection::Builder::session() {
-                Ok(builder) => match builder.build().await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        error!("Failed to connect to D-Bus session bus: {}", e);
-                        return;
-                    }
-                },
-                Err(e) => {
-                    error!("Failed to create D-Bus session builder: {}", e);
-                    return;
+        if let Err(e) = controls.attach(move |event| {
+            let cmd = match event {
+                MediaControlEvent::Play => MprisCommand::Play,
+                MediaControlEvent::Pause => MprisCommand::Pause,
+                MediaControlEvent::Toggle => MprisCommand::TogglePlayPause,
+                MediaControlEvent::Next => MprisCommand::NextTrack,
+                MediaControlEvent::Previous => MprisCommand::PreviousTrack,
+                MediaControlEvent::Stop => MprisCommand::Stop,
+                MediaControlEvent::SetVolume(v) => MprisCommand::SetVolume(v as f32),
+                MediaControlEvent::SeekBy(SeekDirection::Forward, d) => {
+                    MprisCommand::Seek(d.as_micros() as i64)
                 }
+                MediaControlEvent::SeekBy(SeekDirection::Backward, d) => {
+                    MprisCommand::Seek(-(d.as_micros() as i64))
+                }
+                // Events the player doesn't act on (position/URI/raise/quit).
+                MediaControlEvent::Seek(_)
+                | MediaControlEvent::SetPosition(_)
+                | MediaControlEvent::OpenUri(_)
+                | MediaControlEvent::Raise
+                | MediaControlEvent::Quit => return,
             };
+            let _ = cmd_tx.send(cmd);
+        }) {
+            error!("Failed to attach media control handler: {}", e);
+            return;
+        }
 
-            let data = std::sync::Mutex::new(MprisData {
-                playback_status: "Stopped".into(),
-                title: String::new(),
-                artist: String::new(),
-                duration_us: 0,
-                position_us: 0,
-                volume: 0.8,
-                has_track: false,
-            });
+        info!("Media controls started");
 
-            let media_player2 = MediaPlayer2;
-            let player = PlayerInterface { data, cmd_tx };
-
-            if let Err(e) = conn
-                .object_server()
-                .at("/org/mpris/MediaPlayer2", media_player2)
-                .await
-            {
-                error!("Failed to register MediaPlayer2: {}", e);
-                return;
-            }
-
-            if let Err(e) = conn
-                .object_server()
-                .at("/org/mpris/MediaPlayer2", player)
-                .await
-            {
-                error!("Failed to register Player: {}", e);
-                return;
-            }
-
-            if let Err(e) = conn.request_name("org.mpris.MediaPlayer2.goosemusic").await {
-                error!("Failed to request D-Bus name: {}", e);
-                return;
-            }
-
-            info!("MPRIS server started");
-
-            loop {
-                while let Ok(update) = update_rx.try_recv() {
-                    if let Ok(iface_ref) = conn
-                        .object_server()
-                        .interface::<_, PlayerInterface>("/org/mpris/MediaPlayer2")
-                        .await
-                    {
-                        let guard = iface_ref.get_mut().await;
-                        let mut data = guard
-                            .data
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        data.playback_status = update.playback_status;
-                        data.title = update.title;
-                        data.artist = update.artist;
-                        data.duration_us = (update.duration_secs * 1_000_000.0) as i64;
-                        data.position_us = update.position_us;
-                        data.volume = f64::from(update.volume);
-                        data.has_track = update.has_track;
+        loop {
+            while let Ok(update) = update_rx.try_recv() {
+                let playback = match update.playback_status.as_ref() {
+                    "Playing" => MediaPlayback::Playing { progress: None },
+                    "Paused" => MediaPlayback::Paused { progress: None },
+                    _ => MediaPlayback::Stopped,
+                };
+                if let Err(e) = controls.set_playback(playback) {
+                    warn!("Failed to set playback status: {}", e);
+                }
+                if update.has_track {
+                    let metadata = MediaMetadata {
+                        title: Some(&update.title),
+                        artist: Some(&update.artist),
+                        album: None,
+                        cover_url: None,
+                        duration: if update.duration_secs > 0.0 {
+                            Some(Duration::from_secs_f32(update.duration_secs))
+                        } else {
+                            None
+                        },
+                    };
+                    if let Err(e) = controls.set_metadata(metadata) {
+                        warn!("Failed to set metadata: {}", e);
                     }
                 }
-                tokio::time::sleep(Duration::from_millis(100)).await;
             }
-        });
+            thread::sleep(Duration::from_millis(100));
+        }
     });
 }
