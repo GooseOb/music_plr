@@ -22,7 +22,13 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
+    branches:
+      # Warm the default-branch cargo cache so release (tag) builds can reuse it.
+      # actions/cache only restores from the current ref, the default branch, or a
+      # PR base branch, so without this the cache written at the end of one tag run
+      # is invisible to the next tag run.
+      - "master"
 
 # Default read-only; the GitHub-release job widens this to `write`.
 permissions:
@@ -168,7 +174,7 @@ jobs:
       - name: Verify tag matches crate version
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          ver="$(cargo pkgid | sed 's/.*#//')"
+          ver="$(cargo pkgid | sed 's/.*#.*@//')"
           if [ "$tag" != "$ver" ]; then
             echo "::error::Tag '$GITHUB_REF_NAME' does not match crate version '$ver'. Bump version in Cargo.toml before tagging."
             exit 1

@@ -42,7 +42,7 @@ impl crate::app::MusicPlayer {
                 // resolved here once the window actually exists.
                 #[cfg(target_os = "windows")]
                 {
-                    return iced::window::raw_id(id)
+                    return iced::window::raw_id::<Message>(id)
                         .then(move |raw| Task::done(Message::MprisHwnd(Some(raw))));
                 }
                 #[cfg(not(target_os = "windows"))]
