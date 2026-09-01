@@ -6,15 +6,15 @@
 //! forwarded verbatim over `media_event_tx`; outbound state is pushed through
 //! [`MediaUpdate`] drained from `update_rx`.
 
-use std::{borrow::Cow, ffi::c_void, sync::mpsc, thread, time::Duration};
+use std::{ffi::c_void, sync::mpsc, thread, time::Duration};
 
-pub use souvlaki::MediaControlEvent;
-use souvlaki::{MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
+pub use souvlaki::{MediaControlEvent, MediaPlayback};
+use souvlaki::{MediaControls, MediaMetadata, PlatformConfig};
 use tracing::{error, info, warn};
 
 #[derive(Debug, Clone)]
 pub struct MediaUpdate {
-    pub playback_status: Cow<'static, str>,
+    pub playback: MediaPlayback,
     pub title: String,
     pub artist: String,
     pub duration_secs: f32,
@@ -58,22 +58,24 @@ pub fn start(
 
         loop {
             while let Ok(update) = update_rx.try_recv() {
-                let playback = match update.playback_status.as_ref() {
-                    "Playing" => MediaPlayback::Playing { progress: None },
-                    "Paused" => MediaPlayback::Paused { progress: None },
-                    _ => MediaPlayback::Stopped,
-                };
+                let MediaUpdate {
+                    playback,
+                    title,
+                    artist,
+                    duration_secs,
+                    has_track,
+                } = update;
                 if let Err(e) = controls.set_playback(playback) {
                     warn!("Failed to set playback status: {}", e);
                 }
-                if update.has_track {
+                if has_track {
                     let metadata = MediaMetadata {
-                        title: Some(&update.title),
-                        artist: Some(&update.artist),
+                        title: Some(&title),
+                        artist: Some(&artist),
                         album: None,
                         cover_url: None,
-                        duration: if update.duration_secs > 0.0 {
-                            Some(Duration::from_secs_f32(update.duration_secs))
+                        duration: if duration_secs > 0.0 {
+                            Some(Duration::from_secs_f32(duration_secs))
                         } else {
                             None
                         },

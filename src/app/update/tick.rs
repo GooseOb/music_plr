@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use souvlaki::MediaPlayback;
 use tracing::debug;
 
 use super::{
@@ -590,14 +591,13 @@ impl MusicPlayer {
         if let Some(ref tx) = self.media_update_tx {
             let track = self.queue.current();
             let update = MediaUpdate {
-                playback_status: if self.is_playing {
-                    "Playing"
+                playback: if self.is_playing {
+                    MediaPlayback::Playing { progress: None }
                 } else if track.is_some() {
-                    "Paused"
+                    MediaPlayback::Paused { progress: None }
                 } else {
-                    "Stopped"
-                }
-                .into(),
+                    MediaPlayback::Stopped
+                },
                 title: track.map(|t| t.title.clone()).unwrap_or_default(),
                 artist: track.map(|t| t.artist.clone()).unwrap_or_default(),
                 duration_secs: self.duration,
