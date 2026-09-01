@@ -1,6 +1,6 @@
 # GooseOb's Music Player
 
-A YouTube/SoundCloud search music player with local playback, downloads, and MPRIS, built with [iced](https://iced.rs).
+A YouTube/SoundCloud search music player with local playback, downloads, and OS media controls, built with [iced](https://iced.rs).
 
 ## Features
 
@@ -16,7 +16,7 @@ A YouTube/SoundCloud search music player with local playback, downloads, and MPR
 - **Drag & drop** — Drag tracks between views, into the queue, onto playlists (reorder or turn a card into a local playlist), and into the
   Library.
 - **Lyrics** — Free, no-key LRCLib lyrics with synced lines that seek on click; cached per track.
-- **MPRIS** — Full D-Bus interface for media keys.
+- **Media controls** — OS media keys / MPRIS (Linux) / SMTC (Windows) / Now Playing (macOS) via souvlaki.
 - **More** — Search history, volume normalization, navigation history, session restore, right-click context menu, dark theme.
 - **Localization** — 12 languages: English, Polski, Español, Português (Brasil), 简体中文, العربية, Беларуская, Français, Deutsch, 日本語, Русский, हिन्दी.
 

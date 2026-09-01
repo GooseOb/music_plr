@@ -150,7 +150,7 @@ mod tests {
     };
 
     fn player() -> MusicPlayer {
-        // `new_with` inits MPRIS (spawns a thread, no-ops if D-Bus is absent),
+        // `new_with` inits media controls (spawns a thread, no-ops if D-Bus is absent),
         // so it is safe to construct headlessly in tests. The nav history is
         // reset to a deterministic Playlist view so the navigation tests
         // don't depend on on-disk session state.

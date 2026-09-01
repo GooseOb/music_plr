@@ -43,7 +43,7 @@ impl crate::app::MusicPlayer {
                 #[cfg(target_os = "windows")]
                 {
                     return iced::window::raw_id::<Message>(id)
-                        .then(move |raw| Task::done(Message::MprisHwnd(Some(raw))));
+                        .then(move |raw| Task::done(Message::MediaHwnd(Some(raw))));
                 }
                 #[cfg(not(target_os = "windows"))]
                 {
@@ -51,8 +51,8 @@ impl crate::app::MusicPlayer {
                     Task::none()
                 }
             }
-            Message::MprisHwnd(hwnd) => {
-                self.init_mpris(hwnd.map(|h| h as *mut std::ffi::c_void));
+            Message::MediaHwnd(hwnd) => {
+                self.init_media_controls(hwnd.map(|h| h as *mut std::ffi::c_void));
                 Task::none()
             }
             Message::WindowClose => {
@@ -686,13 +686,13 @@ impl crate::app::MusicPlayer {
 
         let events = iced::event::listen_with(Self::event_to_message);
 
-        Subscription::batch([timer, events, Self::mpris_hwnd_subscription()])
+        Subscription::batch([timer, events, Self::media_hwnd_subscription()])
     }
 
     /// Emits `Message::WindowOpened` once the application window is created, so
     /// the Windows HWND can be resolved for SMTC. A no-op subscription on the
     /// other platforms (media controls start without a window handle there).
-    fn mpris_hwnd_subscription() -> Subscription<Message> {
+    fn media_hwnd_subscription() -> Subscription<Message> {
         #[cfg(target_os = "windows")]
         {
             iced::window::open_events().map(Message::WindowOpened)

@@ -4,7 +4,7 @@
     clippy::cast_precision_loss
 )]
 
-/// Display name of the application (window title, settings header, MPRIS
+/// Display name of the application (window title, settings header, media-control
 /// identity). The short lowercase identifier used for internal identifiers
 /// (package name, D-Bus service name, config/data/cache directories, iced
 /// theme name) is `"goosemusic"`.
@@ -18,7 +18,7 @@ mod i18n;
 mod icons;
 mod load_state;
 mod lyrics;
-mod mpris;
+mod media_controls;
 mod providers;
 mod theme;
 mod types;

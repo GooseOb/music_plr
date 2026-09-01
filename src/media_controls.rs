@@ -2,31 +2,18 @@
 //!
 //! souvlaki unifies the three platform mechanisms behind one API: MPRIS over
 //! D-Bus on Linux, System Media Transport Controls on Windows, and the Now
-//! Playing center on macOS. Inbound OS events are mapped to [`MprisCommand`]
-//! and forwarded over `mpris_cmd_tx`; outbound state is pushed through
-//! [`MprisUpdate`] drained from `update_rx`.
+//! Playing center on macOS. Inbound OS events ([`MediaControlEvent`]) are
+//! forwarded verbatim over `media_event_tx`; outbound state is pushed through
+//! [`MediaUpdate`] drained from `update_rx`.
 
 use std::{borrow::Cow, ffi::c_void, sync::mpsc, thread, time::Duration};
 
-use souvlaki::{
-    MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig, SeekDirection,
-};
+pub use souvlaki::MediaControlEvent;
+use souvlaki::{MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
 use tracing::{error, info, warn};
 
-#[derive(Debug, Clone, Copy)]
-pub enum MprisCommand {
-    TogglePlayPause,
-    NextTrack,
-    PreviousTrack,
-    Stop,
-    Play,
-    Pause,
-    SetVolume(f32),
-    Seek(i64),
-}
-
 #[derive(Debug, Clone)]
-pub struct MprisUpdate {
+pub struct MediaUpdate {
     pub playback_status: Cow<'static, str>,
     pub title: String,
     pub artist: String,
@@ -37,8 +24,8 @@ pub struct MprisUpdate {
 /// Spawn the OS media-control server. `hwnd` is required on Windows (the handle
 /// of the application window); it is ignored elsewhere.
 pub fn start(
-    cmd_tx: mpsc::Sender<MprisCommand>,
-    update_rx: mpsc::Receiver<MprisUpdate>,
+    event_tx: mpsc::Sender<MediaControlEvent>,
+    update_rx: mpsc::Receiver<MediaUpdate>,
     hwnd: Option<*mut c_void>,
 ) {
     // Raw pointers aren't `Send`; carry the handle as an integer across the
@@ -59,29 +46,9 @@ pub fn start(
             }
         };
 
+        let tx = event_tx.clone();
         if let Err(e) = controls.attach(move |event| {
-            let cmd = match event {
-                MediaControlEvent::Play => MprisCommand::Play,
-                MediaControlEvent::Pause => MprisCommand::Pause,
-                MediaControlEvent::Toggle => MprisCommand::TogglePlayPause,
-                MediaControlEvent::Next => MprisCommand::NextTrack,
-                MediaControlEvent::Previous => MprisCommand::PreviousTrack,
-                MediaControlEvent::Stop => MprisCommand::Stop,
-                MediaControlEvent::SetVolume(v) => MprisCommand::SetVolume(v as f32),
-                MediaControlEvent::SeekBy(SeekDirection::Forward, d) => {
-                    MprisCommand::Seek(d.as_micros() as i64)
-                }
-                MediaControlEvent::SeekBy(SeekDirection::Backward, d) => {
-                    MprisCommand::Seek(-(d.as_micros() as i64))
-                }
-                // Events the player doesn't act on (position/URI/raise/quit).
-                MediaControlEvent::Seek(_)
-                | MediaControlEvent::SetPosition(_)
-                | MediaControlEvent::OpenUri(_)
-                | MediaControlEvent::Raise
-                | MediaControlEvent::Quit => return,
-            };
-            let _ = cmd_tx.send(cmd);
+            let _ = tx.send(event);
         }) {
             error!("Failed to attach media control handler: {}", e);
             return;

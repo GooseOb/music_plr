@@ -3,8 +3,8 @@ use std::time::Duration;
 use tracing::debug;
 
 use super::{
-    error, mpris, mpsc, spawn_thumbnail_download, BackendResult, Message, MprisCommand,
-    MprisUpdate, MusicPlayer, Task, ViewData,
+    error, media_controls, mpsc, spawn_thumbnail_download, BackendResult, MediaControlEvent,
+    MediaUpdate, Message, MusicPlayer, Task, ViewData,
 };
 use crate::{
     app::ViewKind,
@@ -19,14 +19,14 @@ impl MusicPlayer {
     /// the window handle, required on Windows and ignored elsewhere. Idempotent:
     /// the first successful call wins, so the deferred Windows HWND resolution
     /// can't double-initialize.
-    pub fn init_mpris(&mut self, hwnd: Option<*mut std::ffi::c_void>) {
-        if self.mpris_started {
+    pub fn init_media_controls(&mut self, hwnd: Option<*mut std::ffi::c_void>) {
+        if self.media_controls_started {
             return;
         }
-        let (mpris_update_tx, mpris_update_rx) = mpsc::channel();
-        mpris::start(self.mpris_cmd_tx.clone(), mpris_update_rx, hwnd);
-        self.mpris_update_tx = Some(mpris_update_tx);
-        self.mpris_started = true;
+        let (media_update_tx, media_update_rx) = mpsc::channel();
+        media_controls::start(self.media_event_tx.clone(), media_update_rx, hwnd);
+        self.media_update_tx = Some(media_update_tx);
+        self.media_controls_started = true;
     }
 
     pub fn handle_tick(&mut self) -> Task<Message> {
@@ -35,8 +35,8 @@ impl MusicPlayer {
             task = task.chain(self.process_result(result));
         }
 
-        while let Ok(cmd) = self.mpris_cmd_rx.try_recv() {
-            self.process_mpris_command(cmd);
+        while let Ok(event) = self.media_event_rx.try_recv() {
+            self.process_media_event(&event);
         }
 
         // Auto-dismiss the toast after its display window has elapsed.
@@ -51,9 +51,9 @@ impl MusicPlayer {
         self.update_thumbnails();
 
         let s = self.audio.get_state();
-        // Detect audio state changes for MPRIS update throttling.
+        // Detect audio state changes for media-control update throttling.
         if self.is_playing != s.is_playing || (self.duration - s.duration).abs() > 0.001 {
-            self.mpris_dirty = true;
+            self.media_controls_dirty = true;
         }
         self.is_playing = s.is_playing;
         self.progress = s.progress;
@@ -67,7 +67,10 @@ impl MusicPlayer {
             // finishes writing the file (`cache_ready`)
             if s.cache_ready {
                 if self.stream_cache.insert(pending.provider_id, &pending.id) {
-                    debug!("Registered cached track: {:?}:{:?}", pending.provider_id, pending.id);
+                    debug!(
+                        "Registered cached track: {:?}:{:?}",
+                        pending.provider_id, pending.id
+                    );
                 }
                 self.pending_cache_id = None;
                 // The cache file is now complete: analyze it for volume
@@ -96,7 +99,7 @@ impl MusicPlayer {
             }
         }
 
-        self.update_mpris_if_dirty();
+        self.update_media_controls_if_dirty();
         self.flush_session();
 
         if self.lyrics.is_some() {
@@ -105,10 +108,10 @@ impl MusicPlayer {
         task
     }
 
-    fn update_mpris_if_dirty(&mut self) {
-        if self.mpris_dirty {
-            self.send_mpris_update();
-            self.mpris_dirty = false;
+    fn update_media_controls_if_dirty(&mut self) {
+        if self.media_controls_dirty {
+            self.send_media_update();
+            self.media_controls_dirty = false;
         }
     }
 
@@ -163,33 +166,40 @@ impl MusicPlayer {
         }
     }
 
-    pub fn process_mpris_command(&mut self, cmd: MprisCommand) {
-        match cmd {
-            MprisCommand::TogglePlayPause => self.toggle_play_pause(),
-            MprisCommand::NextTrack => self.next_track(),
-            MprisCommand::PreviousTrack => self.previous_track(),
-            MprisCommand::Stop => {
+    pub fn process_media_event(&mut self, event: &MediaControlEvent) {
+        use souvlaki::{MediaControlEvent as E, SeekDirection};
+        match event {
+            E::Toggle => self.toggle_play_pause(),
+            E::Next => self.next_track(),
+            E::Previous => self.previous_track(),
+            E::Stop => {
                 if self.is_playing {
                     self.toggle_play_pause();
                 }
             }
-            MprisCommand::Play => {
+            E::Play => {
                 if !self.is_playing {
                     self.toggle_play_pause();
                 }
             }
-            MprisCommand::Pause => {
+            E::Pause => {
                 if self.is_playing {
                     self.audio.pause();
-                    self.mpris_dirty = true;
+                    self.media_controls_dirty = true;
                 }
             }
-            MprisCommand::SetVolume(vol) => self.set_volume(vol),
-            MprisCommand::Seek(delta_us) => {
+            E::SetVolume(vol) => self.set_volume(*vol as f32),
+            E::SeekBy(direction, delta) => {
+                let delta_us = delta.as_micros() as i64;
+                let delta_us = match direction {
+                    SeekDirection::Forward => delta_us,
+                    SeekDirection::Backward => -delta_us,
+                };
                 let delta_frac = delta_us as f32 / 1_000_000.0 / self.duration.max(0.001);
                 let new_frac = (self.progress + delta_frac).clamp(0.0, 1.0);
                 self.seek(new_frac);
             }
+            E::Seek(_) | E::SetPosition(_) | E::OpenUri(_) | E::Raise | E::Quit => {}
         }
     }
 
@@ -565,7 +575,7 @@ impl MusicPlayer {
                 };
                 self.queue.set_queue(queue, self.config.max_recently_played);
                 self.save_session();
-                self.mpris_dirty = true;
+                self.media_controls_dirty = true;
             } else {
                 self.spawn_download_thread_for(provider, original);
             }
@@ -576,10 +586,10 @@ impl MusicPlayer {
         }
     }
 
-    pub fn send_mpris_update(&self) {
-        if let Some(ref tx) = self.mpris_update_tx {
+    pub fn send_media_update(&self) {
+        if let Some(ref tx) = self.media_update_tx {
             let track = self.queue.current();
-            let update = MprisUpdate {
+            let update = MediaUpdate {
                 playback_status: if self.is_playing {
                     "Playing"
                 } else if track.is_some() {

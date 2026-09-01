@@ -54,7 +54,7 @@ impl MusicPlayer {
             self.record_now_playing_origin();
             self.play_track_internal(&first, first.source);
             self.save_session();
-            self.mpris_dirty = true;
+            self.media_controls_dirty = true;
         }
         task
     }

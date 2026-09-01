@@ -154,7 +154,7 @@ impl Track {
     }
 
     /// A stable identity key used to de-duplicate recently-played entries and
-    /// MPRIS metadata. Built from title + artist so the same song played from
+    /// Media-control metadata. Built from title + artist so the same song played from
     /// different providers collapses to one history entry.
     pub fn dedup_key(&self) -> String {
         format!("{}|{}", self.title, self.artist)

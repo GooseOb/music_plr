@@ -130,7 +130,7 @@ mod tests {
     use crate::{app::view_data::ViewData, data::config, types::Track};
 
     fn player() -> MusicPlayer {
-        // Same headless construction as the navigation tests: MPRIS no-ops
+        // Same headless construction as the navigation tests: media controls no-op
         // without D-Bus, and nav history is reset to a deterministic Search
         // view (so `view_tracks` reads `view_data.tracks`).
         let mut p = MusicPlayer::new_with(config::Config::default());

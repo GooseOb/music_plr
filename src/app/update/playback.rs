@@ -36,7 +36,7 @@ impl MusicPlayer {
                     self.play_track_internal(&t, t.source);
                 }
                 self.save_session();
-                self.mpris_dirty = true;
+                self.media_controls_dirty = true;
             }
             return;
         }
@@ -66,7 +66,7 @@ impl MusicPlayer {
         self.queue.set_queue(queue, self.config.max_recently_played);
         self.play_track_internal(track, provider);
         self.save_session();
-        self.mpris_dirty = true;
+        self.media_controls_dirty = true;
     }
 
     /// Snapshot the current view as the source of the track being played.
@@ -132,7 +132,7 @@ impl MusicPlayer {
         self.queue
             .set_queue(vec![track], self.config.max_recently_played);
         self.save_session();
-        self.mpris_dirty = true;
+        self.media_controls_dirty = true;
     }
 
     /// Play `pos` through `provider`. If the track already carries that
@@ -378,7 +378,7 @@ impl MusicPlayer {
     pub fn handle_remove_from_queue_batch(&mut self, indices: &[usize]) {
         let removed = crate::util::remove_at(&mut self.queue.tracks, indices);
         self.save_session();
-        self.mpris_dirty = true;
+        self.media_controls_dirty = true;
         let tr = self.strings;
         let msg = (tr.removed_from)(removed, tr.queue);
         self.notify(msg);
@@ -395,7 +395,7 @@ impl MusicPlayer {
                 self.play_track_internal(&track, track.source);
             }
         }
-        self.mpris_dirty = true;
+        self.media_controls_dirty = true;
     }
 
     pub fn next_track(&mut self) {
@@ -410,7 +410,7 @@ impl MusicPlayer {
             let t = t.clone();
             self.play_track_internal(&t, t.source);
             self.save_session();
-            self.mpris_dirty = true;
+            self.media_controls_dirty = true;
         }
     }
 
@@ -422,7 +422,7 @@ impl MusicPlayer {
                 self.play_track_internal(&t, t.source);
             }
             self.save_session();
-            self.mpris_dirty = true;
+            self.media_controls_dirty = true;
         }
     }
 
@@ -430,7 +430,7 @@ impl MusicPlayer {
         self.volume = vol.clamp(0.0, 1.0);
         self.audio.set_volume(self.volume);
         self.save_session();
-        self.mpris_dirty = true;
+        self.media_controls_dirty = true;
     }
 
     pub fn seek(&mut self, frac: f32) {
@@ -438,7 +438,7 @@ impl MusicPlayer {
         self.progress = frac;
         self.audio
             .seek(std::time::Duration::from_secs_f32(frac * self.duration));
-        self.mpris_dirty = true;
+        self.media_controls_dirty = true;
     }
 
     /// Seek to an absolute playback position in seconds (used by clicking a

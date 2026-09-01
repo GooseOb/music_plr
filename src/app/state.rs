@@ -30,7 +30,7 @@ use crate::{
     },
     i18n::Strings,
     lyrics::{LyricsClient, LyricsProvider},
-    mpris::{MprisCommand, MprisUpdate},
+    media_controls::{MediaControlEvent, MediaUpdate},
     providers::{ProviderId, SearchScope},
     theme::{AppTheme, Palette},
     types::{PlayQueue, Track},
@@ -122,13 +122,13 @@ pub struct MusicPlayer {
 
     pub result_tx: mpsc::Sender<BackendResult>,
     pub result_rx: mpsc::Receiver<BackendResult>,
-    pub mpris_cmd_tx: mpsc::Sender<MprisCommand>,
-    pub mpris_cmd_rx: mpsc::Receiver<MprisCommand>,
-    pub mpris_update_tx: Option<mpsc::Sender<MprisUpdate>>,
-    pub mpris_dirty: bool,
-    /// Guards `init_mpris` so it runs at most once (the Windows HWND is
-    /// resolved asynchronously after the window opens).
-    pub mpris_started: bool,
+    pub media_event_tx: mpsc::Sender<MediaControlEvent>,
+    pub media_event_rx: mpsc::Receiver<MediaControlEvent>,
+    pub media_update_tx: Option<mpsc::Sender<MediaUpdate>>,
+    pub media_controls_dirty: bool,
+    /// Guards `init_media_controls` so it runs at most once (the Windows HWND
+    /// is resolved asynchronously after the window opens).
+    pub media_controls_started: bool,
     pub session_dirty: bool,
     pub last_session_flush: Instant,
 
@@ -174,7 +174,7 @@ impl MusicPlayer {
 
     pub(crate) fn new_with(config: Config) -> Self {
         let (result_tx, result_rx) = mpsc::channel();
-        let (mpris_cmd_tx, mpris_cmd_rx) = mpsc::channel();
+        let (media_event_tx, media_event_rx) = mpsc::channel();
 
         let strings = config.language.strings();
         let app_theme = AppTheme::new(Palette::from(config.theme_kind));
@@ -232,11 +232,11 @@ impl MusicPlayer {
             request_ids: RequestIdGenerator::default(),
             result_tx,
             result_rx,
-            mpris_cmd_tx,
-            mpris_cmd_rx,
-            mpris_update_tx: None,
-            mpris_dirty: true,
-            mpris_started: false,
+            media_event_tx,
+            media_event_rx,
+            media_update_tx: None,
+            media_controls_dirty: true,
+            media_controls_started: false,
             session_dirty: true,
             // Backdate so the first `flush_session` isn't throttled.
             last_session_flush: Instant::now()
@@ -263,9 +263,9 @@ impl MusicPlayer {
 
         // Linux and macOS need no window handle, so start immediately. Windows
         // requires the HWND, which arrives later via the window-opened
-        // subscription (see `mpris_hwnd_subscription` in dispatch).
+        // subscription (see `media_hwnd_subscription` in dispatch).
         #[cfg(not(target_os = "windows"))]
-        player.init_mpris(None);
+        player.init_media_controls(None);
         player.restore_session();
         player.resume_playback();
         for item in &player.library.items {

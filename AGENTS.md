@@ -1,12 +1,12 @@
 # goosemusic
 
-YouTube-search music player with local playback and MPRIS, built with iced.
+YouTube-search music player with local playback and OS media controls, built with iced.
 
 ## Stack
 
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`)
 - **Audio**: rodio + symphonia; **pipeline**: yt-dlp (stream/download)
-- **MPRIS**: souvlaki (cross-platform: MPRIS/D-Bus on Linux, SMTC on Windows, Now Playing on macOS; pure-Rust zbus backend on Linux); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15
+- **Media controls**: souvlaki (cross-platform: MPRIS/D-Bus on Linux, SMTC on Windows, Now Playing on macOS; pure-Rust zbus backend on Linux); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15
 - **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default; on-disk cache in `data/lyrics_cache.rs`
 - **Logging**: tracing + tracing-subscriber
 
@@ -36,7 +36,7 @@ Run `cargo +nightly fmt && cargo clippy && cargo test` before handing work back,
 
 - No comments in code, unless logic is really non-obvious. Comments describe _current_ state, not what's changed.
 - **Single source of truth**: `MusicPlayer` (`app/state.rs`) holds all state; `view()` is pure over `&MusicPlayer` — no `Rc<RefCell<Backend>>`, no sync methods. `MusicPlayer` is NOT `Clone` (channels).
-- **Async**: `mpsc` channels for cross-thread results (backend, MPRIS); `Task`/`Subscription` for timer tick + raw events; shared state via `&mut self`.
+- **Async**: `mpsc` channels for cross-thread results (backend, media controls); `Task`/`Subscription` for timer tick + raw events; shared state via `&mut self`.
 - `notify()` / `notify_error()` for user-facing errors; `notify_tracks(verb, n, suffix)` for pluralized counts.
 - Persistence goes through the `JsonStore` trait (`data/mod.rs`): implementors declare only `FILE`.
 
@@ -66,7 +66,7 @@ src/
 ├── theme/layout.rs    # Spacing / size / geometry constants (re-exported from theme)
 ├── theme/catalog.rs   # widget::*::Catalog impls for AppTheme
 ├── providers/         # Provider types + dispatch (mod.rs) and per-provider backends (musicbrainz, soundcloud, youtube)
-├── mpris.rs           # OS media controls via souvlaki (MPRIS/SMTC/Now Playing)
+├── media_controls.rs  # OS media controls via souvlaki (MPRIS/SMTC/Now Playing)
 ├── types.rs           # Track, TrackSource, PlayQueue
 ├── lyrics.rs          # LyricsProvider enum + LyricsClient (provider registry)
 ├── icons.rs           # SVG embedding via include_bytes! + icon()
@@ -99,12 +99,12 @@ src/
   Cleaned via `cleanup()`; accessors `pressed_track()`/`hovered_track()`/`set_hovered*`.
 - **Selection / list access** (`app/update/selection.rs`): `selection`, `toggle_selection`, `clear_selection`, `view_tracks`, `get_track_at`, `track_count` — all keyed by a `TrackListKind`. `Recent` has no selection: `selection` returns `&[]` and mutations are no-ops.
 - **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailsDownloaded` (clears `thumbnail_cache`), `LyricsFetched(Option<Lyrics>, String)` (sets `lyrics`, caches to `lyrics_cache.json`, auto-cleared on track change), `NormalizationComputed(String, f32)` (caches a per-track gain in memory; read on subsequent plays), `CardPlaylistReady(usize, String, Vec<Track>)` (a dragged card became a playlist; fills the playlist at the given index with the browsed tracks). 250ms tick drains → `process_result`.
-- **MPRIS**: media-control thread → `MprisCommand` → `process_mpris_command` (tick); `MprisUpdate` flows main → thread.
+- **Media controls**: souvlaki thread → souvlaki's `MediaControlEvent` → `process_media_event` (tick); `MediaUpdate` flows main → thread.
 - **Nav history**: full `ViewData` in `NavEntry.data` (no separate `view`/`snapshot`); capped at 20. `push_nav_entry()` snapshots live `view_data`.
 
 ## Data Flow & Navigation
 
-- User → `Message` → `update()` → handler (spawns bg thread or mutates state). 250ms tick drains `result_rx` → `process_result`, `mpris_cmd_rx` → `process_mpris_command`; syncs audio, detects stream end → auto-next, sends MPRIS, updates progress. `view()` reads `&MusicPlayer`.
+- User → `Message` → `update()` → handler (spawns bg thread or mutates state). 250ms tick drains `result_rx` → `process_result`, `media_event_rx` → `process_media_event`; syncs audio, detects stream end → auto-next, sends media-control updates, updates progress. `view()` reads `&MusicPlayer`.
 - `nav_history: Vec<NavEntry>` + `nav_history_pos`; Back if `pos > 0`, Forward if `pos + 1 < len`.
 - `handle_navigate_to(data: ViewData)`: truncates at `pos+1`, installs target `ViewData` (no-op self-nav skipped via `ViewData::same_kind`), pushes, advances `pos`.
 - `push_nav_entry`: from `process_result` when search/radio results arrive. `SearchResultsAppend` syncs in place; "Load More" hidden once a page returns < `SEARCH_PAGE_SIZE`.

@@ -1,8 +1,8 @@
 [package]
 name = "goosemusic"
-version = "1.0.0"
+version = "1.0.2"
 edition = "2021"
-description = "A music player with YouTube search, local playback, and MPRIS integration"
+description = "A music player with YouTube search, local playback, and OS media controls"
 license = "MIT"
 repository = "https://github.com/GooseOb/music_plr"
 readme = "README.md"

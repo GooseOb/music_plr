@@ -10,7 +10,7 @@ use crate::{
         view_data::ViewData,
         MusicPlayer,
     },
-    mpris::{self, MprisCommand, MprisUpdate},
+    media_controls::{self, MediaControlEvent, MediaUpdate},
     types::Track,
 };
 
