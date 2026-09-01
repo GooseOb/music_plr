@@ -29,6 +29,11 @@ mod session;
 pub mod settings;
 mod tick;
 
+mod updates;
+pub use updates::{
+    cleanup_stale_update, spawn_update_download, spawn_version_check, UpdateStatus, APP_VERSION,
+};
+
 const DOUBLE_CLICK_MS: u128 = 300;
 
 /// Download thumbnails for the given `(id, url)` pairs. `id` names the cache

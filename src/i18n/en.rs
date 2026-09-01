@@ -207,6 +207,17 @@ pub const STRINGS: Strings = Strings {
     deps_deleting: "Deleting…",
     deps_deleted: "Deleted",
     deps_delete_failed: "Delete failed",
+
+    sec_updates: "Updates",
+    check_for_updates: "Check for updates",
+    checking_for_updates: "Checking for updates…",
+    up_to_date: "Up to date",
+    update_available: |v| format!("Version {v} is available"),
+    update_now: "Update now",
+    updating: "Updating…",
+    update_applied: |v| format!("Updated to {v}. Restarting…"),
+    package_managed: "Cannot auto-update (no write access to the application directory). If installed via a package manager, use it to update.",
+    update_failed: |e| format!("Update failed: {e}"),
 };
 
 fn en_tracks(n: usize) -> String {

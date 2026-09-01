@@ -79,6 +79,20 @@ pub enum BackendResult {
     EditTrackProviderResolved(ProviderId, Option<Track>),
     /// The Edit Track "Find" action failed to resolve `provider`.
     EditTrackProviderError(ProviderId, String),
+    /// A background version-check completed.
+    VersionChecked {
+        current: String,
+        latest: Option<String>,
+        release_url: String,
+        asset_url: Option<String>,
+        sha256: Option<String>,
+        package_managed: bool,
+        error: Option<String>,
+    },
+    /// Download progress for an in-flight self-update.
+    UpdateProgress(u64, u64),
+    /// The update download/extract/staged-apply finished.
+    UpdateComplete(Result<String, String>),
 }
 
 #[derive(Debug, Clone)]
@@ -215,6 +229,11 @@ pub enum Message {
     DepDismiss,
     DepSettingsInstall(DepKind),
     DepSettingsDelete(DepKind),
+
+    /// Trigger a background version check (GitHub releases API).
+    CheckForUpdates,
+    /// Download and stage the available update, then restart.
+    UpdateApp,
 }
 
 /// Editable text fields of a [`Track`](crate::types::Track) in the track

@@ -207,6 +207,17 @@ pub const STRINGS: Strings = Strings {
     deps_deleting: "Удаление…",
     deps_deleted: "Удалено",
     deps_delete_failed: "Не удалось удалить",
+
+    sec_updates: "Обновления",
+    check_for_updates: "Проверить обновления",
+    checking_for_updates: "Проверка обновлений…",
+    up_to_date: "Актуальная версия",
+    update_available: |v| format!("Доступна версия {v}"),
+    update_now: "Обновить сейчас",
+    updating: "Обновление…",
+    update_applied: |v| format!("Обновлено до {v}. Перезапуск…"),
+    package_managed: "Невозможно автоматическое обновление (нет прав на запись в каталог приложения). Если установлено через менеджер пакетов, используйте его для обновления.",
+    update_failed: |e| format!("Обновление не удалось: {e}"),
 };
 
 fn ru_tracks(n: usize) -> String {

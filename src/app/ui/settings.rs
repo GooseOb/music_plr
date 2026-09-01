@@ -50,6 +50,63 @@ fn section<'a>(
     .into()
 }
 
+fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let tr = &player.strings;
+    let status: Element<'_, Message, AppTheme> = match &player.update_status {
+        crate::app::update::UpdateStatus::Unchecked
+        | crate::app::update::UpdateStatus::Checking => {
+            text(tr.checking_for_updates).style(fg_secondary()).into()
+        }
+        crate::app::update::UpdateStatus::UpToDate => text(tr.up_to_date).style(fg_accent()).into(),
+        crate::app::update::UpdateStatus::Available { version, .. } => Column::with_children([
+            text((tr.update_available)(version))
+                .style(fg_accent())
+                .into(),
+            Button::new(text(tr.update_now))
+                .padding([theme::SPACING_XS, theme::SPACING_MD])
+                .on_press(Message::UpdateApp)
+                .into(),
+        ])
+        .spacing(theme::SPACING_SM)
+        .into(),
+        crate::app::update::UpdateStatus::Updating { progress } => {
+            let (downloaded, total) = *progress;
+            let pct = if total > 0 {
+                (downloaded * 100).checked_div(total).unwrap_or(0).min(100)
+            } else {
+                0
+            };
+            Column::with_children([
+                text(tr.updating).into(),
+                text(format!("{pct}%")).style(fg_secondary()).into(),
+            ])
+            .spacing(theme::SPACING_SM)
+            .into()
+        }
+        crate::app::update::UpdateStatus::UpdateApplied => {
+            text((tr.update_applied)(crate::app::update::APP_VERSION))
+                .style(fg_accent())
+                .into()
+        }
+        crate::app::update::UpdateStatus::Error(e) => {
+            text((tr.update_failed)(e)).style(fg_secondary()).into()
+        }
+        crate::app::update::UpdateStatus::PackageManaged => {
+            text(tr.package_managed).style(fg_secondary()).into()
+        }
+    };
+
+    Column::with_children([
+        Button::new(text(tr.check_for_updates))
+            .padding([theme::SPACING_XS, theme::SPACING_MD])
+            .on_press(Message::CheckForUpdates)
+            .into(),
+        status,
+    ])
+    .spacing(theme::SPACING_SM)
+    .into()
+}
+
 fn language_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let row = scope_tab_row(Language::ALL.iter().map(|&language| {
         (
@@ -145,6 +202,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
             player.strings.sec_dependencies,
             [dep_settings_section(player)],
         ),
+        section(player.strings.sec_updates, [updates_section(player)]),
         Column::with_children([
             section(player.strings.language_lbl, [language_section(player)]),
             section(player.strings.sec_appearance, [theme_section(player)]),

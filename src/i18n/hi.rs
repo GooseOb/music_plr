@@ -207,6 +207,17 @@ pub const STRINGS: Strings = Strings {
     deps_deleting: "हटाया जा रहा है…",
     deps_deleted: "हटाया गया",
     deps_delete_failed: "हटाने में विफल",
+
+    sec_updates: "अपडेट",
+    check_for_updates: "अपडेट की जाँच करें",
+    checking_for_updates: "अपडेट खोजा जा रहा है…",
+    up_to_date: "नवीनतम संस्करण",
+    update_available: |v| format!("संस्करण {v} उपलब्ध है"),
+    update_now: "अभी अपडेट करें",
+    updating: "अपडेट हो रहा है…",
+    update_applied: |v| format!("संस्करण {v} में अपडेटेड। पुनरारंभ हो रहा है…"),
+    package_managed: "ऐप्लिकेशन डायरेक्टरी में लिखने का अनुमति नहीं है। यदि पैकेज मैनेजर के माध्यम से स्थापित किया गया है, तो उसे उपयोग करें।",
+    update_failed: |e| format!("अपडेट विफल: {e}"),
 };
 
 fn hi_tracks(n: usize) -> String {

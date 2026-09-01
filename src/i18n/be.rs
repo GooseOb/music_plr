@@ -207,6 +207,17 @@ pub const STRINGS: Strings = Strings {
     deps_deleting: "Выдаленьне…",
     deps_deleted: "Выдалена",
     deps_delete_failed: "Не ўдалося выдаліць",
+
+    sec_updates: "Абнаўленні",
+    check_for_updates: "Праверыць абнаўленні",
+    checking_for_updates: "Праверка абнаўленняў…",
+    up_to_date: "Апошняя версія",
+    update_available: |v| format!("Даступная версія {v}"),
+    update_now: "Абнавіць цяпер",
+    updating: "Абнаўленне…",
+    update_applied: |v| format!("Абнавлена да {v}. Перазапуск…"),
+    package_managed: "Не можна аўтаматычна абнаўляць (нема прав на запіс у каталог аплікэнцыі). Калі ўсталюавана через кіраўнік пакетаў, выкарыстоўніце яго для абнаўлення.",
+    update_failed: |e| format!("Абнаўленне не паспякілася: {e}"),
 };
 
 fn be_tracks(n: usize) -> String {

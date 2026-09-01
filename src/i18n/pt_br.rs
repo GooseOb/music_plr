@@ -207,6 +207,17 @@ pub const STRINGS: Strings = Strings {
     deps_deleting: "Excluindo…",
     deps_deleted: "Excluídas",
     deps_delete_failed: "Falha ao excluir",
+
+    sec_updates: "Atualizações",
+    check_for_updates: "Verificar atualizações",
+    checking_for_updates: "Verificando atualizações…",
+    up_to_date: "Atualizado",
+    update_available: |v| format!("Versão {v} disponível"),
+    update_now: "Atualizar agora",
+    updating: "Atualizando…",
+    update_applied: |v| format!("Atualizado para {v}. Reiniciando…"),
+    package_managed: "Não é possível atualizar automaticamente (sem permissão de escrita no diretório do aplicativo). Se instalado via gerenciador de pacotes, use-o para atualizar.",
+    update_failed: |e| format!("Falha na atualização: {e}"),
 };
 
 fn pt_tracks(n: usize) -> String {

@@ -598,6 +598,14 @@ impl crate::app::MusicPlayer {
                 self.handle_dep_settings_delete(kind);
                 Task::none()
             }
+            Message::CheckForUpdates => {
+                self.check_for_updates();
+                Task::none()
+            }
+            Message::UpdateApp => {
+                self.start_update();
+                Task::none()
+            }
         }
     }
 

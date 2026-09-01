@@ -207,6 +207,17 @@ pub const STRINGS: Strings = Strings {
     deps_deleting: "削除中…",
     deps_deleted: "削除済み",
     deps_delete_failed: "削除に失敗",
+
+    sec_updates: "アップデート",
+    check_for_updates: "アップデートを確認",
+    checking_for_updates: "アップデートを確認中…",
+    up_to_date: "最新です",
+    update_available: |v| format!("バージョン {v} が利用可能です"),
+    update_now: "今すぐ更新",
+    updating: "更新中…",
+    update_applied: |v| format!("バージョン {v} に更新しました。再起動中…"),
+    package_managed: "自動更新できません（アプリケーションディレクトリへの書き込み権限がありません）。パッケージマネージャーでインストールされた場合は、それを使用して更新してください。",
+    update_failed: |e| format!("アップデートに失敗しました: {e}"),
 };
 
 fn ja_tracks(n: usize) -> String {

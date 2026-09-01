@@ -213,6 +213,17 @@ pub const STRINGS: Strings = Strings {
     deps_deleting: "Usuwanie…",
     deps_deleted: "Usunięte",
     deps_delete_failed: "Usuwanie nieudane",
+
+    sec_updates: "Aktualizacje",
+    check_for_updates: "Sprawdź aktualizacje",
+    checking_for_updates: "Sprawdzanie aktualizacji…",
+    up_to_date: "W najnowszej wersji",
+    update_available: |v| format!("Dostępna wersja {v}"),
+    update_now: "Aktualizuj teraz",
+    updating: "Aktualizacja…",
+    update_applied: |v| format!("Zaktualizowano do {v}. Uruchamianie…"),
+    package_managed: "Nie można automatycznie aktualizować (brak praw zapisu do katalogu aplikacji). Jeśli zainstalowano przez menedżera pakietów, użyj go do aktualizacji.",
+    update_failed: |e| format!("Aktualizacja nie powiodła się: {e}"),
 };
 
 fn pl_tracks(n: usize) -> String {

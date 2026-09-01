@@ -207,6 +207,17 @@ pub const STRINGS: Strings = Strings {
     deps_deleting: "删除中…",
     deps_deleted: "已删除",
     deps_delete_failed: "删除失败",
+
+    sec_updates: "更新",
+    check_for_updates: "检查更新",
+    checking_for_updates: "检查更新中…",
+    up_to_date: "已是最新",
+    update_available: |v| format!("版本 {v} 可用"),
+    update_now: "立即更新",
+    updating: "更新中…",
+    update_applied: |v| format!("已更新到 {v}。正在重启…"),
+    package_managed: "无法自动更新（没有对应用程序目录的写入权限）。如果通过包管理器安装，请使用它进行更新。",
+    update_failed: |e| format!("更新失败：{e}"),
 };
 
 fn zh_tracks(n: usize) -> String {

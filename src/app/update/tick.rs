@@ -453,6 +453,35 @@ impl MusicPlayer {
                     self.handle_import_paths(method, &paths)
                 }
             }
+            BackendResult::VersionChecked {
+                current,
+                latest,
+                release_url,
+                asset_url,
+                sha256,
+                package_managed,
+                error,
+            } => self.process_version_checked(
+                current,
+                latest,
+                release_url,
+                asset_url,
+                sha256,
+                package_managed,
+                error,
+            ),
+            BackendResult::UpdateProgress(downloaded, total) => {
+                if let crate::app::update::UpdateStatus::Updating { progress } =
+                    &mut self.update_status
+                {
+                    *progress = (downloaded, total);
+                }
+                Task::none()
+            }
+            BackendResult::UpdateComplete(result) => {
+                self.process_update_complete(result);
+                iced::Task::none()
+            }
         }
     }
 
@@ -582,6 +611,68 @@ impl MusicPlayer {
                 has_track: track.is_some(),
             };
             let _ = tx.send(update);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+    fn process_version_checked(
+        &mut self,
+        current: String,
+        latest: Option<String>,
+        release_url: String,
+        asset_url: Option<String>,
+        sha256: Option<String>,
+        package_managed: bool,
+        error: Option<String>,
+    ) -> Task<Message> {
+        let _ = current;
+
+        if package_managed {
+            self.update_status = crate::app::update::UpdateStatus::PackageManaged;
+            self.notify_error(self.strings.package_managed.to_string());
+            return Task::none();
+        }
+
+        if let Some(err) = error {
+            self.update_status = crate::app::update::UpdateStatus::Error(err.clone());
+            self.notify_error(err);
+            return Task::none();
+        }
+
+        if let Some(latest) = latest {
+            if let (Some(url), Some(sha)) = (asset_url, sha256) {
+                self.update_status = crate::app::update::UpdateStatus::Available {
+                    version: latest.clone(),
+                    release_url,
+                    asset_url: url,
+                    sha256: sha,
+                };
+                self.notify((self.strings.update_available)(&latest));
+            } else {
+                self.update_status = crate::app::update::UpdateStatus::Error(
+                    "New version found but no matching binary for this platform".to_string(),
+                );
+            }
+        } else {
+            self.update_status = crate::app::update::UpdateStatus::UpToDate;
+        }
+        Task::none()
+    }
+
+    fn process_update_complete(&mut self, result: Result<String, String>) {
+        match result {
+            Ok(version) => {
+                self.update_status = crate::app::update::UpdateStatus::UpdateApplied;
+                self.notify((self.strings.update_applied)(&version));
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    std::process::exit(0);
+                });
+            }
+            Err(e) => {
+                self.update_status = crate::app::update::UpdateStatus::Error(e.clone());
+                self.notify_error(e);
+            }
         }
     }
 }

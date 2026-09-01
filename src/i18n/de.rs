@@ -207,6 +207,17 @@ pub const STRINGS: Strings = Strings {
     deps_deleting: "Löschen…",
     deps_deleted: "Gelöscht",
     deps_delete_failed: "Löschen fehlgeschlagen",
+
+    sec_updates: "Updates",
+    check_for_updates: "Auf Updates prüfen",
+    checking_for_updates: "Suche nach Updates…",
+    up_to_date: "Auf dem neuesten Stand",
+    update_available: |v| format!("Version {v} verfügbar"),
+    update_now: "Jetzt aktualisieren",
+    updating: "Aktualisierung…",
+    update_applied: |v| format!("Auf {v} aktualisiert. Starte neu…"),
+    package_managed: "Kann nicht automatisch aktualisieren (kein Schreibrecht im Anwendungsverzeichnis). Wenn über einen Paketmanager installiert, nutzen Sie diesen für Updates.",
+    update_failed: |e| format!("Aktualisierung fehlgeschlagen: {e}"),
 };
 
 fn de_tracks(n: usize) -> String {

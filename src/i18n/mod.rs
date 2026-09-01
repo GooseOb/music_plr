@@ -271,4 +271,15 @@ pub struct Strings {
     pub deps_deleting: &'static str,
     pub deps_deleted: &'static str,
     pub deps_delete_failed: &'static str,
+
+    pub sec_updates: &'static str,
+    pub check_for_updates: &'static str,
+    pub checking_for_updates: &'static str,
+    pub up_to_date: &'static str,
+    pub update_available: fn(&str) -> String,
+    pub update_now: &'static str,
+    pub updating: &'static str,
+    pub update_applied: fn(&str) -> String,
+    pub package_managed: &'static str,
+    pub update_failed: fn(&str) -> String,
 }

@@ -207,6 +207,17 @@ pub const STRINGS: Strings = Strings {
     deps_deleting: "Suppression…",
     deps_deleted: "Supprimées",
     deps_delete_failed: "Échec de la suppression",
+
+    sec_updates: "Mises à jour",
+    check_for_updates: "Vérifier les mises à jour",
+    checking_for_updates: "Recherche de mises à jour…",
+    up_to_date: "À jour",
+    update_available: |v| format!("Version {v} disponible"),
+    update_now: "Mettre à jour",
+    updating: "Mise à jour…",
+    update_applied: |v| format!("Mis à jour vers {v}. Redémarrage…"),
+    package_managed: "Impossible de mettre à jour automatiquement (pas d'accès en écriture dans le répertoire de l'application). Si installé via un gestionnaire de paquets, utilisez-le pour mettre à jour.",
+    update_failed: |e| format!("Échec de la mise à jour : {e}"),
 };
 
 fn fr_tracks(n: usize) -> String {

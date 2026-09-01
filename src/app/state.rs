@@ -150,6 +150,8 @@ pub struct MusicPlayer {
 
     pub bounds: CaptureBounds,
     pub window_size: iced::Size,
+
+    pub update_status: crate::app::update::UpdateStatus,
 }
 
 impl Default for MusicPlayer {
@@ -250,6 +252,7 @@ impl MusicPlayer {
             dep_dialog: (!missing_deps.is_empty())
                 .then(|| DependencyDialog::new(missing_deps, found_deps)),
             dep_ops: std::collections::HashMap::new(),
+            update_status: crate::app::update::UpdateStatus::default(),
         };
 
         // Linux and macOS need no window handle, so start immediately. Windows
@@ -264,6 +267,8 @@ impl MusicPlayer {
                 player.thumbnail_index.ensure(&item.id, &item.thumbnail);
             }
         }
+        crate::app::update::cleanup_stale_update();
+        player.check_for_updates();
         player
     }
 

@@ -416,7 +416,7 @@ fn install_ytmusicapi() -> Result<()> {
 
 /// Compact, dependency-free SHA-256 (used to verify the yt-dlp download).
 #[allow(clippy::many_single_char_names)]
-fn sha256(data: &[u8]) -> String {
+pub(crate) fn sha256(data: &[u8]) -> String {
     #[allow(clippy::unreadable_literal)]
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
