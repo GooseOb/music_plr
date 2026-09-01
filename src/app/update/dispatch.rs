@@ -366,6 +366,10 @@ impl crate::app::MusicPlayer {
                 self.lyrics = None;
                 self.handle_navigate_to(data)
             }
+            Message::SidebarSearch => {
+                self.lyrics = None;
+                self.handle_sidebar_search()
+            }
             Message::NavigateBack => {
                 if self.lyrics.is_some() {
                     self.lyrics = None;

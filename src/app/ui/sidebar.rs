@@ -402,7 +402,15 @@ fn sidebar_nav_item<'a>(
     player: &'a MusicPlayer,
     count: Option<usize>,
 ) -> Element<'a, Message, AppTheme> {
-    let is_active = player.view_data().same_kind(&target);
+    let is_search_item = matches!(target.kind, ViewKind::Search { .. });
+    // The Search item is active for any Search view (any query), not just the
+    // blank landing view; it restores the last search instead of navigating
+    // to that blank view, so `same_kind` doesn't apply.
+    let is_active = if is_search_item {
+        matches!(player.view_data().kind, ViewKind::Search(_))
+    } else {
+        player.view_data().same_kind(&target)
+    };
     let icon_name: &[u8] = match target.kind {
         ViewKind::Search { .. } => icons::SEARCH_ICON,
         ViewKind::Downloads => icons::DOWNLOAD_ICON,
@@ -420,8 +428,14 @@ fn sidebar_nav_item<'a>(
         children.push(iced::widget::right(text(count).style(fg_secondary())).into());
     }
 
+    let on_press = if is_search_item {
+        Message::SidebarSearch
+    } else {
+        Message::NavigateTo(target)
+    };
+
     sidebar_button(Row::with_children(children))
         .style(button_style_panel_item(is_active))
-        .on_press(Message::NavigateTo(target))
+        .on_press(on_press)
         .into()
 }

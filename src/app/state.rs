@@ -56,6 +56,10 @@ pub struct MusicPlayer {
     /// The active search provider (`YouTube` / `SoundCloud` / …). The scope list is
     /// filtered to this provider's supported scopes. Global UI state.
     pub search_provider: ProviderId,
+    /// Snapshot of the most recent completed search view.
+    /// The sidebar "Search" item restores this instead of opening
+    /// a blank search; `None` until the first search completes this session.
+    pub last_search_view: Option<ViewData>,
     /// Whether the search-history dropdown is open (global UI state).
     pub show_search_history: bool,
     /// Filtered history list for the dropdown (derived from
@@ -186,6 +190,7 @@ impl MusicPlayer {
                     .find(|p| p.capabilities().search)
                     .unwrap_or(ProviderId::SoundCloud)
             },
+            last_search_view: None,
             show_search_history: false,
             last_filtered_history: Vec::new(),
             queue: PlayQueue::new(),

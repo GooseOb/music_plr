@@ -247,6 +247,8 @@ impl MusicPlayer {
                 s.exhausted = s.query.trim().is_empty() || count < crate::theme::SEARCH_PAGE_SIZE;
                 s.tab = tab;
                 self.install_results(idx, tracks);
+                // Snapshot the completed search for the sidebar "Search" item.
+                self.last_search_view = Some(self.nav_history[idx].clone());
             }
         }
     }
@@ -304,9 +306,16 @@ impl MusicPlayer {
                         s.append_in_flight = false;
                     }
                     slot.request_id = 0;
+                    if let Some(last_search) = &mut self.last_search_view {
+                        if rid == last_search.request_id {
+                            self.last_search_view = Some(slot.clone());
+                        }
+                    }
                     self.finalize_view(idx);
+                    super::operation::CaptureBounds::new().into()
+                } else {
+                    Task::none()
                 }
-                super::operation::CaptureBounds::new().into()
             }
             BackendResult::BrowseResults(rid, tracks, meta) => {
                 // Apply to the slot that issued the browse, matched by request id

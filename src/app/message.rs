@@ -176,6 +176,7 @@ pub enum Message {
     CopyLyrics,
 
     NavigateTo(ViewData),
+    SidebarSearch,
     NavigateBack,
     NavigateForward,
 

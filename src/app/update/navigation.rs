@@ -161,6 +161,40 @@ mod tests {
     }
 
     #[test]
+    fn sidebar_search_restores_last_search_view() {
+        let mut p = player();
+        let mut last = ViewData::new_search("foo".into(), ProviderId::YouTube, SearchScope::Songs);
+        last.set_tracks(vec![crate::types::Track::from_provider(
+            ProviderId::YouTube,
+            "id1".into(),
+            "https://example.com".into(),
+            "Song",
+            "Artist",
+            180,
+            "",
+            None,
+            None,
+        )]);
+        p.last_search_view = Some(last.clone());
+        let _ = p.handle_navigate_to(ViewData::new_playlist(3, "List".into()));
+
+        // Sidebar Search restores the last search view as a fresh history
+        // slot, syncs the search bar, and keeps Back working.
+        let _ = p.handle_sidebar_search();
+        assert!(matches!(p.view_data().kind, ViewKind::Search { .. }));
+        assert_eq!(p.view_data().tracks().len(), 1);
+        assert_eq!(p.search_query, "foo");
+
+        // Clicking again while the search view is active is a no-op.
+        let _ = p.handle_sidebar_search();
+        assert_eq!(p.nav_history.len(), 3);
+
+        // Back returns to the playlist that was active before.
+        let _ = p.handle_navigate_back();
+        assert!(matches!(p.view_data().kind, ViewKind::Playlist(_)));
+    }
+
+    #[test]
     fn stamped_ids_resolve_to_their_own_slot() {
         let mut p = player();
         let first = p.request_ids.next();

@@ -26,6 +26,7 @@ impl MusicPlayer {
             matches!(&self.view_data().kind, ViewKind::Playlist(p) if p.index == index);
         if index < self.playlists.playlists.len() && !already_selected {
             self.playlist_picker = None;
+            self.lyrics = None;
             self.clear_selection();
             self.drag.cleanup();
 
