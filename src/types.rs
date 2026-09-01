@@ -192,7 +192,7 @@ impl Track {
     /// `source` provider is always present in `providers`. Provider-specific
     /// display metadata (`duration`/`thumbnail`/`album`) lives on the
     /// `ProviderTrack`.
-    #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
+    #[allow(clippy::too_many_arguments)]
     pub fn from_provider(
         provider: ProviderId,
         id: String,

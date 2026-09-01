@@ -9,26 +9,10 @@ use super::{
 use crate::{
     app::ViewKind,
     data::{cache::StreamCache, JsonStore},
-    providers::ProviderId,
 };
 
 /// How long a toast notification stays visible before auto-dismissing.
 pub(crate) const NOTIFICATION_DURATION: Duration = Duration::from_secs(2);
-
-/// Split a cache key of the form `"{provider:?}:{id}"` back into its parts.
-fn parse_cache_key(key: &str) -> (ProviderId, String) {
-    if let Some((p, id)) = key.split_once(':') {
-        let provider = match p {
-            "YouTube" => ProviderId::YouTube,
-            "SoundCloud" => ProviderId::SoundCloud,
-            "MusicBrainz" => ProviderId::MusicBrainz,
-            _ => ProviderId::Local,
-        };
-        (provider, id.to_string())
-    } else {
-        (ProviderId::YouTube, key.to_string())
-    }
-}
 
 impl MusicPlayer {
     /// Start OS media controls (MPRIS/SMTC/Now Playing via souvlaki). `hwnd` is
@@ -82,16 +66,15 @@ impl MusicPlayer {
             // Register the cache as soon as the stream pipeline
             // finishes writing the file (`cache_ready`)
             if s.cache_ready {
-                let (provider, id) = parse_cache_key(&pending);
-                if self.stream_cache.insert(provider, &id) {
-                    debug!("Registered cached track: {}", pending);
+                if self.stream_cache.insert(pending.provider_id, &pending.id) {
+                    debug!("Registered cached track: {:?}:{:?}", pending.provider_id, pending.id);
                 }
                 self.pending_cache_id = None;
                 // The cache file is now complete: analyze it for volume
                 // normalization if a fresh stream was awaiting this.
-                if self.pending_normalization_id.as_deref() == Some(pending.as_str()) {
-                    let path = StreamCache::path_for(provider, &id);
-                    self.request_normalization_analysis(&pending, path);
+                if self.pending_normalization_id.as_deref() == Some(pending.id.as_str()) {
+                    let path = StreamCache::path_for(pending.provider_id, &pending.id);
+                    self.request_normalization_analysis(&pending.id, path);
                     self.pending_normalization_id = None;
                 }
             }

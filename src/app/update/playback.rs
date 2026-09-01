@@ -296,7 +296,10 @@ impl MusicPlayer {
                         analysis_path = Some(path);
                     } else {
                         let url = track.provider_url(provider).unwrap_or_default().to_string();
-                        self.pending_cache_id = Some(format!("{provider:?}:{id}"));
+                        self.pending_cache_id = Some(crate::app::PendingCache {
+                            provider_id: provider,
+                            id: id.clone(),
+                        });
                         let cache_path = StreamCache::path_for(provider, &id);
                         debug!("Streaming ({}): {}", provider.label(), cache_path.display());
                         if provider.uses_ytdlp() {

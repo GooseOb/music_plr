@@ -43,6 +43,12 @@ pub struct Toast {
     pub is_error: bool,
 }
 
+#[derive(Clone, Debug)]
+pub struct PendingCache {
+    pub provider_id: ProviderId,
+    pub id: String,
+}
+
 #[allow(clippy::struct_excessive_bools)]
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
@@ -103,7 +109,7 @@ pub struct MusicPlayer {
 
     pub search_history: SearchHistory,
     pub stream_cache: StreamCache,
-    pub pending_cache_id: Option<String>,
+    pub pending_cache_id: Option<PendingCache>,
     /// Per-track volume-normalization gains, computed in the background and
     /// kept in memory (not persisted) so subsequent plays are normalized.
     pub normalization_cache: std::collections::HashMap<String, f32>,
