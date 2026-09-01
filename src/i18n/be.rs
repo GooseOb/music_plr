@@ -208,15 +208,15 @@ pub const STRINGS: Strings = Strings {
     deps_deleted: "Выдалена",
     deps_delete_failed: "Не ўдалося выдаліць",
 
-    sec_updates: "Абнаўленні",
-    check_for_updates: "Праверыць абнаўленні",
-    checking_for_updates: "Праверка абнаўленняў…",
-    up_to_date: "Апошняя версія",
-    update_available: |v| format!("Даступная версія {v}"),
+    sec_updates: "Абнаўленьні",
+    check_for_updates: "Праверыць абнаўленьні",
+    checking_for_updates: "Праверка абнаўленьняў…",
+    up_to_date: "Апошняя вэрсія",
+    update_available: |v| format!("Даступная вэрсія {v}"),
     update_now: "Абнавіць цяпер",
-    updating: "Абнаўленне…",
-    update_applied: |v| format!("Абнавлена да {v}. Перазапуск…"),
-    package_managed: "Не можна аўтаматычна абнаўляць (нема прав на запіс у каталог аплікэнцыі). Калі ўсталюавана через кіраўнік пакетаў, выкарыстоўніце яго для абнаўлення.",
+    updating: "Абнаўленьне…",
+    update_applied: |v| format!("Абноўлена да {v}. Перазапуск…"),
+    package_managed: "Ня можна аўтаматычна абнаўляць (няма праў на запіс). Калі ўсталявана праз мэнэджэр пакетаў, выкарыстайце яго для абнаўленьня.",
     update_failed: |e| format!("Абнаўленне не паспякілася: {e}"),
 };
 
