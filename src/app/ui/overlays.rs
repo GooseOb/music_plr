@@ -14,9 +14,9 @@ use super::{
         dep_install_status, disabled_text_input_row, scope_tab_row, text_input_row, thumbnail,
     },
     styles::{
-        bg_overlay, bg_popup, button_style_danger, button_style_popup_item, button_style_primary,
-        context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted, icon_fg_secondary,
-        scroll_padding,
+        bg_overlay, bg_popup, bg_toast, button_style_danger, button_style_popup_item,
+        button_style_primary, context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted,
+        icon_fg_secondary, scroll_padding,
     },
     theme, ContextMenuState, Message, MusicPlayer,
 };
@@ -527,6 +527,22 @@ pub fn pos_absolute(
         Space::new().height(pos_y),
         Row::with_children([Space::new().width(pos_x).into(), content])
     ]
+}
+
+pub(super) fn view_notification(toast: &crate::app::Toast) -> Element<'_, Message, AppTheme> {
+    pos_absolute(
+        Container::new(opaque(
+            Container::new(text(toast.message.as_ref()).size(theme::TEXT_SIZE_LG))
+                .padding([theme::SPACING_MD, theme::SPACING_LG])
+                .style(bg_toast(toast.is_error))
+                .max_width(420.0),
+        ))
+        .padding(theme::SPACING_2XL)
+        .into(),
+        Length::Fill,
+        Length::Fill,
+    )
+    .into()
 }
 
 pub(super) fn view_playlist_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {

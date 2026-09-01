@@ -36,6 +36,13 @@ use crate::{
     types::{PlayQueue, Track},
 };
 
+#[derive(Clone)]
+pub struct Toast {
+    pub message: std::borrow::Cow<'static, str>,
+    pub since: std::time::Instant,
+    pub is_error: bool,
+}
+
 #[allow(clippy::struct_excessive_bools)]
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
@@ -80,7 +87,7 @@ pub struct MusicPlayer {
 
     pub download_registry: DownloadRegistry,
 
-    pub notification: Option<std::borrow::Cow<'static, str>>,
+    pub notification: Option<Toast>,
 
     pub artist_error_dedup: Option<(u64, ProviderId)>,
 

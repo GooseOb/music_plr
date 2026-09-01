@@ -67,11 +67,19 @@ impl MusicPlayer {
     }
 
     pub fn notify(&mut self, msg: impl Into<std::borrow::Cow<'static, str>>) {
-        self.notification = Some(msg.into());
+        self.notification = Some(crate::app::Toast {
+            message: msg.into(),
+            since: std::time::Instant::now(),
+            is_error: false,
+        });
     }
 
     pub fn notify_error(&mut self, msg: String) {
         warn!("Backend error: {}", msg);
-        self.notification = Some(msg.into());
+        self.notification = Some(crate::app::Toast {
+            message: msg.into(),
+            since: std::time::Instant::now(),
+            is_error: true,
+        });
     }
 }

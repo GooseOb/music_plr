@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use tracing::debug;
 
 use super::{
@@ -9,6 +11,9 @@ use crate::{
     data::{cache::StreamCache, JsonStore},
     providers::ProviderId,
 };
+
+/// How long a toast notification stays visible before auto-dismissing.
+pub(crate) const NOTIFICATION_DURATION: Duration = Duration::from_secs(2);
 
 /// Split a cache key of the form `"{provider:?}:{id}"` back into its parts.
 fn parse_cache_key(key: &str) -> (ProviderId, String) {
@@ -48,6 +53,13 @@ impl MusicPlayer {
 
         while let Ok(cmd) = self.mpris_cmd_rx.try_recv() {
             self.process_mpris_command(cmd);
+        }
+
+        // Auto-dismiss the toast after its display window has elapsed.
+        if let Some(toast) = &self.notification {
+            if toast.since.elapsed() >= NOTIFICATION_DURATION {
+                self.notification = None;
+            }
         }
 
         // Reconcile currently visible thumbnails: queue any missing ones for

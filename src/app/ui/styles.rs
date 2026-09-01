@@ -65,6 +65,25 @@ pub fn bg_search_hist() -> impl Fn(&AppTheme) -> container::Style + 'static {
     }
 }
 
+pub fn bg_toast(is_error: bool) -> impl Fn(&AppTheme) -> container::Style + 'static {
+    move |theme| {
+        let border_color = if is_error {
+            theme.palette.danger
+        } else {
+            theme.palette.fg_accent
+        };
+        container::Style {
+            background: Some(theme.palette.bg_secondary.into()),
+            border: border::Border {
+                color: border_color,
+                width: 2.0,
+                radius: border::Radius::from(theme::RADIUS_MD),
+            },
+            ..Default::default()
+        }
+    }
+}
+
 pub fn fg_secondary() -> impl Fn(&AppTheme) -> text::Style + 'static {
     |theme| text::Style {
         color: theme.palette.fg_secondary.into(),

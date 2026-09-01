@@ -15,7 +15,7 @@ use super::{
 use crate::{
     app::{
         interaction::{TrackListKind, TrackPos},
-        ui::styles::{fg_accent, fg_tab, icon_tab},
+        ui::styles::{fg_accent, icon_tab},
         ViewKind,
     },
     icons,
@@ -80,7 +80,7 @@ fn queue_tab<'a>(
             icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_SM)
                 .style(icon_tab(active))
                 .into(),
-            text(label).style(fg_tab(active)).into(),
+            text(label).into(),
         ])
         .spacing(theme::SPACING_SM)
         .padding([theme::SPACING_SM, theme::SPACING_MD])

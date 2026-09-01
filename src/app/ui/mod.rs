@@ -68,6 +68,9 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             stack = stack.push(search::view_search_history(player, input_rect));
         }
     }
+    if let Some(notification) = &player.notification {
+        stack = stack.push(overlays::view_notification(notification));
+    }
 
     let cursor = player
         .drag

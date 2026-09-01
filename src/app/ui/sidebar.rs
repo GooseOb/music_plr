@@ -287,7 +287,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             icons::icon(icons::BOOKMARK_ICON, theme::ICON_SIZE_LG)
                 .style(icon_fg_muted())
                 .into(),
-            text(player.strings.library).style(fg_secondary()).into(),
+            text(player.strings.library).into(),
             iced::widget::right(
                 icons::icon(
                     if player.library_expanded {
@@ -348,34 +348,6 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .padding([theme::SPACING_XS, theme::SPACING_XS])
     .into();
 
-    let mut sidebar_content = vec![
-        nav_buttons.into(),
-        widget::rule::horizontal(1).into(),
-        Column::with_children(nav_items)
-            .spacing(theme::SPACING_XS)
-            .into(),
-        widget::rule::horizontal(1).into(),
-        create_row.into(),
-        scrollable(Column::with_children(playlist_items).spacing(theme::SPACING_XS))
-            .id(iced::widget::Id::new("sidebar_playlist_list"))
-            .height(Length::FillPortion(2))
-            .into(),
-        import_btn,
-        widget::rule::horizontal(1).into(),
-        library_header,
-        library_section,
-        widget::rule::horizontal(1).into(),
-    ];
-
-    if let Some(msg) = &player.notification {
-        sidebar_content.push(
-            Container::new(text(msg.as_ref()).center())
-                .width(Length::Fill)
-                .padding([theme::SPACING_XS, theme::SPACING_XL])
-                .into(),
-        );
-    }
-
     let stack = Stack::with_children([
         Container::new(icons::icon(icons::LOGO_ICON, 200.0).style(icon_accent_dimmed()))
             .height(Length::Fill)
@@ -384,10 +356,27 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             .align_y(alignment::Vertical::Center)
             .padding(theme::SPACING_MD)
             .into(),
-        Column::with_children(sidebar_content)
-            .spacing(theme::SPACING_XS)
-            .padding([theme::SPACING_SM, theme::SPACING_XS])
-            .into(),
+        Column::with_children([
+            nav_buttons.into(),
+            widget::rule::horizontal(1).into(),
+            Column::with_children(nav_items)
+                .spacing(theme::SPACING_XS)
+                .into(),
+            widget::rule::horizontal(1).into(),
+            create_row.into(),
+            scrollable(Column::with_children(playlist_items).spacing(theme::SPACING_XS))
+                .id(iced::widget::Id::new("sidebar_playlist_list"))
+                .height(Length::FillPortion(2))
+                .into(),
+            import_btn,
+            widget::rule::horizontal(1).into(),
+            library_header,
+            library_section,
+            widget::rule::horizontal(1).into(),
+        ])
+        .spacing(theme::SPACING_XS)
+        .padding([theme::SPACING_SM, theme::SPACING_XS])
+        .into(),
     ]);
 
     Container::new(stack)
@@ -422,10 +411,10 @@ fn sidebar_nav_item<'a>(
         icons::icon(icon_name, theme::ICON_SIZE_MD)
             .style(icon_tab(is_active))
             .into(),
-        text(name).style(fg_tab(is_active)).into(),
+        text(name).into(),
     ];
     if let Some(count) = count {
-        children.push(iced::widget::right(text(count).style(fg_secondary())).into());
+        children.push(iced::widget::right(text(count)).into());
     }
 
     let on_press = if is_search_item {

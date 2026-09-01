@@ -23,5 +23,5 @@ pub use interaction::{ContextMenuState, TrackListKind, TrackListSearch};
 pub use lyrics_state::{LyricsState, LyricsViewMode};
 pub use message::{BackendResult, EditTrackField, Message};
 pub use playlist_picker::PlaylistPicker;
-pub use state::MusicPlayer;
+pub use state::{MusicPlayer, Toast};
 pub use view_data::{ViewData, ViewKind};
