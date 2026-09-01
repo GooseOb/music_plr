@@ -212,7 +212,7 @@ pub const STRINGS: Strings = Strings {
     check_for_updates: "检查更新",
     checking_for_updates: "检查更新中…",
     up_to_date: "已是最新",
-    update_available: |v| format!("版本 {v} 可用"),
+    update_available: |v| format!("版本 {v} 可用。前往设置更新应用。"),
     update_now: "立即更新",
     updating: "更新中…",
     update_applied: |v| format!("已更新到 {v}。正在重启…"),

@@ -57,7 +57,7 @@ impl MusicPlayer {
 
         // Auto-dismiss the toast after its display window has elapsed.
         if let Some(toast) = &self.notification {
-            if toast.since.elapsed() >= NOTIFICATION_DURATION {
+            if std::time::Instant::now() >= toast.until {
                 self.notification = None;
             }
         }
@@ -647,7 +647,10 @@ impl MusicPlayer {
                     asset_url: url,
                     sha256: sha,
                 };
-                self.notify((self.strings.update_available)(&latest));
+                self.notify_for(
+                    (self.strings.update_available)(&latest),
+                    std::time::Duration::from_secs(6),
+                );
             } else {
                 self.update_status = crate::app::update::UpdateStatus::Error(
                     "New version found but no matching binary for this platform".to_string(),

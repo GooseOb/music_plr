@@ -212,7 +212,7 @@ pub const STRINGS: Strings = Strings {
     check_for_updates: "Auf Updates prüfen",
     checking_for_updates: "Suche nach Updates…",
     up_to_date: "Auf dem neuesten Stand",
-    update_available: |v| format!("Version {v} verfügbar"),
+    update_available: |v| format!("Version {v} verfügbar. Gehen Sie zu den Einstellungen, um zu aktualisieren."),
     update_now: "Jetzt aktualisieren",
     updating: "Aktualisierung…",
     update_applied: |v| format!("Auf {v} aktualisiert. Starte neu…"),

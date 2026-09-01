@@ -39,7 +39,7 @@ use crate::{
 #[derive(Clone)]
 pub struct Toast {
     pub message: std::borrow::Cow<'static, str>,
-    pub since: std::time::Instant,
+    pub until: std::time::Instant,
     pub is_error: bool,
 }
 

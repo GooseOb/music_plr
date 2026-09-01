@@ -212,7 +212,7 @@ pub const STRINGS: Strings = Strings {
     check_for_updates: "Проверить обновления",
     checking_for_updates: "Проверка обновлений…",
     up_to_date: "Актуальная версия",
-    update_available: |v| format!("Доступна версия {v}"),
+    update_available: |v| format!("Доступна версия {v}. Перейдите в Настройки для обновления."),
     update_now: "Обновить сейчас",
     updating: "Обновление…",
     update_applied: |v| format!("Обновлено до {v}. Перезапуск…"),

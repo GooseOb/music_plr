@@ -212,12 +212,12 @@ pub const STRINGS: Strings = Strings {
     check_for_updates: "Праверыць абнаўленьні",
     checking_for_updates: "Праверка абнаўленьняў…",
     up_to_date: "Апошняя вэрсія",
-    update_available: |v| format!("Даступная вэрсія {v}"),
+    update_available: |v| format!("Даступная вэрсія {v}. Перайдзіце ў налады для абнаўленьня."),
     update_now: "Абнавіць цяпер",
     updating: "Абнаўленьне…",
     update_applied: |v| format!("Абноўлена да {v}. Перазапуск…"),
     package_managed: "Ня можна аўтаматычна абнаўляць (няма праў на запіс). Калі ўсталявана праз мэнэджэр пакетаў, выкарыстайце яго для абнаўленьня.",
-    update_failed: |e| format!("Абнаўленне не паспякілася: {e}"),
+    update_failed: |e| format!("Абнаўленне не прайшло: {e}"),
 };
 
 fn be_tracks(n: usize) -> String {
