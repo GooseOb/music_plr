@@ -52,8 +52,5 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Generate icons
-        run: bash scripts/generate-icons.sh
-
       - name: Check (warm cache)
         run: cargo check --locked --target ${{ matrix.target }}

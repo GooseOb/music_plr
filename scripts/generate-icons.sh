@@ -9,44 +9,51 @@ SVG="icons/logo.svg"
 WIN_DIR="windows"
 MAC_DIR="macos"
 
-command -v convert >/dev/null 2>&1 || command -v magick >/dev/null 2>&1 || {
-	echo "error: ImageMagick is required (install imagemagick)" >&2
-	exit 1
-}
+HAS_IMAGEMAGICK=false
+if command -v convert >/dev/null 2>&1 || command -v magick >/dev/null 2>&1; then
+	HAS_IMAGEMAGICK=true
+fi
 
-# Use 'convert' if available, otherwise 'magick' (ImageMagick 7)
-convert() { command convert "$@" 2>/dev/null || command magick "$@"; }
+if $HAS_IMAGEMAGICK; then
+	# Prefer 'magick' (ImageMagick 7); fall back to 'convert' (ImageMagick 6).
+	# On Windows 'convert' is an NTFS utility, so try magick first.
+	convert() { command magick "$@" 2>/dev/null || command convert "$@"; }
+fi
 
 mkdir -p "$WIN_DIR" "$MAC_DIR" "icons"
 
 # ── Windows .ico ──────────────────────────────────────────────
-echo "Generating Windows .ico ..."
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+if $HAS_IMAGEMAGICK; then
+	echo "Generating Windows .ico ..."
+	TMP=$(mktemp -d)
+	trap 'rm -rf "$TMP"' EXIT
 
-for size in 16 32 48 64 128 256; do
-	convert -background none -resize "${size}x${size}" "$SVG" "$TMP/$size.png"
-done
+	for size in 16 32 48 64 128 256; do
+		convert -background none "$SVG" -resize "${size}x${size}" "$TMP/$size.png"
+	done
 
-convert "$TMP/16.png" "$TMP/32.png" "$TMP/48.png" \
-	"$TMP/64.png" "$TMP/128.png" "$TMP/256.png" \
-	"$WIN_DIR/app.ico"
-echo "  -> $WIN_DIR/app.ico"
+	convert "$TMP/16.png" "$TMP/32.png" "$TMP/48.png" \
+		"$TMP/64.png" "$TMP/128.png" "$TMP/256.png" \
+		"$WIN_DIR/app.ico"
+	echo "  -> $WIN_DIR/app.ico"
+else
+	echo "Skipping Windows .ico (ImageMagick not found)"
+fi
 
 # ── macOS .icns ──────────────────────────────────────────────
-if command -v png2icns >/dev/null 2>&1; then
+if $HAS_IMAGEMAGICK && command -v png2icns >/dev/null 2>&1; then
 	echo "Generating macOS .icns ..."
 
 	# Icon name must match CFBundleIconFile without the .icns extension
 	ICON_NAME="goosemusic"
 	# Required sizes for a full-resolution .icns
 	for size in 16 32 128 256 512; do
-		convert -background none -resize "${size}x${size}" "$SVG" \
+		convert -background none "$SVG" -resize "${size}x${size}" \
 			"$MAC_DIR/${ICON_NAME}${size}x${size}.png"
 	done
 
 	# 512@2x (1024px) for Retina
-	convert -background none -resize 1024x1024 "$SVG" \
+	convert -background none "$SVG" -resize 1024x1024 \
 		"$MAC_DIR/${ICON_NAME}512x512@2x.png"
 
 	png2icns "$MAC_DIR/$ICON_NAME.icns" \

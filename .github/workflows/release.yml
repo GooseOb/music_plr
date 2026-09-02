@@ -69,6 +69,15 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
+      - name: Install icon generation dependencies
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            choco install imagemagick.tool -y
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            brew install imagemagick icnsutils
+          fi
+        shell: bash
+
       - name: Generate icons
         run: bash scripts/generate-icons.sh
 
@@ -90,10 +99,6 @@ jobs:
           echo "ARCHIVE=goosemusic-${{ matrix.target }}.tar.gz" >> "$GITHUB_ENV"
 
       # ── macOS: wrap in .app bundle ────────────────────────────────────
-      - name: Install icnsutils
-        if: runner.os == 'macOS'
-        run: brew install icnsutils
-
       - name: Build .app bundle (macOS)
         if: runner.os == 'macOS'
         run: |
