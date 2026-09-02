@@ -404,25 +404,17 @@ fn download_and_staged_apply(
 /// Write a tiny platform-specific updater script and spawn it detached.
 /// The updater waits for the old process (pid) to exit, then moves the
 /// staged binary over the real one and relaunches.
-#[allow(clippy::too_many_lines)]
 fn spawn_updater(pid: u32, old: &str, new: &str) -> std::result::Result<(), std::io::Error> {
     #[cfg(unix)]
     {
-        let script = format!(
-            "#!/bin/sh\n\
-             while kill -0 {pid} 2>/dev/null; do sleep 0.5; done\n\
-             mv {new:?} {old:?}\n\
-             chmod +x {old:?}\n\
-             exec {old:?}\n"
-        );
-        let exe = std::env::current_exe()?;
-        let exe_dir = exe.parent().unwrap_or_else(|| std::path::Path::new("."));
-        let helper = exe_dir.join("goosemusic-updater.sh");
+        let script = include_str!("./updater.sh")
+            .replace("{PID}", &pid.to_string())
+            .replace("{NEW}", &format!("{new:?}"))
+            .replace("{OLD}", &format!("{old:?}"));
+        let helper = std::env::temp_dir().join(format!("goosemusic-updater-{pid}.sh"));
         std::fs::write(&helper, &script)?;
-        if cfg!(unix) {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&helper, PermissionsExt::from_mode(0o755))?;
-        }
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&helper, PermissionsExt::from_mode(0o755))?;
         Command::new(&helper)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -432,15 +424,11 @@ fn spawn_updater(pid: u32, old: &str, new: &str) -> std::result::Result<(), std:
 
     #[cfg(windows)]
     {
-        let script = format!(
-            "@echo off\n\
-             :wait\n\
-             tasklist /FI \"PID eq {pid}\" 2>NUL | findstr {pid} >NUL\n\
-             if %errorlevel% == 0 ( timeout /t 1 /nobreak >NUL ^& goto wait )\n\
-             move /Y \"{new}\" \"{old}\"\n\
-             start \"\" \"{old}\"\n"
-        );
-        let helper = std::env::temp_dir().join(format!("goosemusic-updater-{}.bat", pid));
+        let script = include_str!("./updater.bat")
+            .replace("{PID}", &pid.to_string())
+            .replace("{NEW}", new)
+            .replace("{OLD}", old);
+        let helper = std::env::temp_dir().join(format!("goosemusic-updater-{pid}.bat"));
         std::fs::write(&helper, &script)?;
         Command::new(&helper)
             .stdin(Stdio::null())
@@ -457,11 +445,7 @@ fn spawn_updater(pid: u32, old: &str, new: &str) -> std::result::Result<(), std:
 pub fn cleanup_stale_update() {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
-            for name in [
-                "goosemusic.updating",
-                "goosemusic.updating.exe",
-                "goosemusic-updater.sh",
-            ] {
+            for name in ["goosemusic.updating", "goosemusic.updating.exe"] {
                 let _ = std::fs::remove_file(dir.join(name));
             }
         }
