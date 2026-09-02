@@ -13,7 +13,6 @@ on:
 
 jobs:
   update-cache:
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     name: Cache (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
