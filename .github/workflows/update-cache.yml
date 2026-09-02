@@ -55,4 +55,6 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build (warm cache)
+        env:
+          CARGO_PROFILE_RELEASE_STRIP: ${{ runner.os == 'Windows' && 'false' || 'true' }}
         run: cargo build --release --locked --target ${{ matrix.target }}
