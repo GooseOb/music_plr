@@ -318,7 +318,13 @@ impl AudioPlayer {
                         if let Some(exit) = ytdlp.as_mut().and_then(|p| p.try_wait().ok().flatten())
                         {
                             if !exit.success() {
-                                warn!("yt-dlp exited with error");
+                                if let Some(stderr) = ytdlp.as_mut().and_then(|c| c.stderr.take()) {
+                                    let mut msg = String::new();
+                                    let _ = std::io::Read::read_to_string(&mut std::io::BufReader::new(stderr), &mut msg);
+                                    warn!("yt-dlp exited with error ({}): {}", exit, msg.trim());
+                                } else {
+                                    warn!("yt-dlp exited with error ({exit})");
+                                }
                             }
                         }
                         ytdlp.take();
@@ -563,20 +569,22 @@ fn spawn_stream_to_cache(
         );
         return None;
     };
+    let mut args = vec![
+        "-f",
+        "bestaudio[ext=m4a]/bestaudio",
+        "-o",
+        "-",
+        "--no-warnings",
+        "--no-check-formats",
+    ];
+    #[cfg(target_os = "linux")]
+    args.extend_from_slice(&["--extractor-args", "youtube:player_client=web_embedded"]);
+    args.push(url);
+
     let mut child = match Command::new(path)
-        .args([
-            "-f",
-            "bestaudio[ext=m4a]/bestaudio",
-            "-o",
-            "-",
-            "--no-warnings",
-            "--no-check-formats",
-            "--extractor-args",
-            "youtube:player_client=web_embedded",
-            url,
-        ])
+        .args(&args)
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
     {
         Ok(c) => c,

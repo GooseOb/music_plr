@@ -94,7 +94,7 @@ install_linux() {
 		local share="${XDG_DATA_HOME:-$HOME/.local/share}"
 		mkdir -p "$share/applications" "$share/icons"
 		cp "$tmpdir/goosemusic.desktop" "$share/applications/"
-		[ -f "$tmpdir/icons/logo.svg" ] && cp "$tmpdir/icons/logo.svg" "$share/icons/goosemusic.svg"
+		[ -f "$tmpdir/icons/app-icon.svg" ] && cp "$tmpdir/icons/app-icon.svg" "$share/icons/goosemusic.svg"
 		info "Desktop → $share/applications/goosemusic.desktop"
 		info "Icon    → $share/icons/goosemusic.svg"
 	fi

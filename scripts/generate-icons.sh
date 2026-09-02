@@ -5,7 +5,7 @@
 # Output:   windows/app.ico, macos/goosemusic.icns, icons/logo.svg (copy)
 set -euo pipefail
 
-SVG="icons/logo.svg"
+SVG="icons/app-icon.svg"
 WIN_DIR="windows"
 MAC_DIR="macos"
 

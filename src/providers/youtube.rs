@@ -560,10 +560,14 @@ pub fn download(video_url: &str, download_dir: &str) -> Result<String> {
 }
 
 pub fn download_audio(video_url: &str, output_path: &str) -> Result<String> {
+    #[cfg(target_os = "linux")]
+    let extra_args = &["--extractor-args", "youtube:player_client=web_embedded"];
+    #[cfg(not(target_os = "linux"))]
+    let extra_args: &[&str] = &[];
     ytdlp::download_audio(
         video_url,
         output_path,
-        &["--extractor-args", "youtube:player_client=web_embedded"],
+        extra_args,
     )
 }
 

@@ -99,7 +99,7 @@ jobs:
         run: |
           tar -czf goosemusic-${{ matrix.target }}.tar.gz \
             -C target/${{ matrix.target }}/release goosemusic \
-            -C "$GITHUB_WORKSPACE" goosemusic.desktop icons/logo.svg
+            -C "$GITHUB_WORKSPACE" goosemusic.desktop icons/app-icon.svg
           echo "ARCHIVE=goosemusic-${{ matrix.target }}.tar.gz" >> "$GITHUB_ENV"
 
       # ── macOS: wrap in .app bundle ────────────────────────────────────
