@@ -72,11 +72,11 @@ jobs:
       - name: Install icon generation dependencies
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
-            sudo apt-get update && sudo apt-get install -y imagemagick
+            sudo apt-get update && sudo apt-get install -y imagemagick icnsutils
           elif [ "$RUNNER_OS" = "Windows" ]; then
             choco install imagemagick.tool -y
           elif [ "$RUNNER_OS" = "macOS" ]; then
-            brew install imagemagick icnsutils
+            brew install imagemagick libicns
           fi
         shell: bash
 
