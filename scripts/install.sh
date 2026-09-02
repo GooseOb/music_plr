@@ -14,7 +14,7 @@ REPO="GooseOb/music_plr"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 
 red() { printf '\033[1;31m%s\033[0m\n' "$*" >&2; }
-green() { printf '\033[1;32m%s\033[0m\n' "$*"; }
+green() { printf '\033[1;32m%s\033[0m\n' "$*" >&2; }
 
 info() { green "  $*"; }
 err() {
@@ -28,12 +28,12 @@ need() {
 
 # ── Platform detection ────────────────────────────────────────
 
-detect_platform() {
+detect_rust_target() {
 	local os arch
 
 	case "$(uname -s)" in
-	Linux*) os="linux" ;;
-	Darwin*) os="darwin" ;;
+	Linux*) os="unknown-linux-gnu" ;;
+	Darwin*) os="apple-darwin" ;;
 	MINGW* | MSYS* | CYGWIN*)
 		err "Windows is not supported by this script. Download the .zip from:
   https://github.com/$REPO/releases/latest"
@@ -47,30 +47,30 @@ detect_platform() {
 	*) err "unsupported architecture: $(uname -m)" ;;
 	esac
 
-	echo "${os}_${arch}"
+	echo "${arch}-${os}"
 }
 
 # ── Download latest release asset ─────────────────────────────
 
 download_release() {
-	local platform="$1" asset_name tmpdir archive
+	local target="$1" asset_name archive
 
-	case "$platform" in
-	linux_*) asset_name="goosemusic-${platform}.tar.gz" ;;
-	darwin_*) asset_name="Goosemusic-${platform}.tar.gz" ;;
-	*) err "unsupported platform: $platform" ;;
+	case "$target" in
+	*-unknown-linux-gnu) asset_name="goosemusic-${target}.tar.gz" ;;
+	*-apple-darwin) asset_name="Goosemusic-${target}.tar.gz" ;;
+	*) err "unsupported target: $target" ;;
 	esac
 
 	need curl
 	need tar
 
+	local tmpdir
 	tmpdir="$(mktemp -d)"
-	trap 'rm -rf "$tmpdir"' EXIT
 
 	info "Fetching latest release..."
 	archive="$tmpdir/$asset_name"
 
-	curl -fsSL "https://github.com/$REPO/releases/latest/download/$asset_name" \
+	curl -fL "https://github.com/$REPO/releases/latest/download/$asset_name" \
 		-o "$archive" ||
 		err "download failed — check https://github.com/$REPO/releases"
 
@@ -119,22 +119,22 @@ main() {
 	green "Goosemusic installer"
 	echo ""
 
-	local platform
-	platform="$(detect_platform)"
-	info "Platform: $platform"
+	local target
+	target="$(detect_rust_target)"
+	info "Target: $target"
 
 	local tmpdir
-	tmpdir="$(download_release "$platform")"
+	tmpdir="$(download_release "$target")"
 
-	case "$platform" in
-	linux_*) install_linux "$tmpdir" ;;
-	darwin_*) install_macos "$tmpdir" ;;
+	case "$target" in
+	*-unknown-linux-gnu) install_linux "$tmpdir" ;;
+	*-apple-darwin) install_macos "$tmpdir" ;;
 	esac
 
 	echo ""
 	green "Done!"
-	case "$platform" in
-	linux_*)
+	case "$target" in
+	*-unknown-linux-gnu)
 		echo ""
 		if echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
 			info "Run: goosemusic"
@@ -143,10 +143,11 @@ main() {
 			info "Or add to PATH: export PATH=\"$INSTALL_DIR:\$PATH\""
 		fi
 		;;
-	darwin*)
+	*-apple-darwin)
 		info "Open Goosemusic from Applications or Spotlight"
 		;;
 	esac
+	rm -rf "$tmpdir"
 	echo ""
 }
 
