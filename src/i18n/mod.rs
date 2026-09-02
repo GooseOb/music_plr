@@ -276,6 +276,7 @@ pub struct Strings {
     pub check_for_updates: &'static str,
     pub checking_for_updates: &'static str,
     pub up_to_date: &'static str,
+    pub current_version: fn(&str) -> String,
     pub update_available: fn(&str) -> String,
     pub update_now: &'static str,
     pub updating: &'static str,

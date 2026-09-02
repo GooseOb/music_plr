@@ -212,6 +212,7 @@ pub const STRINGS: Strings = Strings {
     check_for_updates: "تحقق من التحديثات",
     checking_for_updates: "جارٍ التحقق من التحديثات…",
     up_to_date: "محدث",
+    current_version: |v| format!("الإصدار {v}"),
     update_available: |v| format!("الإصدار {v} متاح. اذهب إلى الإعدادات للتحديث."),
     update_now: "تحديث الآن",
     updating: "جارٍ التحديث…",

@@ -212,6 +212,7 @@ pub const STRINGS: Strings = Strings {
     check_for_updates: "अपडेट की जाँच करें",
     checking_for_updates: "अपडेट खोजा जा रहा है…",
     up_to_date: "नवीनतम संस्करण",
+    current_version: |v| format!("संस्करण {v}"),
     update_available: |v| format!("संस्करण {v} उपलब्ध है। अपडेट करने के लिए सेटिंग्स पर जाएं।"),
     update_now: "अभी अपडेट करें",
     updating: "अपडेट हो रहा है…",

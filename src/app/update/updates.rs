@@ -409,7 +409,8 @@ fn spawn_updater(pid: u32, old: &str, new: &str) -> std::result::Result<(), std:
     #[cfg(unix)]
     {
         let script = format!(
-            "while kill -0 {pid} 2>/dev/null; do sleep 0.5; done\n\
+            "#!/bin/sh\n\
+             while kill -0 {pid} 2>/dev/null; do sleep 0.5; done\n\
              mv {new:?} {old:?}\n\
              chmod +x {old:?}\n\
              exec {old:?}\n"

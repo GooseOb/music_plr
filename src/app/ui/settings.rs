@@ -101,6 +101,9 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             .padding([theme::SPACING_XS, theme::SPACING_MD])
             .on_press(Message::CheckForUpdates)
             .into(),
+        text((tr.current_version)(crate::app::update::APP_VERSION))
+            .style(fg_secondary())
+            .into(),
         status,
     ])
     .spacing(theme::SPACING_SM)

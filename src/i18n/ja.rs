@@ -212,6 +212,7 @@ pub const STRINGS: Strings = Strings {
     check_for_updates: "アップデートを確認",
     checking_for_updates: "アップデートを確認中…",
     up_to_date: "最新です",
+    current_version: |v| format!("バージョン {v}"),
     update_available: |v| format!("バージョン {v} が利用可能です。設定から更新できます。"),
     update_now: "今すぐ更新",
     updating: "更新中…",
