@@ -20,6 +20,14 @@ A YouTube/SoundCloud search music player with local playback, downloads, and OS 
 - **More** — Search history, volume normalization, navigation history, session restore, right-click context menu, dark theme.
 - **Localization** — 12 languages: English, Polski, Español, Português (Brasil), 简体中文, العربية, Беларуская, Français, Deutsch, 日本語, Русский, हिन्दी.
 
+## Installation
+
+Install it via [GitHub releases](https://github.com/GooseOb/music_plr/releases), or compile from rust crate:
+
+```sh
+cargo install goosemusic
+```
+
 ## Supported languages
 
 | Language                       | Code    |
