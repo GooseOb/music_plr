@@ -68,6 +68,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: "false"
           shared-key: "shared"
           key: ${{ matrix.target }}
 
@@ -208,6 +209,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
+          save-if: "false"
           shared-key: "shared"
 
       - name: Verify tag matches crate version

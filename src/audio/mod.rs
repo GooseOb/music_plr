@@ -583,6 +583,11 @@ fn spawn_stream_to_cache(
 
     let mut child = match Command::new(path)
         .args(&args)
+        .current_dir(
+            cache_path
+                .parent()
+                .unwrap_or_else(|| std::path::Path::new(".")),
+        )
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
