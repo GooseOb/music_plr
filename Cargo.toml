@@ -1,6 +1,6 @@
 [package]
 name = "goosemusic"
-version = "1.1.2"
+version = "1.1.3"
 edition = "2021"
 description = "A music player with YouTube search, local playback, and OS media controls"
 license = "MIT"
@@ -31,10 +31,12 @@ rfd = "0.15"
 # platforms that feature is inert and the native backend is always compiled.
 souvlaki = { version = "0.8", default-features = false, features = ["use_zbus"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
 musicbrainz_rs = { version = "0.13", features = ["sync"] }
 rsoundcloud = "0.2"
 csv = "1"
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [build-dependencies]
 winres = "0.1"

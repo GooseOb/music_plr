@@ -231,17 +231,15 @@ impl AudioPlayer {
                                 cache_path
                             );
 
-                            match Self::start_source(
+                            // Error details already logged inside start_source
+                            if let Some(active) = Self::start_source(
                                 &cache_path,
                                 None,
                                 duration,
                                 &state_clone,
                                 gain,
                             ) {
-                                Some(active) => output = Some(active),
-                                None => {
-                                    warn!("Failed to play cached file {:?}", cache_path);
-                                }
+                                output = Some(active);
                             }
 
                             // No temp file or streaming state for direct playback;
@@ -347,13 +345,16 @@ impl AudioPlayer {
                     if let Some(path) = playback_file.as_ref() {
                         let ready = std::fs::metadata(path).is_ok_and(|m| m.len() > 8192);
                         if ready {
-                            output = Self::start_source(
+                            // Error details already logged inside start_source
+                            if let Some(active) = Self::start_source(
                                 path,
                                 writer_alive.clone(),
                                 expected_duration,
                                 &state_clone,
                                 pending_gain,
-                            );
+                            ) {
+                                output = Some(active);
+                            }
                         }
                     }
                 }
@@ -383,15 +384,38 @@ impl AudioPlayer {
         state: &Arc<Mutex<PlayerState>>,
         gain: f32,
     ) -> Option<(rodio::OutputStream, rodio::Sink)> {
-        let file = std::fs::File::open(path).ok()?;
-        let source = SymphoniaStreamingSource::new(
+        let file = match std::fs::File::open(path) {
+            Ok(f) => f,
+            Err(e) => {
+                warn!("Failed to open {:?}: {e}", path);
+                return None;
+            }
+        };
+        let source = match SymphoniaStreamingSource::new(
             GrowingMediaSource { file, writer_alive },
             duration,
             gain,
-        )
-        .ok()?;
-        let (stream, handle) = rodio::OutputStream::try_default().ok()?;
-        let sink = rodio::Sink::try_new(&handle).ok()?;
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("SymphoniaStreamingSource::new failed: {e}");
+                return None;
+            }
+        };
+        let (stream, handle) = match rodio::OutputStream::try_default() {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("rodio::OutputStream::try_default failed: {e}");
+                return None;
+            }
+        };
+        let sink = match rodio::Sink::try_new(&handle) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("rodio::Sink::try_new failed: {e}");
+                return None;
+            }
+        };
         let vol = state.lock().map_or(1.0, |st| st.volume);
         sink.set_volume(vol);
         sink.append(source);
