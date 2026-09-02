@@ -53,5 +53,5 @@ jobs:
           shared-key: "shared"
           key: ${{ matrix.target }}
 
-      - name: Check (warm cache)
-        run: cargo check --locked --target ${{ matrix.target }}
+      - name: Build (warm cache)
+        run: cargo build --release --locked --target ${{ matrix.target }}
