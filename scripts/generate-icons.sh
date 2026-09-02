@@ -29,7 +29,7 @@ if $HAS_IMAGEMAGICK; then
 	trap 'rm -rf "$TMP"' EXIT
 
 	for size in 16 32 48 64 128 256; do
-		convert -background none "$SVG" -resize "${size}x${size}" "$TMP/$size.png"
+		convert -background none "$SVG" -resize "${size}x${size}" -gravity center -extent "${size}x${size}" "$TMP/$size.png"
 	done
 
 	convert "$TMP/16.png" "$TMP/32.png" "$TMP/48.png" \
@@ -48,12 +48,12 @@ if $HAS_IMAGEMAGICK && command -v png2icns >/dev/null 2>&1; then
 	ICON_NAME="goosemusic"
 	# Required sizes for a full-resolution .icns
 	for size in 16 32 128 256 512; do
-		convert -background none "$SVG" -resize "${size}x${size}" \
+		convert -background none "$SVG" -resize "${size}x${size}" -gravity center -extent "${size}x${size}" \
 			"$MAC_DIR/${ICON_NAME}${size}x${size}.png"
 	done
 
 	# 512@2x (1024px) for Retina
-	convert -background none "$SVG" -resize 1024x1024 \
+	convert -background none "$SVG" -resize 1024x1024 -gravity center -extent 1024x1024 \
 		"$MAC_DIR/${ICON_NAME}512x512@2x.png"
 
 	png2icns "$MAC_DIR/$ICON_NAME.icns" \
