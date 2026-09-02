@@ -36,6 +36,7 @@ pub struct PlayerState {
     pub stream_finished: bool,
     pub cache_ready: bool,
     pub has_output: bool,
+    pub error: Option<String>,
 }
 
 enum PlayerCommand {
@@ -80,6 +81,7 @@ impl AudioPlayer {
             stream_finished: false,
             cache_ready: false,
             has_output: false,
+            error: None,
         }));
 
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
@@ -314,15 +316,20 @@ impl AudioPlayer {
                         if let Some(exit) = ytdlp.as_mut().and_then(|p| p.try_wait().ok().flatten())
                         {
                             if !exit.success() {
-                                if let Some(stderr) = ytdlp.as_mut().and_then(|c| c.stderr.take()) {
+                                let error_msg = if let Some(stderr) =
+                                    ytdlp.as_mut().and_then(|c| c.stderr.take())
+                                {
                                     let mut msg = String::new();
                                     let _ = std::io::Read::read_to_string(
                                         &mut std::io::BufReader::new(stderr),
                                         &mut msg,
                                     );
-                                    warn!("yt-dlp exited with error ({}): {}", exit, msg.trim());
+                                    msg.trim().to_string()
                                 } else {
-                                    warn!("yt-dlp exited with error ({exit})");
+                                    format!("yt-dlp exited with error ({exit})")
+                                };
+                                if let Ok(mut st) = state_clone.lock() {
+                                    st.error = Some(error_msg);
                                 }
                             }
                         }
@@ -491,6 +498,13 @@ impl AudioPlayer {
         self.state
             .lock()
             .map_or_else(|e| e.into_inner().clone(), |st| st.clone())
+    }
+
+    pub fn take_error(&self) -> Option<String> {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|mut st| st.error.take())
     }
 
     pub fn has_output(&self) -> bool {

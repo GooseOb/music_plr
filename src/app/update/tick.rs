@@ -13,7 +13,7 @@ use crate::{
 };
 
 /// How long a toast notification stays visible before auto-dismissing.
-pub(crate) const NOTIFICATION_DURATION: Duration = Duration::from_secs(2);
+pub(crate) const NOTIFICATION_DURATION: Duration = Duration::from_secs(4);
 
 impl MusicPlayer {
     /// Start OS media controls (MPRIS/SMTC/Now Playing via souvlaki). `hwnd` is
@@ -52,6 +52,9 @@ impl MusicPlayer {
         self.update_thumbnails();
 
         let s = self.audio.get_state();
+        if let Some(err) = self.audio.take_error() {
+            self.notify_error(err);
+        }
         // Detect audio state changes for media-control update throttling.
         if self.is_playing != s.is_playing || (self.duration - s.duration).abs() > 0.001 {
             self.media_controls_dirty = true;
