@@ -474,7 +474,7 @@ impl MusicPlayer {
             }
             BackendResult::UpdateComplete(result) => {
                 self.process_update_complete(result);
-                iced::Task::none()
+                Task::none()
             }
         }
     }

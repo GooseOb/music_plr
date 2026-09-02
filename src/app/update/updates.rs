@@ -428,7 +428,6 @@ fn spawn_updater(pid: u32, old: &str, new: &str) -> std::result::Result<(), std:
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()?;
-        let _ = std::fs::remove_file(&helper);
     }
 
     #[cfg(windows)]
