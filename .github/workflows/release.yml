@@ -91,15 +91,6 @@ jobs:
           path: goosemusic-x86_64-unknown-linux-gnu.tar.gz
           if-no-files-found: error
 
-      - name: Verify tag matches crate version
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          ver="$(cargo pkgid | sed 's/.*#.*@//')"
-          if [ "$tag" != "$ver" ]; then
-            echo "::error::Tag '$GITHUB_REF_NAME' does not match crate version '$ver'. Bump version in Cargo.toml before tagging."
-            exit 1
-          fi
-
       - name: Publish to crates.io
         continue-on-error: true
         env:

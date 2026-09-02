@@ -1,0 +1,47 @@
+# Automatically create a git tag when Cargo.toml version changes on master,
+# then trigger the release workflow.
+#
+# Flow: bump version in Cargo.toml → push to master → this workflow
+# detects the new version → creates tag vX.Y.Z → release.yml builds + publishes.
+name: Auto-tag
+
+on:
+  push:
+    branches: [master]
+    paths: [Cargo.toml]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read Cargo.toml version
+        id: version
+        run: |
+          ver=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "value=$ver" >> "$GITHUB_OUTPUT"
+          echo "Cargo.toml version: $ver"
+
+      - name: Check if tag already exists
+        id: check
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.value }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag v${{ steps.version.outputs.value }} already exists — skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          git tag -a "v${{ steps.version.outputs.value }}" -m "Release v${{ steps.version.outputs.value }}"
+          git push origin "v${{ steps.version.outputs.value }}"
+
+
