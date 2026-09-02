@@ -8,5 +8,4 @@ __pycache__
 
 # Generated icons (run scripts/generate-icons.sh to recreate)
 windows/app.ico
-windows/app.obj
 macos/*.icns

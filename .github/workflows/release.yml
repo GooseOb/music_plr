@@ -72,16 +72,10 @@ jobs:
       - name: Generate icons
         run: bash scripts/generate-icons.sh
 
-      - name: Compile Windows resources
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          OBJ_PATH="$(bash windows/build-resources.sh)"
-          echo "RUSTFLAGS=-C link-arg=$OBJ_PATH" >> "$GITHUB_ENV"
-
       - name: Build
         # Strip on Unix (binutils/Apple `strip` is available). On Windows/MSVC
         # leave it unstripped — there is no `strip.exe` on the PATH by default.
+        # On Windows, build.rs embeds the .ico icon automatically.
         env:
           CARGO_PROFILE_RELEASE_STRIP: ${{ runner.os == 'Windows' && 'false' || 'true' }}
         run: cargo build --release --locked --target ${{ matrix.target }}
@@ -116,7 +110,7 @@ jobs:
             -C dist Goosemusic.app
           echo "ARCHIVE=Goosemusic-${{ matrix.target }}.tar.gz" >> "$GITHUB_ENV"
 
-      # ── Windows: bare .exe (icon embedded via RUSTFLAGS) ──────────────
+      # ── Windows: bare .exe (icon embedded by build.rs) ───────────────
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -156,7 +150,7 @@ jobs:
             ## Quick install
 
             ```sh
-            curl -fsSL https://raw.githubusercontent.com/GooseOb/music_plr/main/scripts/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/GooseOb/music_plr/master/scripts/install.sh | bash
             ```
 
             Detects your platform and installs everything. See the [README](https://github.com/GooseOb/music_plr#installation) for manual install options.

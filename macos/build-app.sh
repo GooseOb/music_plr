@@ -13,11 +13,14 @@ APP="Goosemusic.app"
 BUNDLE="$OUT/$APP"
 
 VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
-[ -z "$VERSION" ] && { echo "error: could not read version from Cargo.toml" >&2; exit 1; }
+[ -z "$VERSION" ] && {
+	echo "error: could not read version from Cargo.toml" >&2
+	exit 1
+}
 
 mkdir -p "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources"
 
-sed "s/VERSION/$VERSION/g" macos/Info.plist > "$BUNDLE/Contents/Info.plist"
+sed "s/VERSION/$VERSION/g" macos/Info.plist >"$BUNDLE/Contents/Info.plist"
 cp "$ICNS" "$BUNDLE/Contents/Resources/goosemusic.icns"
 cp "$BINARY" "$BUNDLE/Contents/Macos/goosemusic"
 chmod +x "$BUNDLE/Contents/Macos/goosemusic"

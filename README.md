@@ -25,7 +25,7 @@ A YouTube/SoundCloud search music player with local playback, downloads, and OS 
 ### Quick install (Linux / macOS)
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/GooseOb/music_plr/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/GooseOb/music_plr/master/scripts/install.sh | bash
 ```
 
 Detects your platform, downloads the latest release, and installs everything. On Linux it also sets up the desktop entry and icon.
