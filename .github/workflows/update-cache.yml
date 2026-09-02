@@ -50,6 +50,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
+          shared-key: "shared"
           key: ${{ matrix.target }}
 
       - name: Check (warm cache)
