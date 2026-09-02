@@ -22,11 +22,35 @@ A YouTube/SoundCloud search music player with local playback, downloads, and OS 
 
 ## Installation
 
-Install it via [GitHub releases](https://github.com/GooseOb/music_plr/releases), or compile from rust crate:
+### Quick install (Linux / macOS)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/GooseOb/music_plr/main/scripts/install.sh | bash
+```
+
+Detects your platform, downloads the latest release, and installs everything. On Linux it also sets up the desktop entry and icon.
+
+### Manual install
+
+Download from [GitHub releases](https://github.com/GooseOb/music_plr/releases) or compile from source:
 
 ```sh
 cargo install goosemusic
 ```
+
+#### Linux desktop integration
+
+The release tarball includes a `.desktop` file and icon. After extracting:
+
+```sh
+cp goosemusic ~/.local/bin/
+cp goosemusic.desktop ~/.local/share/applications/
+cp icons/logo.svg ~/.local/share/icons/goosemusic.svg
+```
+
+#### macOS
+
+Extract the `.app.tar.gz` and drag `Goosemusic.app` to your Applications folder. On first open, right-click → Open if macOS blocks it (unsigned app).
 
 ## Supported languages
 

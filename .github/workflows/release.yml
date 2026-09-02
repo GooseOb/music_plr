@@ -15,8 +15,6 @@
 #     use-cross: true
 # then `cargo install cross` and replace `cargo build` with `cross build`
 # when `matrix.use-cross` is set.
-# Build release binaries for every desktop target, publish them as a GitHub
-# release, and publish the crate to crates.io — all on a `v*` tag push.
 name: Release
 
 on:
@@ -71,6 +69,16 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
+      - name: Generate icons
+        run: bash scripts/generate-icons.sh
+
+      - name: Compile Windows resources
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          OBJ_PATH="$(bash windows/build-resources.sh)"
+          echo "RUSTFLAGS=-C link-arg=$OBJ_PATH" >> "$GITHUB_ENV"
+
       - name: Build
         # Strip on Unix (binutils/Apple `strip` is available). On Windows/MSVC
         # leave it unstripped — there is no `strip.exe` on the PATH by default.
@@ -78,13 +86,37 @@ jobs:
           CARGO_PROFILE_RELEASE_STRIP: ${{ runner.os == 'Windows' && 'false' || 'true' }}
         run: cargo build --release --locked --target ${{ matrix.target }}
 
-      - name: Package (Unix)
-        if: runner.os != 'Windows'
+      # ── Linux: tar binary + .desktop file + icon ──────────────────────
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
         run: |
           tar -czf goosemusic-${{ matrix.target }}.tar.gz \
-            -C target/${{ matrix.target }}/release goosemusic
+            -C target/${{ matrix.target }}/release goosemusic \
+            -C "$GITHUB_WORKSPACE" goosemusic.desktop icons/logo.svg
           echo "ARCHIVE=goosemusic-${{ matrix.target }}.tar.gz" >> "$GITHUB_ENV"
 
+      # ── macOS: wrap in .app bundle ────────────────────────────────────
+      - name: Install icnsutils
+        if: runner.os == 'macOS'
+        run: brew install icnsutils
+
+      - name: Build .app bundle (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          chmod +x macos/build-app.sh
+          macos/build-app.sh \
+            target/${{ matrix.target }}/release/goosemusic \
+            macos/goosemusic.icns \
+            dist
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          tar -czf Goosemusic-${{ matrix.target }}.tar.gz \
+            -C dist Goosemusic.app
+          echo "ARCHIVE=Goosemusic-${{ matrix.target }}.tar.gz" >> "$GITHUB_ENV"
+
+      # ── Windows: bare .exe (icon embedded via RUSTFLAGS) ──────────────
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -121,6 +153,14 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           body: |
+            ## Quick install
+
+            ```sh
+            curl -fsSL https://raw.githubusercontent.com/GooseOb/music_plr/main/scripts/install.sh | bash
+            ```
+
+            Detects your platform and installs everything. See the [README](https://github.com/GooseOb/music_plr#installation) for manual install options.
+
             ## Runtime prerequisites
 
             `goosemusic` is a self-contained binary. On first launch it checks

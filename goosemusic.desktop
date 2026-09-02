@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Goosemusic
+GenericName=Music Player
+Comment=YouTube/SoundCloud music player with local playback
+Exec=goosemusic
+Icon=goosemusic
+Terminal=false
+Type=Application
+Categories=Audio;Music;Player;
+Keywords=music;youtube;soundcloud;player;
