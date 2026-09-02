@@ -282,11 +282,15 @@ pub fn spawn_update_download(
 /// Recursively search `dir` for an executable file named `goosemusic` (or
 /// `goosemusic.exe` on Windows). Returns the first match found.
 fn find_binary_in_dir(dir: &std::path::Path) -> Option<std::path::PathBuf> {
-    let target = if cfg!(windows) { "goosemusic.exe" } else { "goosemusic" };
+    let target = if cfg!(windows) {
+        "goosemusic.exe"
+    } else {
+        "goosemusic"
+    };
     let mut stack = vec![dir.to_path_buf()];
     while let Some(current) = stack.pop() {
         let Ok(entries) = std::fs::read_dir(&current) else {
-            continue
+            continue;
         };
         for entry in entries.flatten() {
             let path = entry.path();
@@ -408,8 +412,7 @@ fn download_and_staged_apply(
     // 5. Make it executable (Unix).
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&staged, PermissionsExt::from_mode(0o755))
+        std::fs::set_permissions(&staged, std::os::unix::fs::PermissionsExt::from_mode(0o755))
             .map_err(|e| format!("Cannot set permissions: {e}"))?;
     }
 

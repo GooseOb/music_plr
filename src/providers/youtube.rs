@@ -564,11 +564,7 @@ pub fn download_audio(video_url: &str, output_path: &str) -> Result<String> {
     let extra_args = &["--extractor-args", "youtube:player_client=web_embedded"];
     #[cfg(not(target_os = "linux"))]
     let extra_args: &[&str] = &[];
-    ytdlp::download_audio(
-        video_url,
-        output_path,
-        extra_args,
-    )
+    ytdlp::download_audio(video_url, output_path, extra_args)
 }
 
 /// Whether `id` looks like a real `YouTube` video `id` (11 chars, not a

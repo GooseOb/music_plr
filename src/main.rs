@@ -46,11 +46,14 @@ fn main() {
     }
 
     let file_layer = tracing_subscriber::fmt::layer()
-        .with_writer(log_file.try_clone().expect("Failed to clone log file handle"))
+        .with_writer(
+            log_file
+                .try_clone()
+                .expect("Failed to clone log file handle"),
+        )
         .with_ansi(false)
         .with_filter(EnvFilter::new("warn"));
-    let stderr_layer = tracing_subscriber::fmt::layer()
-        .with_filter(EnvFilter::from_default_env());
+    let stderr_layer = tracing_subscriber::fmt::layer().with_filter(EnvFilter::from_default_env());
     tracing_subscriber::registry()
         .with(file_layer)
         .with(stderr_layer)

@@ -232,13 +232,9 @@ impl AudioPlayer {
                             );
 
                             // Error details already logged inside start_source
-                            if let Some(active) = Self::start_source(
-                                &cache_path,
-                                None,
-                                duration,
-                                &state_clone,
-                                gain,
-                            ) {
+                            if let Some(active) =
+                                Self::start_source(&cache_path, None, duration, &state_clone, gain)
+                            {
                                 output = Some(active);
                             }
 
@@ -320,7 +316,10 @@ impl AudioPlayer {
                             if !exit.success() {
                                 if let Some(stderr) = ytdlp.as_mut().and_then(|c| c.stderr.take()) {
                                     let mut msg = String::new();
-                                    let _ = std::io::Read::read_to_string(&mut std::io::BufReader::new(stderr), &mut msg);
+                                    let _ = std::io::Read::read_to_string(
+                                        &mut std::io::BufReader::new(stderr),
+                                        &mut msg,
+                                    );
                                     warn!("yt-dlp exited with error ({}): {}", exit, msg.trim());
                                 } else {
                                     warn!("yt-dlp exited with error ({exit})");
