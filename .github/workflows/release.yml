@@ -28,8 +28,30 @@ permissions:
   contents: read
 
 jobs:
+  icons:
+    name: Generate icons
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install icon generation dependencies
+        run: sudo apt-get update && sudo apt-get install -y imagemagick icnsutils
+
+      - name: Generate icons
+        run: bash scripts/generate-icons.sh
+
+      - name: Upload icons
+        uses: actions/upload-artifact@v7
+        with:
+          name: icons
+          path: |
+            windows/app.ico
+            macos/goosemusic.icns
+          if-no-files-found: error
+
   build:
     name: Build (${{ matrix.target }})
+    needs: icons
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -68,23 +90,23 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: "false"
+          save-if: false
           shared-key: "shared"
           key: ${{ matrix.target }}
 
-      - name: Install icon generation dependencies
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            sudo apt-get update && sudo apt-get install -y imagemagick icnsutils
-          elif [ "$RUNNER_OS" = "Windows" ]; then
-            choco install imagemagick.tool -y
-          elif [ "$RUNNER_OS" = "macOS" ]; then
-            brew install imagemagick libicns
-          fi
-        shell: bash
+      - name: Download icons (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/download-artifact@v8
+        with:
+          name: icons
+          path: windows
 
-      - name: Generate icons
-        run: bash scripts/generate-icons.sh
+      - name: Download icons (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/download-artifact@v8
+        with:
+          name: icons
+          path: macos
 
       - name: Build
         # Strip on Unix (binutils/Apple `strip` is available). On Windows/MSVC
@@ -209,7 +231,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: "false"
+          save-if: false
           shared-key: "shared"
 
       - name: Verify tag matches crate version
