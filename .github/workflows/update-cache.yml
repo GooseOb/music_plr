@@ -1,0 +1,59 @@
+# Keep the Rust dependency cache warm so that tag-triggered release builds
+# (release.yml) hit the cache instead of building cold.
+#
+# Tag pushes create a detached HEAD that can only see caches from its base
+# branch — in practice master. Without this workflow every release starts
+# from scratch.
+name: Update Cache
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  update-cache:
+    name: Cache (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libasound2-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libx11-dev \
+            libxrandr-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Generate icons
+        run: bash scripts/generate-icons.sh
+
+      - name: Check (warm cache)
+        run: cargo check --locked --target ${{ matrix.target }}
