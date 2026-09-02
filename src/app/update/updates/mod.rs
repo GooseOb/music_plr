@@ -279,6 +279,28 @@ pub fn spawn_update_download(
     });
 }
 
+/// Recursively search `dir` for an executable file named `goosemusic` (or
+/// `goosemusic.exe` on Windows). Returns the first match found.
+fn find_binary_in_dir(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    let target = if cfg!(windows) { "goosemusic.exe" } else { "goosemusic" };
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&current) else {
+            continue
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() && path.file_name().is_some_and(|n| n == target) {
+                return Some(path);
+            }
+            if path.is_dir() {
+                stack.push(path);
+            }
+        }
+    }
+    None
+}
+
 /// Download → verify SHA-256 → extract → stage → spawn updater.
 /// On success the updater has been spawned and the app should exit.
 fn download_and_staged_apply(
@@ -364,12 +386,14 @@ fn download_and_staged_apply(
     };
     let mut new_binary = extract_dir.join(binary_name);
     if !new_binary.exists() {
-        new_binary = std::fs::read_dir(&extract_dir)
-            .map_err(|e| format!("Cannot read extract dir: {e}"))?
-            .next()
-            .ok_or_else(|| "No binary found in archive".to_string())?
-            .map_err(|e| format!("Cannot read dir entry: {e}"))?
-            .path();
+        new_binary = find_binary_in_dir(&extract_dir)
+            .ok_or_else(|| "No binary found in archive".to_string())?;
+    }
+    if !new_binary.is_file() {
+        return Err(format!(
+            "Extracted path is not a regular file: {}",
+            new_binary.display()
+        ));
     }
 
     // 4. Copy to <exe_dir>/goosemusic.updating{.exe}.
