@@ -71,12 +71,14 @@ jobs:
 
       - name: Install icon generation dependencies
         run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            brew install icnsutils
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y imagemagick
+          elif [ "$RUNNER_OS" = "Windows" ]; then
+            choco install imagemagick.tool -y
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            brew install imagemagick icnsutils
           fi
         shell: bash
-
-      - uses: mfinelli/setup-imagemagick@v8
 
       - name: Generate icons
         run: bash scripts/generate-icons.sh
