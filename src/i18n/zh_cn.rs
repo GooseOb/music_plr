@@ -122,7 +122,7 @@ pub const STRINGS: Strings = Strings {
     reordered_playlist: "播放列表已重新排序",
 
     n_saved: |n| format!("已保存 {n} 项"),
-    n_plays: |n| format!("{} 次播放", crate::util::format_count(n as u64)),
+    n_plays: |n| format!("{} 次播放", crate::util::format_count(n)),
     search_placeholder: |p| match p {
         ProviderId::YouTube => "在 YouTube Music 中搜索…".into(),
         ProviderId::Local => "搜索…".into(),

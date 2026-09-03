@@ -122,7 +122,7 @@ pub const STRINGS: Strings = Strings {
     reordered_playlist: "تم إعادة ترتيب قائمة التشغيل",
 
     n_saved: |n| format!("{n} محفوظة"),
-    n_plays: |n| format!("{} تشغيل", crate::util::format_count(n as u64)),
+    n_plays: |n| format!("{} تشغيل", crate::util::format_count(n)),
     search_placeholder: |p| match p {
         ProviderId::YouTube => "ابحث في YouTube Music…".into(),
         ProviderId::Local => "ابحث…".into(),

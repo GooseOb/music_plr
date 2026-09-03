@@ -281,7 +281,7 @@ fn track_row_layout_inner<'a>(
         let plays = track.play_count();
         if plays > 0 {
             trailing_children.push(
-                text((player.strings.n_plays)(plays as usize))
+                text((player.strings.n_plays)(plays))
                     .size(theme::TEXT_SIZE_SM)
                     .width(Length::Fill)
                     .style(fg_secondary())

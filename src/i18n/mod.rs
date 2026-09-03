@@ -194,7 +194,7 @@ pub struct Strings {
     pub reordered_playlist: &'static str,
 
     pub n_saved: fn(usize) -> String,
-    pub n_plays: fn(usize) -> String,
+    pub n_plays: fn(u64) -> String,
     pub search_placeholder: fn(ProviderId) -> String,
     pub added: fn(usize) -> String,
     pub added_to: fn(usize, &str) -> String,

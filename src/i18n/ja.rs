@@ -122,7 +122,7 @@ pub const STRINGS: Strings = Strings {
     reordered_playlist: "プレイリストを並べ替えました",
 
     n_saved: |n| format!("{n} 件保存"),
-    n_plays: |n| format!("{} 回再生", crate::util::format_count(n as u64)),
+    n_plays: |n| format!("{} 回再生", crate::util::format_count(n)),
     search_placeholder: |p| match p {
         ProviderId::YouTube => "YouTube Music を検索…".into(),
         ProviderId::Local => "検索…".into(),

@@ -122,7 +122,7 @@ pub const STRINGS: Strings = Strings {
     reordered_playlist: "Reordered playlist",
 
     n_saved: |n| format!("{n} saved"),
-    n_plays: |n| format!("{} plays", crate::util::format_count(n as u64)),
+    n_plays: |n| format!("{} plays", crate::util::format_count(n)),
     search_placeholder: |p| match p {
         ProviderId::YouTube => "Search YouTube Music...".into(),
         ProviderId::Local => "Search...".into(),
