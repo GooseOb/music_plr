@@ -13,6 +13,7 @@ pub mod ja;
 pub mod pl;
 pub mod pt_br;
 pub mod ru;
+pub mod uk;
 pub mod zh_cn;
 
 /// Declares the `Language` enum and its `ALL` / `label` / `strings` machinery
@@ -56,18 +57,19 @@ macro_rules! languages {
 }
 
 languages! {
-    En => ("English", en),
-    Pl => ("Polski", pl),
-    Es => ("Español", es),
-    PtBr => ("Português (Brasil)", pt_br),
-    ZhCn => ("简体中文", zh_cn),
     Ar => ("العربية", ar),
     Be => ("Беларуская", be),
-    Fr => ("Français", fr),
     De => ("Deutsch", de),
-    Ja => ("日本語", ja),
-    Ru => ("Русский", ru),
+    En => ("English", en),
+    Es => ("Español", es),
+    Fr => ("Français", fr),
     Hi => ("हिन्दी", hi),
+    Ja => ("日本語", ja),
+    Pl => ("Polski", pl),
+    PtBr => ("Português (Brasil)", pt_br),
+    Ru => ("Русский", ru),
+    Uk => ("Українська", uk),
+    ZhCn => ("简体中文", zh_cn),
 }
 
 /// All user-facing strings for one language. Simple labels are `&'static
