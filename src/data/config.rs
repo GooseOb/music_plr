@@ -29,7 +29,7 @@ impl Default for Config {
             max_recently_played: 50,
             volume_normalization: false,
             default_provider: ProviderId::YouTube,
-            language: Language::default(),
+            language: Language::from_system_locale().unwrap_or_default(),
             theme_kind: ThemeKind::Dark,
         }
     }

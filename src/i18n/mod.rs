@@ -24,8 +24,8 @@ pub mod zh_cn;
 /// a `pub const STRINGS: Strings`. The first entry is the `#[default]`.
 macro_rules! languages {
     (
-        $first:ident => ($fl:literal, $fm:ident)
-        $(, $variant:ident => ($label:literal, $module:ident) )*
+        $first:ident => ($fl:literal, $fm:ident, $fp:literal)
+        $(, $variant:ident => ($label:literal, $module:ident, $prefix:literal) )*
         $(,)?
     ) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -52,24 +52,34 @@ macro_rules! languages {
                     $( Language::$variant => &$module::STRINGS, )*
                 }
             }
+
+            pub fn from_system_locale() -> Option<Self> {
+                let locale = sys_locale::get_locale()?;
+                let prefix = locale.split(['-', '_', '.']).next()?;
+                Some(match prefix {
+                    $fp => Language::$first,
+                    $( $prefix => Language::$variant, )*
+                    _ => return None,
+                })
+            }
         }
     };
 }
 
 languages! {
-    Ar => ("العربية", ar),
-    Be => ("Беларуская", be),
-    De => ("Deutsch", de),
-    En => ("English", en),
-    Es => ("Español", es),
-    Fr => ("Français", fr),
-    Hi => ("हिन्दी", hi),
-    Ja => ("日本語", ja),
-    Pl => ("Polski", pl),
-    PtBr => ("Português (Brasil)", pt_br),
-    Ru => ("Русский", ru),
-    Uk => ("Українська", uk),
-    ZhCn => ("简体中文", zh_cn),
+    Ar => ("العربية", ar, "ar"),
+    Be => ("Беларуская", be, "be"),
+    De => ("Deutsch", de, "de"),
+    En => ("English", en, "en"),
+    Es => ("Español", es, "es"),
+    Fr => ("Français", fr, "fr"),
+    Hi => ("हिन्दी", hi, "hi"),
+    Ja => ("日本語", ja, "ja"),
+    Pl => ("Polski", pl, "pl"),
+    PtBr => ("Português (Brasil)", pt_br, "pt"),
+    Ru => ("Русский", ru, "ru"),
+    Uk => ("Українська", uk, "uk"),
+    ZhCn => ("简体中文", zh_cn, "zh"),
 }
 
 /// All user-facing strings for one language. Simple labels are `&'static

@@ -1981,7 +1981,7 @@ dependencies = [
 
 [[package]]
 name = "goosemusic"
-version = "1.1.6"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "csv",
@@ -1998,6 +1998,7 @@ dependencies = [
  "serde_json",
  "souvlaki",
  "symphonia",
+ "sys-locale",
  "tokio",
  "tracing",
  "tracing-subscriber",
