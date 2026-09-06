@@ -32,6 +32,10 @@ curl -fsSL https://raw.githubusercontent.com/GooseOb/music_plr/master/scripts/in
 
 Detects your platform, downloads the latest release, and installs everything. On Linux it also sets up the desktop entry and icon.
 
+### Windows
+
+Download the [latest release](https://github.com/GooseOb/music_plr/releases/latest/download/goosemusic-x86_64-pc-windows-msvc.zip) and extract to a folder. Run `goosemusic.exe`.
+
 ### Manual install
 
 Download from [GitHub releases](https://github.com/GooseOb/music_plr/releases) or compile from source:
