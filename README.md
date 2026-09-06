@@ -1,5 +1,7 @@
 # GooseOb's Music Player
 
+![Screenshot](./docs/plr_screen.png)
+
 A YouTube/SoundCloud search music player with local playback, downloads, and OS media controls, built with [iced](https://iced.rs).
 
 ## Features
