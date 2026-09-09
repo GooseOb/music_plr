@@ -48,17 +48,16 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let mut stack = Stack::new().push(layout);
 
-    // TODO: use if let and pass into view functions
-    if player.dep_dialog.is_some() {
-        stack = stack.push(overlays::view_dependency_dialog(player));
+    if let Some(dialog) = &player.dep_dialog {
+        stack = stack.push(overlays::view_dependency_dialog(player, dialog));
     } else if player.playlist_picker.is_some() {
         stack = stack.push(overlays::view_playlist_picker(player));
     } else if player.delete_confirm_index.is_some() {
         stack = stack.push(overlays::view_delete_confirm(player.strings));
-    } else if player.edit_track.is_some() {
-        stack = stack.push(overlays::view_edit_track(player));
-    } else if player.import_dialog.is_some() {
-        stack = stack.push(overlays::view_import_playlist(player));
+    } else if let Some(edit) = &player.edit_track {
+        stack = stack.push(overlays::view_edit_track(player, edit));
+    } else if let Some(dialog) = &player.import_dialog {
+        stack = stack.push(overlays::view_import_playlist(player, dialog));
     } else if let Some(context_menu) = &player.context_menu {
         stack = stack.push(overlays::view_context_menu(player, context_menu));
     } else if let Some(rect) = player.drop_indicator_rect() {

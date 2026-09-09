@@ -17,6 +17,7 @@ mod ui;
 mod update;
 mod view_data;
 
+pub use dependency_dialog::DependencyDialog;
 pub use edit_track::EditTrackState;
 pub use import::{CsvPreset, ImportCsvField, ImportMethod, ImportPlaylistDialog};
 pub use interaction::{ContextMenuState, TrackListKind, TrackListSearch};

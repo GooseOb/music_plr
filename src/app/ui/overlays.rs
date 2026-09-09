@@ -23,6 +23,7 @@ use super::{
 use crate::{
     app::{
         dependency_dialog::dep_desc,
+        import::ImportPlaylistDialog,
         interaction::{ContextMenuFocus, CtxAction, SubmenuKind},
         CsvPreset, EditTrackField, ImportCsvField, ImportMethod,
     },
@@ -424,8 +425,10 @@ fn submenu_entries<'a>(
         .collect()
 }
 
-pub(super) fn view_edit_track(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let edit = player.edit_track.as_ref().expect("edit_track present");
+pub(super) fn view_edit_track<'a>(
+    player: &'a MusicPlayer,
+    edit: &'a crate::app::EditTrackState,
+) -> Element<'a, Message, AppTheme> {
     // List every searchable provider plus any extra provider the track
     // already carries an identity for (e.g. Local for imported files), so
     // unresolved providers show a "Find" action next to them.
@@ -605,8 +608,10 @@ fn view_dialog(
 /// Startup dialog listing missing external dependencies. Each auto-installable
 /// dep is a checkbox (default-checked); the user installs the checked ones or
 /// discards.
-pub(super) fn view_dependency_dialog(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let dialog = player.dep_dialog.as_ref().expect("dep_dialog present");
+pub(super) fn view_dependency_dialog<'a>(
+    player: &'a MusicPlayer,
+    dialog: &'a crate::app::DependencyDialog,
+) -> Element<'a, Message, AppTheme> {
     let tr = &player.strings;
     let python3_available = crate::deps::is_available(DepKind::Python3);
 
@@ -766,11 +771,10 @@ pub(super) fn view_delete_confirm(
 /// The "Import playlist" popup: pick a source format, fill in its settings,
 /// then select the file/folder to import.
 #[allow(clippy::too_many_lines)]
-pub(super) fn view_import_playlist(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let dialog = player
-        .import_dialog
-        .as_ref()
-        .expect("import_dialog present");
+pub(super) fn view_import_playlist<'a>(
+    player: &'a MusicPlayer,
+    dialog: &'a ImportPlaylistDialog,
+) -> Element<'a, Message, AppTheme> {
     let tr = player.strings;
 
     let method_row = scope_tab_row([
