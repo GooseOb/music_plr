@@ -127,7 +127,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: icons
-          path: macos
+          path: .
 
       - name: Build
         env:
@@ -178,7 +178,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: icons
-          path: windows
+          path: .
 
       - name: Build
         env:

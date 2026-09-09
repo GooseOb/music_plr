@@ -288,7 +288,7 @@ fn dep_settings_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
     Column::with_children([
         text(kind.name()).style(fg_accent()).into(),
         text(dep_desc(tr, kind)).style(fg_secondary()).into(),
-        install_delete_btn.into(),
+        install_delete_btn,
         status,
     ])
     .spacing(theme::SPACING_XS)
