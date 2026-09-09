@@ -48,6 +48,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let mut stack = Stack::new().push(layout);
 
+    // TODO: use if let and pass into view functions
     if player.dep_dialog.is_some() {
         stack = stack.push(overlays::view_dependency_dialog(player));
     } else if player.playlist_picker.is_some() {

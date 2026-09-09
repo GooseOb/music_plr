@@ -36,6 +36,8 @@ musicbrainz_rs = { version = "0.13", features = ["sync"] }
 rsoundcloud = "0.2"
 csv = "1"
 sys-locale = "0.3"
+flate2 = "1"
+tar = "0.4"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 

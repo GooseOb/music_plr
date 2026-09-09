@@ -501,10 +501,7 @@ impl AudioPlayer {
     }
 
     pub fn take_error(&self) -> Option<String> {
-        self.state
-            .lock()
-            .ok()
-            .and_then(|mut st| st.error.take())
+        self.state.lock().ok().and_then(|mut st| st.error.take())
     }
 
     pub fn has_output(&self) -> bool {

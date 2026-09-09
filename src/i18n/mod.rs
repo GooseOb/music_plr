@@ -270,7 +270,6 @@ pub struct Strings {
     pub deps_yt_dlp_desc: &'static str,
     pub deps_ytmusicapi_desc: &'static str,
     pub deps_python3_desc: &'static str,
-    pub deps_python3_manual: &'static str,
     pub deps_ytmusicapi_requires_python: &'static str,
     pub deps_play_requires_yt_dlp: &'static str,
     pub deps_source_not_playable: &'static str,

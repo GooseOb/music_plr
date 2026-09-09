@@ -194,7 +194,6 @@ pub const STRINGS: Strings = Strings {
     deps_yt_dlp_desc: "يبث ويُنزّل الصوت (مطلوب)",
     deps_ytmusicapi_desc: "بحث YouTube Music (اختياري، يعود إلى yt-dlp)",
     deps_python3_desc: "مطلوب من قِبل ytmusicapi (بحث YouTube Music)",
-    deps_python3_manual: "ثبّت Python 3 يدوياً ثم أعد تشغيل التطبيق",
     deps_ytmusicapi_requires_python: "يتطلب Python 3 (ثبّته أولاً)",
     deps_play_requires_yt_dlp: "التشغيل يتطلب yt-dlp — ثبّته من نافذة البدء لتشغيل هذا.",
     deps_source_not_playable: "لا يمكن تشغيل هذا المصدر.",

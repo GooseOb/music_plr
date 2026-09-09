@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{checkbox, scrollable, text, Button, Column, Container, Row, Space},
+    widget::{checkbox, scrollable, text, Button, Column, Container, Space},
     Element, Length,
 };
 
@@ -263,7 +263,16 @@ fn dep_settings_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
     };
 
     let app_managed = crate::deps::installed_via_app(kind);
-    let install_btn: Element<'_, Message, AppTheme> = if kind.auto_installable() && !app_managed {
+    let install_delete_btn: Element<'_, Message, AppTheme> = if app_managed {
+        Button::new(text(tr.deps_delete))
+            .padding([theme::SPACING_XS, theme::SPACING_MD])
+            .on_press_maybe(if installing || deleting {
+                None
+            } else {
+                Some(Message::DepSettingsDelete(kind))
+            })
+            .into()
+    } else if kind.auto_installable() {
         Button::new(text(tr.deps_install))
             .padding([theme::SPACING_XS, theme::SPACING_MD])
             .on_press_maybe(if installing || deleting {
@@ -276,25 +285,10 @@ fn dep_settings_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
         Space::new().into()
     };
 
-    let delete_btn: Element<'_, Message, AppTheme> = if app_managed {
-        Button::new(text(tr.deps_delete))
-            .padding([theme::SPACING_XS, theme::SPACING_MD])
-            .on_press_maybe(if installing || deleting {
-                None
-            } else {
-                Some(Message::DepSettingsDelete(kind))
-            })
-            .into()
-    } else {
-        Space::new().into()
-    };
-
     Column::with_children([
         text(kind.name()).style(fg_accent()).into(),
         text(dep_desc(tr, kind)).style(fg_secondary()).into(),
-        Row::with_children([install_btn, delete_btn])
-            .spacing(theme::SPACING_SM)
-            .into(),
+        install_delete_btn.into(),
         status,
     ])
     .spacing(theme::SPACING_XS)

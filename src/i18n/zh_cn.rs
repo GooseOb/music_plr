@@ -194,7 +194,6 @@ pub const STRINGS: Strings = Strings {
     deps_yt_dlp_desc: "流式传输并下载音频（必需）",
     deps_ytmusicapi_desc: "YouTube Music 搜索（可选，回退到 yt-dlp）",
     deps_python3_desc: "ytmusicapi 所需（YouTube Music 搜索）",
-    deps_python3_manual: "手动安装 Python 3，然后重启应用",
     deps_ytmusicapi_requires_python: "需要 Python 3（请先安装）",
     deps_play_requires_yt_dlp: "播放需要 yt-dlp——请从启动对话框安装以播放此项。",
     deps_source_not_playable: "此来源无法播放。",

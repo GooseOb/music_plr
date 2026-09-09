@@ -151,19 +151,46 @@ fn run_python(mode: &str, args: &[&str]) -> Result<String> {
         let py = crate::deps::python_exe().ok_or_else(|| {
             anyhow::anyhow!("Python 3 not found; install it to search YouTube Music.")
         })?;
-        let mut cmd = Command::new(py);
-        cmd.arg(&script_path).arg(mode).args(args);
-        let output = run_command_with_timeout(&mut cmd, PYTHON_TIMEOUT)
-            .context("Failed to run Python. Is it installed?")?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("ytmusicapi {mode} failed: {stderr}");
+        let output = run_python_with(&py, &script_path, mode, args)?;
+        if output.status.success() {
+            return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
         }
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if is_import_error(&stderr) {
+            if let Some(sys_py) = crate::deps::system_python_exe() {
+                if sys_py != py {
+                    let sys_output = run_python_with(&sys_py, &script_path, mode, args)?;
+                    if sys_output.status.success() {
+                        return Ok(String::from_utf8_lossy(&sys_output.stdout).into_owned());
+                    }
+                    let sys_stderr = String::from_utf8_lossy(&sys_output.stderr);
+                    anyhow::bail!("ytmusicapi {mode} failed: {sys_stderr}");
+                }
+            }
+        }
+        anyhow::bail!("ytmusicapi {mode} failed: {stderr}");
     })();
 
     let _ = std::fs::remove_file(&script_path);
     result
+}
+
+fn run_python_with(
+    py: &std::path::Path,
+    script: &std::path::Path,
+    mode: &str,
+    args: &[&str],
+) -> Result<std::process::Output> {
+    let mut cmd = Command::new(py);
+    cmd.arg(script).arg(mode).args(args);
+    run_command_with_timeout(&mut cmd, PYTHON_TIMEOUT)
+        .context("Failed to run Python. Is it installed?")
+}
+
+fn is_import_error(stderr: &str) -> bool {
+    stderr.contains("ModuleNotFoundError")
+        || stderr.contains("ImportError")
+        || stderr.contains("No module named")
 }
 
 /// Run a search and split the result into the playable `Track` list (for

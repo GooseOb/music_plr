@@ -2,15 +2,16 @@
 //!
 //! `goosemusic` shells out to external tools. `yt-dlp` (streaming, downloads,
 //! search fallback) ships standalone per-OS binaries on its GitHub releases,
-//! so it can be downloaded and cached by the app itself — no Python required.
-//! `ytmusicapi` (nicer `YouTube` Music search) is an optional `Python` package
-//! installed via `pip` when `Python 3` is present; without it the app falls back
-//! to `yt-dlp` for search. `python3` itself is an OS prerequisite the app
-//! cannot install, so it is surfaced in the dependency dialog as a manual step.
+//! so it can be downloaded and cached by the app itself. `ytmusicapi` (nicer
+//! `YouTube` Music search) is an optional `Python` package installed via `pip`
+//! when Python 3 is present; without it the app falls back to `yt-dlp` for
+//! search. Python 3 itself can be auto-installed from the
+//! `python-build-standalone` project (standalone, relocatable builds that
+//! include pip), or found on the system PATH.
 //!
-//! The pinned `yt-dlp` version + SHA-256 (see [`YT_DLP_VERSION`] /
-//! [`yt_dlp_expected_sha256`]) let the download be verified instead of blindly
-//! executing whatever GitHub serves.
+//! The pinned versions + SHA-256 maps (see [`YT_DLP_VERSION`],
+//! [`PYTHON_VERSION`], etc.) let downloads be verified instead of blindly
+//! executing whatever the hosting service provides.
 
 #![allow(clippy::unreadable_literal)]
 
@@ -21,6 +22,12 @@ use anyhow::{Context, Result};
 /// Pinned `yt-dlp` release. Bump deliberately; the SHA-256 map below must be
 /// updated to match the new release's `SHA2-256SUMS`.
 pub const YT_DLP_VERSION: &str = "2026.08.19";
+
+/// Pinned python-build-standalone release tag.
+pub const PYTHON_PBS_RELEASE: &str = "20260807";
+
+/// Pinned `CPython` version inside the above release.
+pub const PYTHON_VERSION: &str = "3.13.15";
 
 /// External tools the app may need. `Python3` is never auto-installed (it's an
 /// OS package); the rest the app can fetch itself.
@@ -43,8 +50,7 @@ impl DepKind {
     /// Whether the app can download/install this dependency itself.
     pub fn auto_installable(self) -> bool {
         match self {
-            DepKind::YtDlp | DepKind::YtMusicApi => true,
-            DepKind::Python3 => false,
+            DepKind::YtDlp | DepKind::YtMusicApi | DepKind::Python3 => true,
         }
     }
 
@@ -97,15 +103,115 @@ fn yt_dlp_expected_sha256(asset: &str) -> &'static str {
     }
 }
 
-/// Resolve the Python 3 interpreter to invoke. On Windows the binary is
-/// typically `python` rather than `python3`, so both are probed (in order)
-/// and the first that answers `--version` wins.
-pub(crate) fn python_exe() -> Option<&'static str> {
-    ["python3", "python"].into_iter().find(|exe| {
+/// The python-build-standalone `install_only_stripped` archive for the current
+/// target platform. These are the smallest archives that include Python, pip,
+/// and the standard library.
+fn python_asset() -> &'static str {
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    {
+        "cpython-3.13.15+20260807-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"
+    }
+    #[cfg(all(target_os = "linux", not(target_arch = "aarch64")))]
+    {
+        "cpython-3.13.15+20260807-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
+    }
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        "cpython-3.13.15+20260807-aarch64-apple-darwin-install_only_stripped.tar.gz"
+    }
+    #[cfg(all(target_os = "macos", not(target_arch = "aarch64")))]
+    {
+        "cpython-3.13.15+20260807-x86_64-apple-darwin-install_only_stripped.tar.gz"
+    }
+    #[cfg(all(target_os = "windows", not(target_arch = "aarch64")))]
+    {
+        "cpython-3.13.15+20260807-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"
+    }
+    #[cfg(not(any(
+        all(target_os = "linux"),
+        all(target_os = "macos"),
+        all(target_os = "windows", not(target_arch = "aarch64"))
+    )))]
+    {
+        ""
+    }
+}
+
+/// Expected SHA-256 of [`python_asset`] for the pinned release.
+fn python_expected_sha256(asset: &str) -> &'static str {
+    match asset {
+        "cpython-3.13.15+20260807-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz" => {
+            "faae10a9faa9bec06da009ac69326cc1d9691dc138fec6a1b69159dff1781f35"
+        }
+        "cpython-3.13.15+20260807-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz" => {
+            "1dfc9565c26f8892a33202b5966bdf9ff45c56a57b06e8fa65fecf05030afe5b"
+        }
+        "cpython-3.13.15+20260807-x86_64-apple-darwin-install_only_stripped.tar.gz" => {
+            "187eed2282e9c3a5b6b14953d564ee25a9f35cf2c209c9fa292186ee48b0e4a1"
+        }
+        "cpython-3.13.15+20260807-aarch64-apple-darwin-install_only_stripped.tar.gz" => {
+            "dbadb0ffe46f8bace50daaf8a0c5fc6903c003690776da9eb5269e33c856bb53"
+        }
+        "cpython-3.13.15+20260807-x86_64-pc-windows-msvc-install_only_stripped.tar.gz" => {
+            "44bf9ae71f4b45e3ba3104ae331c6eff3f7002593c26fd12453eb9310c4f259a"
+        }
+        _ => "",
+    }
+}
+
+/// The cache directory for the standalone Python installation.
+fn python_cache_path() -> PathBuf {
+    crate::data::cache_path("python").join(PYTHON_VERSION)
+}
+
+/// Resolve the Python 3 interpreter to invoke. Resolution order:
+///   1. `GOOSEMUSIC_PYTHON` env var override
+///   2. Previously downloaded + cached standalone copy
+///   3. `python3` / `python` resolved via PATH
+///
+/// Returns `None` when no Python 3 is available.
+pub(crate) fn python_exe() -> Option<PathBuf> {
+    if let Ok(p) = std::env::var("GOOSEMUSIC_PYTHON") {
+        let path = PathBuf::from(&p);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    let cached = python_cache_path();
+    let bin_dir = cached.join("python").join("bin");
+    let python_bin = {
+        #[cfg(target_os = "windows")]
+        {
+            cached.join("python").join("python.exe")
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            bin_dir.join("python3")
+        }
+    };
+    if python_bin.exists() {
+        return Some(python_bin);
+    }
+    ["python3", "python"].into_iter().find_map(|exe| {
         Command::new(exe)
             .arg("--version")
             .output()
-            .is_ok_and(|o| o.status.success())
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|_| PathBuf::from(exe))
+    })
+}
+
+/// Resolve a system Python (not the managed copy). Used as a fallback when the
+/// managed Python lacks a needed package but the system Python has it.
+pub(crate) fn system_python_exe() -> Option<PathBuf> {
+    ["python3", "python"].into_iter().find_map(|exe| {
+        Command::new(exe)
+            .arg("--version")
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|_| PathBuf::from(exe))
     })
 }
 
@@ -113,12 +219,29 @@ pub(crate) fn python3_present() -> bool {
     python_exe().is_some()
 }
 
+/// Check if a specific Python interpreter has ytmusicapi installed.
+fn has_ytmusicapi(py: &PathBuf) -> bool {
+    Command::new(py)
+        .args(["-c", "import ytmusicapi"])
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
 fn ytmusicapi_present() -> bool {
-    python_exe().is_some_and(|py| {
-        Command::new(py)
-            .args(["-c", "import ytmusicapi"])
+    // Check the resolved Python (managed or system) first.
+    if python_exe().is_some_and(|py| has_ytmusicapi(&py)) {
+        return true;
+    }
+    // Fall back: check system Python3/Python when the managed copy lacks it.
+    ["python3", "python"].into_iter().any(|exe| {
+        Command::new(exe)
+            .arg("--version")
             .output()
             .is_ok_and(|o| o.status.success())
+            && {
+                let path = PathBuf::from(exe);
+                has_ytmusicapi(&path)
+            }
     })
 }
 
@@ -233,7 +356,7 @@ pub fn installed_via_app(kind: DepKind) -> bool {
     match kind {
         DepKind::YtDlp => yt_dlp_cache_path().exists(),
         DepKind::YtMusicApi => yt_music_api_marker().exists(),
-        DepKind::Python3 => false,
+        DepKind::Python3 => python_cache_path().exists(),
     }
 }
 
@@ -257,7 +380,7 @@ pub fn uninstall(kind: DepKind) -> Result<()> {
                 anyhow::anyhow!("Python 3 not found; install it to manage ytmusicapi.")
             })?;
             let output = crate::providers::run_command_with_timeout(
-                Command::new(py).args(["-m", "pip", "uninstall", "-y", "ytmusicapi"]),
+                Command::new(&py).args(["-m", "pip", "uninstall", "-y", "ytmusicapi"]),
                 Duration::from_mins(5),
             )
             .context("Failed to run pip uninstall")?;
@@ -277,7 +400,17 @@ pub fn uninstall(kind: DepKind) -> Result<()> {
             }
             Ok(())
         }
-        DepKind::Python3 => anyhow::bail!("Python 3 must be removed manually (OS package)."),
+        DepKind::Python3 => {
+            let dir = python_cache_path();
+            if dir.exists() {
+                std::fs::remove_dir_all(&dir)
+                    .with_context(|| format!("Failed to remove {}", dir.display()))?;
+            }
+            let mut a = availability();
+            a.python3 = python3_present();
+            set_availability(a);
+            Ok(())
+        }
     }
 }
 
@@ -310,7 +443,7 @@ pub fn install(kind: DepKind, progress: impl Fn(u64, u64) + 'static) -> Result<(
     match kind {
         DepKind::YtDlp => install_yt_dlp(progress),
         DepKind::YtMusicApi => install_ytmusicapi(),
-        DepKind::Python3 => anyhow::bail!("Python 3 must be installed manually (OS package)."),
+        DepKind::Python3 => install_python(progress),
     }
 }
 
@@ -391,11 +524,94 @@ fn install_yt_dlp(progress: impl Fn(u64, u64) + 'static) -> Result<()> {
     Ok(())
 }
 
+fn install_python(progress: impl Fn(u64, u64) + 'static) -> Result<()> {
+    let asset = python_asset();
+    if asset.is_empty() {
+        anyhow::bail!("No standalone Python build available for this platform.");
+    }
+    let url = format!(
+        "https://github.com/astral-sh/python-build-standalone/releases/download/{PYTHON_PBS_RELEASE}/{asset}"
+    );
+    let resp = ureq::get(&url)
+        .call()
+        .with_context(|| format!("Failed to download {url}"))?;
+    let total = resp
+        .headers()
+        .get("content-length")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(0);
+    let mut body = resp.into_body();
+    let reader = body.as_reader();
+    let mut reader = ProgressReader {
+        inner: reader,
+        downloaded: 0,
+        total,
+        last_sent: 0,
+        cb: Box::new(progress),
+    };
+    let mut bytes = Vec::new();
+    reader
+        .read_to_end(&mut bytes)
+        .context("Failed to read Python download")?;
+
+    let expected = python_expected_sha256(asset);
+    if expected.is_empty() {
+        anyhow::bail!("No pinned SHA-256 for asset {asset}; cannot verify download.");
+    }
+    if sha256(&bytes) != expected {
+        anyhow::bail!("Python checksum mismatch — download may be corrupted or tampered.");
+    }
+
+    let dir = python_cache_path();
+    std::fs::create_dir_all(&dir).with_context(|| format!("Failed to create {}", dir.display()))?;
+    let cursor = std::io::Cursor::new(bytes);
+    let gz = flate2::read::GzDecoder::new(cursor);
+    let mut archive = tar::Archive::new(gz);
+    archive
+        .unpack(&dir)
+        .context("Failed to extract Python archive")?;
+
+    let python_bin = {
+        #[cfg(target_os = "windows")]
+        {
+            dir.join("python").join("python.exe")
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            dir.join("python").join("bin").join("python3")
+        }
+    };
+    if !python_bin.exists() {
+        anyhow::bail!(
+            "Python archive extracted but binary not found at {}",
+            python_bin.display()
+        );
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let bin_dir = dir.join("python").join("bin");
+        for entry in std::fs::read_dir(&bin_dir)
+            .with_context(|| format!("Failed to read {}", bin_dir.display()))?
+        {
+            let entry = entry?;
+            if entry.file_type()?.is_file() {
+                std::fs::set_permissions(entry.path(), PermissionsExt::from_mode(0o755))?;
+            }
+        }
+    }
+
+    set_available(DepKind::Python3);
+    Ok(())
+}
+
 fn install_ytmusicapi() -> Result<()> {
     let py = python_exe()
         .ok_or_else(|| anyhow::anyhow!("Python 3 not found; install it to use pip."))?;
     let output = crate::providers::run_command_with_timeout(
-        Command::new(py).args(["-m", "pip", "install", "--user", "ytmusicapi"]),
+        Command::new(&py).args(["-m", "pip", "install", "ytmusicapi"]),
         Duration::from_mins(5),
     )
     .context("Failed to run pip")?;

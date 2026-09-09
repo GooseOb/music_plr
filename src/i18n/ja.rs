@@ -194,7 +194,6 @@ pub const STRINGS: Strings = Strings {
     deps_yt_dlp_desc: "音声をストリーミング・ダウンロード（必須）",
     deps_ytmusicapi_desc: "YouTube Music 検索（任意、yt-dlp にフォールバック）",
     deps_python3_desc: "ytmusicapi に必要（YouTube Music 検索用）",
-    deps_python3_manual: "Python 3 を手動でインストールし、アプリを再起動",
     deps_ytmusicapi_requires_python: "Python 3 が必要（先にインストール）",
     deps_play_requires_yt_dlp: "再生には yt-dlp が必要です。起動ダイアログからインストールして再生してください。",
     deps_source_not_playable: "このソースは再生できません。",

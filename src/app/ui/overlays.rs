@@ -604,11 +604,11 @@ fn view_dialog(
 
 /// Startup dialog listing missing external dependencies. Each auto-installable
 /// dep is a checkbox (default-checked); the user installs the checked ones or
-/// discards. `Python3` (when missing) is shown as a manual step with no box.
+/// discards.
 pub(super) fn view_dependency_dialog(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let dialog = player.dep_dialog.as_ref().expect("dep_dialog present");
     let tr = &player.strings;
-    let python3_missing = dialog.missing.contains(&DepKind::Python3);
+    let python3_available = crate::deps::is_available(DepKind::Python3);
 
     let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
 
@@ -616,10 +616,9 @@ pub(super) fn view_dependency_dialog(player: &MusicPlayer) -> Element<'_, Messag
         .missing
         .iter()
         .map(|&kind| match kind {
-            DepKind::YtDlp => dep_checkbox_row(player, kind, None),
-            DepKind::YtMusicApi if !python3_missing => dep_checkbox_row(player, kind, None),
+            DepKind::YtDlp | DepKind::Python3 => dep_checkbox_row(player, kind, None),
+            DepKind::YtMusicApi if python3_available => dep_checkbox_row(player, kind, None),
             DepKind::YtMusicApi => dep_manual_row(player, kind, tr.deps_ytmusicapi_requires_python),
-            DepKind::Python3 => dep_manual_row(player, kind, tr.deps_python3_manual),
         })
         .collect();
     if !missing_rows.is_empty() {
@@ -631,10 +630,10 @@ pub(super) fn view_dependency_dialog(player: &MusicPlayer) -> Element<'_, Messag
     }
 
     if !dialog.found.is_empty() {
-        let found_rows = dialog.found.iter().map(|&kind| match kind {
-            DepKind::YtDlp | DepKind::YtMusicApi => dep_checkbox_row(player, kind, None),
-            DepKind::Python3 => dep_manual_row(player, kind, ""),
-        });
+        let found_rows = dialog
+            .found
+            .iter()
+            .map(|&kind| dep_checkbox_row(player, kind, None));
         children.push(
             text(tr.deps_found_section_title)
                 .size(theme::TEXT_SIZE_LG)

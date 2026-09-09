@@ -194,7 +194,6 @@ pub const STRINGS: Strings = Strings {
     deps_yt_dlp_desc: "Transmite e baixa áudio (obrigatório)",
     deps_ytmusicapi_desc: "Busca no YouTube Music (opcional, usa yt-dlp como fallback)",
     deps_python3_desc: "Requerido pelo ytmusicapi (busca no YouTube Music)",
-    deps_python3_manual: "Instale o Python 3 manualmente e reinicie o app",
     deps_ytmusicapi_requires_python: "Requer Python 3 (instale primeiro)",
     deps_play_requires_yt_dlp: "A reprodução precisa do yt-dlp; instale-o na caixa inicial para tocar isto.",
     deps_source_not_playable: "Esta fonte não pode ser reproduzida.",

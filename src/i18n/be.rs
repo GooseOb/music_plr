@@ -194,7 +194,6 @@ pub const STRINGS: Strings = Strings {
     deps_yt_dlp_desc: "Патокавае перадаваньне і спампоўка аўдыё (абавязкова)",
     deps_ytmusicapi_desc: "Пошук у YouTube Music (неабавязкова, запасны варыянт — yt-dlp)",
     deps_python3_desc: "Яго патрабуе ytmusicapi (пошук у YouTube Music)",
-    deps_python3_manual: "Усталюйце Python 3 уручную, затым перазапусьціце плэер",
     deps_ytmusicapi_requires_python: "Патрэбны Python 3 (усталюйце спачатку)",
     deps_play_requires_yt_dlp: "Для прайграваньня патрэбен yt-dlp — усталюйце яго з дыялёгу запуску, каб гэта граць.",
     deps_source_not_playable: "Гэту крыніцу нельга прайграць.",

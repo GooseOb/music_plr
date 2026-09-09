@@ -194,7 +194,6 @@ pub const STRINGS: Strings = Strings {
     deps_yt_dlp_desc: "ऑडियो स्ट्रीम और डाउनलोड करता है (आवश्यक)",
     deps_ytmusicapi_desc: "YouTube Music खोज (वैकल्पिक, yt-dlp पर वापस जाता है)",
     deps_python3_desc: "ytmusicapi द्वारा आवश्यक (YouTube Music खोज)",
-    deps_python3_manual: "Python 3 को मैन्युअल रूप से इंस्टॉल करें फिर ऐप पुनः आरंभ करें",
     deps_ytmusicapi_requires_python: "Python 3 आवश्यक है (पहले इंस्टॉल करें)",
     deps_play_requires_yt_dlp: "प्लेबैक के लिए yt-dlp चाहिए — इसे चलाने के लिए स्टार्ट-अप डायलॉग से इंस्टॉल करें।",
     deps_source_not_playable: "यह स्रोत चलाया नहीं जा सकता।",
