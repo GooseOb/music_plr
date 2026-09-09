@@ -11,15 +11,15 @@ pub const STRINGS: Strings = Strings {
 
     queue: "Черга",
     recently_played: "Нещодавні",
-    now_playing_from: "Зараз грає з",
-    now_playing: "Зараз грає",
+    now_playing_from: "Грає з",
+    now_playing: "Грає",
     up_next: "Далі",
     no_track_playing: "Нічого не грає",
     no_more_tracks_in_queue: "У черзі більше немає треків",
     no_recently_played_tracks: "Немає нещодавно відтворених треків",
 
     not_playing: "Не грає",
-    no_tracks_found: "Треки не знайдено",
+    no_tracks_found: "Треків не знайдено",
 
     searching: "Пошук…",
     loading: "Завантаження…",
@@ -30,12 +30,12 @@ pub const STRINGS: Strings = Strings {
 
     not_an_artist_page: "Це не сторінка виконавця",
     provided_by: "Надано",
-    retry: "Повторити",
+    retry: "Спробувати ще",
     nothing_here: "Тут нічого немає",
     most_popular_songs: "Найпопулярніші треки",
     albums: "Альбоми",
     playlists: "Плейлисти",
-    fans_also_like: "Також подобається фанатам",
+    fans_also_like: "Також подобається слухачам",
 
     looking_up_lyrics: "Пошук тексту…",
     play_a_track_for_lyrics: "Відтворіть трек, щоб побачити його текст.",
@@ -48,8 +48,8 @@ pub const STRINGS: Strings = Strings {
     downloaded_tracks: "Завантажені треки",
     no_downloaded_tracks: "Немає завантажених треків",
 
-    ctx_play: "Грати",
-    ctx_play_local: "Грати локально",
+    ctx_play: "Відтворити",
+    ctx_play_local: "Відтворити локально",
     ctx_edit: "Змінити",
     ctx_go_to_artist: "Перейти до виконавця",
     ctx_add_to_playlist: "Додати до плейлиста",
@@ -74,7 +74,7 @@ pub const STRINGS: Strings = Strings {
     no_provider_data: "Цей трек не має даних джерела.",
     save: "Зберегти",
     cancel: "Скасувати",
-    edit_track: "Змінити трек",
+    edit_track: "Редагувати трек",
     lbl_title: "Назва",
     lbl_artist: "Виконавець",
     ph_track_title: "Назва треку",
@@ -103,7 +103,7 @@ pub const STRINGS: Strings = Strings {
     hist_rows_lbl: "Рядків історії пошуку показано",
     hist_entries_lbl: "Зберіганих записів історії пошуку",
     recent_kept_lbl: "Зберіганих нещодавно відтворених треків",
-    reset_defaults: "Скинути",
+    reset_defaults: "Скинути налаштування за замовчуванням",
 
     find_in_list: "Знайти у списку…",
     scope_songs: "Треки",
