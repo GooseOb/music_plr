@@ -216,7 +216,7 @@ jobs:
         id: tag
         env:
           GH_TOKEN: ${{ github.token }}
-        run: echo "value=$(gh api repos/{owner}/{repo}/tags --jq '.[0].name')" >> "$GITHUB_OUTPUT"
+        run: echo "value=$(gh api repos/$GITHUB_REPOSITORY/tags --jq '.[0].name')" >> "$GITHUB_OUTPUT"
 
       - name: Publish
         uses: softprops/action-gh-release@v3
