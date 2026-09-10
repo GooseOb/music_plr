@@ -76,7 +76,6 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "shared"
           key: x86_64-unknown-linux-gnu
 
       - name: Build
@@ -124,7 +123,6 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "shared"
           key: ${{ matrix.target }}
 
       - name: Download icons
@@ -174,7 +172,6 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "shared"
           key: x86_64-pc-windows-msvc
 
       - name: Download icons
