@@ -215,9 +215,14 @@ jobs:
           merge-multiple: true
           path: dist
 
+      - name: Find latest tag
+        id: tag
+        run: echo "value=$(git tag --sort=-v:refname | head -1)" >> "$GITHUB_OUTPUT"
+
       - name: Publish
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ steps.tag.outputs.value }}
           files: dist/*
           generate_release_notes: true
           prerelease: ${{ inputs.prerelease == true }}
