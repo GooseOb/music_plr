@@ -1,5 +1,5 @@
 # Build release binaries for every desktop target and publish them as a
-# GitHub release whenever a tag matching `v*` is pushed (e.g. `v1.2.3`).
+# GitHub release. Triggered by tag.yml (auto-tag) or manually.
 #
 # Platforms (one job each):
 #   - icons         – generates .ico + .icns once, uploads as artifact
@@ -14,10 +14,16 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: "Mark this release as a pre-release"
+        type: boolean
+        default: false
   workflow_call:
-  push:
-    tags:
-      - "v*"
+    inputs:
+      prerelease:
+        type: boolean
+        default: false
 
 # Default read-only; the GitHub-release job widens this to `write`.
 permissions:
@@ -70,7 +76,6 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: false
           shared-key: "shared"
           key: x86_64-unknown-linux-gnu
 
@@ -119,7 +124,6 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: false
           shared-key: "shared"
           key: ${{ matrix.target }}
 
@@ -170,7 +174,6 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: false
           shared-key: "shared"
           key: x86_64-pc-windows-msvc
 
@@ -217,7 +220,7 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ inputs.prerelease == true }}
           body: |
             ## Quick install
 
