@@ -217,7 +217,9 @@ jobs:
 
       - name: Find latest tag
         id: tag
-        run: echo "value=$(git tag --sort=-v:refname | head -1)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "value=$(gh api repos/{owner}/{repo}/tags --jq '.[0].name')" >> "$GITHUB_OUTPUT"
 
       - name: Publish
         uses: softprops/action-gh-release@v3
