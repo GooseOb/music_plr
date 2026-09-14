@@ -62,10 +62,10 @@ pub enum BackendResult {
         original: Track,
         provider: ProviderId,
         resolved: Option<Track>,
+        rid: u64,
         /// Where the track was selected from, so the resolved provider id can
-        /// be written back into the source list (search/playlist/queue). `None`
-        /// when the resolve was triggered automatically (no source row).
-        pos: Option<TrackPos>,
+        /// be written back into the source list (search/playlist/queue).
+        pos: TrackPos,
         /// Whether the resolved track should be played (true) or downloaded
         /// (false) once its id is known.
         play: bool,

@@ -12,52 +12,27 @@ use crate::{
 impl MusicPlayer {
     pub fn handle_play_track(&mut self, pos: TrackPos) {
         let TrackPos { index, list } = pos;
-        if list == TrackListKind::Recent {
-            if let Some(track) = self.get_track_at(pos) {
-                self.set_queue(vec![track]);
-            }
-            return;
-        }
-        if list == TrackListKind::Queue {
-            // Skip to the selected queue entry: discard all tracks before it
-            // (including the current one), keeping the clicked track and
-            // everything after it.
-            if index < self.queue.tracks.len() {
-                if index > 0 {
-                    if let Some(old) = self.queue.current().cloned() {
-                        self.queue
-                            .record_played(&old, self.config.max_recently_played);
-                    }
+        match list {
+            TrackListKind::Recent => {
+                if let Some(track) = self.get_track_at(pos) {
+                    self.set_queue(vec![track]);
                 }
-                self.queue.tracks.drain(0..index);
-                if let Some(t) = self.queue.current() {
-                    let t = t.clone();
-                    self.play_track_internal(&t, t.source);
-                }
-                self.save_session();
-                self.media_controls_dirty = true;
             }
-            return;
+            TrackListKind::Queue => {
+                let queue = self.queue.tracks.get(index..).unwrap_or(&[]);
+                self.set_queue(queue.to_vec());
+            }
+            TrackListKind::Active => {
+                let queue = self.view_tracks().get(index..).unwrap_or(&[]);
+                self.set_queue(queue.to_vec());
+                self.record_now_playing_origin();
+            }
         }
-        self.play_and_queue_rest(index);
-    }
-
-    /// Replace the queue with the view tracks from `index` onward, play the
-    /// first one, and persist the session.
-    fn play_and_queue_rest(&mut self, index: usize) {
-        let queue = self.tracks_starting_with(index);
-        self.set_queue(queue.to_vec());
-        self.record_now_playing_origin();
     }
 
     /// Snapshot the current view as the source of the track being played.
     pub(super) fn record_now_playing_origin(&mut self) {
         self.now_playing_from = Some(self.view_data().clone());
-    }
-
-    /// Returns the view tracks from `index` onward.
-    pub(super) fn tracks_starting_with(&self, index: usize) -> &[Track] {
-        self.view_tracks().get(index..).unwrap_or(&[])
     }
 
     /// Persist `track` back into the list it came from (`pos`), so a resolved
@@ -136,9 +111,9 @@ impl MusicPlayer {
             // playlist is written to disk; the queue is saved via the session)
             // so the chosen provider survives a restart.
             self.set_track_at(pos, t);
-            self.play_and_queue_rest(pos.index);
+            self.handle_play_track(pos);
         } else {
-            self.resolve_provider(provider, track, Some(pos), true);
+            self.resolve_provider(provider, track, pos, true);
         }
     }
 
@@ -158,7 +133,7 @@ impl MusicPlayer {
                     to_download.push(track);
                 } else {
                     let pos = TrackPos::new(idx, list);
-                    self.resolve_provider(provider, track, Some(pos), false);
+                    self.resolve_provider(provider, track, pos, false);
                 }
             }
         }
@@ -173,36 +148,28 @@ impl MusicPlayer {
 
     /// Resolve a track's id on `provider` in the background. If `play` is true
     /// the resolved track is streamed; otherwise it is downloaded.
-    fn resolve_provider(
-        &mut self,
-        provider: ProviderId,
-        track: Track,
-        pos: Option<TrackPos>,
-        play: bool,
-    ) {
+    fn resolve_provider(&mut self, provider: ProviderId, track: Track, pos: TrackPos, play: bool) {
         let title = track.title.clone();
         let msg = (self.strings.resolving_on)(&title, provider.label());
         self.notify(msg);
+        let rid = self.slot_request_id();
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
             let resolved = crate::providers::resolve_id(provider, &track);
-            let resolved = match resolved {
-                Ok(resolved) => resolved,
-                Err(e) => {
-                    let _ = tx.send(crate::app::BackendResult::ProviderResolveError {
-                        title,
-                        provider,
-                        message: e.to_string(),
-                    });
-                    return;
-                }
-            };
-            let _ = tx.send(crate::app::BackendResult::ProviderResolved {
-                original: track,
-                provider,
-                resolved,
-                pos,
-                play,
+            let _ = tx.send(match resolved {
+                Ok(resolved) => crate::app::BackendResult::ProviderResolved {
+                    original: track,
+                    provider,
+                    resolved,
+                    rid,
+                    pos,
+                    play,
+                },
+                Err(e) => crate::app::BackendResult::ProviderResolveError {
+                    title,
+                    provider,
+                    message: e.to_string(),
+                },
             });
         });
     }

@@ -8,7 +8,7 @@ use super::{
     MediaUpdate, Message, MusicPlayer, Task, ViewData,
 };
 use crate::{
-    app::ViewKind,
+    app::{interaction::TrackListKind, ViewKind},
     data::{cache::StreamCache, JsonStore},
 };
 
@@ -410,10 +410,11 @@ impl MusicPlayer {
                 original,
                 provider,
                 resolved,
+                rid,
                 pos,
                 play,
             } => {
-                self.apply_provider_resolution(original, provider, resolved, pos, play);
+                self.apply_provider_resolution(original, provider, resolved, rid, pos, play);
                 Task::none()
             }
             BackendResult::ProviderResolveError {
@@ -545,6 +546,39 @@ impl MusicPlayer {
         self.sync_lyrics_editor();
     }
 
+    fn slot_tracks(&self, idx: usize) -> &[crate::types::Track] {
+        match self.nav_history.get(idx).map(|v| &v.kind) {
+            Some(ViewKind::Playlist(entry)) => self
+                .playlists
+                .playlists
+                .get(entry.index)
+                .map_or(&[], |p| &p.tracks),
+            _ => self.nav_history.get(idx).map_or(&[], |v| v.tracks()),
+        }
+    }
+
+    fn set_track_at_slot(
+        &mut self,
+        history_idx: usize,
+        track_idx: usize,
+        track: crate::types::Track,
+    ) {
+        if let Some(ViewKind::Playlist(entry)) = self.nav_history.get(history_idx).map(|v| &v.kind)
+        {
+            if let Some(pl) = self.playlists.playlists.get_mut(entry.index) {
+                if let Some(t) = pl.tracks.get_mut(track_idx) {
+                    *t = track.clone();
+                }
+            }
+            self.playlists.save();
+        }
+        if let Some(slot) = self.nav_history.get_mut(history_idx) {
+            if let Some(t) = slot.tracks_mut().and_then(|ts| ts.get_mut(track_idx)) {
+                *t = track;
+            }
+        }
+    }
+
     /// Apply a resolved provider track to `original`: write its full provider
     /// metadata back into the source list, then either play (replacing the
     /// queue) or download.
@@ -553,7 +587,8 @@ impl MusicPlayer {
         mut original: crate::types::Track,
         provider: crate::providers::ProviderId,
         resolved: Option<crate::types::Track>,
-        pos: Option<crate::app::interaction::TrackPos>,
+        rid: u64,
+        pos: crate::app::interaction::TrackPos,
         play: bool,
     ) {
         if let Some(resolved_track) = resolved {
@@ -563,17 +598,35 @@ impl MusicPlayer {
             original.source = provider;
             self.thumbnail_index
                 .ensure(original.primary_id(), original.thumbnail());
-            if let Some(p) = pos {
-                self.set_track_at(p, original.clone());
-            }
-            if play {
-                self.set_queue(if let Some(p) = pos {
-                    self.tracks_starting_with(p.index).to_vec()
-                } else {
-                    vec![original]
-                });
+
+            let slot = if pos.list == TrackListKind::Active {
+                self.slot_for_request(rid)
             } else {
-                self.spawn_download_thread_for(provider, original);
+                None
+            };
+
+            if let Some(slot) = slot {
+                self.set_track_at_slot(slot, pos.index, original.clone());
+                if play {
+                    let queue = self
+                        .slot_tracks(slot)
+                        .get(pos.index..)
+                        .unwrap_or(&[])
+                        .to_vec();
+                    self.set_queue(queue);
+                    self.record_now_playing_origin();
+                } else {
+                    self.spawn_download_thread_for(provider, original);
+                }
+            } else {
+                if pos.list != TrackListKind::Active {
+                    self.set_track_at(pos, original.clone());
+                }
+                if play {
+                    self.handle_play_track(pos);
+                } else {
+                    self.spawn_download_thread_for(provider, original);
+                }
             }
         } else {
             let title = original.title.clone();
