@@ -5,7 +5,7 @@ use std::{
 
 use super::{Message, MusicPlayer, Task, Track, ViewData};
 use crate::{
-    app::{ImportMethod, ImportPlaylistDialog, ViewKind},
+    app::{update::operation::CaptureBounds, ImportMethod, ImportPlaylistDialog, ViewKind},
     data::JsonStore,
 };
 
@@ -48,13 +48,8 @@ impl MusicPlayer {
                 return task;
             }
             let tracks = playlist.tracks.clone();
-            let first = tracks[0].clone();
-            self.queue
-                .set_queue(tracks, self.config.max_recently_played);
+            self.set_queue(tracks);
             self.record_now_playing_origin();
-            self.play_track_internal(&first, first.source);
-            self.save_session();
-            self.media_controls_dirty = true;
         }
         task
     }
@@ -222,30 +217,31 @@ impl MusicPlayer {
             if let Some(track) =
                 self.get_track_at(super::TrackPos::new(i, super::TrackListKind::Active))
             {
-                self.clipboard.push(track.clone());
+                self.clipboard.push(track);
             }
         }
     }
 
-    pub fn handle_paste_clipboard(&mut self) {
+    pub fn handle_paste_clipboard(&mut self) -> Task<Message> {
         if self.clipboard.is_empty() {
-            return;
+            return Task::none();
         }
         let active = match &self.view_data().kind {
             ViewKind::Playlist(p) => Some(p.index),
             _ => None,
         };
         let Some(idx) = active else {
-            return;
+            return Task::none();
         };
         self.playlists
-            .insert_tracks_at(idx, self.clipboard.iter().rev(), 0);
+            .insert_tracks_at(idx, self.clipboard.iter(), 0);
         self.playlists.save();
         let count = self.clipboard.len();
         let name = self.playlists.playlists[idx].name.clone();
         let msg = (self.strings.pasted_into)(count, &name);
         self.notify(msg);
         self.clipboard.clear();
+        CaptureBounds::new().into()
     }
 
     pub fn handle_delete_selected(&mut self) {

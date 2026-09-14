@@ -120,12 +120,15 @@ impl MusicPlayer {
     }
 
     pub fn handle_reveal_now_playing(&mut self) -> Task<Message> {
-        let Some(origin) = self.now_playing_from.clone() else {
+        let Some(mut origin) = self.now_playing_from.clone() else {
             return Task::none();
         };
         let Some(track) = self.queue.current().cloned() else {
             return Task::none();
         };
+        // Zero the id so an in-flight response for the live view can never
+        // be routed into the restored snapshot.
+        origin.request_id = 0;
         let nav_task = self.handle_navigate_to(origin);
         let key = track.cache_key();
         let index = self.view_tracks().iter().position(|t| t.cache_key() == key);

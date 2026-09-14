@@ -86,13 +86,17 @@ impl MusicPlayer {
         sel.extend(0..count);
     }
 
-    pub fn get_track_at(&self, pos: TrackPos) -> Option<Track> {
+    pub fn get_track_ref_at(&self, pos: TrackPos) -> Option<&Track> {
         let TrackPos { index, list } = pos;
         match list {
-            TrackListKind::Queue => self.queue.tracks.get(index).cloned(),
-            TrackListKind::Active => self.view_tracks().get(index).cloned(),
-            TrackListKind::Recent => self.queue.recently_played.get(index).cloned(),
+            TrackListKind::Queue => self.queue.tracks.get(index),
+            TrackListKind::Active => self.view_tracks().get(index),
+            TrackListKind::Recent => self.queue.recently_played.get(index),
         }
+    }
+
+    pub fn get_track_at(&self, pos: TrackPos) -> Option<Track> {
+        self.get_track_ref_at(pos).cloned()
     }
 
     /// Whether `pos` is a match in the active track list search (any occurrence).

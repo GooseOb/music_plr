@@ -567,19 +567,11 @@ impl MusicPlayer {
                 self.set_track_at(p, original.clone());
             }
             if play {
-                self.play_track_internal(&original, provider);
-                let queue = if let Some(p) = pos {
-                    let tracks = self.tracks_after(p.index);
-                    let mut val = Vec::with_capacity(tracks.len() + 1);
-                    val.push(original);
-                    val.extend_from_slice(tracks);
-                    val
+                self.set_queue(if let Some(p) = pos {
+                    self.tracks_starting_with(p.index).to_vec()
                 } else {
                     vec![original]
-                };
-                self.queue.set_queue(queue, self.config.max_recently_played);
-                self.save_session();
-                self.media_controls_dirty = true;
+                });
             } else {
                 self.spawn_download_thread_for(provider, original);
             }

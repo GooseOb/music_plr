@@ -237,8 +237,7 @@ impl MusicPlayer {
                 Task::none()
             }
             Physical::Code(Code::KeyV) if modifiers.control() || modifiers.logo() => {
-                self.handle_paste_clipboard();
-                Task::none()
+                self.handle_paste_clipboard()
             }
             _ => Task::none(),
         };

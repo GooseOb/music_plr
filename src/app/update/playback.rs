@@ -14,8 +14,7 @@ impl MusicPlayer {
         let TrackPos { index, list } = pos;
         if list == TrackListKind::Recent {
             if let Some(track) = self.get_track_at(pos) {
-                let source = track.source;
-                self.play_track_replacing_queue(track, source);
+                self.set_queue(vec![track]);
             }
             return;
         }
@@ -40,50 +39,25 @@ impl MusicPlayer {
             }
             return;
         }
-        if let Some(track) = self.get_track_at(TrackPos::new(index, TrackListKind::Active)) {
-            let source = track.source;
-            // Prefer the track's own source when it can stream; otherwise fall
-            // back to the configured default provider. `play_track_internal`
-            // still checks for a local file / cached copy *first*, so a
-            // downloaded or previously-streamed track plays without yt-dlp
-            // even when no provider can stream right now.
-            let preferred = if track.best_stream_provider(source).is_some() {
-                source
-            } else {
-                self.config.default_provider
-            };
-            self.play_and_queue_rest(&track, preferred, index);
-        }
+        self.play_and_queue_rest(index);
     }
 
-    /// Play `track` through `provider`, replacing the queue, then enqueue the
-    /// remaining view tracks after `index` and persist the session.
-    fn play_and_queue_rest(&mut self, track: &Track, provider: ProviderId, index: usize) {
+    /// Replace the queue with the view tracks from `index` onward, play the
+    /// first one, and persist the session.
+    fn play_and_queue_rest(&mut self, index: usize) {
+        let queue = self.tracks_starting_with(index);
+        self.set_queue(queue.to_vec());
         self.record_now_playing_origin();
-        let mut queue = Vec::with_capacity(self.tracks_after(index).len() + 1);
-        queue.push(track.clone());
-        queue.extend_from_slice(self.tracks_after(index));
-        self.queue.set_queue(queue, self.config.max_recently_played);
-        self.play_track_internal(track, provider);
-        self.save_session();
-        self.media_controls_dirty = true;
     }
 
     /// Snapshot the current view as the source of the track being played.
-    /// `request_id` is zeroed so an in-flight response for the live view can
-    /// never be routed into the restored snapshot.
     pub(super) fn record_now_playing_origin(&mut self) {
-        let mut snap = self.view_data().clone();
-        snap.request_id = 0;
-        snap.scroll = 0.0;
-        snap.selection.clear();
-        self.now_playing_from = Some(snap);
+        self.now_playing_from = Some(self.view_data().clone());
     }
 
-    /// Returns the tracks after `index` in the current view.
-    pub(super) fn tracks_after(&self, index: usize) -> &[Track] {
-        let start = index + 1;
-        self.view_tracks().get(start..).unwrap_or(&[])
+    /// Returns the view tracks from `index` onward.
+    pub(super) fn tracks_starting_with(&self, index: usize) -> &[Track] {
+        self.view_tracks().get(index..).unwrap_or(&[])
     }
 
     /// Persist `track` back into the list it came from (`pos`), so a resolved
@@ -127,10 +101,21 @@ impl MusicPlayer {
         }
     }
 
-    pub fn play_track_replacing_queue(&mut self, track: Track, preferred: ProviderId) {
-        self.play_track_internal(&track, preferred);
+    /// Play `tracks[0]` (preferring its own source when streamable, else the
+    /// default provider), replace the queue with `tracks`, and persist the
+    /// session. An empty `tracks` clears the queue without playing.
+    pub fn set_queue(&mut self, tracks: Vec<Track>) {
+        if !tracks.is_empty() {
+            let first = &tracks[0];
+            let preferred = if first.best_stream_provider(first.source).is_some() {
+                first.source
+            } else {
+                self.config.default_provider
+            };
+            self.play_track_internal(first, preferred);
+        }
         self.queue
-            .set_queue(vec![track], self.config.max_recently_played);
+            .set_queue(tracks, self.config.max_recently_played);
         self.save_session();
         self.media_controls_dirty = true;
     }
@@ -150,8 +135,8 @@ impl MusicPlayer {
             // Persist the source switch back into the list it came from (a
             // playlist is written to disk; the queue is saved via the session)
             // so the chosen provider survives a restart.
-            self.set_track_at(pos, t.clone());
-            self.play_and_queue_rest(&t, provider, pos.index);
+            self.set_track_at(pos, t);
+            self.play_and_queue_rest(pos.index);
         } else {
             self.resolve_provider(provider, track, Some(pos), true);
         }
@@ -205,7 +190,7 @@ impl MusicPlayer {
                 Ok(resolved) => resolved,
                 Err(e) => {
                     let _ = tx.send(crate::app::BackendResult::ProviderResolveError {
-                        title: track.title.clone(),
+                        title,
                         provider,
                         message: e.to_string(),
                     });

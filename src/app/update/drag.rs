@@ -290,7 +290,6 @@ impl MusicPlayer {
         if let Some(DropTarget::PlaylistAdd(playlist_idx)) = self.drag.drop_target {
             let tracks: Vec<Track> = indices
                 .iter()
-                .rev()
                 .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
                 .collect();
             let count = self
