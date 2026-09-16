@@ -1,4 +1,4 @@
-use iced::widget::Column;
+use iced::widget::{Column, Space};
 
 use super::{
     artist, lyrics, playlist, search, settings, track_list_search, Element, Message, MusicPlayer,
@@ -9,15 +9,14 @@ use crate::{
 };
 
 pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let mut children: Vec<Element<'a, Message, AppTheme>> = vec![search::view_search_bar(player)];
-
-    if let Some(fs) = player.track_list_search.as_ref() {
-        if fs.list == crate::app::TrackListKind::Active {
-            children.push(track_list_search::view_track_list_search(player, fs));
+    let track_list_search = match &player.track_list_search {
+        Some(fs) if fs.list == crate::app::TrackListKind::Active => {
+            track_list_search::view_track_list_search(player, fs)
         }
-    }
+        _ => Space::new().into(),
+    };
 
-    children.push(if let Some(lyrics_state) = player.lyrics.as_ref() {
+    let view = if let Some(lyrics_state) = player.lyrics.as_ref() {
         lyrics::view_lyrics(player, lyrics_state)
     } else {
         match &player.view_data().kind {
@@ -34,7 +33,7 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
             ViewKind::Downloads => playlist::view_downloads(player),
             ViewKind::Settings => settings::view_settings(player),
         }
-    });
+    };
 
-    Column::with_children(children).into()
+    Column::with_children([search::view_search_bar(player), track_list_search, view]).into()
 }

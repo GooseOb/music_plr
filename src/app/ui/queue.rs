@@ -34,26 +34,26 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
         .width(Length::Fill)
         .style(bg_secondary());
 
-    let mut children: Vec<Element<'_, Message, AppTheme>> = vec![tab_bar.into()];
-
-    if let Some(fs) = player.track_list_search.as_ref() {
-        if matches!(
-            fs.list,
-            crate::app::TrackListKind::Queue | crate::app::TrackListKind::Recent
-        ) {
-            children.push(super::track_list_search::view_track_list_search(player, fs));
+    let track_list_search = match &player.track_list_search {
+        Some(fs) if matches!(fs.list, TrackListKind::Queue | TrackListKind::Recent) => {
+            super::track_list_search::view_track_list_search(player, fs)
         }
-    }
+        _ => Space::new().into(),
+    };
 
-    children.push(match player.queue.queue_tab {
+    let view = match player.queue.queue_tab {
         QueueTab::Queue => view_queue_tab(player),
         QueueTab::RecentlyPlayed => view_recently_played_tab(player),
-    });
+    };
 
-    Container::new(Column::with_children(children))
-        .width(queue_width)
-        .style(bg_secondary())
-        .into()
+    Container::new(Column::with_children([
+        tab_bar.into(),
+        track_list_search,
+        view,
+    ]))
+    .width(queue_width)
+    .style(bg_secondary())
+    .into()
 }
 
 fn view_queue_tabs(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
