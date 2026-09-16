@@ -28,7 +28,8 @@ impl MusicPlayer {
         let download_dir = self.config.download_dir.clone();
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
-            let result = crate::providers::download(provider, &track, &download_dir);
+            let emit = |event| drop(tx.send(BackendResult::PlayerClientEvent(event)));
+            let result = crate::providers::download(provider, &track, &download_dir, &emit);
             match result {
                 Ok(path) => {
                     let mut downloaded = track;

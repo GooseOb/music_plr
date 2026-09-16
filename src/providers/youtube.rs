@@ -574,7 +574,11 @@ pub fn resolve_id(track: &Track) -> Result<Option<Track>> {
     }))
 }
 
-pub fn download(video_url: &str, download_dir: &str) -> Result<String> {
+pub fn download(
+    video_url: &str,
+    download_dir: &str,
+    emit: &dyn Fn(crate::providers::ClientEvent),
+) -> Result<String> {
     let id = video_url
         .split("v=")
         .nth(1)
@@ -583,15 +587,57 @@ pub fn download(video_url: &str, download_dir: &str) -> Result<String> {
     let dir = std::path::Path::new(download_dir);
     let _ = std::fs::create_dir_all(dir);
     let output_path = dir.join(format!("{id}.mp3"));
-    download_audio(video_url, output_path.to_string_lossy().as_ref())
+    download_audio(video_url, output_path.to_string_lossy().as_ref(), emit)
 }
 
-pub fn download_audio(video_url: &str, output_path: &str) -> Result<String> {
-    #[cfg(target_os = "linux")]
-    let extra_args = &["--extractor-args", "youtube:player_client=web_embedded"];
-    #[cfg(not(target_os = "linux"))]
-    let extra_args: &[&str] = &[];
-    ytdlp::download_audio(video_url, output_path, extra_args)
+pub fn download_audio(
+    video_url: &str,
+    output_path: &str,
+    emit: &dyn Fn(crate::providers::ClientEvent),
+) -> Result<String> {
+    // Start right away on the remembered winner (or yt-dlp defaults);
+    // the race runs only if this attempt fails with a client failure.
+    let winner = if ytdlp::is_youtube_url(video_url) {
+        ytdlp::cached_client()
+    } else {
+        None
+    };
+    let extractor_arg = winner
+        .as_deref()
+        .map(|c| format!("youtube:player_client={c}"));
+    let extra_args: Vec<&str> = match &extractor_arg {
+        Some(arg) => vec!["--extractor-args", arg.as_str()],
+        None => Vec::new(),
+    };
+    match ytdlp::download_audio(video_url, output_path, &extra_args) {
+        Ok(path) => Ok(path),
+        Err(e) if ytdlp::is_youtube_url(video_url) && ytdlp::is_client_failure(&e.to_string()) => {
+            ytdlp::forget_client();
+            let (winner, _) = ytdlp::resolve_player_client(video_url, ytdlp::DOWNLOAD_FORMAT, emit);
+            let extractor_arg = winner
+                .as_deref()
+                .map(|c| format!("youtube:player_client={c}"));
+            let extra_args: Vec<&str> = match &extractor_arg {
+                Some(arg) => vec!["--extractor-args", arg.as_str()],
+                None => Vec::new(),
+            };
+            match ytdlp::download_audio(video_url, output_path, &extra_args) {
+                Ok(path) => Ok(path),
+                Err(e) => {
+                    if ytdlp::is_client_failure(&e.to_string()) {
+                        ytdlp::forget_client();
+                    }
+                    Err(e)
+                }
+            }
+        }
+        Err(e) => {
+            if ytdlp::is_client_failure(&e.to_string()) {
+                ytdlp::forget_client();
+            }
+            Err(e)
+        }
+    }
 }
 
 /// Whether `id` looks like a real `YouTube` video `id` (11 chars, not a

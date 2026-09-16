@@ -15,7 +15,7 @@ mod artist_page;
 mod musicbrainz;
 mod soundcloud;
 mod youtube;
-mod ytdlp;
+pub(crate) mod ytdlp;
 
 use std::{
     collections::HashMap,
@@ -467,15 +467,31 @@ pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<Track>> 
     }
 }
 
+/// Progress events from the `YouTube` player-client race that precedes
+/// streaming/downloading. Emitted on the caller's channel (`BackendResult`
+/// for downloads, `PlayerState` for streams) and surfaced as toasts.
+#[derive(Debug, Clone)]
+pub enum ClientEvent {
+    Resolving,
+    Resolved(String),
+    Unavailable,
+}
+
 /// Download a track's audio for `provider` into `download_dir`. The track must
-/// already carry that provider's id/url.
-pub fn download(provider: ProviderId, track: &Track, download_dir: &str) -> Result<String> {
+/// already carry that provider's id/url. `emit` receives the player-client
+/// race events (`YouTube` only; other providers ignore it).
+pub fn download(
+    provider: ProviderId,
+    track: &Track,
+    download_dir: &str,
+    emit: &dyn Fn(ClientEvent),
+) -> Result<String> {
     match provider {
         ProviderId::YouTube => {
             let url = track
                 .provider_url(provider)
                 .unwrap_or_else(|| track.primary_url());
-            youtube::download(url, download_dir)
+            youtube::download(url, download_dir, emit)
         }
         ProviderId::SoundCloud => soundcloud::download(track, download_dir),
         _ => anyhow::bail!("provider does not support downloading"),

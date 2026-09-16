@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::app::{message::BackendResult, MusicPlayer};
 
@@ -71,19 +71,92 @@ pub fn can_self_update() -> bool {
 
 // ── GitHub API structs ──────────────────────────────────────────────
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct GitHubRelease {
     tag_name: String,
     html_url: String,
     assets: Vec<GitHubAsset>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct GitHubAsset {
     name: String,
     browser_download_url: String,
     #[serde(default)]
     digest: String,
+}
+
+/// GitHub API error payload (`{"message": ...}`).
+#[derive(Deserialize, Default)]
+struct GitHubApiError {
+    #[serde(default)]
+    message: String,
+}
+
+/// Cached latest-release response: the `ETag` from the last `200` plus the
+/// payload it validated. Stored in the cache dir so conditional requests
+/// survive restarts — a `304 Not Modified` costs no rate-limit quota.
+#[derive(Serialize, Deserialize)]
+struct VersionCheckCache {
+    etag: String,
+    release: GitHubRelease,
+}
+
+fn version_cache_path() -> std::path::PathBuf {
+    crate::data::cache_path("version_check.json")
+}
+
+fn load_version_cache() -> Option<VersionCheckCache> {
+    let json = std::fs::read_to_string(version_cache_path()).ok()?;
+    serde_json::from_str(&json).ok()
+}
+
+fn save_version_cache(cache: &VersionCheckCache) {
+    if serde_json::to_string(cache).is_ok_and(|json| {
+        let path = version_cache_path();
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        std::fs::write(path, json).is_ok()
+    }) {}
+}
+
+/// Extract GitHub's `{"message"}` from an error response body, if present.
+fn github_error_message(resp: &mut ureq::http::Response<ureq::Body>) -> Option<String> {
+    let body = resp.body_mut().read_to_string().ok()?;
+    let err: GitHubApiError = serde_json::from_str(&body).ok()?;
+    (!err.message.is_empty()).then_some(err.message)
+}
+
+/// Error text for a `403`/`429`: names the rate limit (with reset time when
+/// the `x-ratelimit-reset` header is present) or surfaces a non-quota denial.
+fn rate_limit_error(resp: &mut ureq::http::Response<ureq::Body>) -> String {
+    let message = github_error_message(resp).unwrap_or_default();
+    if !message.to_ascii_lowercase().contains("rate limit") {
+        return if message.is_empty() {
+            "GitHub API denied the request (HTTP 403)".to_string()
+        } else {
+            format!("GitHub API denied the request: {message}")
+        };
+    }
+    let reset_in = resp
+        .headers()
+        .get("x-ratelimit-reset")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(|reset| {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            reset.saturating_sub(now)
+        });
+    match reset_in {
+        Some(secs) if secs > 0 => format!(
+            "GitHub rate limit exceeded, resets in ~{} min; update check skipped",
+            secs / 60 + 1
+        ),
+        _ => "GitHub rate limit exceeded; update check skipped".to_string(),
+    }
 }
 
 /// Release asset filename for the current compilation target, e.g.
@@ -175,28 +248,7 @@ pub fn spawn_version_check(tx: std::sync::mpsc::Sender<BackendResult>) {
         }
 
         let result: Result<Option<UpdateInfo>, String> = (|| {
-            let url = format!("https://api.github.com/repos/{GITHUB_REPO}/releases/latest");
-            let resp = agent()
-                .get(&url)
-                .header("User-Agent", &format!("goosemusic/{APP_VERSION}"))
-                .header("Accept", "application/vnd.github.v3+json")
-                .call();
-
-            let mut resp = match resp {
-                Ok(r) => r,
-                Err(ureq::Error::StatusCode(code)) => {
-                    return Err(format!("GitHub API returned HTTP {code}"));
-                }
-                Err(e) => {
-                    return Err(format!("GitHub API request failed: {e}"));
-                }
-            };
-
-            let release: GitHubRelease = resp
-                .body_mut()
-                .read_json()
-                .map_err(|e| format!("Failed to parse GitHub API response: {e}"))?;
-
+            let release = fetch_release()?;
             let tag = release.tag_name.trim_start_matches('v');
 
             if !version_gt(tag, APP_VERSION) {
@@ -253,6 +305,57 @@ pub fn spawn_version_check(tx: std::sync::mpsc::Sender<BackendResult>) {
             },
         });
     });
+}
+
+/// Fetch the latest release, sending the cached `ETag` when present: a `304`
+/// answers from the stored payload and costs no rate-limit quota, a `200`
+/// refreshes the cache, and quota denials surface as distinct errors.
+fn fetch_release() -> Result<GitHubRelease, String> {
+    let url = format!("https://api.github.com/repos/{GITHUB_REPO}/releases/latest");
+    let cached = load_version_cache();
+    let mut req = agent()
+        .get(&url)
+        .header("User-Agent", &format!("goosemusic/{APP_VERSION}"))
+        .header("Accept", "application/vnd.github.v3+json")
+        .config()
+        .http_status_as_error(false)
+        .build();
+    if let Some(c) = &cached {
+        req = req.header("If-None-Match", &c.etag);
+    }
+    let mut resp = req
+        .call()
+        .map_err(|e| format!("GitHub API request failed: {e}"))?;
+
+    match resp.status().as_u16() {
+        304 => cached
+            .map(|c| c.release)
+            .ok_or_else(|| "GitHub returned 304 with no cached release".to_string()),
+        200 => {
+            let etag = resp
+                .headers()
+                .get("etag")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or_default()
+                .to_string();
+            let release: GitHubRelease = resp
+                .body_mut()
+                .read_json()
+                .map_err(|e| format!("Failed to parse GitHub API response: {e}"))?;
+            if !etag.is_empty() {
+                save_version_cache(&VersionCheckCache {
+                    etag,
+                    release: release.clone(),
+                });
+            }
+            Ok(release)
+        }
+        403 | 429 => Err(rate_limit_error(&mut resp)),
+        code => Err(match github_error_message(&mut resp) {
+            Some(msg) => format!("GitHub API returned HTTP {code}: {msg}"),
+            None => format!("GitHub API returned HTTP {code}"),
+        }),
+    }
 }
 
 /// Spawn a detached thread that downloads the release asset, verifies it,

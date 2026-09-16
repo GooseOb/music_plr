@@ -13,6 +13,8 @@ use std::{
 
 use tracing::{debug, warn};
 
+use crate::providers::ClientEvent;
+
 mod growing;
 mod normalization;
 mod symphonia_source;
@@ -37,6 +39,7 @@ pub struct PlayerState {
     pub cache_ready: bool,
     pub has_output: bool,
     pub error: Option<String>,
+    pub client_event: Option<ClientEvent>,
 }
 
 enum PlayerCommand {
@@ -82,6 +85,7 @@ impl AudioPlayer {
             cache_ready: false,
             has_output: false,
             error: None,
+            client_event: None,
         }));
 
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
@@ -106,6 +110,10 @@ impl AudioPlayer {
             let mut stream_url: Option<String> = None;
             let mut expected_duration: f32 = 0.0;
             let mut stream_active: bool = false;
+            // Whether the current stream started on the remembered winner
+            // without racing: a client-dependent failure then retries once
+            // with a fresh race instead of surfacing an error.
+            let mut stream_allow_retry: bool = false;
             // The normalization gain for the currently-streaming track, set
             // when `StreamAndCache` arrives and read by the progressive-decode
             // block below (which runs outside that match arm's scope).
@@ -125,6 +133,7 @@ impl AudioPlayer {
                     // `writer_alive` flag so any in-flight reader stops blocking.
                     writer_alive.take();
                     stream_active = false;
+                    stream_allow_retry = false;
                     stream_url = None;
                     playback_file = None;
                     if let Some((_, s)) = &output {
@@ -167,8 +176,29 @@ impl AudioPlayer {
                                 duration
                             );
 
+                            // Start streaming right away on the remembered
+                            // winner (or yt-dlp defaults) without blocking
+                            // on a race; a client-dependent failure retries
+                            // below with a fresh race. On a cold cache the
+                            // race is warmed in the background (silently, no
+                            // toasts) so the next track starts on a winner.
+                            let winner = if crate::providers::ytdlp::is_youtube_url(&url) {
+                                crate::providers::ytdlp::cached_client()
+                            } else {
+                                None
+                            };
+                            if winner.is_none() && crate::providers::ytdlp::is_youtube_url(&url) {
+                                let warm_url = url.clone();
+                                std::thread::spawn(move || {
+                                    let _ = crate::providers::ytdlp::resolve_player_client(
+                                        &warm_url,
+                                        crate::providers::ytdlp::STREAM_FORMAT,
+                                        &|_| {},
+                                    );
+                                });
+                            }
                             let Some((child, alive_flag)) =
-                                spawn_stream_to_cache(&url, &cache_path)
+                                spawn_stream_to_cache(&url, &cache_path, winner.as_deref())
                             else {
                                 continue;
                             };
@@ -176,6 +206,7 @@ impl AudioPlayer {
                             ytdlp = Some(child);
                             writer_alive = Some(alive_flag);
                             playback_file = Some(cache_path);
+                            stream_allow_retry = crate::providers::ytdlp::is_youtube_url(&url);
                             stream_url = Some(url);
                             expected_duration = duration;
                             stream_active = true;
@@ -328,6 +359,49 @@ impl AudioPlayer {
                                 } else {
                                     format!("yt-dlp exited with error ({exit})")
                                 };
+                                let retry = stream_allow_retry
+                                    && stream_url
+                                        .as_deref()
+                                        .is_some_and(crate::providers::ytdlp::is_youtube_url)
+                                    && crate::providers::ytdlp::is_client_failure(&error_msg);
+                                stream_allow_retry = false;
+                                if crate::providers::ytdlp::is_client_failure(&error_msg) {
+                                    crate::providers::ytdlp::forget_client();
+                                }
+                                if retry {
+                                    if let (Some(url), Some(path)) =
+                                        (stream_url.clone(), playback_file.clone())
+                                    {
+                                        let (winner, _) =
+                                            crate::providers::ytdlp::resolve_player_client(
+                                                &url,
+                                                crate::providers::ytdlp::STREAM_FORMAT,
+                                                &|event| {
+                                                    set_client_event(&state_clone, event);
+                                                },
+                                            );
+                                        // Drop the partial output and truncate
+                                        // the cache file so the retry starts
+                                        // clean; decoding restarts below once
+                                        // enough of the new stream has landed.
+                                        let _ = std::fs::File::create(&path);
+                                        if let Some((_, s)) = &output {
+                                            s.stop();
+                                        }
+                                        output = None;
+                                        if let Ok(mut st) = state_clone.lock() {
+                                            st.has_output = false;
+                                            st.progress = 0.0;
+                                        }
+                                        if let Some((child, alive)) =
+                                            spawn_stream_to_cache(&url, &path, winner.as_deref())
+                                        {
+                                            ytdlp = Some(child);
+                                            writer_alive = Some(alive);
+                                            continue;
+                                        }
+                                    }
+                                }
                                 if let Ok(mut st) = state_clone.lock() {
                                     st.error = Some(error_msg);
                                 }
@@ -504,8 +578,22 @@ impl AudioPlayer {
         self.state.lock().ok().and_then(|mut st| st.error.take())
     }
 
+    pub fn take_client_event(&self) -> Option<ClientEvent> {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|mut st| st.client_event.take())
+    }
+
     pub fn has_output(&self) -> bool {
         self.state.lock().is_ok_and(|st| st.has_output)
+    }
+}
+
+/// Record a player-client race event for the tick loop to surface as a toast.
+fn set_client_event(state: &Arc<Mutex<PlayerState>>, event: ClientEvent) {
+    if let Ok(mut st) = state.lock() {
+        st.client_event = Some(event);
     }
 }
 
@@ -559,7 +647,8 @@ fn spawn_http_stream_to_cache(url: &str, cache_path: &std::path::Path) -> Option
 }
 
 /// Spawn `yt-dlp` streaming `url` to stdout plus a thread copying its
-/// stdout into `cache_path`.
+/// stdout into `cache_path`, using `client` as the `youtube:player_client`
+/// (or yt-dlp's defaults when `None`).
 ///
 /// Returns the child process and a "writer alive" flag that the copy thread
 /// clears once the download finishes, so a reader blocked at EOF on the still
@@ -568,6 +657,7 @@ fn spawn_http_stream_to_cache(url: &str, cache_path: &std::path::Path) -> Option
 fn spawn_stream_to_cache(
     url: &str,
     cache_path: &std::path::Path,
+    client: Option<&str>,
 ) -> Option<(std::process::Child, Arc<AtomicBool>)> {
     // Request AAC-in-M4A: symphonia can decode AAC (unlike Opus/WebM, which
     // neither rodio's `symphonia-all` nor the standalone `symphonia` 0.5 crate
@@ -579,6 +669,7 @@ fn spawn_stream_to_cache(
         );
         return None;
     };
+    let extractor_arg = client.map(|c| format!("youtube:player_client={c}"));
     let mut args = vec![
         "-f",
         "bestaudio[ext=m4a]/bestaudio",
@@ -587,8 +678,9 @@ fn spawn_stream_to_cache(
         "--no-warnings",
         "--no-check-formats",
     ];
-    #[cfg(target_os = "linux")]
-    args.extend_from_slice(&["--extractor-args", "youtube:player_client=web_embedded"]);
+    if let Some(ref arg) = extractor_arg {
+        args.extend_from_slice(&["--extractor-args", arg.as_str()]);
+    }
     args.push(url);
 
     let mut child = match Command::new(path)

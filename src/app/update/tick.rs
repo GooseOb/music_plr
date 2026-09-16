@@ -55,6 +55,9 @@ impl MusicPlayer {
         if let Some(err) = self.audio.take_error() {
             self.notify_error(err);
         }
+        if let Some(event) = self.audio.take_client_event() {
+            self.notify_client_event(event);
+        }
         // Detect audio state changes for media-control update throttling.
         if self.is_playing != s.is_playing || (self.duration - s.duration).abs() > 0.001 {
             self.media_controls_dirty = true;
@@ -389,6 +392,10 @@ impl MusicPlayer {
             BackendResult::DownloadError(msg) => {
                 error!("Download error: {}", msg);
                 self.notify_error(msg);
+                Task::none()
+            }
+            BackendResult::PlayerClientEvent(event) => {
+                self.notify_client_event(event);
                 Task::none()
             }
             BackendResult::SearchError(msg) => {

@@ -86,6 +86,23 @@ impl MusicPlayer {
         });
     }
 
+    /// Surface a `YouTube` player-client race event as a toast, using the
+    /// current language. The "none available" case is an error toast, but
+    /// playback/download still falls back to yt-dlp's defaults.
+    pub fn notify_client_event(&mut self, event: crate::providers::ClientEvent) {
+        match event {
+            crate::providers::ClientEvent::Resolving => {
+                self.notify(self.strings.resolving_player_client);
+            }
+            crate::providers::ClientEvent::Resolved(client) => {
+                self.notify((self.strings.resolved_player_client)(&client));
+            }
+            crate::providers::ClientEvent::Unavailable => {
+                self.notify_error(self.strings.player_client_unavailable.to_string());
+            }
+        }
+    }
+
     pub fn notify_error(&mut self, msg: String) {
         warn!("Backend error: {}", msg);
         self.notification = Some(crate::app::Toast {

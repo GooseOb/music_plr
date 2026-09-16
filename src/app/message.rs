@@ -24,6 +24,9 @@ pub enum BackendResult {
     BrowseResults(u64, Vec<Track>, Option<crate::providers::AlbumMeta>),
     DownloadComplete(Track, String),
     DownloadError(String),
+    /// A `YouTube` player-client race event from a download thread; the tick
+    /// loop surfaces it as a toast.
+    PlayerClientEvent(crate::providers::ClientEvent),
     SearchError(String),
     ThumbnailDownloaded(String),
     LyricsFetched(Result<Lyrics, String>, String),
