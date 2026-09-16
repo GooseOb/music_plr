@@ -130,7 +130,7 @@ src/
 
 `AudioPlayer` runs a dedicated output thread (mpsc command channel). Decoding is fully native via symphonia.
 
-- **Stream+cache**: `yt-dlp -f bestaudio[ext=m4a]/bestaudio -o -` writes AAC-in-M4A to the cache file (`.cache`, owned by `StreamCache`); a copy thread drains stdout and flips `writer_alive` when done.
+- **Stream+cache**: `yt-dlp -f bestaudio[ext=m4a]/bestaudio/best[ext=mp4]/best -o -` writes AAC audio (muxed MP4 fallback for age-restricted tracks, whose AAC symphonia still decodes) to the cache file (`.cache`, owned by `StreamCache`); a copy thread drains stdout and flips `writer_alive` when done.
 - **Decoding**: a custom `SymphoniaStreamingSource` (rodio `Source` + `Iterator<Item=i16>`) wraps a non-seekable `GrowingMediaSource`, so symphonia demuxes sequentially and plays a still-growing file without `rodio::Decoder::new`'s `SeekError`. The reader blocks at EOF while `writer_alive`, so playback starts within a few KB.
 - **Cached/downloaded/local** (`PlayCached`) reuse the same source with `writer_alive = None` (real `byte_len`) so seeking works on replay.
 - **Stream completion**: when yt-dlp and the copy thread both finish (`writer_alive` false), the tick loop registers the cache; track end → sink empties → auto-advance.

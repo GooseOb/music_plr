@@ -659,10 +659,12 @@ fn spawn_stream_to_cache(
     cache_path: &std::path::Path,
     client: Option<&str>,
 ) -> Option<(std::process::Child, Arc<AtomicBool>)> {
-    // Request AAC-in-M4A: symphonia can decode AAC (unlike Opus/WebM, which
-    // neither rodio's `symphonia-all` nor the standalone `symphonia` 0.5 crate
-    // can decode), and YouTube serves it as a fast-start DASH stream (moov at
-    // the front) that demuxes sequentially — ideal for streaming.
+    // Request AAC-in-M4A (see `STREAM_FORMAT`): symphonia can decode AAC
+    // (unlike Opus/WebM, which neither rodio's `symphonia-all` nor the
+    // standalone `symphonia` 0.5 crate can decode), and YouTube serves it as
+    // a fast-start DASH stream (moov at the front) that demuxes
+    // sequentially — ideal for streaming. The muxed tail of the selector
+    // covers age-restricted tracks that only offer a 360p MP4.
     let Some(path) = crate::deps::resolve_yt_dlp() else {
         warn!(
             "yt-dlp not found; install it from the Dependencies dialog (or place yt-dlp on PATH)"
@@ -672,7 +674,7 @@ fn spawn_stream_to_cache(
     let extractor_arg = client.map(|c| format!("youtube:player_client={c}"));
     let mut args = vec![
         "-f",
-        "bestaudio[ext=m4a]/bestaudio",
+        crate::providers::ytdlp::STREAM_FORMAT,
         "-o",
         "-",
         "--no-warnings",

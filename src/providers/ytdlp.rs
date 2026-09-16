@@ -25,8 +25,11 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
 pub(crate) const PLAYER_CLIENTS: &[&str] = &["ios", "android", "web", "tv", "mweb", "web_embedded"];
 
 /// Format selector probed (and then streamed) for live playback: AAC-in-M4A
-/// that symphonia decodes, falling back to any best audio.
-pub(crate) const STREAM_FORMAT: &str = "bestaudio[ext=m4a]/bestaudio";
+/// that symphonia decodes, falling back to any best audio, then to muxed
+/// MP4/best. The muxed fallback matters for age-restricted tracks: without
+/// an age-verified account `YouTube` serves only a 360p muxed MP4 whose AAC
+/// audio symphonia still decodes (video track is skipped).
+pub(crate) const STREAM_FORMAT: &str = "bestaudio[ext=m4a]/bestaudio/best[ext=mp4]/best";
 
 /// Format selector probed before an `--extract-audio` download: any audio
 /// works since yt-dlp re-encodes to MP3.
