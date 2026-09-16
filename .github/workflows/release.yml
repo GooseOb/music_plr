@@ -7,6 +7,7 @@
 #   - build-macos   – macOS, aarch64 + x86_64 (matrix, same runner type)
 #   - build-windows – Windows, x86_64 MSVC
 #   - release       – collects artifacts, publishes GitHub release
+#   - publish-crates-io – publishes to crates.io (independent; never blocks release)
 #
 # To add Linux ARM, create a new `build-linux-arm` job using `cross`
 # (https://github.com/cross-rs/cross) on ubuntu-latest.
@@ -82,12 +83,6 @@ jobs:
         env:
           CARGO_PROFILE_RELEASE_STRIP: "true"
         run: cargo build --release --locked --target x86_64-unknown-linux-gnu
-
-      - name: Publish to crates.io
-        continue-on-error: true
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish
 
       - name: Package
         run: |
@@ -247,3 +242,33 @@ jobs:
             - **D-Bus** session bus (Linux) — MPRIS media-key integration (OS-provided)
 
             Nothing needs installing manually to play, stream, or download.
+
+  publish-crates-io:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libasound2-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            libx11-dev \
+            libxrandr-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: x86_64-unknown-linux-gnu-crate
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
