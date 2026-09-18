@@ -28,7 +28,7 @@ pub enum BackendResult {
     /// loop surfaces it as a toast.
     PlayerClientEvent(crate::providers::ClientEvent),
     SearchError(String),
-    ThumbnailDownloaded(String),
+    ThumbnailDownloaded(ProviderId, String),
     LyricsFetched(Result<Lyrics, String>, String),
     NormalizationComputed(String, f32),
     CardPlaylistReady(usize, String, Vec<Track>),

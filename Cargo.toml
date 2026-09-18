@@ -33,6 +33,7 @@ souvlaki = { version = "0.8", default-features = false, features = ["use_zbus"] 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
 musicbrainz_rs = { version = "0.13", features = ["sync"] }
+bandcamp = "0.3.4"
 rsoundcloud = "0.2"
 csv = "1"
 sys-locale = "0.3"

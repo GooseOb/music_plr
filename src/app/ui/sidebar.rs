@@ -112,7 +112,7 @@ fn library_row<'a>(
     } else {
         p.fg_secondary
     };
-    let thumb = player.thumbnail_index.get(&item.id);
+    let thumb = player.thumbnail_index.get(item.provider, &item.id);
     let thumb = thumbnail(theme::ICON_SIZE_LG + 4.0, thumb);
     let is_hovered = player.drag.is_hovered_library_card(item);
     let hover_item = item.clone();

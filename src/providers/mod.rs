@@ -12,6 +12,8 @@
 //! [`crate::types::Track`]s carrying that provider's id.
 
 mod artist_page;
+mod bandcamp;
+pub(crate) mod lastfm;
 mod musicbrainz;
 mod soundcloud;
 mod youtube;
@@ -98,6 +100,8 @@ pub enum ProviderId {
     YouTube,
     SoundCloud,
     MusicBrainz,
+    Bandcamp,
+    LastFm,
     Local,
 }
 
@@ -112,11 +116,39 @@ pub struct ProviderCaps {
 }
 
 impl ProviderId {
+    /// Directory name for this provider's cached files (thumbnails, stream
+    /// cache). Lowercase ASCII, safe to use as a path segment.
+    pub fn slug(self) -> &'static str {
+        match self {
+            ProviderId::YouTube => "youtube",
+            ProviderId::SoundCloud => "soundcloud",
+            ProviderId::MusicBrainz => "musicbrainz",
+            ProviderId::Bandcamp => "bandcamp",
+            ProviderId::LastFm => "lastfm",
+            ProviderId::Local => "local",
+        }
+    }
+
+    /// Inverse of [`slug`](ProviderId::slug); `None` for unknown directory names.
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        match slug {
+            "youtube" => Some(ProviderId::YouTube),
+            "soundcloud" => Some(ProviderId::SoundCloud),
+            "musicbrainz" => Some(ProviderId::MusicBrainz),
+            "bandcamp" => Some(ProviderId::Bandcamp),
+            "lastfm" => Some(ProviderId::LastFm),
+            "local" => Some(ProviderId::Local),
+            _ => None,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             ProviderId::YouTube => "YouTube",
             ProviderId::SoundCloud => "SoundCloud",
             ProviderId::MusicBrainz => "MusicBrainz",
+            ProviderId::Bandcamp => "Bandcamp",
+            ProviderId::LastFm => "Last.fm",
             ProviderId::Local => "Local",
         }
     }
@@ -128,6 +160,8 @@ impl ProviderId {
             ProviderId::YouTube,
             ProviderId::SoundCloud,
             ProviderId::MusicBrainz,
+            ProviderId::Bandcamp,
+            ProviderId::LastFm,
         ]
     }
 
@@ -161,6 +195,18 @@ impl ProviderId {
                 download: false,
                 radio: false,
             },
+            ProviderId::Bandcamp => ProviderCaps {
+                search: true,
+                stream: true,
+                download: true,
+                radio: false,
+            },
+            ProviderId::LastFm => ProviderCaps {
+                search: true,
+                stream: false,
+                download: false,
+                radio: true,
+            },
             ProviderId::Local => ProviderCaps {
                 search: false,
                 stream: false,
@@ -182,7 +228,7 @@ impl ProviderId {
                 SearchScope::Albums,
                 SearchScope::Playlists,
             ],
-            ProviderId::MusicBrainz => &[
+            ProviderId::MusicBrainz | ProviderId::Bandcamp | ProviderId::LastFm => &[
                 SearchScope::Songs,
                 SearchScope::Artists,
                 SearchScope::Albums,
@@ -310,6 +356,8 @@ pub fn search(
         ProviderId::YouTube => youtube::search(query, scope, offset),
         ProviderId::SoundCloud => Ok(soundcloud::search(query, scope, offset)),
         ProviderId::MusicBrainz => Ok(musicbrainz::search(query, scope, offset)),
+        ProviderId::Bandcamp => bandcamp::search(query, scope, offset),
+        ProviderId::LastFm => lastfm::search(query, scope, offset),
         ProviderId::Local => Ok((Vec::new(), SearchTab::Songs)),
     }
 }
@@ -320,6 +368,8 @@ pub fn search_more(provider: ProviderId, query: &str, offset: usize) -> Result<V
         ProviderId::YouTube => youtube::search_more(query, offset),
         ProviderId::SoundCloud => Ok(soundcloud::search_more(query, offset)),
         ProviderId::MusicBrainz => Ok(musicbrainz::search_more(query, offset)),
+        ProviderId::Bandcamp => bandcamp::search_more(query, offset),
+        ProviderId::LastFm => lastfm::search_more(query, offset),
         ProviderId::Local => Ok(Vec::new()),
     }
 }
@@ -344,6 +394,8 @@ pub fn browse(
         ProviderId::YouTube => youtube::browse(id, kind),
         ProviderId::SoundCloud => Ok((soundcloud::browse(id, kind)?, None)),
         ProviderId::MusicBrainz => Ok((musicbrainz::browse(id, kind)?, None)),
+        ProviderId::Bandcamp => bandcamp::browse(id, kind),
+        ProviderId::LastFm => lastfm::browse(id, kind),
         ProviderId::Local => Ok((Vec::new(), None)),
     }
 }
@@ -382,6 +434,8 @@ pub fn spawn_artist_kinds_fetch(
             let result = match provider {
                 ProviderId::YouTube => youtube::fetch_artist_page(&id, kinds),
                 ProviderId::MusicBrainz => musicbrainz::fetch_artist_page(&id, kinds),
+                ProviderId::Bandcamp => bandcamp::fetch_artist_page(&id, kinds),
+                ProviderId::LastFm => lastfm::fetch_artist_page(&id, kinds),
                 _ => Ok(artist_page::ArtistPage::default()),
             }
             .map_err(|e| format!("{e:#}"));
@@ -432,6 +486,8 @@ pub fn resolve_artist_id(provider: ProviderId, name: &str) -> Result<Option<Stri
         ProviderId::YouTube => youtube::resolve_artist_id(name),
         ProviderId::SoundCloud => soundcloud::resolve_artist_id(name),
         ProviderId::MusicBrainz => musicbrainz::resolve_artist_id(name),
+        ProviderId::Bandcamp => bandcamp::resolve_artist_id(name),
+        ProviderId::LastFm => lastfm::resolve_artist_id(name),
         ProviderId::Local => Ok(None),
     }
 }
@@ -440,7 +496,11 @@ pub fn resolve_artist_id(provider: ProviderId, name: &str) -> Result<Option<Stri
 pub fn radio_song(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     match provider {
         ProviderId::YouTube => youtube::radio_song(id),
-        ProviderId::SoundCloud | ProviderId::MusicBrainz | ProviderId::Local => Ok(Vec::new()),
+        ProviderId::LastFm => lastfm::radio_song(id),
+        ProviderId::SoundCloud
+        | ProviderId::MusicBrainz
+        | ProviderId::Bandcamp
+        | ProviderId::Local => Ok(Vec::new()),
     }
 }
 
@@ -448,7 +508,11 @@ pub fn radio_song(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
 pub fn radio_artist(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     match provider {
         ProviderId::YouTube => youtube::radio_artist(id),
-        ProviderId::SoundCloud | ProviderId::MusicBrainz | ProviderId::Local => Ok(Vec::new()),
+        ProviderId::LastFm => lastfm::radio_artist(id),
+        ProviderId::SoundCloud
+        | ProviderId::MusicBrainz
+        | ProviderId::Bandcamp
+        | ProviderId::Local => Ok(Vec::new()),
     }
 }
 
@@ -463,6 +527,8 @@ pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<Track>> 
         ProviderId::YouTube => youtube::resolve_id(track),
         ProviderId::SoundCloud => soundcloud::resolve_id(track),
         ProviderId::MusicBrainz => musicbrainz::resolve_id(track),
+        ProviderId::Bandcamp => bandcamp::resolve_id(track),
+        ProviderId::LastFm => lastfm::resolve_id(track),
         ProviderId::Local => Ok(None),
     }
 }
@@ -494,6 +560,7 @@ pub fn download(
             youtube::download(url, download_dir, emit)
         }
         ProviderId::SoundCloud => soundcloud::download(track, download_dir),
+        ProviderId::Bandcamp => bandcamp::download(track, download_dir),
         _ => anyhow::bail!("provider does not support downloading"),
     }
 }

@@ -93,7 +93,7 @@ fn provider_row<'a>(
                 Row::with_children([
                     thumbnail(
                         theme::PLAYBAR_THUMBNAIL_SIZE,
-                        player.thumbnail_index.get(&pt.id),
+                        player.thumbnail_index.get(provider, &pt.id),
                     ),
                     disabled_text_input_row(player.strings.lbl_thumbnail, &pt.thumbnail),
                 ])

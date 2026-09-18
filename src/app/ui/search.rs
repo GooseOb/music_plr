@@ -210,7 +210,7 @@ fn card_row<'a>(
     item: &crate::data::library::LibraryItem,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let thumb = player.thumbnail_index.get(id);
+    let thumb = player.thumbnail_index.get(item.provider, id);
     let leading = text((index + 1).to_string())
         .size(theme::TEXT_SIZE_SM)
         .style(fg_secondary())
@@ -263,6 +263,7 @@ pub(super) fn browse_meta(badge: &str, date: &str) -> Option<String> {
 
 pub(super) fn view_browse<'a>(
     player: &'a MusicPlayer,
+    provider: ProviderId,
     label: &'a str,
     thumb_key: &str,
     meta: Option<String>,
@@ -271,7 +272,7 @@ pub(super) fn view_browse<'a>(
 
     let image = thumbnail(
         theme::PAGE_THUMBNAIL_SIZE,
-        player.thumbnail_index.get(thumb_key),
+        player.thumbnail_index.get(provider, thumb_key),
     );
     let header = Row::with_children([
         image,

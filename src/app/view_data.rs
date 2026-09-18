@@ -42,6 +42,8 @@ pub struct AlbumRef {
     pub id: String,
     pub name: String,
     #[serde(default)]
+    pub provider: ProviderId,
+    #[serde(default)]
     pub badge: String,
     #[serde(default)]
     pub date: String,
@@ -53,6 +55,8 @@ pub struct AlbumRef {
 pub struct PlaylistRef {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub provider: ProviderId,
     #[serde(default)]
     pub thumbnail: String,
 }
@@ -104,12 +108,14 @@ impl From<LibraryItem> for ViewKind {
                 id: item.id,
                 name: item.title,
                 thumbnail: item.thumbnail,
+                provider: item.provider,
                 ..Default::default()
             }),
             LibraryKind::Playlist => ViewKind::PlaylistView(PlaylistRef {
                 id: item.id,
                 name: item.title,
                 thumbnail: item.thumbnail,
+                provider: item.provider,
             }),
         }
     }

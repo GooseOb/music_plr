@@ -339,17 +339,15 @@ impl MusicPlayer {
         };
         let (id, page) = (&entry.id, &entry.page);
         if let Some(header) = &page.header {
-            let key = crate::app::ui::artist::header_thumb_key(
-                id,
-                page.header_provider.unwrap_or_default(),
-            );
+            let provider = page.header_provider.unwrap_or_default();
+            let key = crate::app::ui::artist::header_thumb_key(id);
             if !header.image.is_empty() {
-                self.thumbnail_index.ensure(&key, &header.image);
+                self.thumbnail_index.ensure(provider, &key, &header.image);
             }
         }
-        for (id, thumbnail) in page.card_thumbs() {
+        for (provider, id, thumbnail) in page.card_thumbs() {
             if !thumbnail.is_empty() {
-                self.thumbnail_index.ensure(id, thumbnail);
+                self.thumbnail_index.ensure(provider, id, thumbnail);
             }
         }
     }

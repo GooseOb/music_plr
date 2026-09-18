@@ -25,10 +25,16 @@ pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Mess
                 search::view_search_radio(player, label)
             }
             ViewKind::Artist(_) => artist::view_artist(player),
-            ViewKind::Album(r) => {
-                search::view_browse(player, &r.name, &r.id, browse_meta(&r.badge, &r.date))
+            ViewKind::Album(r) => search::view_browse(
+                player,
+                r.provider,
+                &r.name,
+                &r.id,
+                browse_meta(&r.badge, &r.date),
+            ),
+            ViewKind::PlaylistView(r) => {
+                search::view_browse(player, r.provider, &r.name, &r.id, None)
             }
-            ViewKind::PlaylistView(r) => search::view_browse(player, &r.name, &r.id, None),
             ViewKind::Playlist(entry) => playlist::view_playlist(player, entry),
             ViewKind::Downloads => playlist::view_downloads(player),
             ViewKind::Settings => settings::view_settings(player),

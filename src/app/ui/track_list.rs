@@ -249,7 +249,7 @@ fn track_row_layout_inner<'a>(
     show_album: bool,
     show_plays: bool,
 ) -> Row<'a, Message, AppTheme> {
-    let thumb = player.thumbnail_index.get(track.primary_id());
+    let thumb = player.thumbnail_index.get(track.source, track.primary_id());
     let is_downloaded = player.download_registry.contains(&track.cache_key());
     let is_cached = player
         .stream_cache
@@ -266,6 +266,7 @@ fn track_row_layout_inner<'a>(
                         crate::app::ViewKind::Album(crate::app::view_data::AlbumRef {
                             id: album.id.clone(),
                             name: album.name.clone(),
+                            provider: track.source,
                             ..Default::default()
                         }),
                         track.source,

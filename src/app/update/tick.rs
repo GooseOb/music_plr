@@ -131,7 +131,7 @@ impl MusicPlayer {
             // regardless of provider (YouTube, SoundCloud, MusicBrainz, …).
             if !track.thumbnail().is_empty() {
                 self.thumbnail_index
-                    .ensure(track.primary_id(), track.thumbnail());
+                    .ensure(track.source, track.primary_id(), track.thumbnail());
             }
         }
         match &view.kind {
@@ -141,17 +141,20 @@ impl MusicPlayer {
                 if let Some(playlist) = self.playlists.playlists.get(entry.index) {
                     for track in &playlist.tracks {
                         if !track.thumbnail().is_empty() {
-                            self.thumbnail_index
-                                .ensure(track.primary_id(), track.thumbnail());
+                            self.thumbnail_index.ensure(
+                                track.source,
+                                track.primary_id(),
+                                track.thumbnail(),
+                            );
                         }
                     }
                 }
             }
             ViewKind::Album(r) => {
-                self.thumbnail_index.ensure(&r.id, &r.thumbnail);
+                self.thumbnail_index.ensure(r.provider, &r.id, &r.thumbnail);
             }
             ViewKind::PlaylistView(r) => {
-                self.thumbnail_index.ensure(&r.id, &r.thumbnail);
+                self.thumbnail_index.ensure(r.provider, &r.id, &r.thumbnail);
             }
             _ => {}
         }
@@ -161,7 +164,8 @@ impl MusicPlayer {
             | crate::providers::SearchTab::Playlists(cards) = &s.tab
             {
                 for card in cards {
-                    self.thumbnail_index.ensure(&card.id, &card.thumbnail);
+                    self.thumbnail_index
+                        .ensure(s.provider, &card.id, &card.thumbnail);
                 }
             }
         }
@@ -221,7 +225,8 @@ impl MusicPlayer {
                 r.date = meta.date;
             }
             if r.thumbnail.is_empty() && !meta.thumbnail.is_empty() {
-                self.thumbnail_index.ensure(&r.id.clone(), &meta.thumbnail);
+                self.thumbnail_index
+                    .ensure(r.provider, &r.id.clone(), &meta.thumbnail);
                 r.thumbnail = meta.thumbnail;
             }
         }
@@ -366,8 +371,11 @@ impl MusicPlayer {
                     // about, so the freshly inserted tracks must be seeded
                     // here or their artwork never downloads.
                     for track in tracks.iter().filter(|t| !t.thumbnail().is_empty()) {
-                        self.thumbnail_index
-                            .ensure(track.primary_id(), track.thumbnail());
+                        self.thumbnail_index.ensure(
+                            track.source,
+                            track.primary_id(),
+                            track.thumbnail(),
+                        );
                     }
                     let msg = (self.strings.added_to)(count, &name);
                     self.notify(msg);
@@ -433,8 +441,8 @@ impl MusicPlayer {
                 self.notify_error(msg);
                 Task::none()
             }
-            BackendResult::ThumbnailDownloaded(id) => {
-                self.thumbnail_index.mark_downloaded(&id);
+            BackendResult::ThumbnailDownloaded(provider, id) => {
+                self.thumbnail_index.mark_downloaded(provider, &id);
                 Task::none()
             }
             BackendResult::NormalizationComputed(id, gain) => {
@@ -515,7 +523,8 @@ impl MusicPlayer {
         self.download_registry.register(track.clone());
         let msg = (self.strings.download_complete)(&path);
         self.notify(msg);
-        self.thumbnail_index.mark_downloaded(track.primary_id());
+        self.thumbnail_index
+            .mark_downloaded(track.source, track.primary_id());
         if matches!(self.view_data().kind, ViewKind::Downloads) {
             if let Some(tracks) = self.view_data_mut().tracks_mut() {
                 tracks.push(track);
@@ -604,7 +613,7 @@ impl MusicPlayer {
             }
             original.source = provider;
             self.thumbnail_index
-                .ensure(original.primary_id(), original.thumbnail());
+                .ensure(provider, original.primary_id(), original.thumbnail());
 
             let slot = if pos.list == TrackListKind::Active {
                 self.slot_for_request(rid)

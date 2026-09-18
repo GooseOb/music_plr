@@ -36,18 +36,22 @@ pub use updates::{
 
 const DOUBLE_CLICK_MS: u128 = 300;
 
-/// Download thumbnails for the given `(id, url)` pairs. `id` names the cache
-/// file; `url` is the source (empty falls back to the default `YouTube` still).
-pub fn spawn_thumbnail_download(entries: Vec<(String, String)>, tx: &mpsc::Sender<BackendResult>) {
+/// Download thumbnails for the given `(provider, id, url)` triples. `id`
+/// names the cache file inside the provider's directory; `url` is the source
+/// (empty falls back to the default `YouTube` still).
+pub fn spawn_thumbnail_download(
+    entries: Vec<(crate::providers::ProviderId, String, String)>,
+    tx: &mpsc::Sender<BackendResult>,
+) {
     tracing::debug!(
         "Spawning thumbnail download threads for {} entries",
         entries.len()
     );
-    for (id, thumb) in entries {
+    for (provider, id, thumb) in entries {
         let tx = tx.clone();
         thread::spawn(move || {
-            crate::data::thumbnails::download(&id, &thumb);
-            let _ = tx.send(BackendResult::ThumbnailDownloaded(id));
+            crate::data::thumbnails::download(provider, &id, &thumb);
+            let _ = tx.send(BackendResult::ThumbnailDownloaded(provider, id));
         });
     }
 }

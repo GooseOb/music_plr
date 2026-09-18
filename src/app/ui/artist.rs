@@ -74,12 +74,12 @@ pub(super) fn view_artist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, A
 
 /// Thumbnail cache key for the artist header image, namespaced by the
 /// provider supplying it so switching providers swaps the picture.
-pub(crate) fn header_thumb_key(id: &str, provider: ProviderId) -> String {
-    format!("artist-header:{}:{}", id, provider.label())
+pub(crate) fn header_thumb_key(id: &str) -> String {
+    format!("artist-header:{id}")
 }
 
-/// "Provided by [YT | SC]" picker for the header block (thumbnail /
-/// description source).
+/// "Provided by [YT | SC | BC | LFM]" picker for the header block
+/// (thumbnail / description source).
 fn header_provider_picker(
     selected: Option<ProviderId>,
     tr: &'static crate::i18n::Strings,
@@ -89,13 +89,21 @@ fn header_provider_picker(
             .size(theme::TEXT_SIZE_XS)
             .style(fg_secondary())
             .into(),
-        scope_tab_row([ProviderId::YouTube, ProviderId::SoundCloud].map(|p| {
-            (
-                p.label().to_string(),
-                selected == Some(p),
-                Message::ArtistHeaderProviderChanged(p),
-            )
-        })),
+        scope_tab_row(
+            [
+                ProviderId::YouTube,
+                ProviderId::SoundCloud,
+                ProviderId::Bandcamp,
+                ProviderId::LastFm,
+            ]
+            .map(|p| {
+                (
+                    p.label().to_string(),
+                    selected == Some(p),
+                    Message::ArtistHeaderProviderChanged(p),
+                )
+            }),
+        ),
     ])
     .spacing(theme::SPACING_XS)
     .align_y(alignment::Vertical::Center)
@@ -113,7 +121,7 @@ fn header<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let thumb = player
         .thumbnail_index
-        .get(&header_thumb_key(id, header_provider.unwrap_or_default()));
+        .get(header_provider.unwrap_or_default(), &header_thumb_key(id));
     let image = thumbnail(theme::PAGE_THUMBNAIL_SIZE, thumb);
 
     let stats_line = header
@@ -225,6 +233,7 @@ fn cards<'a>(
                 };
                 h_card(
                     player,
+                    provider,
                     &c.id,
                     &c.title,
                     &subtitle,
@@ -235,6 +244,7 @@ fn cards<'a>(
                             badge: c.badge.clone(),
                             date: c.date.clone(),
                             thumbnail: c.thumbnail.clone(),
+                            provider,
                         }),
                         provider,
                     ),
@@ -246,6 +256,7 @@ fn cards<'a>(
             .map(|c| {
                 h_card(
                     player,
+                    provider,
                     &c.id,
                     &c.title,
                     "",
@@ -254,6 +265,7 @@ fn cards<'a>(
                             id: c.id.clone(),
                             name: c.title.clone(),
                             thumbnail: c.thumbnail.clone(),
+                            provider,
                         }),
                         provider,
                     ),
@@ -265,6 +277,7 @@ fn cards<'a>(
             .map(|r| {
                 h_card(
                     player,
+                    provider,
                     &r.id,
                     &r.name,
                     &r.stat,
@@ -366,12 +379,13 @@ where
 /// `on_press` (drill-down).
 fn h_card<'a>(
     player: &'a MusicPlayer,
+    provider: ProviderId,
     thumb_id: &str,
     title: &'a str,
     subtitle: &str,
     on_press: Message,
 ) -> Element<'a, Message, AppTheme> {
-    let thumb_path = player.thumbnail_index.get(thumb_id);
+    let thumb_path = player.thumbnail_index.get(provider, thumb_id);
     let image = Container::new(thumbnail(CARD_IMAGE_SIZE, thumb_path)).height(CARD_IMAGE_SIZE);
     let mut body = vec![image.into()];
     body.push(

@@ -270,7 +270,9 @@ impl MusicPlayer {
         player.resume_playback();
         for item in &player.library.items {
             if !item.thumbnail.is_empty() {
-                player.thumbnail_index.ensure(&item.id, &item.thumbnail);
+                player
+                    .thumbnail_index
+                    .ensure(item.provider, &item.id, &item.thumbnail);
             }
         }
         crate::app::update::cleanup_stale_update();

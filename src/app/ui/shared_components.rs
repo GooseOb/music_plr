@@ -20,7 +20,7 @@ use crate::{
 };
 
 pub fn thumbnail(size: f32, thumb: Option<&std::path::PathBuf>) -> Element<'_, Message, AppTheme> {
-    if let Some(path) = thumb {
+    if let Some(path) = thumb.filter(|p| p.exists()) {
         image(image::Handle::from_path(path))
             .width(size)
             .height(size)

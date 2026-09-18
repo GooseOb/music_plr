@@ -2,13 +2,13 @@
 
 ![Screenshot](./docs/plr_screen.png)
 
-A YouTube/SoundCloud search music player with local playback, downloads, and OS media controls, built with [iced](https://iced.rs).
+A YouTube/SoundCloud/Bandcamp search music player with local playback, downloads, and OS media controls, built with [iced](https://iced.rs).
 
 ## Features
 
-- **Search** — YouTube Music (Songs / Videos / Artists / Albums / Playlists) via ytmusicapi with yt-dlp fallback, plus SoundCloud search. Drill
+- **Search** — YouTube Music (Songs / Videos / Artists / Albums / Playlists) via ytmusicapi with yt-dlp fallback, plus SoundCloud, Bandcamp, Last.fm (built-in app key), and MusicBrainz search. Drill
   into artists, albums, and playlists.
-- **Streaming & caching** — Stream audio via yt-dlp with fully native decoding, cached to disk for instant replay.
+- **Streaming & caching** — Stream audio via yt-dlp (YouTube/SoundCloud) or direct HTTP (Bandcamp), with fully native decoding, cached to disk for instant replay.
 - **Downloads** — Download tracks to MP3 via yt-dlp, with a Downloads view and on-row indicators.
 - **Local music & playlists** — Add local files (MP3, FLAC, WAV, OGG, M4A, AAC, OPUS, WMA) and create, rename, delete, and organize playlists.
 - **Library** — Save albums, artists, and playlists; browse them from the sidebar.

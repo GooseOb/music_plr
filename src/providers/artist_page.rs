@@ -255,18 +255,23 @@ impl ArtistPageState {
     }
 
     /// `(id, thumbnail)` of every non-empty card across the card sections.
-    pub fn card_thumbs(&self) -> impl Iterator<Item = (&String, &String)> {
-        self.sections.iter().flat_map(|s| match &s.state {
-            LoadState::Ready(SectionContent::Albums(v)) => {
-                v.iter().map(|c| (&c.id, &c.thumbnail)).collect()
+    pub fn card_thumbs(&self) -> impl Iterator<Item = (ProviderId, &String, &String)> {
+        self.sections.iter().flat_map(|s| {
+            let Some(provider) = s.provider else {
+                return Vec::new();
+            };
+            match &s.state {
+                LoadState::Ready(SectionContent::Albums(v)) => {
+                    v.iter().map(|c| (provider, &c.id, &c.thumbnail)).collect()
+                }
+                LoadState::Ready(SectionContent::Playlists(v)) => {
+                    v.iter().map(|c| (provider, &c.id, &c.thumbnail)).collect()
+                }
+                LoadState::Ready(SectionContent::Related(v)) => {
+                    v.iter().map(|r| (provider, &r.id, &r.thumbnail)).collect()
+                }
+                _ => Vec::new(),
             }
-            LoadState::Ready(SectionContent::Playlists(v)) => {
-                v.iter().map(|c| (&c.id, &c.thumbnail)).collect()
-            }
-            LoadState::Ready(SectionContent::Related(v)) => {
-                v.iter().map(|r| (&r.id, &r.thumbnail)).collect()
-            }
-            _ => Vec::new(),
         })
     }
 
@@ -379,12 +384,25 @@ impl ArtistSectionKind {
     /// Providers that can serve this section, in preference order.
     pub fn providers(self) -> &'static [ProviderId] {
         match self {
+            Self::Popular => &[
+                ProviderId::YouTube,
+                ProviderId::SoundCloud,
+                ProviderId::Bandcamp,
+                ProviderId::LastFm,
+            ],
             Self::Albums => &[
                 ProviderId::YouTube,
                 ProviderId::SoundCloud,
                 ProviderId::MusicBrainz,
+                ProviderId::Bandcamp,
+                ProviderId::LastFm,
             ],
-            _ => &[ProviderId::YouTube, ProviderId::SoundCloud],
+            Self::Related => &[
+                ProviderId::YouTube,
+                ProviderId::SoundCloud,
+                ProviderId::LastFm,
+            ],
+            Self::Playlists => &[ProviderId::YouTube, ProviderId::SoundCloud],
         }
     }
 }
