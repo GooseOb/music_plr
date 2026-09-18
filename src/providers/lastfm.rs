@@ -21,10 +21,6 @@ const BUNDLED_API_KEY: &str = "14a3619d2a81b7cd3e2e0a9adaebeecf";
 /// on every row.
 const DEFAULT_ART_HASH: &str = "2a96cbd8b46e442fc41c2b86b821562f";
 
-fn api_key() -> &'static str {
-    BUNDLED_API_KEY
-}
-
 fn agent() -> &'static ureq::Agent {
     static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
     AGENT.get_or_init(|| {
@@ -37,14 +33,7 @@ fn agent() -> &'static ureq::Agent {
 }
 
 fn get(method: &str, params: &[(&str, &str)]) -> Result<serde_json::Value> {
-    let key = api_key();
-    if key.trim().is_empty() {
-        anyhow::bail!("Last.fm API key is not set (Settings)");
-    }
-    let mut url = format!(
-        "{API_URL}?method={method}&api_key={}&format=json",
-        crate::util::urlencode(key.trim())
-    );
+    let mut url = format!("{API_URL}?method={method}&api_key={BUNDLED_API_KEY}&format=json");
     for (k, v) in params {
         let _ = write!(url, "&{k}={}", crate::util::urlencode(v));
     }
@@ -178,7 +167,7 @@ fn enrich_songs_with_album_art(tracks: Vec<Track>) -> Vec<Track> {
             .map(|artist| s.spawn(move || artist_art(artist)))
             .collect::<Vec<_>>()
             .into_iter()
-            .map(|h| h.join().unwrap())
+            .map(|h| h.join().ok().flatten())
             .collect()
     });
     let by_artist: std::collections::HashMap<&str, &str> = artists
@@ -252,7 +241,7 @@ fn enrich_parallel(
             })
             .collect::<Vec<_>>()
             .into_iter()
-            .map(|h| h.join().unwrap())
+            .filter_map(|h| h.join().ok())
             .collect()
     })
 }
@@ -447,7 +436,7 @@ fn header_from_info(artist: &serde_json::Value) -> ArtistHeader {
     let listener_count = listeners(artist);
     if listener_count > 0 {
         stats.push((
-            "Listeners".to_string(),
+            "Last.fm Listeners".to_string(),
             crate::util::format_count(listener_count),
         ));
     }
@@ -457,7 +446,10 @@ fn header_from_info(artist: &serde_json::Value) -> ArtistHeader {
         .and_then(|p| p.as_str())
     {
         if let Ok(plays) = plays.parse::<u64>() {
-            stats.push(("Plays".to_string(), crate::util::format_count(plays)));
+            stats.push((
+                "Last.fm Plays".to_string(),
+                crate::util::format_count(plays),
+            ));
         }
     }
     if let Some(tags) = artist
@@ -472,7 +464,7 @@ fn header_from_info(artist: &serde_json::Value) -> ArtistHeader {
             .filter(|n| !n.is_empty())
             .collect();
         if !names.is_empty() {
-            stats.push(("Tags".to_string(), names.join(", ")));
+            stats.push(("Last.fm Tags".to_string(), names.join(", ")));
         }
     }
     let bio = artist

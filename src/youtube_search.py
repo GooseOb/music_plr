@@ -349,7 +349,7 @@ def artist_page(browse_id):
         "description": a.get("description", "") or "",
     }
     if a.get("monthlyListeners"):
-        header["stats"].append(["Monthly listeners", a["monthlyListeners"]])
+        header["stats"].append(["YouTube Monthly listeners", a["monthlyListeners"]])
     if a.get("subscribers"):
         header["stats"].append(["YouTube Subscribers", a["subscribers"]])
 

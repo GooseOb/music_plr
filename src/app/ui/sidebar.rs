@@ -231,7 +231,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         ),
     ];
 
-    let playlist_items: Vec<Element<'_, Message, AppTheme>> = player
+    let playlist_items = player
         .playlists
         .playlists
         .iter()
@@ -260,16 +260,14 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
                 .width(Length::Fill)
                 .id(iced::widget::Id::from(format!("sidebar_pl:{i}")))
                 .into()
-        })
-        .collect();
+        });
 
-    let library_items: Vec<Element<'_, Message, AppTheme>> = player
+    let library_items = player
         .library
         .items
         .iter()
         .enumerate()
-        .map(|(i, item)| library_row(player, item, i))
-        .collect();
+        .map(|(i, item)| library_row(player, item, i));
 
     let library_section: Element<'_, Message, AppTheme> = if player.library.items.is_empty() {
         library_collapsed(player.strings.nothing_saved_yet)

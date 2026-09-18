@@ -52,13 +52,13 @@ impl MusicPlayer {
         // Source: everything it can serve. YouTube answers in one request;
         // SoundCloud runs all five endpoints concurrently.
         self.load_artist_page(rid, name, source, ArtistDataKind::ALL);
-        // Companion header stats (e.g. SoundCloud Followers on a YouTube
-        // artist page) — a single cheap profile request.
-        if source != ProviderId::YouTube {
-            self.load_artist_page(rid, name, ProviderId::YouTube, &[ArtistDataKind::Header]);
-        }
-        if source != ProviderId::SoundCloud {
-            self.load_artist_page(rid, name, ProviderId::SoundCloud, &[ArtistDataKind::Header]);
+        // Companion headers (e.g. SoundCloud followers or a Last.fm bio on
+        // a YouTube artist page) — one cheap header-only request per other
+        // header-capable provider, so the header picker switches request-free.
+        for &provider in ProviderId::header_providers() {
+            if provider != source {
+                self.load_artist_page(rid, name, provider, &[ArtistDataKind::Header]);
+            }
         }
         nav_task
     }

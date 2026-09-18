@@ -844,27 +844,22 @@ pub(super) fn view_import_playlist<'a>(
                 .into()
         }
         ImportMethod::FileList => {
-            let pattern_rows: Vec<Element<'_, Message, AppTheme>> = dialog
-                .patterns
-                .iter()
-                .enumerate()
-                .map(|(i, pat)| {
-                    let input = text_input(tr.import_pattern_lbl, pat)
-                        .on_input(move |v| Message::ImportPatternChanged(i, v))
-                        .padding(theme::SPACING_SM)
-                        .into();
-                    let remove = Button::new(
-                        icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM).style(icon_fg_muted()),
-                    )
-                    .padding(theme::SPACING_XS)
-                    .on_press(Message::ImportRemovePattern(i))
+            let pattern_rows = dialog.patterns.iter().enumerate().map(|(i, pat)| {
+                let input = text_input(tr.import_pattern_lbl, pat)
+                    .on_input(move |v| Message::ImportPatternChanged(i, v))
+                    .padding(theme::SPACING_SM)
                     .into();
-                    Row::with_children([input, remove])
-                        .spacing(theme::SPACING_SM)
-                        .align_y(alignment::Vertical::Center)
-                        .into()
-                })
-                .collect();
+                let remove = Button::new(
+                    icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM).style(icon_fg_muted()),
+                )
+                .padding(theme::SPACING_XS)
+                .on_press(Message::ImportRemovePattern(i))
+                .into();
+                Row::with_children([input, remove])
+                    .spacing(theme::SPACING_SM)
+                    .align_y(alignment::Vertical::Center)
+                    .into()
+            });
             let add = Button::new(text(tr.import_add_pattern))
                 .padding([theme::SPACING_XS, theme::SPACING_MD])
                 .on_press(Message::ImportAddPattern)

@@ -172,6 +172,19 @@ impl ProviderId {
         &[ProviderId::YouTube, ProviderId::SoundCloud]
     }
 
+    /// Providers that can serve an artist-page header worth displaying
+    /// (picture + stats + description). Shown in the artist header picker
+    /// and pre-fetched as companions by `open_artist`. `MusicBrainz` is
+    /// excluded: its header is stats-only with no picture.
+    pub fn header_providers() -> &'static [ProviderId] {
+        &[
+            ProviderId::YouTube,
+            ProviderId::SoundCloud,
+            ProviderId::Bandcamp,
+            ProviderId::LastFm,
+        ]
+    }
+
     pub fn capabilities(self) -> ProviderCaps {
         let a = crate::deps::availability();
         match self {

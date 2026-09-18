@@ -225,10 +225,9 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
 }
 
 fn dep_settings_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let rows: Vec<Element<'_, Message, AppTheme>> = DepKind::all()
+    let rows = DepKind::all()
         .iter()
-        .map(|&kind| dep_settings_row(player, kind))
-        .collect();
+        .map(|&kind| dep_settings_row(player, kind));
     Column::with_children(rows)
         .spacing(theme::SPACING_MD)
         .into()

@@ -78,8 +78,7 @@ pub(crate) fn header_thumb_key(id: &str) -> String {
     format!("artist-header:{id}")
 }
 
-/// "Provided by [YT | SC | BC | LFM]" picker for the header block
-/// (thumbnail / description source).
+/// Provider picker for the header block (thumbnail / description source).
 fn header_provider_picker(
     selected: Option<ProviderId>,
     tr: &'static crate::i18n::Strings,
@@ -89,21 +88,13 @@ fn header_provider_picker(
             .size(theme::TEXT_SIZE_XS)
             .style(fg_secondary())
             .into(),
-        scope_tab_row(
-            [
-                ProviderId::YouTube,
-                ProviderId::SoundCloud,
-                ProviderId::Bandcamp,
-                ProviderId::LastFm,
-            ]
-            .map(|p| {
-                (
-                    p.label().to_string(),
-                    selected == Some(p),
-                    Message::ArtistHeaderProviderChanged(p),
-                )
-            }),
-        ),
+        scope_tab_row(ProviderId::header_providers().iter().map(|&p| {
+            (
+                p.label().to_string(),
+                selected == Some(p),
+                Message::ArtistHeaderProviderChanged(p),
+            )
+        })),
     ])
     .spacing(theme::SPACING_XS)
     .align_y(alignment::Vertical::Center)
