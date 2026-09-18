@@ -153,6 +153,22 @@ impl ProviderId {
         }
     }
 
+    /// Every provider, including `Local`. Prefer the narrower lists
+    /// ([`searchable`](ProviderId::searchable),
+    /// [`defaultable`](ProviderId::defaultable),
+    /// [`header_providers`](ProviderId::header_providers)) when only capable
+    /// providers make sense.
+    pub fn all() -> &'static [ProviderId] {
+        &[
+            ProviderId::YouTube,
+            ProviderId::SoundCloud,
+            ProviderId::MusicBrainz,
+            ProviderId::Bandcamp,
+            ProviderId::LastFm,
+            ProviderId::Local,
+        ]
+    }
+
     /// All providers that appear in the search provider picker (excludes
     /// `Local`, which is not a remote search source).
     pub fn searchable() -> &'static [ProviderId] {
@@ -166,10 +182,14 @@ impl ProviderId {
     }
 
     /// Providers eligible to be the default provider: must support both
-    /// streaming and downloading (`MusicBrainz` is search-only; Local is
-    /// excluded).
+    /// streaming and downloading (search-only `MusicBrainz`/`LastFm` and
+    /// `Local` are excluded).
     pub fn defaultable() -> &'static [ProviderId] {
-        &[ProviderId::YouTube, ProviderId::SoundCloud]
+        &[
+            ProviderId::YouTube,
+            ProviderId::SoundCloud,
+            ProviderId::Bandcamp,
+        ]
     }
 
     /// Providers that can serve an artist-page header worth displaying
