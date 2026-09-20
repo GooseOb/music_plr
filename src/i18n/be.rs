@@ -97,6 +97,8 @@ pub const STRINGS: Strings = Strings {
     theme_lbl: "Тэма",
     language_lbl: "Мова",
     default_provider_lbl: "Перадвызначаная крыніца стрымінгу і спамповак",
+    cookie_browser_lbl: "Cookies браўзэра (відэа з векавым абмежаваньнем)",
+    cookies_off: "Выкл",
     normalize_volume_lbl: "Нармалізаваць гучнасьць паміж трэкамі",
     download_dir_lbl: "Папка спамповак",
     cache_size_lbl: "Макс. памер кэша стрымінгу (МБ)",

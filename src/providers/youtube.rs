@@ -488,14 +488,17 @@ fn fetch_batch_metadata(
     let Some(path) = crate::deps::resolve_yt_dlp() else {
         return results;
     };
+    let cookie_args = crate::deps::cookie_args();
+    let mut batch_args = vec![
+        "--batch-file",
+        "-",
+        "--dump-json",
+        "--skip-download",
+        "--no-warnings",
+    ];
+    batch_args.extend(cookie_args.iter().map(String::as_str));
     let Ok(mut child) = Command::new(path)
-        .args([
-            "--batch-file",
-            "-",
-            "--dump-json",
-            "--skip-download",
-            "--no-warnings",
-        ])
+        .args(&batch_args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

@@ -97,6 +97,8 @@ pub const STRINGS: Strings = Strings {
     theme_lbl: "テーマ",
     language_lbl: "言語",
     default_provider_lbl: "既定のストリーミング・ダウンロード提供元",
+    cookie_browser_lbl: "ブラウザのCookie（年齢制限動画用）",
+    cookies_off: "オフ",
     normalize_volume_lbl: "曲間で音量を正規化",
     download_dir_lbl: "ダウンロード先",
     cache_size_lbl: "ストリーミングキャッシュの最大サイズ（MB）",

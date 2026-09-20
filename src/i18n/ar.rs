@@ -97,6 +97,8 @@ pub const STRINGS: Strings = Strings {
     theme_lbl: "السمة",
     language_lbl: "اللغة",
     default_provider_lbl: "مزود البث والتنزيل الافتراضي",
+    cookie_browser_lbl: "ملفات تعريف ارتباط المتصفّح (لمقاطع المقيّدة عمريًا)",
+    cookies_off: "إيقاف",
     normalize_volume_lbl: "تطبيع مستوى الصوت بين الأغاني",
     download_dir_lbl: "مجلد التنزيل",
     cache_size_lbl: "أقصى حجم لذاكرة البث المؤقتة (ميغابايت)",

@@ -175,6 +175,7 @@ impl MusicPlayer {
     pub(crate) fn new_with(config: Config) -> Self {
         let (result_tx, result_rx) = mpsc::channel();
         let (media_event_tx, media_event_rx) = mpsc::channel();
+        crate::deps::set_cookie_browser(config.cookie_browser.clone());
 
         let strings = config.language.strings();
         let app_theme = AppTheme::new(&Palette::from(config.theme_kind));

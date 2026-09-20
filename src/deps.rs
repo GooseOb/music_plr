@@ -299,12 +299,53 @@ pub fn resolve_yt_dlp() -> Option<PathBuf> {
 }
 
 /// Build a `Command` pre-targeted at the resolved `yt-dlp`, or an error
-/// directing the user to the dependency dialog.
+/// directing the user to the dependency dialog. Includes the configured
+/// `--cookies-from-browser` args (if any) so every `yt-dlp` call shares them.
 pub fn yt_dlp_command() -> Result<Command> {
     let path = resolve_yt_dlp().context(
         "yt-dlp not found. Install it from the Dependencies dialog, or place yt-dlp on PATH.",
     )?;
-    Ok(Command::new(path))
+    let mut cmd = Command::new(path);
+    cmd.args(cookie_args());
+    Ok(cmd)
+}
+
+/// Browsers `yt-dlp --cookies-from-browser` can read cookies from. Offered in
+/// the Settings picker; stored lowercase in [`crate::data::config::Config`].
+pub const COOKIE_BROWSERS: &[&str] = &[
+    "brave", "chrome", "chromium", "edge", "firefox", "opera", "safari", "vivaldi",
+];
+
+static COOKIE_BROWSER: OnceLock<std::sync::Mutex<Option<String>>> = OnceLock::new();
+
+/// Record which browser `yt-dlp` should read cookies from (`None` disables).
+/// Unknown names are rejected defensively. Synced from the config at startup
+/// and on every settings change; background threads read it via
+/// [`cookie_args`] so no plumbing is needed at each call site.
+pub fn set_cookie_browser(browser: Option<String>) {
+    let normalized = browser.and_then(|b| {
+        let lower = b.to_ascii_lowercase();
+        COOKIE_BROWSERS.contains(&lower.as_str()).then_some(lower)
+    });
+    if let Ok(mut guard) = COOKIE_BROWSER
+        .get_or_init(|| std::sync::Mutex::new(None))
+        .lock()
+    {
+        *guard = normalized;
+    }
+}
+
+/// Extra `yt-dlp` args for the configured cookie browser, or empty when
+/// disabled. Used by call sites that build their `Command` manually (stream,
+/// probes, batch metadata); [`yt_dlp_command`] already includes them.
+pub(crate) fn cookie_args() -> Vec<String> {
+    COOKIE_BROWSER
+        .get_or_init(|| std::sync::Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+        .map(|b| vec!["--cookies-from-browser".to_string(), b])
+        .unwrap_or_default()
 }
 
 /// Detect which dependencies are missing, returning them for the startup
@@ -635,7 +676,20 @@ pub(crate) fn sha256(data: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::sha256;
+    use super::{cookie_args, set_cookie_browser, sha256};
+
+    #[test]
+    fn cookie_browser_normalizes_and_rejects_unknown() {
+        set_cookie_browser(Some("Firefox".into()));
+        assert_eq!(
+            cookie_args(),
+            vec!["--cookies-from-browser".to_string(), "firefox".to_string()]
+        );
+        set_cookie_browser(Some("netscape".into()));
+        assert!(cookie_args().is_empty());
+        set_cookie_browser(None);
+        assert!(cookie_args().is_empty());
+    }
 
     #[test]
     fn sha256_known_vectors() {

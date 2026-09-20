@@ -97,6 +97,8 @@ pub const STRINGS: Strings = Strings {
     theme_lbl: "Tema",
     language_lbl: "Idioma",
     default_provider_lbl: "Provedor padrão de streaming e download",
+    cookie_browser_lbl: "Cookies do navegador (vídeos com restrição de idade)",
+    cookies_off: "Não",
     normalize_volume_lbl: "Normalizar o volume entre faixas",
     download_dir_lbl: "Pasta de download",
     cache_size_lbl: "Tamanho máximo do cache de streaming (MB)",

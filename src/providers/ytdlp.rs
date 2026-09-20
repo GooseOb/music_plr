@@ -168,21 +168,23 @@ fn probe_client_has_format(
     client: &str,
     done: &AtomicBool,
 ) -> bool {
+    let extractor_arg = format!("youtube:player_client={client}");
+    let cookie_args = crate::deps::cookie_args();
+    let mut args = vec![
+        "--skip-download",
+        "--no-warnings",
+        "--no-playlist",
+        "--socket-timeout",
+        "10",
+        "-f",
+        format_selector,
+        "--print",
+        "format_id",
+    ];
+    args.extend(cookie_args.iter().map(String::as_str));
+    args.extend(["--extractor-args", extractor_arg.as_str(), url]);
     let Ok(mut child) = std::process::Command::new(yt_dlp)
-        .args([
-            "--skip-download",
-            "--no-warnings",
-            "--no-playlist",
-            "--socket-timeout",
-            "10",
-            "-f",
-            format_selector,
-            "--print",
-            "format_id",
-            "--extractor-args",
-            &format!("youtube:player_client={client}"),
-            url,
-        ])
+        .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

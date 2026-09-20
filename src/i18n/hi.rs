@@ -97,6 +97,8 @@ pub const STRINGS: Strings = Strings {
     theme_lbl: "थीम",
     language_lbl: "भाषा",
     default_provider_lbl: "डिफ़ॉल्ट स्ट्रीमिंग और डाउनलोड प्रदाता",
+    cookie_browser_lbl: "ब्राउज़र कुकीज़ (आयु-प्रतिबंधित वीडियो के लिए)",
+    cookies_off: "बंद",
     normalize_volume_lbl: "ट्रैक्स के बीच वॉल्यूम सामान्य करें",
     download_dir_lbl: "डाउनलोड निर्देशिका",
     cache_size_lbl: "अधिकतम स्ट्रीम कैश आकार (MB)",

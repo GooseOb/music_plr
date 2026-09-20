@@ -732,6 +732,7 @@ fn spawn_stream_to_cache(
         return None;
     };
     let extractor_arg = client.map(|c| format!("youtube:player_client={c}"));
+    let cookie_args = crate::deps::cookie_args();
     let mut args = vec![
         "-f",
         crate::providers::ytdlp::STREAM_FORMAT,
@@ -740,6 +741,7 @@ fn spawn_stream_to_cache(
         "--no-warnings",
         "--no-check-formats",
     ];
+    args.extend(cookie_args.iter().map(String::as_str));
     if let Some(ref arg) = extractor_arg {
         args.extend_from_slice(&["--extractor-args", arg.as_str()]);
     }

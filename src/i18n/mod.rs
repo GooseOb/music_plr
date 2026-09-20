@@ -181,6 +181,8 @@ pub struct Strings {
     pub theme_lbl: &'static str,
     pub language_lbl: &'static str,
     pub default_provider_lbl: &'static str,
+    pub cookie_browser_lbl: &'static str,
+    pub cookies_off: &'static str,
     pub normalize_volume_lbl: &'static str,
     pub download_dir_lbl: &'static str,
     pub cache_size_lbl: &'static str,

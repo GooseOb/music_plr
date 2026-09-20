@@ -97,6 +97,8 @@ pub const STRINGS: Strings = Strings {
     theme_lbl: "主题",
     language_lbl: "语言",
     default_provider_lbl: "默认的流媒体与下载提供方",
+    cookie_browser_lbl: "浏览器 Cookie（用于年龄限制视频）",
+    cookies_off: "关闭",
     normalize_volume_lbl: "在各曲目间统一音量",
     download_dir_lbl: "下载目录",
     cache_size_lbl: "流媒体缓存最大大小（MB）",

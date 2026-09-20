@@ -119,6 +119,7 @@ Config lives at `~/.config/goosemusic/config.json` and is also editable live fro
 | `max_search_history_visible` | Entries shown in the dropdown       | `10`                 |
 | `max_recently_played`        | Tracks kept in Recently Played      | `50`                 |
 | `volume_normalization`       | Consistent loudness across tracks   | `false`              |
+| `cookie_browser`             | Browser yt-dlp reads cookies from (age-restricted videos) | `none` |
 
 Persistent data goes to `~/.local/share/goosemusic` (playlists, library, downloads, search history); regenerable caches (session, streamed audio,
 thumbnails, lyrics) go to `~/.cache/goosemusic`.

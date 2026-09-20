@@ -17,6 +17,10 @@ pub struct Config {
     pub default_provider: ProviderId,
     pub language: Language,
     pub theme_kind: ThemeKind,
+    /// Browser `yt-dlp` reads cookies from for age-restricted videos (`None`
+    /// disables). `serde(default)` keeps pre-existing `config.json` files
+    /// parsing after the upgrade instead of resetting the whole config.
+    pub cookie_browser: Option<String>,
 }
 
 impl Default for Config {
@@ -31,6 +35,7 @@ impl Default for Config {
             default_provider: ProviderId::YouTube,
             language: Language::from_system_locale().unwrap_or_default(),
             theme_kind: ThemeKind::Dark,
+            cookie_browser: None,
         }
     }
 }
@@ -62,6 +67,7 @@ mod tests {
         assert_eq!(cfg.max_search_history_stored, 100);
         assert_eq!(cfg.cache_max_size_mb, 1024);
         assert_eq!(cfg.max_recently_played, 50);
+        assert_eq!(cfg.cookie_browser, None);
     }
 
     #[test]
@@ -76,6 +82,7 @@ mod tests {
             default_provider: ProviderId::SoundCloud,
             language: Language::Pl,
             theme_kind: ThemeKind::Light,
+            cookie_browser: Some("firefox".into()),
         };
 
         let json = serde_json::to_string(&cfg).unwrap();

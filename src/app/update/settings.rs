@@ -17,6 +17,7 @@ pub enum SettingsChange {
     DefaultProvider(crate::providers::ProviderId),
     Language(crate::i18n::Language),
     Theme(crate::theme::ThemeKind),
+    CookieBrowser(Option<String>),
 }
 
 impl MusicPlayer {
@@ -24,8 +25,6 @@ impl MusicPlayer {
     /// in sync. The single write path for every settings field.
     fn set_config(&mut self, f: impl FnOnce(&mut config::Config)) {
         f(&mut self.config);
-        self.stream_cache
-            .set_max_size_mb(self.config.cache_max_size_mb);
         self.config.save();
     }
 
@@ -50,6 +49,7 @@ impl MusicPlayer {
             }
             SettingsChange::CacheMaxSize(v) => {
                 if let Ok(n) = v.trim().parse::<u64>() {
+                    self.stream_cache.set_max_size_mb(n);
                     self.set_config(|c| c.cache_max_size_mb = n);
                 }
             }
@@ -76,12 +76,19 @@ impl MusicPlayer {
                 self.set_config(|c| c.theme_kind = kind);
                 self.app_theme = AppTheme::new(&kind.palette());
             }
+            SettingsChange::CookieBrowser(browser) => {
+                crate::deps::set_cookie_browser(browser.clone());
+                self.set_config(|c| c.cookie_browser = browser);
+            }
         }
     }
 
     pub fn handle_settings_reset_defaults(&mut self) {
         self.config = config::Config::default();
         self.set_config(|_| {});
+        crate::deps::set_cookie_browser(self.config.cookie_browser.clone());
+        self.stream_cache
+            .set_max_size_mb(self.config.cache_max_size_mb);
         self.app_theme = AppTheme::new(&self.config.theme_kind.palette());
     }
 }

@@ -12,6 +12,7 @@ use crate::{
     app::{
         dependency_dialog::dep_desc,
         ui::styles::{fg_accent, fg_secondary},
+        update::SettingsChange,
     },
     deps::DepKind,
     i18n::Language,
@@ -24,12 +25,33 @@ fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppThe
         (
             provider.label().to_string(),
             player.config.default_provider == provider,
-            Message::SettingsChanged(crate::app::update::SettingsChange::DefaultProvider(
-                provider,
-            )),
+            Message::SettingsChanged(SettingsChange::DefaultProvider(provider)),
         )
     }));
     Column::with_children([text(player.strings.default_provider_lbl).into(), row])
+        .spacing(theme::SPACING_SM)
+        .align_x(alignment::Horizontal::Left)
+        .into()
+}
+
+fn cookie_browser_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let current = player.config.cookie_browser.as_deref();
+    let mut items = Vec::with_capacity(crate::deps::COOKIE_BROWSERS.len() + 1);
+    items.push((
+        player.strings.cookies_off.to_string(),
+        current.is_none(),
+        Message::SettingsChanged(SettingsChange::CookieBrowser(None)),
+    ));
+    for browser in crate::deps::COOKIE_BROWSERS {
+        let browser = *browser;
+        items.push((
+            browser.to_string(),
+            current == Some(browser),
+            Message::SettingsChanged(SettingsChange::CookieBrowser(Some(browser.to_string()))),
+        ));
+    }
+    let row = scope_tab_row(items);
+    Column::with_children([text(player.strings.cookie_browser_lbl).into(), row])
         .spacing(theme::SPACING_SM)
         .align_x(alignment::Horizontal::Left)
         .into()
@@ -117,7 +139,7 @@ fn language_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         (
             language.label().to_string(),
             player.config.language == language,
-            Message::SettingsChanged(crate::app::update::SettingsChange::Language(language)),
+            Message::SettingsChanged(SettingsChange::Language(language)),
         )
     }));
     Column::with_children([text(player.strings.language_lbl).into(), row])
@@ -131,7 +153,7 @@ fn theme_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         (
             kind.label().to_string(),
             player.config.theme_kind == kind,
-            Message::SettingsChanged(crate::app::update::SettingsChange::Theme(kind)),
+            Message::SettingsChanged(SettingsChange::Theme(kind)),
         )
     }));
     Column::with_children([text(player.strings.theme_lbl).into(), row])
@@ -153,9 +175,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
 
     let normalize = checkbox(cfg.volume_normalization)
         .label(player.strings.normalize_volume_lbl)
-        .on_toggle(|b| {
-            Message::SettingsChanged(crate::app::update::SettingsChange::VolumeNormalization(b))
-        })
+        .on_toggle(|b| Message::SettingsChanged(SettingsChange::VolumeNormalization(b)))
         .spacing(theme::SPACING_MD)
         .into();
 
@@ -163,42 +183,46 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         player.strings.download_dir_lbl,
         &cfg.download_dir,
         "",
-        |s| Message::SettingsChanged(crate::app::update::SettingsChange::DownloadDir(s)),
+        |s| Message::SettingsChanged(SettingsChange::DownloadDir(s)),
     );
 
     let cache_size = text_input_row(
         player.strings.cache_size_lbl,
         &format!("{}", cfg.cache_max_size_mb),
         "1024",
-        |s| Message::SettingsChanged(crate::app::update::SettingsChange::CacheMaxSize(s)),
+        |s| Message::SettingsChanged(SettingsChange::CacheMaxSize(s)),
     );
 
     let hist_visible = text_input_row(
         player.strings.hist_rows_lbl,
         &format!("{}", cfg.max_search_history_visible),
         "10",
-        |s| Message::SettingsChanged(crate::app::update::SettingsChange::MaxHistoryVisible(s)),
+        |s| Message::SettingsChanged(SettingsChange::MaxHistoryVisible(s)),
     );
 
     let hist_stored = text_input_row(
         player.strings.hist_entries_lbl,
         &format!("{}", cfg.max_search_history_stored),
         "100",
-        |s| Message::SettingsChanged(crate::app::update::SettingsChange::MaxHistoryStored(s)),
+        |s| Message::SettingsChanged(SettingsChange::MaxHistoryStored(s)),
     );
 
     let recent = text_input_row(
         player.strings.recent_kept_lbl,
         &format!("{}", cfg.max_recently_played),
         "50",
-        |s| Message::SettingsChanged(crate::app::update::SettingsChange::MaxRecentlyPlayed(s)),
+        |s| Message::SettingsChanged(SettingsChange::MaxRecentlyPlayed(s)),
     );
 
     let content = Column::with_children([
         footer.into(),
         section(
             player.strings.sec_playback,
-            [normalize, default_provider_section(player)],
+            [
+                normalize,
+                default_provider_section(player),
+                cookie_browser_section(player),
+            ],
         ),
         section(player.strings.sec_storage, [download_dir, cache_size]),
         section(
