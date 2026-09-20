@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("संस्करण {v} में अपडेटेड। पुनरारंभ हो रहा है…"),
     package_managed: "ऐप्लिकेशन डायरेक्टरी में लिखने का अनुमति नहीं है। यदि पैकेज मैनेजर के माध्यम से स्थापित किया गया है, तो उसे उपयोग करें।",
     update_failed: |e| format!("अपडेट विफल: {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn hi_tracks(n: usize) -> String {

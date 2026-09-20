@@ -87,6 +87,37 @@ pub(crate) fn run_command_with_timeout(cmd: &mut Command, timeout: Duration) -> 
     })
 }
 
+/// Shared HTTP agent for keyless JSON providers (Last.fm, Bandcamp).
+pub(crate) fn http_agent() -> &'static ureq::Agent {
+    static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::config::Config::builder()
+            .timeout_connect(Some(std::time::Duration::from_secs(15)))
+            .timeout_global(Some(std::time::Duration::from_secs(30)))
+            .build()
+            .new_agent()
+    })
+}
+
+/// Shared multi-thread tokio runtime for async provider backends
+/// (`rsoundcloud`, `bandcamp` crate). One runtime for all providers instead of
+/// one per provider.
+pub(crate) fn shared_runtime() -> &'static tokio::runtime::Runtime {
+    static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to build provider runtime")
+    })
+}
+
+/// Ensure `dir` exists and join `{id}.mp3` — the shared download-path preamble.
+pub(crate) fn download_file_path(dir: &std::path::Path, id: &str) -> std::path::PathBuf {
+    let _ = std::fs::create_dir_all(dir);
+    dir.join(format!("{id}.mp3"))
+}
+
 /// Identifies a music provider. Stored on tracks (which provider is the source of a
 /// result) and in configuration (the default stream+download provider).
 ///
@@ -209,10 +240,10 @@ impl ProviderId {
         let a = crate::deps::availability();
         match self {
             ProviderId::YouTube => ProviderCaps {
-                search: a.yt_dlp || a.ytmusicapi,
+                search: a.ytmusicapi || a.yt_dlp,
                 stream: a.yt_dlp,
                 download: a.yt_dlp,
-                radio: a.yt_dlp,
+                radio: a.ytmusicapi,
             },
             ProviderId::SoundCloud => ProviderCaps {
                 // SoundCloud search is crate-based (no external tool); only
@@ -582,7 +613,7 @@ pub enum ClientEvent {
 pub fn download(
     provider: ProviderId,
     track: &Track,
-    download_dir: &str,
+    download_dir: &std::path::Path,
     emit: &dyn Fn(ClientEvent),
 ) -> Result<String> {
     match provider {

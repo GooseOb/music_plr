@@ -27,6 +27,7 @@ mod search;
 mod selection;
 mod session;
 pub mod settings;
+pub use settings::SettingsChange;
 mod tick;
 
 mod updates;
@@ -35,6 +36,9 @@ pub use updates::{
 };
 
 const DOUBLE_CLICK_MS: u128 = 300;
+
+/// Insert position for prepending tracks to a playlist.
+pub(crate) const PREPEND: usize = 0;
 
 /// Download thumbnails for the given `(provider, id, url)` triples. `id`
 /// names the cache file inside the provider's directory; `url` is the source

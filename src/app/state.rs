@@ -177,7 +177,7 @@ impl MusicPlayer {
         let (media_event_tx, media_event_rx) = mpsc::channel();
 
         let strings = config.language.strings();
-        let app_theme = AppTheme::new(Palette::from(config.theme_kind));
+        let app_theme = AppTheme::new(&Palette::from(config.theme_kind));
         let missing_deps = crate::deps::detect_missing();
         let found_deps: Vec<crate::deps::DepKind> = crate::deps::DepKind::all()
             .iter()
@@ -189,7 +189,7 @@ impl MusicPlayer {
             search_history: SearchHistory::load(),
             stream_cache: StreamCache::new(config.cache_max_size_mb),
             pending_cache_id: None,
-            normalization_cache: std::collections::HashMap::new(),
+            normalization_cache: crate::audio::load_gains(),
             pending_normalization_id: None,
             lyrics_client: LyricsClient::new(LyricsProvider::default()),
             lyrics: None,

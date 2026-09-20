@@ -14,11 +14,8 @@ use crate::{
         import::{ImportCsvField, ImportPlaylistDialog},
         interaction::{DefaultCtxAction, TrackListKind},
         message::{BackendResult, EditTrackField, Message},
-        update::{
-            operation::{
-                CaptureBounds, CaptureContextMenu, CaptureSearchHistoryRows, ContextMenuGeometry,
-            },
-            settings::SettingsChange,
+        update::operation::{
+            CaptureBounds, CaptureContextMenu, CaptureSearchHistoryRows, ContextMenuGeometry,
         },
     },
     deps::DepKind,
@@ -264,53 +261,43 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::ImportMethodChanged(method) => {
-                if let Some(dialog) = &mut self.import_dialog {
-                    dialog.method = method;
-                }
+                self.update_import_dialog(|dialog| dialog.method = method);
                 Task::none()
             }
             Message::ImportCsvColChanged(field, value) => {
-                if let Some(dialog) = &mut self.import_dialog {
-                    match field {
-                        ImportCsvField::Name => dialog.csv_name_col = value,
-                        ImportCsvField::Artist => dialog.csv_artist_col = value,
-                        ImportCsvField::Album => dialog.csv_album_col = value,
-                    }
-                }
+                self.update_import_dialog(|dialog| match field {
+                    ImportCsvField::Name => dialog.csv_name_col = value,
+                    ImportCsvField::Artist => dialog.csv_artist_col = value,
+                    ImportCsvField::Album => dialog.csv_album_col = value,
+                });
                 Task::none()
             }
             Message::ImportCsvPresetChanged(preset) => {
-                if let Some(dialog) = &mut self.import_dialog {
-                    dialog.apply_csv_preset(preset);
-                }
+                self.update_import_dialog(|dialog| dialog.apply_csv_preset(preset));
                 Task::none()
             }
             Message::ImportPlaylistNameChanged(value) => {
-                if let Some(dialog) = &mut self.import_dialog {
-                    dialog.playlist_name = value;
-                }
+                self.update_import_dialog(|dialog| dialog.playlist_name = value);
                 Task::none()
             }
             Message::ImportPatternChanged(index, value) => {
-                if let Some(dialog) = &mut self.import_dialog {
+                self.update_import_dialog(|dialog| {
                     if let Some(slot) = dialog.patterns.get_mut(index) {
                         *slot = value;
                     }
-                }
+                });
                 Task::none()
             }
             Message::ImportAddPattern => {
-                if let Some(dialog) = &mut self.import_dialog {
-                    dialog.patterns.push(String::new());
-                }
+                self.update_import_dialog(|dialog| dialog.patterns.push(String::new()));
                 Task::none()
             }
             Message::ImportRemovePattern(index) => {
-                if let Some(dialog) = &mut self.import_dialog {
+                self.update_import_dialog(|dialog| {
                     if index < dialog.patterns.len() {
                         dialog.patterns.remove(index);
                     }
-                }
+                });
                 Task::none()
             }
             Message::ImportSelectFiles => {
@@ -379,40 +366,8 @@ impl crate::app::MusicPlayer {
                 }
             }
             Message::NavigateForward => self.handle_navigate_forward(),
-            Message::SettingsDownloadDirChanged(dir) => {
-                self.handle_settings_change(SettingsChange::DownloadDir(dir));
-                Task::none()
-            }
-            Message::SettingsMaxHistoryVisibleChanged(v) => {
-                self.handle_settings_change(SettingsChange::MaxHistoryVisible(v));
-                Task::none()
-            }
-            Message::SettingsMaxHistoryStoredChanged(v) => {
-                self.handle_settings_change(SettingsChange::MaxHistoryStored(v));
-                Task::none()
-            }
-            Message::SettingsCacheMaxSizeChanged(v) => {
-                self.handle_settings_change(SettingsChange::CacheMaxSize(v));
-                Task::none()
-            }
-            Message::SettingsMaxRecentlyPlayedChanged(v) => {
-                self.handle_settings_change(SettingsChange::MaxRecentlyPlayed(v));
-                Task::none()
-            }
-            Message::SettingsVolumeNormalizationToggled(enabled) => {
-                self.handle_settings_change(SettingsChange::VolumeNormalization(enabled));
-                Task::none()
-            }
-            Message::SettingsLanguageChanged(language) => {
-                self.handle_settings_change(SettingsChange::Language(language));
-                Task::none()
-            }
-            Message::SettingsDefaultProviderChanged(provider) => {
-                self.handle_settings_change(SettingsChange::DefaultProvider(provider));
-                Task::none()
-            }
-            Message::SettingsThemeChanged(kind) => {
-                self.handle_settings_change(SettingsChange::Theme(kind));
+            Message::SettingsChanged(change) => {
+                self.handle_settings_change(change);
                 Task::none()
             }
             Message::SettingsResetDefaults => {
@@ -460,30 +415,10 @@ impl crate::app::MusicPlayer {
                 let width_changed = prev
                     .as_ref()
                     .is_none_or(|p| (p.panel.width - panel.width).abs() > f32::EPSILON);
-                // Recompute the flip from the original cursor point using
-                // the latest measurement. A panel flush with the window edge
-                // means its measurement was clipped by the remaining space,
-                // so that counts as overflow too. Flipped menus keep their
-                // bottom/right edge at the cursor.
-                let edge_epsilon = 1.0;
-                let moved = if let Some(menu) = &mut self.context_menu {
-                    let (cx, cy) = menu.cursor;
-                    let nx = if cx + panel.width > self.window_size.width - edge_epsilon {
-                        (cx - panel.width).max(0.0)
-                    } else {
-                        cx
-                    };
-                    let ny = if cy + panel.height > self.window_size.height - edge_epsilon {
-                        (cy - panel.height).max(0.0)
-                    } else {
-                        cy
-                    };
-                    let moved = (nx, ny) != menu.position;
-                    menu.position = (nx, ny);
-                    moved
-                } else {
-                    false
-                };
+                let moved = self
+                    .context_menu
+                    .as_mut()
+                    .is_some_and(|menu| menu.flip_position(panel, self.window_size));
                 let stable = !moved && !width_changed;
                 self.bounds.context_menu = Some(ContextMenuGeometry {
                     panel,

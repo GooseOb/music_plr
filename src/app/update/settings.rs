@@ -74,7 +74,7 @@ impl MusicPlayer {
             }
             SettingsChange::Theme(kind) => {
                 self.set_config(|c| c.theme_kind = kind);
-                self.app_theme = AppTheme::new(kind.palette());
+                self.app_theme = AppTheme::new(&kind.palette());
             }
         }
     }
@@ -82,6 +82,6 @@ impl MusicPlayer {
     pub fn handle_settings_reset_defaults(&mut self) {
         self.config = config::Config::default();
         self.set_config(|_| {});
-        self.app_theme = AppTheme::new(self.config.theme_kind.palette());
+        self.app_theme = AppTheme::new(&self.config.theme_kind.palette());
     }
 }

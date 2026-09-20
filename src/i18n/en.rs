@@ -82,8 +82,8 @@ pub const STRINGS: Strings = Strings {
     delete: "Delete",
     delete_playlist_q: "Delete playlist?",
     tracks_wont_be_deleted: "Tracks will not be deleted.",
-    lbl_id: "Id",
-    lbl_url: "Url",
+    lbl_id: "ID",
+    lbl_url: "URL",
     lbl_artist_id: "Artist ID",
     lbl_duration_secs: "Duration (in seconds)",
     lbl_thumbnail: "Thumbnail",
@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("Updated to {v}. Restarting…"),
     package_managed: "Cannot auto-update (no write access to the application directory). If installed via a package manager, use it to update.",
     update_failed: |e| format!("Update failed: {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn en_tracks(n: usize) -> String {

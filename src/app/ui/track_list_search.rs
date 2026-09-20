@@ -17,8 +17,8 @@ pub(super) fn view_track_list_search<'a>(
     fs: &'a TrackListSearch,
 ) -> Element<'a, Message, AppTheme> {
     let count = match player.track_list_match_position() {
-        Some(pos) => format!("{}/{}", pos, fs.matches.len()),
-        None => format!("0/{}", fs.matches.len()),
+        Some(pos) => (player.strings.list_match_pos)(pos, fs.matches.len()),
+        None => (player.strings.list_match_pos)(0, fs.matches.len()),
     };
 
     let input = text_input(player.strings.find_in_list, &fs.query)

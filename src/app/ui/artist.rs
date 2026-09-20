@@ -217,11 +217,8 @@ fn cards<'a>(
         SectionContent::Albums(v) => v
             .iter()
             .map(|c| {
-                let subtitle: String = match (c.badge.as_str(), c.date.as_str()) {
-                    ("", date) => date.to_string(),
-                    (badge, "") => (*badge).to_string(),
-                    (badge, date) => format!("{badge} \u{00b7} {date}"),
-                };
+                let subtitle: String =
+                    super::search::browse_meta(&c.badge, &c.date).unwrap_or_default();
                 h_card(
                     player,
                     provider,

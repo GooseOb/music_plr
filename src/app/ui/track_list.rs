@@ -77,10 +77,10 @@ where
             translation_y,
             bounds,
             ..
-        }) if count > 0 && count as f32 * crate::theme::ROW_HEIGHT > bounds.height + 1.0 => {
+        }) if count > 0 && count as f32 * theme::ROW_HEIGHT > bounds.height + 1.0 => {
             let viewport_height = bounds.height;
             let overscan = 6i32;
-            let row_h = crate::theme::ROW_HEIGHT;
+            let row_h = theme::ROW_HEIGHT;
 
             let first =
                 ((((translation_y / row_h) - overscan as f32).max(0.0)) as usize).min(count);
@@ -107,7 +107,7 @@ where
             if count == 0 {
                 Vec::new()
             } else {
-                vec![row_spacer(count as f32 * crate::theme::ROW_HEIGHT)]
+                vec![row_spacer(count as f32 * theme::ROW_HEIGHT)]
             }
         }
     };

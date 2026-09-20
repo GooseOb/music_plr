@@ -1,5 +1,3 @@
-use std::sync::OnceLock;
-
 use anyhow::{Context, Result};
 
 use crate::{
@@ -11,32 +9,11 @@ use crate::{
     types::{Track, TrackAlbum},
 };
 
-fn agent() -> &'static ureq::Agent {
-    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
-    AGENT.get_or_init(|| {
-        ureq::config::Config::builder()
-            .timeout_connect(Some(std::time::Duration::from_secs(15)))
-            .timeout_global(Some(std::time::Duration::from_mins(1)))
-            .build()
-            .new_agent()
-    })
-}
-
-fn runtime() -> &'static tokio::runtime::Runtime {
-    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to build Bandcamp runtime")
-    })
-}
-
 fn block_on<F, T>(fut: F) -> Result<T>
 where
     F: std::future::Future<Output = std::result::Result<T, bandcamp::Error>>,
 {
-    runtime()
+    super::shared_runtime()
         .block_on(fut)
         .map_err(|e| anyhow::anyhow!("Bandcamp: {e}"))
 }
@@ -240,19 +217,29 @@ pub fn search_more(query: &str, offset: usize) -> Result<Vec<Track>> {
 pub fn browse(id: &str, kind: &str) -> Result<(Vec<Track>, Option<AlbumMeta>)> {
     if kind == "artist" {
         let artist = fetch_artist(id)?;
-        let mut tracks = Vec::new();
-        for entry in artist.discography.iter().take(4) {
-            let item_type = match entry.item_type {
-                bandcamp::ArtistDiscographyEntryType::Album => "a",
-                bandcamp::ArtistDiscographyEntryType::Track => "t",
-            };
-            if let Ok(album) = fetch_tralbum(entry.band_id, entry.id, item_type) {
-                tracks.extend(album_tracks(&album));
-            }
-            if tracks.len() >= 50 {
-                break;
-            }
-        }
+        let entries: Vec<(u64, u64, &'static str)> = artist
+            .discography
+            .iter()
+            .take(4)
+            .map(|entry| {
+                let item_type = match entry.item_type {
+                    bandcamp::ArtistDiscographyEntryType::Album => "a",
+                    bandcamp::ArtistDiscographyEntryType::Track => "t",
+                };
+                (entry.band_id, entry.id, item_type)
+            })
+            .collect();
+        let tracks: Vec<Track> = std::thread::scope(|s| {
+            entries
+                .into_iter()
+                .map(|(band, id, kind)| s.spawn(move || fetch_tralbum(band, id, kind)))
+                .collect::<Vec<_>>()
+                .into_iter()
+                .filter_map(|h| h.join().ok()?.ok())
+                .flat_map(|album| album_tracks(&album))
+                .take(50)
+                .collect()
+        });
         return Ok((tracks, None));
     }
     let (band, item, kind) = split_release_id(id)?;
@@ -351,7 +338,7 @@ pub fn resolve_id(track: &Track) -> Result<Option<Track>> {
     Ok(found)
 }
 
-pub fn download(track: &Track, download_dir: &str) -> Result<String> {
+pub fn download(track: &Track, download_dir: &std::path::Path) -> Result<String> {
     use std::io::Write as _;
 
     let url = track
@@ -361,10 +348,8 @@ pub fn download(track: &Track, download_dir: &str) -> Result<String> {
     let id = track
         .provider_id(ProviderId::Bandcamp)
         .unwrap_or("download");
-    let dir = std::path::Path::new(download_dir);
-    let _ = std::fs::create_dir_all(dir);
-    let output_path = dir.join(format!("{id}.mp3"));
-    let mut body = agent()
+    let output_path = super::download_file_path(download_dir, id);
+    let mut body = super::http_agent()
         .get(&url)
         .header("User-Agent", "curl/8.5.0")
         .call()
@@ -388,7 +373,10 @@ mod tests {
     #[test]
     fn release_id_round_trip() {
         let (band, item, kind) = split_release_id("3752216131:83593492:a").unwrap();
-        assert_eq!((band, item, kind.as_str()), (3752216131, 83593492, "a"));
+        assert_eq!(
+            (band, item, kind.as_str()),
+            (3_752_216_131, 83_593_492, "a")
+        );
         assert!(split_release_id("nope").is_err());
     }
 }

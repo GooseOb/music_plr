@@ -24,7 +24,9 @@ fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppThe
         (
             provider.label().to_string(),
             player.config.default_provider == provider,
-            Message::SettingsDefaultProviderChanged(provider),
+            Message::SettingsChanged(crate::app::update::SettingsChange::DefaultProvider(
+                provider,
+            )),
         )
     }));
     Column::with_children([text(player.strings.default_provider_lbl).into(), row])
@@ -78,7 +80,7 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             };
             Column::with_children([
                 text(tr.updating).into(),
-                text(format!("{pct}%")).style(fg_secondary()).into(),
+                text((tr.percent)(pct)).style(fg_secondary()).into(),
             ])
             .spacing(theme::SPACING_SM)
             .into()
@@ -115,7 +117,7 @@ fn language_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         (
             language.label().to_string(),
             player.config.language == language,
-            Message::SettingsLanguageChanged(language),
+            Message::SettingsChanged(crate::app::update::SettingsChange::Language(language)),
         )
     }));
     Column::with_children([text(player.strings.language_lbl).into(), row])
@@ -129,7 +131,7 @@ fn theme_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         (
             kind.label().to_string(),
             player.config.theme_kind == kind,
-            Message::SettingsThemeChanged(kind),
+            Message::SettingsChanged(crate::app::update::SettingsChange::Theme(kind)),
         )
     }));
     Column::with_children([text(player.strings.theme_lbl).into(), row])
@@ -151,7 +153,9 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
 
     let normalize = checkbox(cfg.volume_normalization)
         .label(player.strings.normalize_volume_lbl)
-        .on_toggle(Message::SettingsVolumeNormalizationToggled)
+        .on_toggle(|b| {
+            Message::SettingsChanged(crate::app::update::SettingsChange::VolumeNormalization(b))
+        })
         .spacing(theme::SPACING_MD)
         .into();
 
@@ -159,35 +163,35 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         player.strings.download_dir_lbl,
         &cfg.download_dir,
         "",
-        Message::SettingsDownloadDirChanged,
+        |s| Message::SettingsChanged(crate::app::update::SettingsChange::DownloadDir(s)),
     );
 
     let cache_size = text_input_row(
         player.strings.cache_size_lbl,
         &format!("{}", cfg.cache_max_size_mb),
         "1024",
-        Message::SettingsCacheMaxSizeChanged,
+        |s| Message::SettingsChanged(crate::app::update::SettingsChange::CacheMaxSize(s)),
     );
 
     let hist_visible = text_input_row(
         player.strings.hist_rows_lbl,
         &format!("{}", cfg.max_search_history_visible),
         "10",
-        Message::SettingsMaxHistoryVisibleChanged,
+        |s| Message::SettingsChanged(crate::app::update::SettingsChange::MaxHistoryVisible(s)),
     );
 
     let hist_stored = text_input_row(
         player.strings.hist_entries_lbl,
         &format!("{}", cfg.max_search_history_stored),
         "100",
-        Message::SettingsMaxHistoryStoredChanged,
+        |s| Message::SettingsChanged(crate::app::update::SettingsChange::MaxHistoryStored(s)),
     );
 
     let recent = text_input_row(
         player.strings.recent_kept_lbl,
         &format!("{}", cfg.max_recently_played),
         "50",
-        Message::SettingsMaxRecentlyPlayedChanged,
+        |s| Message::SettingsChanged(crate::app::update::SettingsChange::MaxRecentlyPlayed(s)),
     );
 
     let content = Column::with_children([
@@ -249,7 +253,7 @@ fn dep_settings_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
     } else if let Some(res) = op.and_then(|o| o.delete_result.as_ref()) {
         match res {
             Ok(()) => text(tr.deps_deleted).style(fg_accent()).into(),
-            Err(e) => text(format!("{}: {}", tr.deps_delete_failed, e))
+            Err(e) => text((tr.deps_delete_failed_detail)(e.as_str()))
                 .style(fg_secondary())
                 .into(),
         }

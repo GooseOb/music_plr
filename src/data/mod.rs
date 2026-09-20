@@ -24,8 +24,10 @@ pub mod thumbnails;
 
 /// The app's platform directories. Falls back to the current directory when
 /// the OS can't provide them (e.g. a stripped-down container).
-fn project_dirs() -> Option<directories::ProjectDirs> {
-    directories::ProjectDirs::from("", "", "goosemusic")
+fn project_dirs() -> Option<&'static directories::ProjectDirs> {
+    static DIRS: std::sync::OnceLock<Option<directories::ProjectDirs>> = std::sync::OnceLock::new();
+    DIRS.get_or_init(|| directories::ProjectDirs::from("", "", "goosemusic"))
+        .as_ref()
 }
 
 /// Absolute path to `file` inside the config directory, or a bare relative
@@ -94,10 +96,23 @@ pub trait JsonStore: Serialize + DeserializeOwned + Default {
     fn save(&self) {
         let path = Self::path();
         if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
+            if let Err(e) = std::fs::create_dir_all(dir) {
+                tracing::warn!("Failed to create {}: {e}", dir.display());
+                return;
+            }
         }
-        if let Ok(s) = serde_json::to_string_pretty(self) {
-            let _ = std::fs::write(&path, s);
+        let Ok(s) = serde_json::to_string_pretty(self) else {
+            tracing::warn!("Failed to serialize {}", path.display());
+            return;
+        };
+        let tmp = path.with_extension("tmp");
+        if let Err(e) = std::fs::write(&tmp, s) {
+            tracing::warn!("Failed to write {}: {e}", tmp.display());
+            return;
+        }
+        if let Err(e) = std::fs::rename(&tmp, &path) {
+            tracing::warn!("Failed to rename {}: {e}", tmp.display());
+            let _ = std::fs::remove_file(&tmp);
         }
     }
 

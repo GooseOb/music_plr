@@ -21,23 +21,12 @@ const BUNDLED_API_KEY: &str = "14a3619d2a81b7cd3e2e0a9adaebeecf";
 /// on every row.
 const DEFAULT_ART_HASH: &str = "2a96cbd8b46e442fc41c2b86b821562f";
 
-fn agent() -> &'static ureq::Agent {
-    static AGENT: std::sync::OnceLock<ureq::Agent> = std::sync::OnceLock::new();
-    AGENT.get_or_init(|| {
-        ureq::config::Config::builder()
-            .timeout_connect(Some(std::time::Duration::from_secs(15)))
-            .timeout_global(Some(std::time::Duration::from_secs(20)))
-            .build()
-            .new_agent()
-    })
-}
-
 fn get(method: &str, params: &[(&str, &str)]) -> Result<serde_json::Value> {
     let mut url = format!("{API_URL}?method={method}&api_key={BUNDLED_API_KEY}&format=json");
     for (k, v) in params {
         let _ = write!(url, "&{k}={}", crate::util::urlencode(v));
     }
-    let mut body = agent()
+    let mut body = super::http_agent()
         .get(&url)
         .header(
             "User-Agent",
@@ -80,13 +69,13 @@ fn image_url(v: &serde_json::Value) -> String {
 }
 
 fn raw_image_url(v: &serde_json::Value) -> String {
-    let images = match v {
-        serde_json::Value::Array(items) => items.clone(),
+    let empty: Vec<serde_json::Value> = Vec::new();
+    let images: &[serde_json::Value] = match v {
+        serde_json::Value::Array(items) => items,
         _ => v
             .get("image")
             .and_then(|i| i.as_array())
-            .cloned()
-            .unwrap_or_default(),
+            .map_or(&empty, |a| a.as_slice()),
     };
     for want in ["extralarge", "large", "medium", "small", "mega"] {
         if let Some(url) = images.iter().find_map(|i| {
@@ -119,7 +108,8 @@ fn listeners(v: &serde_json::Value) -> u64 {
 fn track_from_search(t: &serde_json::Value) -> Track {
     let title = str_field(t, "name");
     let artist = str_field(t, "artist");
-    let mut track = Track::from_provider(
+    let play_count = listeners(t);
+    Track::from_provider_with_count(
         ProviderId::LastFm,
         track_key(&artist, &title),
         str_field(t, "url"),
@@ -129,17 +119,28 @@ fn track_from_search(t: &serde_json::Value) -> Track {
         image_url(t),
         None,
         Some(artist),
-    );
-    if let Some(pt) = track.providers.get_mut(&ProviderId::LastFm) {
-        pt.play_count = listeners(t);
-    }
-    track
+        play_count,
+    )
+}
+
+fn art_cache() -> &'static std::sync::Mutex<std::collections::HashMap<String, Option<String>>> {
+    static CACHE: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashMap<String, Option<String>>>,
+    > = std::sync::OnceLock::new();
+    CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
 /// Real artwork for a track lives on its album, which `track.search` does
 /// not return (it serves the generic star placeholder for everything). One
-/// `track.getInfo` call per track recovers the album image.
+/// `track.getInfo` call per track recovers the album image, cached per
+/// `(artist, title)` so repeated searches don't re-hit the API.
 fn album_art(artist: &str, title: &str) -> Option<String> {
+    let key = format!("t{artist}\u{1f}{title}");
+    if let Ok(cache) = art_cache().lock() {
+        if let Some(cached) = cache.get(&key) {
+            return cached.clone();
+        }
+    }
     let info = get(
         "track.getInfo",
         &[("artist", artist), ("track", title), ("autocorrect", "1")],
@@ -147,7 +148,11 @@ fn album_art(artist: &str, title: &str) -> Option<String> {
     .ok()?;
     let album = info.get("track")?.get("album")?;
     let url = image_url(album);
-    (!url.is_empty()).then_some(url)
+    let result = (!url.is_empty()).then_some(url);
+    if let Ok(mut cache) = art_cache().lock() {
+        cache.insert(key, result.clone());
+    }
+    result
 }
 
 fn enrich_songs_with_album_art(tracks: Vec<Track>) -> Vec<Track> {
@@ -207,17 +212,27 @@ fn album_art_for(track: &Track) -> Option<String> {
 
 /// Artist-level fallback for tracks with no album art (covers, remixes):
 /// the top album's artwork. Still the right artist, far better than the
-/// generic icon, and fetched once per unique artist.
+/// generic icon, and fetched once per unique artist (cached process-wide).
 fn artist_art(artist: &str) -> Option<String> {
+    let key = format!("a{artist}");
+    if let Ok(cache) = art_cache().lock() {
+        if let Some(cached) = cache.get(&key) {
+            return cached.clone();
+        }
+    }
     let top = get(
         "artist.gettopalbums",
         &[("artist", artist), ("limit", "5"), ("autocorrect", "1")],
     )
     .ok()?;
-    collect(&["topalbums", "album"], &top)
+    let result = collect(&["topalbums", "album"], &top)
         .iter()
         .map(image_url)
-        .find(|url| !url.is_empty())
+        .find(|url| !url.is_empty());
+    if let Ok(mut cache) = art_cache().lock() {
+        cache.insert(key, result.clone());
+    }
+    result
 }
 
 fn enrich_parallel(
@@ -540,25 +555,42 @@ pub fn fetch_artist_page(
                 .collect();
         }
     }
-    if K::Popular.wanted(kinds) {
-        page.popular = popular_from_top(id);
-    }
-    if K::Albums.wanted(kinds) {
-        if let Ok(top) = get(
-            "artist.gettopalbums",
-            &[("artist", id), ("limit", "10"), ("autocorrect", "1")],
-        ) {
-            page.albums = collect(&["topalbums", "album"], &top)
-                .iter()
-                .map(|a| ArtistAlbumCard {
-                    id: format!("{}\u{1f}{}", id, str_field(a, "name")),
-                    title: str_field(a, "name"),
-                    date: String::new(),
-                    badge: "Album".to_string(),
-                    thumbnail: image_url(a),
+    let (popular, albums) = std::thread::scope(|s| {
+        let popular = K::Popular
+            .wanted(kinds)
+            .then(|| s.spawn(|| popular_from_top(id)))
+            .map(|h| h.join().unwrap_or_default());
+        let albums = K::Albums
+            .wanted(kinds)
+            .then(|| {
+                s.spawn(|| {
+                    get(
+                        "artist.gettopalbums",
+                        &[("artist", id), ("limit", "10"), ("autocorrect", "1")],
+                    )
+                    .map(|top| {
+                        collect(&["topalbums", "album"], &top)
+                            .iter()
+                            .map(|a| ArtistAlbumCard {
+                                id: format!("{}\u{1f}{}", id, str_field(a, "name")),
+                                title: str_field(a, "name"),
+                                date: String::new(),
+                                badge: "Album".to_string(),
+                                thumbnail: image_url(a),
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default()
                 })
-                .collect();
-        }
+            })
+            .map(|h| h.join().unwrap_or_default());
+        (popular, albums)
+    });
+    if let Some(popular) = popular {
+        page.popular = popular;
+    }
+    if let Some(albums) = albums {
+        page.albums = albums;
     }
     Ok(page)
 }
@@ -648,38 +680,48 @@ pub fn radio_artist(id: &str) -> Result<Vec<Track>> {
         .map(|a| str_field(a, "name"))
         .filter(|n| !n.is_empty())
         .collect();
-    let mut tracks = Vec::new();
-    for name in &similar {
-        if let Ok(top) = get(
-            "artist.gettoptracks",
-            &[("artist", name), ("limit", "7"), ("autocorrect", "1")],
-        ) {
-            tracks.extend(
-                collect(&["toptracks", "track"], &top)
-                    .iter()
-                    .take(7)
-                    .map(|t| {
-                        let title = str_field(t, "name");
-                        let page = t
-                            .get("url")
-                            .and_then(|u| u.as_str())
-                            .unwrap_or_default()
-                            .to_string();
-                        Track::from_provider(
-                            ProviderId::LastFm,
-                            track_key(name, &title),
-                            page,
-                            title,
-                            name.clone(),
-                            0,
-                            image_url(t),
-                            None,
-                            Some(name.clone()),
-                        )
-                    }),
-            );
-        }
-    }
+    let tracks: Vec<Track> = std::thread::scope(|s| {
+        similar
+            .iter()
+            .map(|name| {
+                s.spawn(move || {
+                    get(
+                        "artist.gettoptracks",
+                        &[("artist", name), ("limit", "7"), ("autocorrect", "1")],
+                    )
+                    .map(|top| {
+                        collect(&["toptracks", "track"], &top)
+                            .iter()
+                            .take(7)
+                            .map(|t| {
+                                let title = str_field(t, "name");
+                                let page = t
+                                    .get("url")
+                                    .and_then(|u| u.as_str())
+                                    .unwrap_or_default()
+                                    .to_string();
+                                Track::from_provider(
+                                    ProviderId::LastFm,
+                                    track_key(name, &title),
+                                    page,
+                                    title,
+                                    name.clone(),
+                                    0,
+                                    image_url(t),
+                                    None,
+                                    Some(name.clone()),
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default()
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .flat_map(|h| h.join().unwrap_or_default())
+            .collect()
+    });
     Ok(tracks)
 }
 

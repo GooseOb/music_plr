@@ -153,18 +153,23 @@ impl SubmenuKind {
 
     /// Cheap capability probe so building the main-menu action list does not
     /// allocate a provider vec just to check that one is non-empty.
-    pub fn available(self) -> bool {
+    /// Takes the track because `Play` also covers a local file with no
+    /// stream-capable provider.
+    pub fn available(self, track: &Track) -> bool {
         use crate::providers::ProviderId;
         let any = |list: &'static [ProviderId], cap: fn(ProviderId) -> bool| {
             list.iter().copied().any(cap)
         };
         match self {
-            SubmenuKind::Play => any(ProviderId::searchable(), |p| p.capabilities().stream),
+            SubmenuKind::Play => {
+                track.local_path().is_some()
+                    || any(ProviderId::searchable(), |p| p.capabilities().stream)
+            }
             SubmenuKind::Download => any(ProviderId::defaultable(), |p| p.capabilities().download),
             SubmenuKind::SongRadio | SubmenuKind::ArtistRadio => {
                 any(ProviderId::searchable(), |p| p.capabilities().radio)
             }
-            SubmenuKind::GoToArtist => !ProviderId::searchable().is_empty(),
+            SubmenuKind::GoToArtist => any(ProviderId::searchable(), |p| p.capabilities().search),
         }
     }
 }
@@ -262,7 +267,7 @@ impl ContextMenuState {
         }
         v.push(CtxAction::AddToPlaylist);
         v.push(CtxAction::Download);
-        if SubmenuKind::SongRadio.available() {
+        if SubmenuKind::SongRadio.available(&self.track) {
             v.push(CtxAction::SongRadio);
             v.push(CtxAction::ArtistRadio);
         }
@@ -318,6 +323,27 @@ impl ContextMenuState {
         } else {
             fallback
         }
+    }
+
+    /// Recompute the flip from the original cursor point using the latest
+    /// measurement. Returns whether the position moved. A panel flush with
+    /// the window edge counts as overflow (its measurement was clipped).
+    pub fn flip_position(&mut self, panel: iced::Rectangle, window: iced::Size) -> bool {
+        const EDGE_EPSILON: f32 = 1.0;
+        let (cx, cy) = self.cursor;
+        let nx = if cx + panel.width > window.width - EDGE_EPSILON {
+            (cx - panel.width).max(0.0)
+        } else {
+            cx
+        };
+        let ny = if cy + panel.height > window.height - EDGE_EPSILON {
+            (cy - panel.height).max(0.0)
+        } else {
+            cy
+        };
+        let moved = (nx, ny) != self.position;
+        self.position = (nx, ny);
+        moved
     }
 }
 

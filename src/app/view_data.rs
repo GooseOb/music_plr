@@ -132,13 +132,27 @@ impl Default for ViewKind {
     }
 }
 
+pub struct BrowseParams<'a> {
+    pub id: &'a str,
+    pub kind: &'static str,
+    pub name: &'a str,
+}
+
 impl ViewKind {
-    pub fn browse_params(&self) -> Option<(&str, &'static str, &str)> {
+    pub fn browse_params(&self) -> Option<BrowseParams<'_>> {
         match self {
             // Artist pages have their own load path (`open_artist`) and are
             // not served by the generic browse flow.
-            ViewKind::Album(r) => Some((&r.id, "album", &r.name)),
-            ViewKind::PlaylistView(r) => Some((&r.id, "playlist", &r.name)),
+            ViewKind::Album(r) => Some(BrowseParams {
+                id: &r.id,
+                kind: "album",
+                name: &r.name,
+            }),
+            ViewKind::PlaylistView(r) => Some(BrowseParams {
+                id: &r.id,
+                kind: "playlist",
+                name: &r.name,
+            }),
             _ => None,
         }
     }
@@ -177,6 +191,10 @@ impl ViewData {
             | (ViewKind::ArtistRadio(a), ViewKind::ArtistRadio(b)) => a == b,
             (ViewKind::Artist(a), ViewKind::Artist(b)) => a.id == b.id && a.source == b.source,
             (ViewKind::Playlist(a), ViewKind::Playlist(b)) => a == b,
+            (ViewKind::Album(a), ViewKind::Album(b)) => a.id == b.id && a.provider == b.provider,
+            (ViewKind::PlaylistView(a), ViewKind::PlaylistView(b)) => {
+                a.id == b.id && a.provider == b.provider
+            }
             (ViewKind::Downloads, ViewKind::Downloads)
             | (ViewKind::Settings, ViewKind::Settings) => true,
             _ => false,

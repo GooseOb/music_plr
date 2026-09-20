@@ -3,22 +3,17 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum LoadState<T, E = String> {
     Ready(T),
     Failed(E),
+    #[default]
     Loading,
 }
 
-impl<T> LoadState<T> {
+impl<T, E> LoadState<T, E> {
     pub fn is_loading(&self) -> bool {
         matches!(self, Self::Loading)
-    }
-}
-
-impl<T: Default> Default for LoadState<T> {
-    fn default() -> Self {
-        Self::Ready(T::default())
     }
 }

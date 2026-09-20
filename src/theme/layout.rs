@@ -16,6 +16,7 @@ pub const PLAYBAR_THUMBNAIL_SIZE: f32 = 56.0;
 pub const PAGE_THUMBNAIL_SIZE: f32 = PLAYBAR_THUMBNAIL_SIZE * 2.0;
 pub const TRACK_LEADING_WIDTH: f32 = 30.0;
 
+pub const SPACING_XXS: f32 = 2.0;
 pub const SPACING_XS: f32 = 4.0;
 pub const SPACING_2XS: f32 = 6.0;
 pub const SPACING_SM: f32 = 8.0;
@@ -26,7 +27,7 @@ pub const SPACING_2XL: f32 = 32.0;
 
 pub const RADIUS_SM: f32 = 8.0;
 pub const RADIUS_MD: f32 = 12.0;
-// pub const RADIUS_LG: f32 = 16.0;
+pub const RADIUS_LG: f32 = 16.0;
 pub const SEARCH_BTN_SIZE: f32 = 35.0;
 pub const SEARCH_DROPDOWN_MAX_ITEMS: usize = 5;
 
@@ -48,4 +49,6 @@ pub const VOLUME_SLIDER_WIDTH: f32 = 80.0;
 pub const PLAYBAR_TRACK_INFO_WIDTH: f32 = 164.0;
 pub const TIME_TEXT_WIDTH: f32 = 48.0;
 pub const DIALOG_WIDTH: f32 = 300.0;
+pub const DIALOG_WIDTH_LG: f32 = 600.0;
+pub const DIALOG_WIDTH_XL: f32 = 750.0;
 pub const QUEUE_WIDTH_RATIO: f32 = 0.2;

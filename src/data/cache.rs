@@ -261,8 +261,6 @@ mod tests {
             ("YouTube", ProviderId::YouTube),
             ("SoundCloud", ProviderId::SoundCloud),
             ("MusicBrainz", ProviderId::MusicBrainz),
-            ("Bandcamp", ProviderId::Bandcamp),
-            ("LastFm", ProviderId::LastFm),
             ("Local", ProviderId::Local),
         ] {
             let (migrated, changed) = migrate_index_keys(HashMap::from([(

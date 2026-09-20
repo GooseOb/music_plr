@@ -291,12 +291,13 @@ pub(super) fn view_browse<'a>(
     .spacing(theme::SPACING_MD)
     .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
-    let track_list = match content {
-        LoadState::Failed(e) => empty_state((player.strings.couldnt_load)(e)),
-        LoadState::Loading => loading_state(player.strings.loading),
-        LoadState::Ready(tracks) => {
-            view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
-        }
+    let track_list = match super::shared_components::load_state_tracks(
+        content,
+        player.strings,
+        player.strings.loading,
+    ) {
+        Ok(tracks) => view_track_list(tracks, player, TrackListKind::Active, 0),
+        Err(el) => el,
     };
 
     Column::with_children([header.into(), track_list]).into()
@@ -321,12 +322,13 @@ pub(super) fn view_search_radio<'a>(
     let header = Container::new(text(label).width(Length::Fill).center())
         .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
-    let track_list = match content {
-        LoadState::Failed(e) => empty_state(format!("Radio failed: {e}")),
-        LoadState::Loading => loading_state(player.strings.generating_radio),
-        LoadState::Ready(tracks) => {
-            view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
-        }
+    let track_list = match super::shared_components::load_state_tracks(
+        content,
+        player.strings,
+        player.strings.generating_radio,
+    ) {
+        Ok(tracks) => view_track_list(tracks, player, TrackListKind::Active, 0),
+        Err(el) => el,
     };
 
     Column::with_children([header.into(), track_list]).into()

@@ -2,8 +2,8 @@ use iced::widget::Id;
 
 use super::{
     operation::{ListGeometry, LIBRARY_LIST_ID, SIDEBAR_LIST_ID},
-    BackendResult, Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData,
-    DOUBLE_CLICK_MS,
+    BackendResult, Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, DOUBLE_CLICK_MS,
+    PREPEND,
 };
 use crate::{
     app::{
@@ -294,7 +294,7 @@ impl MusicPlayer {
                 .collect();
             let count = self
                 .playlists
-                .insert_tracks_at(playlist_idx, tracks.iter(), 0);
+                .insert_tracks_at(playlist_idx, tracks.iter(), PREPEND);
             let name = self.playlists.playlists[playlist_idx].name.clone();
             let msg = (self.strings.added_to)(count, &name);
             self.notify(msg);
@@ -525,9 +525,7 @@ impl MusicPlayer {
         // stream in as the browse result arrives. Select it directly (rather
         // than `handle_select_playlist`) so it activates even when the drop
         // index coincides with the currently selected playlist.
-        let task = self.push_new_view(ViewData::new_playlist(idx, name));
-        self.save_session();
-        task
+        self.navigate_to_playlist(idx)
     }
 
     /// Arm a press for dragging. A track row also supports double-click (play

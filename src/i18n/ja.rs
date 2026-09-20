@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("バージョン {v} に更新しました。再起動中…"),
     package_managed: "自動更新できません（アプリケーションディレクトリへの書き込み権限がありません）。パッケージマネージャーでインストールされた場合は、それを使用して更新してください。",
     update_failed: |e| format!("アップデートに失敗しました: {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn ja_tracks(n: usize) -> String {

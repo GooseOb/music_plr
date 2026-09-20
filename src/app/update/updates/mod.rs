@@ -6,6 +6,8 @@
 //! asset, verifies its SHA-256, stages the replacement, and spawns a detached
 //! updater that swaps in the new binary once this process exits.
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::{
     io::Read,
     process::{Command, Stdio},
@@ -543,7 +545,6 @@ fn spawn_updater(pid: u32, old: &str, new: &str) -> std::result::Result<(), std:
             .replace("{OLD}", &format!("{old:?}"));
         let helper = std::env::temp_dir().join(format!("goosemusic-updater-{pid}.sh"));
         std::fs::write(&helper, &script)?;
-        use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&helper, PermissionsExt::from_mode(0o755))?;
         Command::new(&helper)
             .stdin(Stdio::null())

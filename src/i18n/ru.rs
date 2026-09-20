@@ -82,8 +82,8 @@ pub const STRINGS: Strings = Strings {
     delete: "Удалить",
     delete_playlist_q: "Удалить плейлист?",
     tracks_wont_be_deleted: "Треки не будут удалены.",
-    lbl_id: "Id",
-    lbl_url: "Url",
+    lbl_id: "ID",
+    lbl_url: "URL",
     lbl_artist_id: "Id исполнителя",
     lbl_duration_secs: "Длительность (в секундах)",
     lbl_thumbnail: "Обложка",
@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("Обновлено до {v}. Перезапуск…"),
     package_managed: "Невозможно автоматическое обновление (нет прав на запись в каталог приложения). Если установлено через менеджер пакетов, используйте его для обновления.",
     update_failed: |e| format!("Обновление не удалось: {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn ru_tracks(n: usize) -> String {

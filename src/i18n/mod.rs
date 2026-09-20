@@ -297,4 +297,9 @@ pub struct Strings {
     pub update_applied: fn(&str) -> String,
     pub package_managed: &'static str,
     pub update_failed: fn(&str) -> String,
+    pub percent: fn(u64) -> String,
+    pub list_match_pos: fn(usize, usize) -> String,
+    pub sub_menu_label: fn(&str, &str, &str) -> String,
+    pub deps_failed_detail: fn(&str) -> String,
+    pub deps_delete_failed_detail: fn(&str) -> String,
 }

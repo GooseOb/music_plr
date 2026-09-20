@@ -27,14 +27,18 @@ pub(super) struct GrowingMediaSource {
 
 impl io::Read for GrowingMediaSource {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let start = std::time::Instant::now();
         loop {
             match self.file.read(buf) {
                 Ok(0) => {
                     let still_writing = self
                         .writer_alive
                         .as_ref()
-                        .is_some_and(|w| w.load(Ordering::SeqCst));
+                        .is_some_and(|w| w.load(Ordering::Acquire));
                     if !still_writing {
+                        return Ok(0);
+                    }
+                    if start.elapsed() > Duration::from_mins(10) {
                         return Ok(0);
                     }
                     // Writer still has bytes coming; wait briefly and retry

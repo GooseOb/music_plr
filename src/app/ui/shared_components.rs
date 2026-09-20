@@ -176,17 +176,28 @@ pub fn subtitle_artist(
     }
 }
 
-pub fn disabled_text_input_row<'a>(label: &'a str, value: &str) -> Element<'a, Message, AppTheme> {
+pub fn labeled_input<'a>(
+    label: &'a str,
+    value: &str,
+    placeholder: &'a str,
+    on_input: Option<fn(String) -> Message>,
+) -> Element<'a, Message, AppTheme> {
+    let mut input = text_input(placeholder, value).padding([theme::SPACING_SM, theme::SPACING_MD]);
+    if let Some(on_input) = on_input {
+        input = input.on_input(on_input);
+    }
     Column::with_children([
         Container::new(text(label))
             .padding([0.0, theme::SPACING_XS])
             .into(),
-        text_input("", value)
-            .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .into(),
+        input.into(),
     ])
     .spacing(theme::SPACING_XS)
     .into()
+}
+
+pub fn disabled_text_input_row<'a>(label: &'a str, value: &str) -> Element<'a, Message, AppTheme> {
+    labeled_input(label, value, "", None)
 }
 
 pub fn text_input_row<'a>(
@@ -195,25 +206,31 @@ pub fn text_input_row<'a>(
     placeholder: &'a str,
     on_input: fn(String) -> Message,
 ) -> Element<'a, Message, AppTheme> {
-    Column::with_children([
-        Container::new(text(label))
-            .padding([0.0, theme::SPACING_XS])
-            .into(),
-        text_input(placeholder, value)
-            .on_input(on_input)
-            .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .into(),
-    ])
-    .spacing(theme::SPACING_XS)
-    .into()
+    labeled_input(label, value, placeholder, Some(on_input))
+}
+
+pub fn load_state_tracks<'a>(
+    content: &'a crate::load_state::LoadState<Vec<crate::types::Track>>,
+    tr: &Strings,
+    loading_msg: &'a str,
+) -> Result<&'a [crate::types::Track], Element<'a, Message, AppTheme>> {
+    match content {
+        crate::load_state::LoadState::Ready(tracks) => Ok(tracks),
+        crate::load_state::LoadState::Loading => Err(loading_state(loading_msg)),
+        crate::load_state::LoadState::Failed(e) => Err(empty_state((tr.couldnt_load)(e))),
+    }
 }
 
 /// Download progress bar with a live percentage label, for dependency installs.
 /// Shared by the startup dialog and the Settings Dependencies section so the
 /// progress rendering can't drift between the two. Callers must ensure `total`
 /// is non-zero (otherwise a plain "installing" label is more appropriate).
-pub fn dep_progress_bar(downloaded: u64, total: u64) -> Element<'static, Message, AppTheme> {
-    let pct = ((downloaded as f64 / total as f64) * 100.0) as u16;
+pub fn dep_progress_bar(
+    downloaded: u64,
+    total: u64,
+    tr: &Strings,
+) -> Element<'static, Message, AppTheme> {
+    let pct = ((downloaded as f64 / total as f64) * 100.0) as u64;
     let bar = Container::new(ProgressBar::new(
         std::ops::RangeInclusive::new(0.0, total as f32),
         downloaded as f32,
@@ -222,7 +239,7 @@ pub fn dep_progress_bar(downloaded: u64, total: u64) -> Element<'static, Message
     .style(bg_secondary());
     Column::with_children([
         bar.into(),
-        text(format!("{pct}%"))
+        text((tr.percent)(pct))
             .size(theme::TEXT_SIZE_XS)
             .style(fg_secondary())
             .into(),
@@ -243,7 +260,7 @@ pub fn dep_install_status(
     if op.is_some_and(|o| o.installing) {
         return Some(
             match op.and_then(|o| (o.progress.1 > 0).then_some(o.progress)) {
-                Some((downloaded, total)) => dep_progress_bar(downloaded, total),
+                Some((downloaded, total)) => dep_progress_bar(downloaded, total, tr),
                 None => text(tr.deps_installing).style(fg_secondary()).into(),
             },
         );
@@ -251,7 +268,7 @@ pub fn dep_install_status(
     if let Some(res) = op.and_then(|o| o.install_result.as_ref()) {
         return Some(match res {
             Ok(()) => text(tr.deps_installed).style(fg_accent()).into(),
-            Err(e) => text(format!("{}: {}", tr.deps_failed, e))
+            Err(e) => text((tr.deps_failed_detail)(e.as_str()))
                 .style(fg_secondary())
                 .into(),
         });

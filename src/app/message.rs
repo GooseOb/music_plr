@@ -197,15 +197,7 @@ pub enum Message {
     NavigateBack,
     NavigateForward,
 
-    SettingsDownloadDirChanged(String),
-    SettingsMaxHistoryVisibleChanged(String),
-    SettingsMaxHistoryStoredChanged(String),
-    SettingsCacheMaxSizeChanged(String),
-    SettingsMaxRecentlyPlayedChanged(String),
-    SettingsVolumeNormalizationToggled(bool),
-    SettingsDefaultProviderChanged(ProviderId),
-    SettingsLanguageChanged(crate::i18n::Language),
-    SettingsThemeChanged(crate::theme::ThemeKind),
+    SettingsChanged(crate::app::update::SettingsChange),
     SettingsResetDefaults,
 
     ContextMenuPlayTrack(TrackPos),

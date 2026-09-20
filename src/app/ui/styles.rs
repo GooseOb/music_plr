@@ -49,20 +49,20 @@ pub fn bg_overlay() -> impl Fn(&AppTheme) -> container::Style + 'static {
     }
 }
 
-pub fn bg_popup() -> impl Fn(&AppTheme) -> container::Style + 'static {
+pub fn bg_rounded(bg: fn(&Palette) -> Color) -> impl Fn(&AppTheme) -> container::Style + 'static {
     move |theme| container::Style {
-        background: Some(theme.palette.bg_secondary.into()),
+        background: Some(bg(&theme.palette).into()),
         border: border::rounded(theme::RADIUS_MD),
         ..Default::default()
     }
 }
 
+pub fn bg_popup() -> impl Fn(&AppTheme) -> container::Style + 'static {
+    bg_rounded(|p| p.bg_secondary)
+}
+
 pub fn bg_search_hist() -> impl Fn(&AppTheme) -> container::Style + 'static {
-    move |theme| container::Style {
-        background: Some(theme.palette.bg_tertiary.into()),
-        border: border::rounded(theme::RADIUS_MD),
-        ..Default::default()
-    }
+    bg_rounded(|p| p.bg_tertiary)
 }
 
 pub fn bg_toast(is_error: bool) -> impl Fn(&AppTheme) -> container::Style + 'static {
@@ -107,22 +107,24 @@ pub fn fg_tab(active: bool) -> impl Fn(&AppTheme) -> text::Style + 'static {
     }
 }
 
-pub fn icon_fg() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
-    |theme, _| svg::Style {
-        color: Some(theme.palette.fg),
+pub fn icon(
+    color: fn(&Palette) -> Color,
+) -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    move |theme, _| svg::Style {
+        color: Some(color(&theme.palette)),
     }
+}
+
+pub fn icon_fg() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    icon(|p| p.fg)
 }
 
 pub fn icon_fg_muted() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
-    |theme, _| svg::Style {
-        color: Some(theme.palette.fg_muted),
-    }
+    icon(|p| p.fg_muted)
 }
 
 pub fn icon_fg_secondary() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
-    |theme, _| svg::Style {
-        color: Some(theme.palette.fg_secondary),
-    }
+    icon(|p| p.fg_secondary)
 }
 
 pub fn icon_accent_dimmed() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
@@ -136,15 +138,11 @@ pub fn icon_accent_dimmed() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + '
 }
 
 pub fn icon_accent() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
-    |theme, _| svg::Style {
-        color: Some(theme.palette.fg_accent),
-    }
+    icon(|p| p.fg_accent)
 }
 
 pub fn icon_primary() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
-    |_, _| svg::Style {
-        color: Some(Color::BLACK),
-    }
+    icon(|p| p.fg_on_accent)
 }
 
 pub fn icon_playbar_button(
@@ -152,7 +150,7 @@ pub fn icon_playbar_button(
 ) -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
     move |theme, _| svg::Style {
         color: Some(if active {
-            Color::BLACK
+            theme.palette.fg_on_accent
         } else {
             theme.palette.fg_secondary
         }),
@@ -176,7 +174,7 @@ pub fn icon_color(color: Color) -> impl Fn(&AppTheme, svg::Status) -> svg::Style
 pub fn button_style_primary() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
     button_style(
         |p, hot| Some(if hot { p.accent_hover } else { p.accent }),
-        |_, _| Color::BLACK,
+        |p, _| p.fg_on_accent,
         theme::RADIUS_SM,
     )
 }
@@ -198,7 +196,7 @@ pub fn button_style_playbar(
                 p.button
             })
         },
-        move |p, _| if enabled { Color::BLACK } else { p.fg },
+        move |p, _| if enabled { p.fg_on_accent } else { p.fg },
         theme::RADIUS_SM,
     )
 }
@@ -206,7 +204,7 @@ pub fn button_style_playbar(
 pub fn button_style_danger() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
     button_style(
         |p, hot| Some(if hot { p.danger_hover } else { p.danger }),
-        |_, _| Color::WHITE,
+        |p, _| p.fg_on_danger,
         theme::RADIUS_SM,
     )
 }
@@ -267,7 +265,7 @@ pub fn button_style_scope(
             text_color: if matches!(status, button::Status::Disabled) {
                 p.fg_muted
             } else if selected {
-                Color::BLACK
+                p.fg_on_accent
             } else {
                 p.fg_secondary
             },

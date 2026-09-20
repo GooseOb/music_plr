@@ -3,13 +3,41 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{Message, MusicPlayer, Task, Track, ViewData};
+use super::{Message, MusicPlayer, Task, Track, ViewData, PREPEND};
 use crate::{
     app::{update::operation::CaptureBounds, ImportMethod, ImportPlaylistDialog, ViewKind},
     data::JsonStore,
 };
 
 impl MusicPlayer {
+    pub(crate) fn navigate_to_playlist(&mut self, index: usize) -> Task<Message> {
+        self.playlist_picker = None;
+        self.lyrics = None;
+        self.clear_selection();
+        self.drag.cleanup();
+        let playlist_name = self.playlists.playlists[index].name.clone();
+        let task = self.push_new_view(ViewData::new_playlist(index, playlist_name));
+        let view = self.view_data().clone();
+        self.seed_view_thumbnails(&view);
+        self.save_session();
+        task
+    }
+
+    fn finish_import(&mut self, name: &str, tracks: &[Track]) -> (bool, Task<Message>) {
+        if tracks.is_empty() {
+            self.notify(self.strings.import_no_tracks);
+            return (false, Task::none());
+        }
+        let idx = self
+            .playlists
+            .create_at(name, self.playlists.playlists.len());
+        self.playlists.insert_tracks_at(idx, tracks.iter(), PREPEND);
+        let label = self.playlists.playlists[idx].name.clone();
+        self.notify((self.strings.import_imported_into)(tracks.len(), &label));
+        let task = self.open_imported_playlist(idx);
+        (true, task)
+    }
+
     pub fn handle_create_playlist(&mut self) {
         if self.playlist_create_name.trim().is_empty() {
             return;
@@ -25,18 +53,7 @@ impl MusicPlayer {
         let already_selected =
             matches!(&self.view_data().kind, ViewKind::Playlist(p) if p.index == index);
         if index < self.playlists.playlists.len() && !already_selected {
-            self.playlist_picker = None;
-            self.lyrics = None;
-            self.clear_selection();
-            self.drag.cleanup();
-
-            let playlist_name = self.playlists.playlists[index].name.clone();
-            let task = self.push_new_view(ViewData::new_playlist(index, playlist_name));
-            let view = self.view_data().clone();
-            self.seed_view_thumbnails(&view);
-
-            self.save_session();
-            return task;
+            return self.navigate_to_playlist(index);
         }
         Task::none()
     }
@@ -147,7 +164,9 @@ impl MusicPlayer {
             return;
         };
 
-        let count = self.playlists.insert_tracks_at(idx, new_tracks.iter(), 0);
+        let count = self
+            .playlists
+            .insert_tracks_at(idx, new_tracks.iter(), PREPEND);
         let msg = (self.strings.added)(count);
         self.notify(msg);
     }
@@ -168,7 +187,7 @@ impl MusicPlayer {
             .collect();
         let count = self
             .playlists
-            .insert_tracks_at(playlist_idx, tracks.iter(), 0);
+            .insert_tracks_at(playlist_idx, tracks.iter(), PREPEND);
         self.playlist_picker = None;
         let name = self.playlists.playlists[playlist_idx].name.clone();
         let msg = (self.strings.added_to)(count, &name);
@@ -234,7 +253,7 @@ impl MusicPlayer {
             return Task::none();
         };
         self.playlists
-            .insert_tracks_at(idx, self.clipboard.iter(), 0);
+            .insert_tracks_at(idx, self.clipboard.iter(), PREPEND);
         self.playlists.save();
         let count = self.clipboard.len();
         let name = self.playlists.playlists[idx].name.clone();
@@ -251,13 +270,7 @@ impl MusicPlayer {
         let indices: Vec<usize> = self.view_data_mut().selection.clone();
 
         if matches!(self.view_data_mut().kind, ViewKind::Playlist(_)) {
-            if let ViewKind::Playlist(p) = &self.view_data().kind {
-                if p.index < self.playlists.playlists.len() {
-                    let removed = self.playlists.remove_tracks_at(p.index, &indices);
-                    let msg = (self.strings.removed_n)(removed);
-                    self.notify(msg);
-                }
-            }
+            self.handle_remove_from_playlist_batch(&indices);
         } else if let ViewKind::Downloads = &self.view_data().kind {
             if let Some(tracks) = self.view_data_mut().tracks_mut() {
                 let removed_urls: Vec<String> = indices
@@ -350,8 +363,8 @@ impl MusicPlayer {
                 .playlists
                 .create_at(&pl.name, self.playlists.playlists.len());
             self.playlists.playlists[idx].tracks = pl.tracks;
-            self.playlists.save();
         }
+        self.playlists.save();
         self.notify((self.strings.import_playlists_imported)(count));
         (true, Task::none())
     }
@@ -397,19 +410,8 @@ impl MusicPlayer {
                 title, artist, album,
             ));
         }
-        if tracks.is_empty() {
-            self.notify(self.strings.import_no_tracks);
-            return (false, Task::none());
-        }
         let name = Self::import_playlist_name(dialog, path.file_stem().and_then(|s| s.to_str()));
-        let idx = self
-            .playlists
-            .create_at(&name, self.playlists.playlists.len());
-        self.playlists.insert_tracks_at(idx, tracks.iter(), 0);
-        let label = self.playlists.playlists[idx].name.clone();
-        self.notify((self.strings.import_imported_into)(tracks.len(), &label));
-        let task = self.open_imported_playlist(idx);
-        (true, task)
+        self.finish_import(&name, &tracks)
     }
 
     fn import_file_list(
@@ -439,14 +441,7 @@ impl MusicPlayer {
             return (false, Task::none());
         }
         let name = Self::import_playlist_name(dialog, dir.file_name().and_then(|s| s.to_str()));
-        let idx = self
-            .playlists
-            .create_at(&name, self.playlists.playlists.len());
-        self.playlists.insert_tracks_at(idx, tracks.iter(), 0);
-        let label = self.playlists.playlists[idx].name.clone();
-        self.notify((self.strings.import_imported_into)(tracks.len(), &label));
-        let task = self.open_imported_playlist(idx);
-        (true, task)
+        self.finish_import(&name, &tracks)
     }
 
     /// Resolve the playlist name: the user's override if set, else the source

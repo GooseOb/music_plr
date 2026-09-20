@@ -179,7 +179,7 @@ pub(super) fn view_context_menu<'a>(
 
     let mut row_children: Vec<Element<'_, Message, AppTheme>> = vec![Container::new(
         Column::with_children(items)
-            .spacing(2)
+            .spacing(theme::SPACING_XXS)
             .padding(theme::SPACING_SM),
     )
     .id(super::CONTEXT_MENU_PANEL_ID)
@@ -216,7 +216,7 @@ pub(super) fn view_context_menu<'a>(
                 Space::new().height(offset).into(),
                 Container::new(
                     Column::with_children(entries)
-                        .spacing(2)
+                        .spacing(theme::SPACING_XXS)
                         .padding(theme::SPACING_SM),
                 )
                 .width(panel_width)
@@ -400,9 +400,11 @@ fn submenu_entries<'a>(
             let label = if provider == ProviderId::Local {
                 tr.ctx_play_local.to_string()
             } else if by_search {
-                format!("{} {} {}", base, provider.label(), tr.via_search_suffix)
+                (tr.sub_menu_label)(base, provider.label(), tr.via_search_suffix)
             } else {
-                format!("{} {}", base, provider.label())
+                (tr.sub_menu_label)(base, provider.label(), "")
+                    .trim_end()
+                    .to_string()
             };
             let icon = if by_search { icons::SEARCH_ICON } else { icon };
             let message = kind.entry_message(provider, menu);
@@ -515,7 +517,7 @@ pub(super) fn view_edit_track<'a>(
     ])
     .spacing(theme::SPACING_MD)
     .padding(theme::SPACING_MD)
-    .width(theme::DIALOG_WIDTH * 2.5)
+    .width(theme::DIALOG_WIDTH_XL)
     .height(player.window_size.height * 0.7);
 
     view_dialog(dialog.into(), Message::CloseEditTrack)
@@ -538,7 +540,7 @@ pub(super) fn view_notification(toast: &crate::app::Toast) -> Element<'_, Messag
             Container::new(text(toast.message.as_ref()).size(theme::TEXT_SIZE_LG))
                 .padding([theme::SPACING_MD, theme::SPACING_LG])
                 .style(bg_toast(toast.is_error))
-                .max_width(420.0),
+                .max_width(theme::DIALOG_WIDTH_LG),
         ))
         .padding(theme::SPACING_2XL)
         .into(),
@@ -677,7 +679,7 @@ pub(super) fn view_dependency_dialog<'a>(
     let content = Column::with_children(children)
         .spacing(theme::SPACING_MD)
         .padding(theme::SPACING_MD)
-        .width(theme::DIALOG_WIDTH * 2.0);
+        .width(theme::DIALOG_WIDTH_LG);
 
     view_dialog(content.into(), Message::DepDismiss)
 }
@@ -816,19 +818,22 @@ pub(super) fn view_import_playlist<'a>(
                     .spacing(theme::SPACING_SM)
                     .align_y(alignment::Vertical::Center)
                     .into(),
-                text_input_row(tr.import_csv_name_col, &dialog.csv_name_col, "name", |v| {
-                    Message::ImportCsvColChanged(ImportCsvField::Name, v)
-                }),
+                text_input_row(
+                    tr.import_csv_name_col,
+                    &dialog.csv_name_col,
+                    tr.import_csv_name_col,
+                    |v| Message::ImportCsvColChanged(ImportCsvField::Name, v),
+                ),
                 text_input_row(
                     tr.import_csv_artist_col,
                     &dialog.csv_artist_col,
-                    "artist",
+                    tr.import_csv_artist_col,
                     |v| Message::ImportCsvColChanged(ImportCsvField::Artist, v),
                 ),
                 text_input_row(
                     tr.import_csv_album_col,
                     &dialog.csv_album_col,
-                    "album",
+                    tr.import_csv_album_col,
                     |v| Message::ImportCsvColChanged(ImportCsvField::Album, v),
                 ),
             ];
@@ -922,7 +927,7 @@ pub(super) fn view_import_playlist<'a>(
     let dialog_col = Column::with_children(children)
         .spacing(theme::SPACING_MD)
         .padding(theme::SPACING_MD)
-        .width(theme::DIALOG_WIDTH * 2.0);
+        .width(theme::DIALOG_WIDTH_LG);
 
     view_dialog(dialog_col.into(), Message::CloseImportPlaylist)
 }

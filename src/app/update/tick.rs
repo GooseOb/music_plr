@@ -5,7 +5,7 @@ use tracing::debug;
 
 use super::{
     error, media_controls, mpsc, spawn_thumbnail_download, BackendResult, MediaControlEvent,
-    MediaUpdate, Message, MusicPlayer, Task, ViewData,
+    MediaUpdate, Message, MusicPlayer, Task, ViewData, PREPEND,
 };
 use crate::{
     app::{interaction::TrackListKind, ViewKind},
@@ -40,71 +40,16 @@ impl MusicPlayer {
             self.process_media_event(&event);
         }
 
-        // Auto-dismiss the toast after its display window has elapsed.
-        if let Some(toast) = &self.notification {
-            if std::time::Instant::now() >= toast.until {
-                self.notification = None;
-            }
-        }
-
+        self.expire_notification();
         // Reconcile currently visible thumbnails: queue any missing ones for
         // download and flush the queue to a background thread.
         self.update_thumbnails();
 
         let s = self.audio.get_state();
-        if let Some(err) = self.audio.take_error() {
-            self.notify_error(err);
-        }
-        if let Some(event) = self.audio.take_client_event() {
-            self.notify_client_event(event);
-        }
-        // Detect audio state changes for media-control update throttling.
-        if self.is_playing != s.is_playing || (self.duration - s.duration).abs() > 0.001 {
-            self.media_controls_dirty = true;
-        }
-        self.is_playing = s.is_playing;
-        self.progress = s.progress;
-        self.duration = s.duration;
-        if self.track_loading && s.is_playing {
-            self.track_loading = false;
-        }
-
-        if let Some(pending) = self.pending_cache_id.clone() {
-            // Register the cache as soon as the stream pipeline
-            // finishes writing the file (`cache_ready`)
-            if s.cache_ready {
-                if self.stream_cache.insert(pending.provider_id, &pending.id) {
-                    debug!(
-                        "Registered cached track: {:?}:{:?}",
-                        pending.provider_id, pending.id
-                    );
-                }
-                self.pending_cache_id = None;
-                // The cache file is now complete: analyze it for volume
-                // normalization if a fresh stream was awaiting this.
-                if self.pending_normalization_id.as_deref() == Some(pending.id.as_str()) {
-                    let path = StreamCache::path_for(pending.provider_id, &pending.id);
-                    self.request_normalization_analysis(&pending.id, path);
-                    self.pending_normalization_id = None;
-                }
-            }
-        }
-
-        if s.stream_finished && !s.is_playing && !self.track_loading {
-            // When repeat is on, restart the current track instead of
-            // advancing the queue so the same song loops until toggled off.
-            if self.repeat {
-                if let Some(track) = self.queue.current() {
-                    let track = track.clone();
-                    self.play_track_internal(&track, track.source);
-                }
-                self.audio.clear_stream_finished();
-            } else if self.queue.current().is_some() {
-                self.next_track();
-            } else {
-                self.audio.clear_stream_finished();
-            }
-        }
+        self.drain_audio_events();
+        self.sync_playback_state(&s);
+        self.register_pending_cache(&s);
+        self.auto_advance(&s);
 
         self.update_media_controls_if_dirty();
         self.flush_session();
@@ -115,6 +60,76 @@ impl MusicPlayer {
         task
     }
 
+    fn expire_notification(&mut self) {
+        if let Some(toast) = &self.notification {
+            if std::time::Instant::now() >= toast.until {
+                self.notification = None;
+            }
+        }
+    }
+
+    fn drain_audio_events(&mut self) {
+        if let Some(err) = self.audio.take_error() {
+            self.notify_error(err);
+        }
+        if let Some(event) = self.audio.take_client_event() {
+            self.notify_client_event(event);
+        }
+    }
+
+    fn sync_playback_state(&mut self, s: &crate::audio::PlayerState) {
+        if self.is_playing != s.is_playing || (self.duration - s.duration).abs() > 0.001 {
+            self.media_controls_dirty = true;
+        }
+        self.is_playing = s.is_playing;
+        self.progress = s.progress;
+        self.duration = s.duration;
+        if self.track_loading && s.is_playing {
+            self.track_loading = false;
+        }
+    }
+
+    fn register_pending_cache(&mut self, s: &crate::audio::PlayerState) {
+        let Some(pending) = self.pending_cache_id.clone() else {
+            return;
+        };
+        if !s.cache_ready {
+            return;
+        }
+        if self.stream_cache.insert(pending.provider_id, &pending.id) {
+            debug!(
+                "Registered cached track: {:?}:{:?}",
+                pending.provider_id, pending.id
+            );
+        }
+        self.pending_cache_id = None;
+        if self.pending_normalization_id.as_deref() == Some(pending.id.as_str()) {
+            let path = StreamCache::path_for(pending.provider_id, &pending.id);
+            self.request_normalization_analysis(&pending.id, path);
+            self.pending_normalization_id = None;
+        }
+    }
+
+    fn auto_advance(&mut self, s: &crate::audio::PlayerState) {
+        if !(s.stream_finished && !s.is_playing && !self.track_loading) {
+            return;
+        }
+        if self.repeat {
+            if let Some(track) = self.queue.current().cloned() {
+                self.play_track_internal(&track, track.source);
+            }
+            self.audio.clear_stream_finished();
+        } else if self.queue.current().is_some() {
+            self.next_track();
+        } else {
+            self.audio.clear_stream_finished();
+        }
+    }
+
+    fn capture_bounds_task() -> Task<Message> {
+        super::operation::CaptureBounds::new().into()
+    }
+
     fn update_media_controls_if_dirty(&mut self) {
         if self.media_controls_dirty {
             self.send_media_update();
@@ -122,32 +137,28 @@ impl MusicPlayer {
         }
     }
 
-    /// Seed a view's thumbnail ids into the index so the next tick drains any
-    /// missing ones. Called wherever a view becomes active (navigation,
-    /// results installed) — the tick only drains, it never re-scans visibility.
-    pub(crate) fn seed_view_thumbnails(&mut self, view: &ViewData) {
-        for track in view.tracks() {
-            // Seed thumbnails for any track that carries a thumbnail URL,
-            // regardless of provider (YouTube, SoundCloud, MusicBrainz, …).
+    pub(crate) fn seed_tracks_thumbnails(&mut self, tracks: &[crate::types::Track]) {
+        for track in tracks {
             if !track.thumbnail().is_empty() {
                 self.thumbnail_index
                     .ensure(track.source, track.primary_id(), track.thumbnail());
             }
         }
+    }
+
+    /// Seed a view's thumbnail ids into the index so the next tick drains any
+    /// missing ones. Called wherever a view becomes active (navigation,
+    /// results installed) — the tick only drains, it never re-scans visibility.
+    pub(crate) fn seed_view_thumbnails(&mut self, view: &ViewData) {
+        let tracks = view.tracks().to_vec();
+        self.seed_tracks_thumbnails(&tracks);
         match &view.kind {
             // A local playlist backs its tracks from the store, not from
             // `ViewData`, so seed from the store or its artwork never drains.
             ViewKind::Playlist(entry) => {
                 if let Some(playlist) = self.playlists.playlists.get(entry.index) {
-                    for track in &playlist.tracks {
-                        if !track.thumbnail().is_empty() {
-                            self.thumbnail_index.ensure(
-                                track.source,
-                                track.primary_id(),
-                                track.thumbnail(),
-                            );
-                        }
-                    }
+                    let tracks = playlist.tracks.clone();
+                    self.seed_tracks_thumbnails(&tracks);
                 }
             }
             ViewKind::Album(r) => {
@@ -309,7 +320,7 @@ impl MusicPlayer {
             }
             BackendResult::SearchResults(rid, tracks, tab) => {
                 self.process_search_results(rid, tracks, tab);
-                super::operation::CaptureBounds::new().into()
+                Self::capture_bounds_task()
             }
             BackendResult::SearchResultsAppend(rid, tracks) => {
                 let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
@@ -329,7 +340,7 @@ impl MusicPlayer {
                         }
                     }
                     self.finalize_view(idx);
-                    super::operation::CaptureBounds::new().into()
+                    Self::capture_bounds_task()
                 } else {
                     Task::none()
                 }
@@ -342,7 +353,7 @@ impl MusicPlayer {
                         self.apply_album_meta(idx, meta);
                     }
                 }
-                super::operation::CaptureBounds::new().into()
+                Self::capture_bounds_task()
             }
             BackendResult::ArtistIdResolved {
                 rid,
@@ -359,28 +370,19 @@ impl MusicPlayer {
                 data,
             } => {
                 self.apply_artist_section(rid, provider, kind, *data);
-                super::operation::CaptureBounds::new().into()
+                Self::capture_bounds_task()
             }
             BackendResult::CardPlaylistReady(idx, name, tracks) => {
                 // A dragged card turned into a playlist; the browse result
                 // fills it. The playlist view reads tracks from the store, so
                 // they appear as soon as we insert them.
                 if idx < self.playlists.playlists.len() {
-                    let count = self.playlists.insert_tracks_at(idx, tracks.iter(), 0);
-                    // The tick only drains thumbnail ids it already knows
-                    // about, so the freshly inserted tracks must be seeded
-                    // here or their artwork never downloads.
-                    for track in tracks.iter().filter(|t| !t.thumbnail().is_empty()) {
-                        self.thumbnail_index.ensure(
-                            track.source,
-                            track.primary_id(),
-                            track.thumbnail(),
-                        );
-                    }
+                    let count = self.playlists.insert_tracks_at(idx, tracks.iter(), PREPEND);
+                    self.seed_tracks_thumbnails(&tracks);
                     let msg = (self.strings.added_to)(count, &name);
                     self.notify(msg);
                 }
-                super::operation::CaptureBounds::new().into()
+                Self::capture_bounds_task()
             }
             BackendResult::RadioResults(rid, label, tracks) => {
                 if let Some(idx) = self.slot_for_request(rid) {
@@ -391,7 +393,7 @@ impl MusicPlayer {
                     self.nav_history[idx].kind = kind;
                     self.install_results(idx, tracks);
                 }
-                super::operation::CaptureBounds::new().into()
+                Self::capture_bounds_task()
             }
             BackendResult::DownloadComplete(track, _provider) => {
                 self.process_download_complete(track);
@@ -447,6 +449,7 @@ impl MusicPlayer {
             }
             BackendResult::NormalizationComputed(id, gain) => {
                 self.normalization_cache.insert(id, gain);
+                crate::audio::save_gains(&self.normalization_cache);
                 Task::none()
             }
             BackendResult::LocalFilesPicked(paths) => {
@@ -519,7 +522,7 @@ impl MusicPlayer {
     }
 
     fn process_download_complete(&mut self, track: crate::types::Track) {
-        let path = track.download_path().unwrap_or_default();
+        let path = track.local_path().unwrap_or_default();
         self.download_registry.register(track.clone());
         let msg = (self.strings.download_complete)(&path);
         self.notify(msg);

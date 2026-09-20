@@ -8,7 +8,7 @@ use crate::{
     theme::AppTheme,
 };
 
-pub(super) fn view_main_content<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
+pub(super) fn view_main_content(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let track_list_search = match &player.track_list_search {
         Some(fs) if fs.list == crate::app::TrackListKind::Active => {
             track_list_search::view_track_list_search(player, fs)

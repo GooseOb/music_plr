@@ -82,8 +82,8 @@ pub const STRINGS: Strings = Strings {
     delete: "Supprimer",
     delete_playlist_q: "Supprimer la playlist ?",
     tracks_wont_be_deleted: "Les pistes ne seront pas supprimées.",
-    lbl_id: "Id",
-    lbl_url: "Url",
+    lbl_id: "ID",
+    lbl_url: "URL",
     lbl_artist_id: "Id de l'artiste",
     lbl_duration_secs: "Durée (en secondes)",
     lbl_thumbnail: "Miniature",
@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("Mis à jour vers {v}. Redémarrage…"),
     package_managed: "Impossible de mettre à jour automatiquement (pas d'accès en écriture dans le répertoire de l'application). Si installé via un gestionnaire de paquets, utilisez-le pour mettre à jour.",
     update_failed: |e| format!("Échec de la mise à jour : {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn fr_tracks(n: usize) -> String {

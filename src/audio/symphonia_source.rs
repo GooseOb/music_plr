@@ -121,12 +121,15 @@ impl SymphoniaStreamingSource {
         }
         let decoded = decoded.ok()?;
 
-        let spec = decoded.spec().to_owned();
+        let spec = *decoded.spec();
         let duration = symphonia::core::units::Duration::from(decoded.capacity() as u64);
-        let mut buffer = symphonia::core::audio::SampleBuffer::<i16>::new(duration, spec);
-        buffer.copy_interleaved_ref(decoded);
-        self.spec = spec;
-        self.buffer = buffer;
+        if spec != self.spec {
+            self.buffer = symphonia::core::audio::SampleBuffer::<i16>::new(duration, spec);
+            self.spec = spec;
+        } else if decoded.capacity() * spec.channels.count() > self.buffer.samples().len() {
+            self.buffer = symphonia::core::audio::SampleBuffer::<i16>::new(duration, spec);
+        }
+        self.buffer.copy_interleaved_ref(decoded);
         Some(())
     }
 
@@ -214,7 +217,8 @@ impl rodio::Source for SymphoniaStreamingSource {
         };
 
         self.decode_into_buffer(&packet).ok_or(FAILED)?;
-        self.current_frame_offset = samples_to_pass as usize * self.channels() as usize;
+        let offset = samples_to_pass as usize * self.channels() as usize;
+        self.current_frame_offset = offset.min(self.buffer.samples().len());
         Ok(())
     }
 }

@@ -29,7 +29,12 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
             let emit = |event| drop(tx.send(BackendResult::PlayerClientEvent(event)));
-            let result = crate::providers::download(provider, &track, &download_dir, &emit);
+            let result = crate::providers::download(
+                provider,
+                &track,
+                std::path::Path::new(&download_dir),
+                &emit,
+            );
             match result {
                 Ok(path) => {
                     let mut downloaded = track;

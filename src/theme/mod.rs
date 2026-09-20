@@ -56,6 +56,8 @@ pub struct Palette {
     pub overlay: Color,
     pub danger: Color,
     pub danger_hover: Color,
+    pub fg_on_accent: Color,
+    pub fg_on_danger: Color,
 }
 
 impl Default for Palette {
@@ -96,6 +98,8 @@ impl Palette {
             overlay: Color::from_rgba8(0, 0, 0, 0.7),
             danger: Color::from_rgb8(0xc0, 0x40, 0x40),
             danger_hover: Color::from_rgb8(0xc0, 0x30, 0x30),
+            fg_on_accent: Color::BLACK,
+            fg_on_danger: Color::WHITE,
         }
     }
 
@@ -117,6 +121,8 @@ impl Palette {
             overlay: Color::from_rgba8(0, 0, 0, 0.5),
             danger: Color::from_rgb8(0xf0, 0x70, 0x70),
             danger_hover: Color::from_rgb8(0xe0, 0x60, 0x60),
+            fg_on_accent: Color::BLACK,
+            fg_on_danger: Color::WHITE,
         }
     }
 }
@@ -141,7 +147,7 @@ pub struct AppTheme {
 }
 
 impl AppTheme {
-    pub fn new(palette: Palette) -> Self {
+    pub fn new(palette: &Palette) -> Self {
         Self {
             inner: Theme::custom_with_fn(
                 "goosemusic",
@@ -164,21 +170,21 @@ impl AppTheme {
                     })
                 },
             ),
-            palette,
+            palette: *palette,
         }
     }
 }
 
 impl From<Palette> for AppTheme {
     fn from(palette: Palette) -> Self {
-        Self::new(palette)
+        Self::new(&palette)
     }
 }
 
 // Delegate theme::Base to the inner iced::Theme.
 impl theme::Base for AppTheme {
     fn default(_preference: theme::Mode) -> Self {
-        Self::new(Palette::default())
+        Self::new(&Palette::default())
     }
 
     fn mode(&self) -> theme::Mode {

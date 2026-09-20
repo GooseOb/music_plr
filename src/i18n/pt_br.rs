@@ -82,8 +82,8 @@ pub const STRINGS: Strings = Strings {
     delete: "Excluir",
     delete_playlist_q: "Excluir playlist?",
     tracks_wont_be_deleted: "As faixas não serão excluídas.",
-    lbl_id: "Id",
-    lbl_url: "Url",
+    lbl_id: "ID",
+    lbl_url: "URL",
     lbl_artist_id: "Id do artista",
     lbl_duration_secs: "Duração (em segundos)",
     lbl_thumbnail: "Miniatura",
@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("Atualizado para {v}. Reiniciando…"),
     package_managed: "Não é possível atualizar automaticamente (sem permissão de escrita no diretório do aplicativo). Se instalado via gerenciador de pacotes, use-o para atualizar.",
     update_failed: |e| format!("Falha na atualização: {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn pt_tracks(n: usize) -> String {

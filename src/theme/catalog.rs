@@ -6,7 +6,7 @@
 
 use iced::{widget, Color};
 
-use super::{AppTheme, RADIUS_MD, RADIUS_SM, SPACING_SM};
+use super::{AppTheme, RADIUS_LG, RADIUS_MD, RADIUS_SM};
 
 impl widget::container::Catalog for AppTheme {
     type Class<'a> = widget::container::StyleFn<'a, AppTheme>;
@@ -123,7 +123,7 @@ impl widget::scrollable::Catalog for AppTheme {
                         widget::scrollable::Status::Dragged { .. } => p.fg_muted,
                     }
                     .into(),
-                    border: iced::border::rounded(SPACING_SM),
+                    border: iced::border::rounded(RADIUS_SM),
                 },
             };
 
@@ -134,7 +134,7 @@ impl widget::scrollable::Catalog for AppTheme {
                 gap: None,
                 auto_scroll: widget::scrollable::AutoScroll {
                     background: p.overlay.into(),
-                    border: iced::border::rounded(u32::MAX),
+                    border: iced::border::rounded(RADIUS_LG),
                     shadow: iced::Shadow {
                         color: Color::BLACK.scale_alpha(0.7),
                         offset: iced::Vector::ZERO,

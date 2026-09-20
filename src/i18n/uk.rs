@@ -82,8 +82,8 @@ pub const STRINGS: Strings = Strings {
     delete: "Видалити",
     delete_playlist_q: "Видалити плейлист?",
     tracks_wont_be_deleted: "Треки не будуть видалені.",
-    lbl_id: "Id",
-    lbl_url: "Url",
+    lbl_id: "ID",
+    lbl_url: "URL",
     lbl_artist_id: "Id виконавця",
     lbl_duration_secs: "Тривалість (у секундах)",
     lbl_thumbnail: "Обкладинка",
@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("Оновлено до {v}. Перезапуск…"),
     package_managed: "Неможливо автоматично оновити (немає прав на запис до каталогу програми). Якщо встановлено через менеджер пакетів, використовуйте його для оновлення.",
     update_failed: |e| format!("Оновлення не вдалося: {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn uk_tracks(n: usize) -> String {

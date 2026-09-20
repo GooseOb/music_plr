@@ -1,8 +1,7 @@
 use std::{
     io::Write,
     process::{Command, Stdio},
-    sync::atomic::{AtomicU64, Ordering},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
@@ -40,7 +39,7 @@ pub struct YouTubeVideo {
 
 impl From<YouTubeVideo> for Track {
     fn from(v: YouTubeVideo) -> Self {
-        let mut track = Track::from_provider(
+        Track::from_provider_with_count(
             ProviderId::YouTube,
             v.id,
             v.url,
@@ -50,11 +49,8 @@ impl From<YouTubeVideo> for Track {
             v.thumbnail,
             v.album,
             v.artist_id,
-        );
-        if let Some(pt) = track.providers.get_mut(&ProviderId::YouTube) {
-            pt.play_count = v.views;
-        }
-        track
+            v.views,
+        )
     }
 }
 
@@ -133,46 +129,43 @@ fn parse_abbreviated_count(s: &str) -> u64 {
 const SEARCH_TIMEOUT: Duration = Duration::from_mins(1);
 const PYTHON_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Write the embedded ytmusicapi script to a unique temp file, run it with
-/// `python3` in the given `mode`, and return its stdout. Unique per pid +
-/// call counter (concurrent searches used to race on one fixed filename) and
-/// removed after the run.
-fn run_python(mode: &str, args: &[&str]) -> Result<String> {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let script_path = std::env::temp_dir().join(format!(
-        "goosemusic_search_{}_{}.py",
-        std::process::id(),
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    ));
-    std::fs::write(&script_path, include_str!("../youtube_search.py"))
-        .context("Failed to write ytmusicapi script")?;
+fn cached_script_path() -> std::path::PathBuf {
+    static PATH: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    PATH.get_or_init(|| {
+        let path =
+            std::env::temp_dir().join(format!("goosemusic_search_{}.py", std::process::id()));
+        let _ = std::fs::write(&path, include_str!("../youtube_search.py"));
+        path
+    })
+    .clone()
+}
 
-    let result = (|| {
-        let py = crate::deps::python_exe().ok_or_else(|| {
-            anyhow::anyhow!("Python 3 not found; install it to search YouTube Music.")
-        })?;
-        let output = run_python_with(&py, &script_path, mode, args)?;
-        if output.status.success() {
-            return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
-        }
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if is_import_error(&stderr) {
-            if let Some(sys_py) = crate::deps::system_python_exe() {
-                if sys_py != py {
-                    let sys_output = run_python_with(&sys_py, &script_path, mode, args)?;
-                    if sys_output.status.success() {
-                        return Ok(String::from_utf8_lossy(&sys_output.stdout).into_owned());
-                    }
-                    let sys_stderr = String::from_utf8_lossy(&sys_output.stderr);
-                    anyhow::bail!("ytmusicapi {mode} failed: {sys_stderr}");
+/// Run the embedded ytmusicapi script (written once per process) with
+/// `python3` in the given `mode`, and return its stdout.
+fn run_python(mode: &str, args: &[&str]) -> Result<String> {
+    let script_path = cached_script_path();
+
+    let py = crate::deps::python_exe().ok_or_else(|| {
+        anyhow::anyhow!("Python 3 not found; install it to search YouTube Music.")
+    })?;
+    let output = run_python_with(&py, &script_path, mode, args)?;
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if is_import_error(&stderr) {
+        if let Some(sys_py) = crate::deps::system_python_exe() {
+            if sys_py != py {
+                let sys_output = run_python_with(&sys_py, &script_path, mode, args)?;
+                if sys_output.status.success() {
+                    return Ok(String::from_utf8_lossy(&sys_output.stdout).into_owned());
                 }
+                let sys_stderr = String::from_utf8_lossy(&sys_output.stderr);
+                anyhow::bail!("ytmusicapi {mode} failed: {sys_stderr}");
             }
         }
-        anyhow::bail!("ytmusicapi {mode} failed: {stderr}");
-    })();
-
-    let _ = std::fs::remove_file(&script_path);
-    result
+    }
+    anyhow::bail!("ytmusicapi {mode} failed: {stderr}");
 }
 
 fn run_python_with(
@@ -518,6 +511,21 @@ fn fetch_batch_metadata(
     }
     drop(child.stdin.take());
 
+    let deadline = Instant::now() + Duration::from_mins(1);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return results;
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(_) => return results,
+        }
+    }
     if let Ok(output) = child.wait_with_output() {
         if output.status.success() {
             for line in String::from_utf8_lossy(&output.stdout).lines() {
@@ -576,7 +584,7 @@ pub fn resolve_id(track: &Track) -> Result<Option<Track>> {
 
 pub fn download(
     video_url: &str,
-    download_dir: &str,
+    download_dir: &std::path::Path,
     emit: &dyn Fn(crate::providers::ClientEvent),
 ) -> Result<String> {
     let id = video_url
@@ -584,9 +592,7 @@ pub fn download(
         .nth(1)
         .and_then(|s| s.split('&').next())
         .unwrap_or("download");
-    let dir = std::path::Path::new(download_dir);
-    let _ = std::fs::create_dir_all(dir);
-    let output_path = dir.join(format!("{id}.mp3"));
+    let output_path = super::download_file_path(download_dir, id);
     download_audio(video_url, output_path.to_string_lossy().as_ref(), emit)
 }
 

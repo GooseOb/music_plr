@@ -100,3 +100,26 @@ pub fn compute_normalization_gain(path: &Path) -> Option<f32> {
     }
     Some(gain)
 }
+
+pub fn load_gains() -> std::collections::HashMap<String, f32> {
+    let path = crate::data::cache_path("normalization.json");
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+pub fn save_gains(gains: &std::collections::HashMap<String, f32>) {
+    let path = crate::data::cache_path("normalization.json");
+    if let Some(dir) = path.parent() {
+        if std::fs::create_dir_all(dir).is_err() {
+            return;
+        }
+    }
+    if let Ok(s) = serde_json::to_string(gains) {
+        let tmp = path.with_extension("tmp");
+        if std::fs::write(&tmp, s).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}

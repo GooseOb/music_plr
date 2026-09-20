@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("تم التحديث إلى {v}. جارٍ إعادة التشغيل…"),
     package_managed: "لا يمكن التحديث التلقائي (عدم وجود إذن بالكتابة في دليل التطبيق). إذا تم تثبيته عبر مدير حزم، استخدمه للتحديث.",
     update_failed: |e| format!("فشل التحديث: {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn ar_tracks(n: usize) -> String {

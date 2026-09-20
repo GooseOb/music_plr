@@ -45,7 +45,8 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
 
     let artist_el = subtitle_artist(artist, theme::TEXT_SIZE_SM, artist_target);
 
-    let track_info = Column::with_children([text(title).into(), artist_el]).spacing(2);
+    let track_info =
+        Column::with_children([text(title).into(), artist_el]).spacing(theme::SPACING_XXS);
 
     let elapsed_text = time_text((player.progress * player.duration) as u32);
     let total_text = time_text(player.duration as u32);

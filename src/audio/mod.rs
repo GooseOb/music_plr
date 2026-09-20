@@ -20,7 +20,7 @@ mod normalization;
 mod symphonia_source;
 
 use growing::GrowingMediaSource;
-pub use normalization::compute_normalization_gain;
+pub use normalization::{compute_normalization_gain, load_gains, save_gains};
 use symphonia_source::SymphoniaStreamingSource;
 
 pub struct AudioPlayer {
@@ -92,8 +92,10 @@ impl AudioPlayer {
         let state_clone = state.clone();
 
         thread::spawn(move || {
-            let mut output: Option<(rodio::OutputStream, rodio::Sink)> = None;
+            let mut output: Option<rodio::Sink> = None;
+            let mut output_stream: Option<(rodio::OutputStream, rodio::OutputStreamHandle)> = None;
             let mut ytdlp: Option<std::process::Child> = None;
+            let mut ytdlp_stderr: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>> = None;
             // Set to `true` while the copy thread is still draining yt-dlp's
             // stdout into the cache file. The native decoder reads the (growing)
             // cache file and blocks at EOF until this flips to `false`, then
@@ -128,6 +130,7 @@ impl AudioPlayer {
                         let _ = p.kill();
                         let _ = p.wait();
                     }
+                    ytdlp_stderr.take();
                     // yt-dlp's stdout is drained into the cache file by the copy
                     // thread; killing yt-dlp ends that thread. Drop the
                     // `writer_alive` flag so any in-flight reader stops blocking.
@@ -136,7 +139,7 @@ impl AudioPlayer {
                     stream_allow_retry = false;
                     stream_url = None;
                     playback_file = None;
-                    if let Some((_, s)) = &output {
+                    if let Some(s) = &output {
                         s.stop();
                     }
                     output = None;
@@ -164,13 +167,14 @@ impl AudioPlayer {
                                 }
                             }
 
-                            reset_pipeline!();
-
-                            if let Some(dir) = cache_path.parent() {
-                                let _ = std::fs::create_dir_all(dir);
+                            if is_duplicate_stream(stream_url.as_deref(), &url, "StreamAndCache") {
+                                continue;
                             }
 
-                            warn!(
+                            reset_pipeline!();
+                            ensure_cache_dir(&cache_path);
+
+                            debug!(
                                 "Streaming yt-dlp raw audio to cache file: {} (duration={})",
                                 cache_path.display(),
                                 duration
@@ -197,13 +201,14 @@ impl AudioPlayer {
                                     );
                                 });
                             }
-                            let Some((child, alive_flag)) =
+                            let Some((child, alive_flag, stderr_buf)) =
                                 spawn_stream_to_cache(&url, &cache_path, winner.as_deref())
                             else {
                                 continue;
                             };
 
                             ytdlp = Some(child);
+                            ytdlp_stderr = Some(stderr_buf);
                             writer_alive = Some(alive_flag);
                             playback_file = Some(cache_path);
                             stream_allow_retry = crate::providers::ytdlp::is_youtube_url(&url);
@@ -219,18 +224,12 @@ impl AudioPlayer {
                             cache_path,
                             gain,
                         } => {
-                            if let Some(ref current) = stream_url {
-                                if current == &url {
-                                    debug!("Ignoring duplicate StreamHttp for same URL");
-                                    continue;
-                                }
+                            if is_duplicate_stream(stream_url.as_deref(), &url, "StreamHttp") {
+                                continue;
                             }
 
                             reset_pipeline!();
-
-                            if let Some(dir) = cache_path.parent() {
-                                let _ = std::fs::create_dir_all(dir);
-                            }
+                            ensure_cache_dir(&cache_path);
 
                             debug!(
                                 "Streaming HTTP audio to cache file: {} (duration={})",
@@ -265,9 +264,14 @@ impl AudioPlayer {
                             );
 
                             // Error details already logged inside start_source
-                            if let Some(active) =
-                                Self::start_source(&cache_path, None, duration, &state_clone, gain)
-                            {
+                            if let Some(active) = Self::start_source(
+                                &cache_path,
+                                None,
+                                duration,
+                                &state_clone,
+                                gain,
+                                &mut output_stream,
+                            ) {
                                 output = Some(active);
                             }
 
@@ -279,7 +283,7 @@ impl AudioPlayer {
                         }
 
                         PlayerCommand::Pause => {
-                            if let Some((_, s)) = &output {
+                            if let Some(s) = &output {
                                 s.pause();
                                 if let Ok(mut st) = state_clone.lock() {
                                     st.is_playing = false;
@@ -287,7 +291,7 @@ impl AudioPlayer {
                             }
                         }
                         PlayerCommand::Resume => {
-                            if let Some((_, s)) = &output {
+                            if let Some(s) = &output {
                                 s.play();
                                 if let Ok(mut st) = state_clone.lock() {
                                     st.is_playing = true;
@@ -295,7 +299,7 @@ impl AudioPlayer {
                             }
                         }
                         PlayerCommand::SetVolume(v) => {
-                            if let Some((_, s)) = &output {
+                            if let Some(s) = &output {
                                 s.set_volume(v);
                             }
                             if let Ok(mut st) = state_clone.lock() {
@@ -303,7 +307,7 @@ impl AudioPlayer {
                             }
                         }
                         PlayerCommand::Seek(pos) => {
-                            if let Some((_, s)) = &output {
+                            if let Some(s) = &output {
                                 let _ = s.try_seek(pos);
                             }
                         }
@@ -312,7 +316,7 @@ impl AudioPlayer {
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
 
-                if let Some((_, s)) = &output {
+                if let Some(s) = &output {
                     if let Ok(mut st) = state_clone.lock() {
                         st.is_playing = !s.empty() && !s.is_paused();
                         if st.duration > 0.0 && !s.empty() {
@@ -341,24 +345,27 @@ impl AudioPlayer {
                         .is_none_or(|p| p.try_wait().ok().flatten().is_some());
                     let copy_done = writer_alive
                         .as_ref()
-                        .is_none_or(|w| !w.load(Ordering::SeqCst));
+                        .is_none_or(|w| !w.load(Ordering::Acquire));
 
                     if child_done && copy_done {
                         if let Some(exit) = ytdlp.as_mut().and_then(|p| p.try_wait().ok().flatten())
                         {
                             if !exit.success() {
-                                let error_msg = if let Some(stderr) =
-                                    ytdlp.as_mut().and_then(|c| c.stderr.take())
-                                {
-                                    let mut msg = String::new();
-                                    let _ = std::io::Read::read_to_string(
-                                        &mut std::io::BufReader::new(stderr),
-                                        &mut msg,
-                                    );
-                                    msg.trim().to_string()
-                                } else {
-                                    format!("yt-dlp exited with error ({exit})")
-                                };
+                                let error_msg =
+                                    ytdlp_stderr
+                                        .as_ref()
+                                        .map(|buf| {
+                                            String::from_utf8_lossy(&buf.lock().map_or_else(
+                                                |e| e.into_inner().clone(),
+                                                |b| b.clone(),
+                                            ))
+                                            .trim()
+                                            .to_string()
+                                        })
+                                        .filter(|s| !s.is_empty())
+                                        .unwrap_or_else(|| {
+                                            format!("yt-dlp exited with error ({exit})")
+                                        });
                                 let retry = stream_allow_retry
                                     && stream_url
                                         .as_deref()
@@ -385,7 +392,7 @@ impl AudioPlayer {
                                         // clean; decoding restarts below once
                                         // enough of the new stream has landed.
                                         let _ = std::fs::File::create(&path);
-                                        if let Some((_, s)) = &output {
+                                        if let Some(s) = &output {
                                             s.stop();
                                         }
                                         output = None;
@@ -393,10 +400,11 @@ impl AudioPlayer {
                                             st.has_output = false;
                                             st.progress = 0.0;
                                         }
-                                        if let Some((child, alive)) =
+                                        if let Some((child, alive, stderr_buf)) =
                                             spawn_stream_to_cache(&url, &path, winner.as_deref())
                                         {
                                             ytdlp = Some(child);
+                                            ytdlp_stderr = Some(stderr_buf);
                                             writer_alive = Some(alive);
                                             continue;
                                         }
@@ -438,6 +446,7 @@ impl AudioPlayer {
                                 expected_duration,
                                 &state_clone,
                                 pending_gain,
+                                &mut output_stream,
                             ) {
                                 output = Some(active);
                             }
@@ -463,13 +472,16 @@ impl AudioPlayer {
     /// until the copy thread finishes; for a cached file it is `None` (real
     /// EOF, and seekable for replay). Returns `None` if the file can't be
     /// opened or the format can't be probed yet (retry on the streaming path).
+    /// The OS audio device (`output_stream`) is created once and reused across
+    /// tracks instead of reopening per track.
     fn start_source(
         path: &PathBuf,
         writer_alive: Option<Arc<AtomicBool>>,
         duration: f32,
         state: &Arc<Mutex<PlayerState>>,
         gain: f32,
-    ) -> Option<(rodio::OutputStream, rodio::Sink)> {
+        output_stream: &mut Option<(rodio::OutputStream, rodio::OutputStreamHandle)>,
+    ) -> Option<rodio::Sink> {
         let file = match std::fs::File::open(path) {
             Ok(f) => f,
             Err(e) => {
@@ -488,14 +500,17 @@ impl AudioPlayer {
                 return None;
             }
         };
-        let (stream, handle) = match rodio::OutputStream::try_default() {
-            Ok(s) => s,
-            Err(e) => {
-                warn!("rodio::OutputStream::try_default failed: {e}");
-                return None;
-            }
-        };
-        let sink = match rodio::Sink::try_new(&handle) {
+        if output_stream.is_none() {
+            match rodio::OutputStream::try_default() {
+                Ok(s) => output_stream.replace(s),
+                Err(e) => {
+                    warn!("rodio::OutputStream::try_default failed: {e}");
+                    return None;
+                }
+            };
+        }
+        let handle = &output_stream.as_ref()?.1;
+        let sink = match rodio::Sink::try_new(handle) {
             Ok(s) => s,
             Err(e) => {
                 warn!("rodio::Sink::try_new failed: {e}");
@@ -514,7 +529,7 @@ impl AudioPlayer {
             st.cache_ready = false;
             st.has_output = true;
         }
-        Some((stream, sink))
+        Some(sink)
     }
 
     pub fn play_stream_cache(&self, url: &str, duration: f32, cache_path: PathBuf, gain: f32) {
@@ -590,11 +605,68 @@ impl AudioPlayer {
     }
 }
 
+fn is_duplicate_stream(stream_url: Option<&str>, url: &str, kind: &str) -> bool {
+    if stream_url == Some(url) {
+        debug!("Ignoring duplicate {kind} for same URL");
+        return true;
+    }
+    false
+}
+
+fn ensure_cache_dir(cache_path: &std::path::Path) {
+    if let Some(dir) = cache_path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+}
+
 /// Record a player-client race event for the tick loop to surface as a toast.
 fn set_client_event(state: &Arc<Mutex<PlayerState>>, event: ClientEvent) {
     if let Ok(mut st) = state.lock() {
         st.client_event = Some(event);
     }
+}
+
+fn copy_loop(reader: &mut (dyn Read + '_), file: &mut std::fs::File, label: &str) {
+    let mut buf = [0u8; 8192];
+    loop {
+        match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                if file.write_all(&buf[..n]).is_err() {
+                    break;
+                }
+            }
+            Err(e) => {
+                warn!("{label} read error: {e}");
+                break;
+            }
+        }
+    }
+}
+
+fn copy_reader_to_file(
+    mut reader: impl Read + Send + 'static,
+    path: std::path::PathBuf,
+    flag: Arc<AtomicBool>,
+    label: &'static str,
+) {
+    thread::spawn(move || {
+        let mut file = match std::fs::File::create(&path) {
+            Ok(f) => f,
+            Err(e) => {
+                warn!("Failed to create cache file: {e}");
+                flag.store(false, Ordering::Release);
+                return;
+            }
+        };
+        copy_loop(&mut reader, &mut file, label);
+        debug!(
+            "{label} copy thread done: {} ({} bytes)",
+            path.display(),
+            file.metadata().map_or(0, |m| m.len())
+        );
+        flag.store(false, Ordering::Release);
+    });
 }
 
 /// Spawn a direct HTTP stream of `url` into `cache_path` (used by non-yt-dlp
@@ -615,50 +687,38 @@ fn spawn_http_stream_to_cache(url: &str, cache_path: &std::path::Path) -> Option
             Ok(f) => f,
             Err(e) => {
                 warn!("Failed to create cache file: {e}");
-                flag.store(false, Ordering::SeqCst);
+                flag.store(false, Ordering::Release);
                 return;
             }
         };
         let mut reader = resp.body_mut().as_reader();
-        let mut buf = [0u8; 8192];
-        loop {
-            match reader.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => {
-                    if file.write_all(&buf[..n]).is_err() {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    warn!("HTTP stream read error: {e}");
-                    break;
-                }
-            }
-        }
+        copy_loop(&mut reader, &mut file, "HTTP stream");
         debug!(
-            "http stream copy thread done: {} ({} bytes)",
+            "HTTP stream copy thread done: {} ({} bytes)",
             path.display(),
             file.metadata().map_or(0, |m| m.len())
         );
-        flag.store(false, Ordering::SeqCst);
+        flag.store(false, Ordering::Release);
     });
 
     Some(alive_flag)
 }
 
+type StreamParts = (std::process::Child, Arc<AtomicBool>, Arc<Mutex<Vec<u8>>>);
+
 /// Spawn `yt-dlp` streaming `url` to stdout plus a thread copying its
 /// stdout into `cache_path`, using `client` as the `youtube:player_client`
 /// (or yt-dlp's defaults when `None`).
 ///
-/// Returns the child process and a "writer alive" flag that the copy thread
-/// clears once the download finishes, so a reader blocked at EOF on the still
-/// growing cache file knows when EOF is genuine. Returns `None` if yt-dlp
-/// could not be spawned or exposed no stdout.
+/// Returns the child process, a "writer alive" flag that the copy thread
+/// clears once the download finishes, and a concurrently-drained stderr
+/// buffer (so a chatty yt-dlp can't deadlock on a full pipe). Returns `None`
+/// if yt-dlp could not be spawned or exposed no stdout.
 fn spawn_stream_to_cache(
     url: &str,
     cache_path: &std::path::Path,
     client: Option<&str>,
-) -> Option<(std::process::Child, Arc<AtomicBool>)> {
+) -> Option<StreamParts> {
     // Request AAC-in-M4A (see `STREAM_FORMAT`): symphonia can decode AAC
     // (unlike Opus/WebM, which neither rodio's `symphonia-all` nor the
     // standalone `symphonia` 0.5 crate can decode), and YouTube serves it as
@@ -703,50 +763,30 @@ fn spawn_stream_to_cache(
         }
     };
 
-    let Some(mut stdout) = child.stdout.take() else {
+    let Some(stdout) = child.stdout.take() else {
         warn!("yt-dlp stdout not available");
         return None;
     };
+
+    let stderr_buf = Arc::new(Mutex::new(Vec::new()));
+    if let Some(stderr) = child.stderr.take() {
+        let buf = stderr_buf.clone();
+        thread::spawn(move || {
+            use std::io::Read as _;
+            let mut out = Vec::new();
+            let _ = std::io::BufReader::new(stderr).read_to_end(&mut out);
+            if let Ok(mut b) = buf.lock() {
+                *b = out;
+            }
+        });
+    }
 
     // yt-dlp emits raw `bestaudio` bytes on stdout; write them straight to the
     // cache file. symphonia decodes that growing file directly during
     // playback, so there is no transmux step — exactly one copy on disk.
     let alive_flag = Arc::new(AtomicBool::new(true));
     let path = cache_path.to_path_buf();
-    let flag = alive_flag.clone();
-    thread::spawn(move || {
-        let mut file = match std::fs::File::create(&path) {
-            Ok(f) => f,
-            Err(e) => {
-                warn!("Failed to create cache file: {}", e);
-                flag.store(false, Ordering::SeqCst);
-                return;
-            }
-        };
-        let mut buf = [0u8; 8192];
-        loop {
-            match stdout.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => {
-                    if file.write_all(&buf[..n]).is_err() {
-                        break;
-                    }
-                }
-                Err(e) => {
-                    warn!("yt-dlp read error: {}", e);
-                    break;
-                }
-            }
-        }
-        // Download finished: signal the reader that no more bytes are coming
-        // so symphonia sees a genuine EOF.
-        debug!(
-            "stream copy thread done: {} ({} bytes)",
-            path.display(),
-            file.metadata().map_or(0, |m| m.len())
-        );
-        flag.store(false, Ordering::SeqCst);
-    });
+    copy_reader_to_file(stdout, path, alive_flag.clone(), "yt-dlp");
 
-    Some((child, alive_flag))
+    Some((child, alive_flag, stderr_buf))
 }

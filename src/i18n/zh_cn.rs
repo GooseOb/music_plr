@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("已更新到 {v}。正在重启…"),
     package_managed: "无法自动更新（没有对应用程序目录的写入权限）。如果通过包管理器安装，请使用它进行更新。",
     update_failed: |e| format!("更新失败：{e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn zh_tracks(n: usize) -> String {

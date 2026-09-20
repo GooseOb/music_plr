@@ -279,9 +279,10 @@ impl MusicPlayer {
         kind: &ViewKind,
         provider: crate::providers::ProviderId,
     ) -> Task<Message> {
-        let (id, kind_str, label) = kind
+        let params = kind
             .browse_params()
             .expect("start_browse called with a non-browse ViewKind");
+        let (id, kind_str, label) = (params.id, params.kind, params.name);
         let nav_task = self.push_new_view(ViewData {
             kind: kind.clone(),
             content: crate::load_state::LoadState::Loading,

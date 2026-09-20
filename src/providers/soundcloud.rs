@@ -42,7 +42,7 @@ impl From<&AlbumPlaylist> for CardData {
 /// don't need `SoundCloud`'s (auth-gated) stream URLs.
 impl From<&SCTrack> for Track {
     fn from(t: &SCTrack) -> Self {
-        let mut track = Track::from_provider(
+        Track::from_provider_with_count(
             ProviderId::SoundCloud,
             t.track.id.to_string(),
             t.track.permalink_url.clone(),
@@ -55,11 +55,8 @@ impl From<&SCTrack> for Track {
                 .unwrap_or_else(|| t.user.avatar_url.clone()),
             None,
             Some(t.user.id.to_string()),
-        );
-        if let Some(pt) = track.providers.get_mut(&ProviderId::SoundCloud) {
-            pt.play_count = t.track.playback_count.unwrap_or(0).max(0) as u64;
-        }
-        track
+            t.track.playback_count.unwrap_or(0).max(0) as u64,
+        )
     }
 }
 
@@ -79,7 +76,7 @@ impl From<&User> for CardData {
 /// playable `Track`, carrying the `permalink_url` for `yt-dlp` playback.
 impl From<&BasicTrack> for Track {
     fn from(t: &BasicTrack) -> Self {
-        let mut track = Track::from_provider(
+        Track::from_provider_with_count(
             ProviderId::SoundCloud,
             t.track.id.to_string(),
             t.track.permalink_url.clone(),
@@ -89,37 +86,39 @@ impl From<&BasicTrack> for Track {
             t.track.artwork_url.clone().unwrap_or_default(),
             None,
             Some(t.user.id.to_string()),
-        );
-        if let Some(pt) = track.providers.get_mut(&ProviderId::SoundCloud) {
-            pt.play_count = t.track.playback_count.unwrap_or(0).max(0) as u64;
-        }
-        track
+            t.track.playback_count.unwrap_or(0).max(0) as u64,
+        )
     }
 }
 
-/// Run an async `rsoundcloud` call to completion on the shared current-thread
-/// tokio runtime. The provider backends run on plain `std::thread`s, but
-/// `rsoundcloud` is async, so we drive it with one lazily-built runtime reused
-/// across calls (building a runtime per call is needlessly expensive).
+/// Run an async `rsoundcloud` call to completion on the shared multi-thread
+/// tokio runtime (see `super::shared_runtime`). Multi-thread so per-kind
+/// `tokio::spawn`s actually run in parallel and concurrent `block_on`s from
+/// different `std::thread`s don't serialize/panic.
 fn block_on_sc<F, T, E>(fut: F) -> Result<T>
 where
     F: std::future::Future<Output = std::result::Result<T, E>>,
     E: std::fmt::Debug,
 {
-    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
-    let rt = RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to build SoundCloud runtime")
-    });
-    rt.block_on(fut)
+    super::shared_runtime()
+        .block_on(fut)
         .map_err(|e| anyhow::anyhow!("SoundCloud API error: {e:?}"))
 }
 
-/// A ready `SoundCloudClient` (scrapes a `client_id` on first use).
+/// A ready `SoundCloudClient`. The `client_id` scrape happens once per process
+/// and is reused afterwards instead of re-scraping on every search/browse.
 async fn sc_client() -> rsoundcloud::ClientResult<SoundCloudClient> {
-    SoundCloudClient::default().await
+    static CLIENT_ID: OnceLock<String> = OnceLock::new();
+    if let Some(id) = CLIENT_ID.get() {
+        return SoundCloudClient::new(Some(id.clone()), None).await;
+    }
+    match SoundCloudClient::generate_client_id().await {
+        Ok(id) => {
+            let _ = CLIENT_ID.set(id.clone());
+            SoundCloudClient::new(Some(id), None).await
+        }
+        Err(_) => SoundCloudClient::default().await,
+    }
 }
 
 fn search_page(offset: usize) -> CollectionParams {
@@ -376,8 +375,9 @@ pub fn fetch_artist_kinds(
     });
 }
 
-/// Run one request future with up to `attempts` tries and linear backoff —
-/// `SoundCloud`'s internal API answers 403/429 under bursts.
+/// Run one request future with up to `attempts` tries and capped backoff —
+/// `SoundCloud`'s internal API answers 403/429 under bursts. Sleeps at most
+/// 1s so five parallel kinds fail fast instead of stalling the section.
 async fn retry<T, Fut>(attempts: u32, f: &mut impl FnMut() -> Fut) -> rsoundcloud::ClientResult<T>
 where
     Fut: std::future::Future<Output = rsoundcloud::ClientResult<T>>,
@@ -386,11 +386,8 @@ where
         match f().await {
             Ok(v) => return Ok(v),
             Err(e) if attempt + 1 < attempts => {
-                tracing::warn!(
-                    "SoundCloud request failed ({e:?}); retrying in {}s",
-                    attempt + 1
-                );
-                tokio::time::sleep(std::time::Duration::from_secs(u64::from(attempt) + 1)).await;
+                tracing::warn!("SoundCloud request failed ({e:?}); retrying");
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
             }
             Err(e) => return Err(e),
         }
@@ -417,7 +414,7 @@ pub fn resolve_id(track: &Track) -> Result<Option<Track>> {
 /// Download the track's audio. The track must carry a `SoundCloud` id/url.
 /// Streaming/downloading is the one part that stays on `yt-dlp` because
 /// `rsoundcloud` doesn't expose a plain stream URL.
-pub fn download(track: &Track, download_dir: &str) -> Result<String> {
+pub fn download(track: &Track, download_dir: &std::path::Path) -> Result<String> {
     let url = track
         .provider_url(ProviderId::SoundCloud)
         .unwrap_or_else(|| track.primary_url())
@@ -425,8 +422,6 @@ pub fn download(track: &Track, download_dir: &str) -> Result<String> {
     let id = track
         .provider_id(ProviderId::SoundCloud)
         .unwrap_or("download");
-    let dir = std::path::Path::new(download_dir);
-    let _ = std::fs::create_dir_all(dir);
-    let output_path = dir.join(format!("{id}.mp3"));
+    let output_path = super::download_file_path(download_dir, id);
     ytdlp::download_audio(&url, output_path.to_string_lossy().as_ref(), &[])
 }

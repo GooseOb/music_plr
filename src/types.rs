@@ -33,27 +33,21 @@ impl Track {
         self.providers.values().next()
     }
 
+    fn source_or_any<'a, T>(&'a self, f: impl Fn(&'a ProviderTrack) -> Option<T>) -> Option<T> {
+        self.source_provider()
+            .and_then(&f)
+            .or_else(|| self.providers.values().find_map(f))
+    }
+
     /// The track duration in seconds, taken from the source provider's data.
     pub fn duration(&self) -> u32 {
-        self.source_provider()
-            .map(|p| p.duration)
-            .or_else(|| {
-                self.providers
-                    .values()
-                    .find_map(|p| (p.duration > 0).then_some(p.duration))
-            })
+        self.source_or_any(|p| (p.duration > 0).then_some(p.duration))
             .unwrap_or(0)
     }
 
     /// The thumbnail URL, taken from the source provider's data.
     pub fn thumbnail(&self) -> &str {
-        self.source_provider()
-            .and_then(|p| (!p.thumbnail.is_empty()).then_some(p.thumbnail.as_str()))
-            .or_else(|| {
-                self.providers
-                    .values()
-                    .find_map(|p| (!p.thumbnail.is_empty()).then_some(p.thumbnail.as_str()))
-            })
+        self.source_or_any(|p| (!p.thumbnail.is_empty()).then_some(p.thumbnail.as_str()))
             .unwrap_or("")
     }
 
@@ -71,9 +65,7 @@ impl Track {
 
     /// The album metadata, taken from the source provider's data.
     pub fn album(&self) -> Option<&TrackAlbum> {
-        self.source_provider()
-            .and_then(|p| p.album.as_ref())
-            .or_else(|| self.providers.values().find_map(|p| p.album.as_ref()))
+        self.source_or_any(|p| p.album.as_ref())
     }
 }
 
@@ -106,12 +98,6 @@ impl Track {
     pub fn local_path(&self) -> Option<String> {
         let local = self.providers.get(&ProviderId::Local)?;
         (!local.url.is_empty()).then(|| local.url.clone())
-    }
-
-    /// Alias of [`local_path`]: the on-disk path of this track's local audio
-    /// file, used by the download registry.
-    pub fn download_path(&self) -> Option<String> {
-        self.local_path()
     }
 
     /// Record the on-disk path of this track's local audio file. Adds/updates
@@ -223,6 +209,36 @@ impl Track {
             source: provider,
             providers,
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_provider_with_count(
+        provider: ProviderId,
+        id: String,
+        url: String,
+        title: impl Into<String>,
+        artist_name: impl Into<String>,
+        duration: u32,
+        thumbnail: impl Into<String>,
+        album: Option<TrackAlbum>,
+        artist_id: Option<String>,
+        play_count: u64,
+    ) -> Self {
+        let mut track = Self::from_provider(
+            provider,
+            id,
+            url,
+            title,
+            artist_name,
+            duration,
+            thumbnail,
+            album,
+            artist_id,
+        );
+        if let Some(pt) = track.providers.get_mut(&provider) {
+            pt.play_count = play_count;
+        }
+        track
     }
 }
 

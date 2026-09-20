@@ -82,8 +82,8 @@ pub const STRINGS: Strings = Strings {
     delete: "Usuń",
     delete_playlist_q: "Usunąć playlistę?",
     tracks_wont_be_deleted: "Utwory nie zostaną usunięte.",
-    lbl_id: "Id",
-    lbl_url: "Url",
+    lbl_id: "ID",
+    lbl_url: "URL",
     lbl_artist_id: "ID wykonawcy",
     lbl_duration_secs: "Czas trwania (sekundy)",
     lbl_thumbnail: "Miniatura",
@@ -227,6 +227,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("Zaktualizowano do {v}. Uruchamianie…"),
     package_managed: "Nie można automatycznie aktualizować (brak praw zapisu do katalogu aplikacji). Jeśli zainstalowano przez menedżera pakietów, użyj go do aktualizacji.",
     update_failed: |e| format!("Aktualizacja nie powiodła się: {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn pl_tracks(n: usize) -> String {

@@ -82,8 +82,8 @@ pub const STRINGS: Strings = Strings {
     delete: "Löschen",
     delete_playlist_q: "Wiedergabeliste löschen?",
     tracks_wont_be_deleted: "Titel werden nicht gelöscht.",
-    lbl_id: "Id",
-    lbl_url: "Url",
+    lbl_id: "ID",
+    lbl_url: "URL",
     lbl_artist_id: "Künstler-ID",
     lbl_duration_secs: "Dauer (in Sekunden)",
     lbl_thumbnail: "Vorschaubild",
@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("Auf {v} aktualisiert. Starte neu…"),
     package_managed: "Kann nicht automatisch aktualisieren (kein Schreibrecht im Anwendungsverzeichnis). Wenn über einen Paketmanager installiert, nutzen Sie diesen für Updates.",
     update_failed: |e| format!("Aktualisierung fehlgeschlagen: {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn de_tracks(n: usize) -> String {

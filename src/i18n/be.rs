@@ -82,8 +82,8 @@ pub const STRINGS: Strings = Strings {
     delete: "Выдаліць",
     delete_playlist_q: "Выдаліць плэйліст?",
     tracks_wont_be_deleted: "Трэкі ня будуць выдалены.",
-    lbl_id: "Id",
-    lbl_url: "Url",
+    lbl_id: "ID",
+    lbl_url: "URL",
     lbl_artist_id: "Id выканаўцы",
     lbl_duration_secs: "Працягласьць (у сэкундах)",
     lbl_thumbnail: "Вокладка",
@@ -221,6 +221,11 @@ pub const STRINGS: Strings = Strings {
     update_applied: |v| format!("Абноўлена да {v}. Перазапуск…"),
     package_managed: "Ня можна аўтаматычна абнаўляць (няма праў на запіс). Калі ўсталявана праз мэнэджэр пакетаў, выкарыстайце яго для абнаўленьня.",
     update_failed: |e| format!("Абнаўленне не прайшло: {e}"),
+    percent: |pct| format!("{pct}%"),
+    list_match_pos: |pos, total| format!("{pos}/{total}"),
+    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
+    deps_failed_detail: |e| format!("Failed: {e}"),
+    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 };
 
 fn be_tracks(n: usize) -> String {
