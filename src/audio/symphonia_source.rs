@@ -1,4 +1,18 @@
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+
 use super::growing::GrowingMediaSource;
+
+/// How many consecutive packet/decode failures to skip before treating the
+/// stream as exhausted. Muxed MP4 containers (the `best[ext=mp4]` fallback for
+/// tracks with no audio-only format) interleave video packets whose sample
+/// offsets require seeks, so symphonia's reader reports transient
+/// `out-of-bounds for a non-seekable stream` errors mid-track; giving up on
+/// the first one truncated playback after a few seconds. Genuine EOF keeps
+/// failing, so the budget only delays track-end by microseconds.
+const MAX_CONSECUTIVE_PACKET_ERRORS: usize = 200;
 
 /// A rodio `Source` that decodes a (growing) cache file via symphonia,
 /// streaming samples as they arrive. Mirrors rodio's internal
@@ -19,6 +33,11 @@ pub(super) struct SymphoniaStreamingSource {
     /// volume normalization composes with the sink's master volume and the
     /// source stays seekable (unlike wrapping it in rodio's `Amplify`).
     gain: f32,
+    /// The download flag shared with the copy thread (`None` for a complete
+    /// cached file). Consulted live so a seek attempted while the download is
+    /// still running is rejected without touching the reader state, while one
+    /// after completion goes through against the now-whole file.
+    writer_alive: Option<Arc<AtomicBool>>,
 }
 
 impl SymphoniaStreamingSource {
@@ -35,6 +54,7 @@ impl SymphoniaStreamingSource {
             probe::Hint,
         };
 
+        let writer_alive = source.writer_alive.clone();
         let mss = MediaSourceStream::new(
             Box::new(source),
             symphonia::core::io::MediaSourceStreamOptions::default(),
@@ -97,7 +117,14 @@ impl SymphoniaStreamingSource {
             expected_duration,
             track_id,
             gain,
+            writer_alive,
         })
+    }
+
+    fn is_live(&self) -> bool {
+        self.writer_alive
+            .as_ref()
+            .is_some_and(|w| w.load(Ordering::Acquire))
     }
 
     /// Decode `packet`, retrying on up to `RETRIES` further packets when the
@@ -116,7 +143,7 @@ impl SymphoniaStreamingSource {
             if decoded.is_ok() {
                 break;
             }
-            let next = self.format.next_packet().ok()?;
+            let next = self.next_audio_packet()?;
             decoded = self.decoder.decode(&next);
         }
         let decoded = decoded.ok()?;
@@ -134,12 +161,23 @@ impl SymphoniaStreamingSource {
     }
 
     /// Pull the next packet belonging to the selected audio track, skipping
-    /// packets from other tracks in the container.
+    /// packets from other tracks in the container. Transient reader errors
+    /// (e.g. isomp4 reporting `out-of-bounds for a non-seekable stream` on
+    /// muxed containers mid-track) are skipped up to
+    /// [`MAX_CONSECUTIVE_PACKET_ERRORS`]; only a sustained failure run — the
+    /// shape genuine EOF takes — ends the stream.
     fn next_audio_packet(&mut self) -> Option<symphonia::core::formats::Packet> {
+        let mut errors = 0;
         loop {
-            let p = self.format.next_packet().ok()?;
-            if p.track_id() == self.track_id {
-                return Some(p);
+            if let Ok(p) = self.format.next_packet() {
+                if p.track_id() == self.track_id {
+                    return Some(p);
+                }
+            } else {
+                errors += 1;
+                if errors > MAX_CONSECUTIVE_PACKET_ERRORS {
+                    return None;
+                }
             }
         }
     }
@@ -149,9 +187,11 @@ impl Iterator for SymphoniaStreamingSource {
     type Item = i16;
 
     fn next(&mut self) -> Option<i16> {
-        if self.current_frame_offset >= self.buffer.len() {
+        while self.current_frame_offset >= self.buffer.len() {
             let packet = self.next_audio_packet()?;
-            self.decode_into_buffer(&packet)?;
+            if self.decode_into_buffer(&packet).is_none() {
+                continue;
+            }
             self.current_frame_offset = 0;
         }
         let sample = self.buffer.samples()[self.current_frame_offset];
@@ -191,8 +231,14 @@ impl rodio::Source for SymphoniaStreamingSource {
             underlying_source: "streaming source seek failed",
         };
 
-        // Live (still-downloading) sources are non-seekable, so the underlying
-        // `format.seek` returns an error that we surface as a seek failure.
+        // Reject seeks while the download is still running without touching
+        // the reader: a failed `format.seek` on a sequential stream leaves it
+        // positioned mid-track, after which playback cut out within a second.
+        // Once the download has finished the file is whole, so a seek then
+        // goes through against the complete data.
+        if self.is_live() {
+            return Err(FAILED);
+        }
         let seek_res = self
             .format
             .seek(

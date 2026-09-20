@@ -10,19 +10,29 @@ use std::{
 
 /// A symphonia `MediaSource` over a cache file that yt-dlp is still writing.
 ///
-/// Reports itself as **non-seekable** so symphonia's format readers demux
-/// *sequentially* during initialization. On a partial file a seek would hit
-/// missing bytes and trip rodio's
+/// Reports itself as **non-seekable** while the download is running so
+/// symphonia's format readers demux *sequentially* during initialization. On
+/// a partial file a seek would hit missing bytes and trip rodio's
 /// `unreachable!("Seek errors should not occur during initialization")`.
 /// Reads at EOF *block* (with a short sleep) while the writer is alive, so the
 /// decoder sees a file that grows until the download finishes — at which
-/// point a real `EOF` is reported and the track ends normally.
+/// point a real `EOF` is reported and the track ends normally. Once the
+/// writer is done the file is whole, so the source becomes seekable and
+/// in-place seeks (e.g. the progress bar) work without replaying.
 pub(super) struct GrowingMediaSource {
     pub(super) file: std::fs::File,
     /// `Some(flag)` while the copy thread is still writing: reads block at
     /// EOF until the flag flips to `false`. `None` means the download is
     /// already complete, so a 0-byte read is a genuine EOF.
     pub(super) writer_alive: Option<Arc<AtomicBool>>,
+}
+
+impl GrowingMediaSource {
+    fn download_done(&self) -> bool {
+        self.writer_alive
+            .as_ref()
+            .is_none_or(|w| !w.load(Ordering::Acquire))
+    }
 }
 
 impl io::Read for GrowingMediaSource {
@@ -53,10 +63,9 @@ impl io::Read for GrowingMediaSource {
 
 impl io::Seek for GrowingMediaSource {
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-        // Seeking is only valid once the download is complete (cached file),
-        // where `writer_alive` is `None`. During live streaming the source is
-        // intentionally non-seekable.
-        if self.writer_alive.is_none() {
+        // Seeking is only valid once the download is complete; during live
+        // streaming the source is intentionally non-seekable.
+        if self.download_done() {
             self.file.seek(pos)
         } else {
             Err(io::Error::new(
@@ -72,12 +81,13 @@ impl symphonia::core::io::MediaSource for GrowingMediaSource {
         // Live (partial) files are non-seekable so symphonia demuxes
         // sequentially; the probe then never seeks (and never hits the
         // `byte_len() == None` seek-error panic inside rodio's `Decoder`).
-        // Complete (cached) files are seekable, enabling seeking on replay.
-        self.writer_alive.is_none()
+        // Once the download is done the file is whole, so the still-playing
+        // source becomes seekable without a replay.
+        self.download_done()
     }
 
     fn byte_len(&self) -> Option<u64> {
-        if self.writer_alive.is_none() {
+        if self.download_done() {
             self.file.metadata().ok().map(|m| m.len())
         } else {
             None
