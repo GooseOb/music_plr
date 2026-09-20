@@ -168,6 +168,31 @@ impl StreamCache {
         self.index.entries.contains_key(&key(provider, id)) && Self::path_for(provider, id).exists()
     }
 
+    pub fn remove(&mut self, provider: ProviderId, id: &str) -> bool {
+        let removed_entry = self.index.entries.remove(&key(provider, id));
+        let removed_file = std::fs::remove_file(Self::path_for(provider, id)).is_ok();
+        let had_entry = if let Some(entry) = removed_entry {
+            self.current_total = self.current_total.saturating_sub(entry.size_bytes);
+            self.save();
+            true
+        } else {
+            false
+        };
+        had_entry || removed_file
+    }
+
+    pub fn cached_providers_for(&self, track: &crate::types::Track) -> Vec<ProviderId> {
+        ProviderId::all()
+            .iter()
+            .copied()
+            .filter(|p| {
+                track
+                    .provider_id(*p)
+                    .is_some_and(|id| self.index_contains(*p, id))
+            })
+            .collect()
+    }
+
     /// In-memory check of whether `id` has a completed cache entry in the
     /// index. Unlike `contains`, this does NOT touch the filesystem — the
     /// index is loaded into memory at startup and updated as streams finish,

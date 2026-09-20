@@ -148,7 +148,7 @@ pub(super) fn view_context_menu<'a>(
         .filter(|g| g.stable)
         .map_or(Length::Shrink, |_| Length::Fill);
     let items: Vec<Element<'_, Message, AppTheme>> = menu
-        .actions()
+        .actions(&player.stream_cache)
         .iter()
         .enumerate()
         .map(|(i, action)| {
@@ -189,8 +189,8 @@ pub(super) fn view_context_menu<'a>(
 
     let mut anchor_x = pos_x;
 
-    if let Some(kind) = menu.open_submenu_kind() {
-        let entries = submenu_entries(kind, menu, row_len, player.strings);
+    if let Some(kind) = menu.open_submenu_kind(&player.stream_cache) {
+        let entries = submenu_entries(kind, menu, &player.stream_cache, row_len, player.strings);
         // Skip until the capture task has delivered geometry, so the submenu
         // doesn't render at the panel top and jump once bounds arrive.
         let geo = player
@@ -202,7 +202,7 @@ pub(super) fn view_context_menu<'a>(
             let parent_index = match menu.hovered {
                 Some(ContextMenuFocus::Item(i)) => i,
                 Some(ContextMenuFocus::Sub(..)) => menu
-                    .actions()
+                    .actions(&player.stream_cache)
                     .iter()
                     .position(|a| a.submenu() == Some(kind))
                     .unwrap_or(0),
@@ -293,6 +293,7 @@ fn action_label(
             },
             icons::DELETE_ICON,
         ),
+        CtxAction::ClearCache => (Cow::Borrowed(tr.ctx_clear_cache), icons::CACHE_ICON),
     }
 }
 
@@ -359,10 +360,11 @@ fn context_menu_button<'a>(
 fn submenu_entries<'a>(
     kind: SubmenuKind,
     menu: &'a ContextMenuState,
+    cache: &crate::data::cache::StreamCache,
     row_len: Length,
     tr: &'a crate::i18n::Strings,
 ) -> Vec<Element<'a, Message, AppTheme>> {
-    kind.providers(&menu.track)
+    menu.submenu_providers(kind, cache)
         .into_iter()
         .enumerate()
         .map(|(i, provider)| {
@@ -395,6 +397,9 @@ fn submenu_entries<'a>(
                     menu.track.provider_artist_id(provider).is_some(),
                     true,
                 ),
+                SubmenuKind::ClearCache => {
+                    (tr.sub_clear_cache_from, icons::CACHE_ICON, true, false)
+                }
             };
             let by_search = search_fallback && !has_id;
             let label = if provider == ProviderId::Local {

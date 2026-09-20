@@ -32,11 +32,12 @@ impl MusicPlayer {
             Physical::Code(Code::Enter) => {
                 let menu = self.context_menu.as_ref().expect("checked above");
                 let message = match menu.hovered {
-                    Some(ContextMenuFocus::Item(i)) => {
-                        menu.actions().get(i).map(|a| a.to_message(menu))
-                    }
-                    Some(ContextMenuFocus::Sub(kind, i)) => kind
-                        .providers(&menu.track)
+                    Some(ContextMenuFocus::Item(i)) => menu
+                        .actions(&self.stream_cache)
+                        .get(i)
+                        .map(|a| a.to_message(menu)),
+                    Some(ContextMenuFocus::Sub(kind, i)) => menu
+                        .submenu_providers(kind, &self.stream_cache)
                         .get(i)
                         .map(|p| kind.entry_message(*p, menu)),
                     None => None,
@@ -58,15 +59,17 @@ impl MusicPlayer {
                 return Task::none();
             };
             let (kind, count, current) = match menu.hovered {
-                Some(ContextMenuFocus::Sub(kind, i)) => {
-                    (Some(kind), kind.providers(&menu.track).len(), Some(i))
-                }
+                Some(ContextMenuFocus::Sub(kind, i)) => (
+                    Some(kind),
+                    menu.submenu_providers(kind, &self.stream_cache).len(),
+                    Some(i),
+                ),
                 other => {
                     let i = match other {
                         Some(ContextMenuFocus::Item(i)) => Some(i),
                         _ => None,
                     };
-                    (None, menu.actions().len(), i)
+                    (None, menu.actions(&self.stream_cache).len(), i)
                 }
             };
             if count == 0 {
@@ -94,7 +97,11 @@ impl MusicPlayer {
             match menu.hovered {
                 // Enter the open submenu from its parent row.
                 Some(ContextMenuFocus::Item(i)) => {
-                    let Some(kind) = menu.actions().get(i).and_then(|a| a.submenu()) else {
+                    let Some(kind) = menu
+                        .actions(&self.stream_cache)
+                        .get(i)
+                        .and_then(|a| a.submenu())
+                    else {
                         return Task::none();
                     };
                     ContextMenuFocus::Sub(kind, 0)
@@ -102,7 +109,7 @@ impl MusicPlayer {
                 // Leave the submenu back to its parent row.
                 Some(ContextMenuFocus::Sub(kind, _)) => {
                     let i = menu
-                        .actions()
+                        .actions(&self.stream_cache)
                         .iter()
                         .position(|a| a.submenu() == Some(kind))
                         .unwrap_or(0);

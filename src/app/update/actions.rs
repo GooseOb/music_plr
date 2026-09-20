@@ -274,6 +274,28 @@ impl MusicPlayer {
         }
     }
 
+    /// Clear the stream cache for the context menu's track on `provider`.
+    pub fn handle_context_menu_clear_cache(&mut self, provider: ProviderId) {
+        let Some(menu) = self.take_context_menu() else {
+            return;
+        };
+        if let Some(id) = menu.track.provider_id(provider).map(str::to_string) {
+            if self.stream_cache.remove(provider, &id) {
+                self.notify((self.strings.cache_cleared_for)(provider.label()));
+            }
+        }
+    }
+
+    /// Clear the stream cache for the context menu's track on its current
+    /// (source) provider: the direct click on the "Clear cache" parent row.
+    pub fn handle_context_menu_clear_cache_current(&mut self) {
+        let provider = match self.context_menu.as_ref() {
+            Some(menu) => menu.track.source,
+            None => return,
+        };
+        self.handle_context_menu_clear_cache(provider);
+    }
+
     /// Open the track-editing popup for the track at `pos`, seeding the
     /// working copy from the live track. Only one track is edited at a time
     /// (the right-clicked one), so multi-selection is ignored here.

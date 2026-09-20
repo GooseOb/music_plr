@@ -3,7 +3,7 @@
 use iced::{widget::Id, Point};
 
 use crate::{
-    data::library::LibraryItem,
+    data::{cache::StreamCache, library::LibraryItem},
     types::{QueueTab, Track},
 };
 
@@ -95,6 +95,7 @@ pub enum SubmenuKind {
     SongRadio,
     ArtistRadio,
     GoToArtist,
+    ClearCache,
 }
 
 impl SubmenuKind {
@@ -112,6 +113,7 @@ impl SubmenuKind {
             SubmenuKind::SongRadio => Message::ContextMenuSongRadioProvider(provider),
             SubmenuKind::ArtistRadio => Message::ContextMenuArtistRadioProvider(provider),
             SubmenuKind::GoToArtist => Message::ContextMenuGoToArtistProvider(provider),
+            SubmenuKind::ClearCache => Message::ContextMenuClearCacheProvider(provider),
         }
     }
 
@@ -148,6 +150,12 @@ impl SubmenuKind {
                 .copied()
                 .filter(|p| p.capabilities().search)
                 .collect(),
+            SubmenuKind::ClearCache => track
+                .providers
+                .keys()
+                .copied()
+                .filter(|p| *p != ProviderId::Local)
+                .collect(),
         }
     }
 
@@ -170,6 +178,7 @@ impl SubmenuKind {
                 any(ProviderId::searchable(), |p| p.capabilities().radio)
             }
             SubmenuKind::GoToArtist => any(ProviderId::searchable(), |p| p.capabilities().search),
+            SubmenuKind::ClearCache => track.providers.keys().any(|p| *p != ProviderId::Local),
         }
     }
 }
@@ -195,6 +204,7 @@ pub enum CtxAction {
     Download,
     SongRadio,
     ArtistRadio,
+    ClearCache,
     RemoveFromQueue,
     RemoveFromPlaylist,
 }
@@ -207,6 +217,7 @@ impl CtxAction {
             CtxAction::SongRadio => Some(SubmenuKind::SongRadio),
             CtxAction::ArtistRadio => Some(SubmenuKind::ArtistRadio),
             CtxAction::GoToArtist => Some(SubmenuKind::GoToArtist),
+            CtxAction::ClearCache => Some(SubmenuKind::ClearCache),
             CtxAction::Edit
             | CtxAction::AddToPlaylist
             | CtxAction::RemoveFromQueue
@@ -224,6 +235,7 @@ impl CtxAction {
             CtxAction::Download => Message::ContextMenuDefault(DefaultCtxAction::Download),
             CtxAction::SongRadio => Message::ContextMenuDefault(DefaultCtxAction::SongRadio),
             CtxAction::ArtistRadio => Message::ContextMenuDefault(DefaultCtxAction::ArtistRadio),
+            CtxAction::ClearCache => Message::ContextMenuClearCache,
             CtxAction::RemoveFromQueue => {
                 Message::ContextMenuRemoveFromQueue(menu.target_indices.clone())
             }
@@ -258,9 +270,29 @@ pub struct ContextMenuState {
 }
 
 impl ContextMenuState {
+    /// Providers of [`SubmenuKind::ClearCache`]: only those the track carries
+    /// an id for that actually have a stream-cache entry.
+    pub fn cached_providers(&self, cache: &StreamCache) -> Vec<crate::providers::ProviderId> {
+        cache.cached_providers_for(&self.track)
+    }
+
+    /// Providers listed in `kind`'s submenu for this menu. `ClearCache` is
+    /// filtered down to the cached providers; every other submenu lists its
+    /// static candidate set.
+    pub fn submenu_providers(
+        &self,
+        kind: SubmenuKind,
+        cache: &StreamCache,
+    ) -> Vec<crate::providers::ProviderId> {
+        match kind {
+            SubmenuKind::ClearCache => self.cached_providers(cache),
+            _ => kind.providers(&self.track),
+        }
+    }
+
     /// The visible entries of the main menu, in order. The view renders one
     /// row per entry; keyboard navigation indexes into this list.
-    pub fn actions(&self) -> Vec<CtxAction> {
+    pub fn actions(&self, cache: &StreamCache) -> Vec<CtxAction> {
         let mut v = vec![CtxAction::Play, CtxAction::Edit];
         if !self.track.artist.is_empty() {
             v.push(CtxAction::GoToArtist);
@@ -270,6 +302,9 @@ impl ContextMenuState {
         if SubmenuKind::SongRadio.available(&self.track) {
             v.push(CtxAction::SongRadio);
             v.push(CtxAction::ArtistRadio);
+        }
+        if !self.cached_providers(cache).is_empty() {
+            v.push(CtxAction::ClearCache);
         }
         if self.pos.list == TrackListKind::Queue {
             v.push(CtxAction::RemoveFromQueue);
@@ -282,9 +317,9 @@ impl ContextMenuState {
     /// The submenu currently visible, derived from the hovered element: a
     /// main-menu parent opens its own submenu; hovering a submenu entry keeps
     /// that submenu open.
-    pub fn open_submenu_kind(&self) -> Option<SubmenuKind> {
+    pub fn open_submenu_kind(&self, cache: &StreamCache) -> Option<SubmenuKind> {
         match self.hovered? {
-            ContextMenuFocus::Item(i) => self.actions().get(i).and_then(|a| a.submenu()),
+            ContextMenuFocus::Item(i) => self.actions(cache).get(i).and_then(|a| a.submenu()),
             ContextMenuFocus::Sub(kind, _) => Some(kind),
         }
     }

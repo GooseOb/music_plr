@@ -404,6 +404,14 @@ impl crate::app::MusicPlayer {
             Message::ContextMenuArtistRadioProvider(provider) => {
                 self.handle_context_menu_artist_radio(provider)
             }
+            Message::ContextMenuClearCache => {
+                self.handle_context_menu_clear_cache_current();
+                Task::none()
+            }
+            Message::ContextMenuClearCacheProvider(provider) => {
+                self.handle_context_menu_clear_cache(provider);
+                Task::none()
+            }
             Message::ContextMenuHover(focus) => {
                 if let Some(menu) = &mut self.context_menu {
                     menu.hovered = focus;
