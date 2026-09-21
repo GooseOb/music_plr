@@ -7,7 +7,7 @@ YouTube-search music player with local playback and OS media controls, built wit
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`)
 - **Audio**: rodio + symphonia; **pipeline**: yt-dlp (stream/download)
 - **Media controls**: souvlaki (cross-platform: MPRIS/D-Bus on Linux, SMTC on Windows, Now Playing on macOS; pure-Rust zbus backend on Linux); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15
-- **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default; on-disk cache in `data/lyrics_cache.rs`
+- **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default, plus named user-added per-track lyrics (plain or LRC-synced) shown as tabs after the providers, editable/deletable from the lyrics view; on-disk cache in `data/lyrics_cache.rs`
 - **Logging**: tracing + tracing-subscriber
 
 ## Prerequisites

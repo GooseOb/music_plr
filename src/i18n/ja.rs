@@ -42,6 +42,10 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "選択可能",
     lyrics_synced: "同期済み",
     lyrics_plain: "プレーン",
+    add_custom: "歌詞を追加",
+    lyrics_name: "名前",
+    edit_lyrics: "歌詞を編集",
+    lyrics_editor_hint: "1行に1フレーズ。[mm:ss.xx]を先頭に付けると同期歌詞になります。",
 
     playlist_not_found: "プレイリストが見つかりません",
     add_local: "ローカルを追加",
@@ -124,6 +128,10 @@ pub const STRINGS: Strings = Strings {
     saved_to_library: "ライブラリに保存しました",
     removed_from_library: "ライブラリから削除しました",
     no_lyrics_found: "この曲の歌詞が見つかりません。",
+    lyrics_saved: "カスタム歌詞を保存しました",
+    lyrics_deleted: "カスタム歌詞を削除しました",
+    lyrics_empty: "歌詞を空にできません",
+    lyrics_name_empty: "歌詞に名前を付けてください",
     select_playlist_drop: "曲を置く先のプレイリストを選択",
     reordered_playlist: "プレイリストを並べ替えました",
 

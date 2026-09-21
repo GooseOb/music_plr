@@ -42,6 +42,10 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "Выделяемый",
     lyrics_synced: "Синхронизирован",
     lyrics_plain: "Обычный",
+    add_custom: "Добавить текст",
+    lyrics_name: "Название",
+    edit_lyrics: "Изменить текст",
+    lyrics_editor_hint: "Одна строка на строку текста. Добавьте [mm:ss.xx] в начало для синхронизации или оставьте как есть.",
 
     playlist_not_found: "Плейлист не найден",
     add_local: "Добавить локальный",
@@ -124,6 +128,10 @@ pub const STRINGS: Strings = Strings {
     saved_to_library: "Сохранено в библиотеку",
     removed_from_library: "Удалено из библиотеки",
     no_lyrics_found: "Для этого трека текст не найден.",
+    lyrics_saved: "Свой текст сохранён",
+    lyrics_deleted: "Свой текст удалён",
+    lyrics_empty: "Текст не может быть пустым",
+    lyrics_name_empty: "Дайте тексту название",
     select_playlist_drop: "Выберите плейлист, чтобы бросить в него треки",
     reordered_playlist: "Плейлист переупорядочен",
 

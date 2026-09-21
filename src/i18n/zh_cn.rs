@@ -42,6 +42,10 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "可选中",
     lyrics_synced: "已同步",
     lyrics_plain: "纯文本",
+    add_custom: "添加歌词",
+    lyrics_name: "名称",
+    edit_lyrics: "编辑歌词",
+    lyrics_editor_hint: "每行一句。在行首添加 [mm:ss.xx] 可作为同步歌词，否则为纯文本。",
 
     playlist_not_found: "未找到播放列表",
     add_local: "添加本地",
@@ -124,6 +128,10 @@ pub const STRINGS: Strings = Strings {
     saved_to_library: "已保存到媒体库",
     removed_from_library: "已从媒体库移除",
     no_lyrics_found: "未找到该曲目的歌词。",
+    lyrics_saved: "已保存自定义歌词",
+    lyrics_deleted: "已删除自定义歌词",
+    lyrics_empty: "歌词不能为空",
+    lyrics_name_empty: "请为歌词起个名字",
     select_playlist_drop: "选择一个播放列表以放入曲目",
     reordered_playlist: "播放列表已重新排序",
 

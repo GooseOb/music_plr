@@ -42,6 +42,10 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "قابلة للتحديد",
     lyrics_synced: "متزامنة",
     lyrics_plain: "عادية",
+    add_custom: "إضافة كلمات",
+    lyrics_name: "الاسم",
+    edit_lyrics: "تعديل الكلمات",
+    lyrics_editor_hint: "سطر واحد لكل بيت. أضف [mm:ss.xx] في البداية للكلمات المتزامنة، أو اتركها عادية.",
 
     playlist_not_found: "لم يتم العثور على قائمة التشغيل",
     add_local: "إضافة محلية",
@@ -124,6 +128,10 @@ pub const STRINGS: Strings = Strings {
     saved_to_library: "تم الحفظ في المكتبة",
     removed_from_library: "تمت الإزالة من المكتبة",
     no_lyrics_found: "لم يتم العثور على كلمات لهذه الأغنية.",
+    lyrics_saved: "تم حفظ الكلمات المخصصة",
+    lyrics_deleted: "تم حذف الكلمات المخصصة",
+    lyrics_empty: "لا يمكن أن تكون الكلمات فارغة",
+    lyrics_name_empty: "أعطِ كلماتك اسمًا",
     select_playlist_drop: "اختر قائمة تشغيل لإفلات الأغاني فيها",
     reordered_playlist: "تم إعادة ترتيب قائمة التشغيل",
 

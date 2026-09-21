@@ -549,6 +549,9 @@ impl MusicPlayer {
         if state.track_id.as_deref() != Some(track_id) {
             return Task::none();
         }
+        if state.editing {
+            return Task::none();
+        }
         match result {
             Ok(lyrics) => {
                 if let Some(id) = state.track_id.as_ref() {

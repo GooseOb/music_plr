@@ -42,6 +42,10 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "Auswählbar",
     lyrics_synced: "Synchronisiert",
     lyrics_plain: "Einfach",
+    add_custom: "Text hinzufügen",
+    lyrics_name: "Name",
+    edit_lyrics: "Text bearbeiten",
+    lyrics_editor_hint: "Eine Zeile pro Textzeile. Für synchronisierten Text Zeilen mit [mm:ss.xx] beginnen, oder einfach lassen.",
 
     playlist_not_found: "Wiedergabeliste nicht gefunden",
     add_local: "Lokal hinzufügen",
@@ -124,6 +128,10 @@ pub const STRINGS: Strings = Strings {
     saved_to_library: "In Bibliothek gespeichert",
     removed_from_library: "Aus Bibliothek entfernt",
     no_lyrics_found: "Für diesen Titel wurden keine Texte gefunden.",
+    lyrics_saved: "Eigener Text gespeichert",
+    lyrics_deleted: "Eigener Text gelöscht",
+    lyrics_empty: "Text darf nicht leer sein",
+    lyrics_name_empty: "Gib dem Text einen Namen",
     select_playlist_drop: "Wähle eine Wiedergabeliste zum Ablegen der Titel",
     reordered_playlist: "Wiedergabeliste neu geordnet",
 

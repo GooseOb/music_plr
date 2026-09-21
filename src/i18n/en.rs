@@ -42,6 +42,10 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "Selectable",
     lyrics_synced: "Synced",
     lyrics_plain: "Plain",
+    add_custom: "Add custom",
+    lyrics_name: "Name",
+    edit_lyrics: "Edit lyrics",
+    lyrics_editor_hint: "One line per lyric. Prefix lines with [mm:ss.xx] for synced lyrics, or leave them plain.",
 
     playlist_not_found: "Playlist not found",
     add_local: "Add local",
@@ -124,6 +128,10 @@ pub const STRINGS: Strings = Strings {
     saved_to_library: "Saved to library",
     removed_from_library: "Removed from library",
     no_lyrics_found: "No lyrics found for this track.",
+    lyrics_saved: "Custom lyrics saved",
+    lyrics_deleted: "Custom lyrics deleted",
+    lyrics_empty: "Lyrics can't be empty",
+    lyrics_name_empty: "Give your lyrics a name",
     select_playlist_drop: "Select a playlist to drop tracks into",
     reordered_playlist: "Reordered playlist",
 

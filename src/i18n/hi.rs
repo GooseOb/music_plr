@@ -42,6 +42,10 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "चयन योग्य",
     lyrics_synced: "सिंक किए गए",
     lyrics_plain: "सादा",
+    add_custom: "बोल जोड़ें",
+    lyrics_name: "नाम",
+    edit_lyrics: "बोल संपादित करें",
+    lyrics_editor_hint: "प्रति पंक्ति एक बोल। सिंक किए गए बोलों के लिए [mm:ss.xx] जोड़ें, या सादा छोड़ दें।",
 
     playlist_not_found: "प्लेलिस्ट नहीं मिली",
     add_local: "स्थानीय जोड़ें",
@@ -124,6 +128,10 @@ pub const STRINGS: Strings = Strings {
     saved_to_library: "लाइब्रेरी में सहेजा गया",
     removed_from_library: "लाइब्रेरी से हटाया गया",
     no_lyrics_found: "इस ट्रैक के लिए कोई बोल नहीं मिले।",
+    lyrics_saved: "कस्टम बोल सहेजे गए",
+    lyrics_deleted: "कस्टम बोल हटाए गए",
+    lyrics_empty: "बोल खाली नहीं हो सकते",
+    lyrics_name_empty: "अपने बोलों को एक नाम दें",
     select_playlist_drop: "ट्रैक डालने के लिए एक प्लेलिस्ट चुनें",
     reordered_playlist: "प्लेलिस्ट पुनः व्यवस्थित की गई",
 

@@ -126,6 +126,10 @@ pub struct Strings {
     pub lyrics_selectable: &'static str,
     pub lyrics_synced: &'static str,
     pub lyrics_plain: &'static str,
+    pub add_custom: &'static str,
+    pub edit_lyrics: &'static str,
+    pub lyrics_editor_hint: &'static str,
+    pub lyrics_name: &'static str,
 
     pub playlist_not_found: &'static str,
     pub add_local: &'static str,
@@ -208,6 +212,10 @@ pub struct Strings {
     pub saved_to_library: &'static str,
     pub removed_from_library: &'static str,
     pub no_lyrics_found: &'static str,
+    pub lyrics_saved: &'static str,
+    pub lyrics_deleted: &'static str,
+    pub lyrics_empty: &'static str,
+    pub lyrics_name_empty: &'static str,
     pub select_playlist_drop: &'static str,
     pub reordered_playlist: &'static str,
 

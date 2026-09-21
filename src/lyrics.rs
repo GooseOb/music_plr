@@ -20,6 +20,8 @@ pub enum LyricsProvider {
     LrcMux,
     #[serde(rename = "lyrics_ovh")]
     LyricsOvh,
+    #[serde(rename = "custom")]
+    Custom,
 }
 
 impl LyricsProvider {
@@ -28,9 +30,14 @@ impl LyricsProvider {
             LyricsProvider::LrcLib => "LRCLib",
             LyricsProvider::LrcMux => "LrcMux",
             LyricsProvider::LyricsOvh => "Lyrics.ovh",
+            LyricsProvider::Custom => "Custom",
         }
     }
 
+    /// Network providers shown as tabs in the lyrics view. `Custom` is
+    /// deliberately excluded: it tags user-added lyrics rather than a
+    /// fetchable service, and named custom entries render as their own tabs
+    /// from `LyricsState::custom_names`.
     pub fn all() -> &'static [LyricsProvider] {
         &[
             LyricsProvider::LrcLib,
@@ -44,6 +51,7 @@ impl LyricsProvider {
             LyricsProvider::LrcLib => fetch_lrclib(req),
             LyricsProvider::LrcMux => fetch_lrcmux(req),
             LyricsProvider::LyricsOvh => fetch_lyrics_ovh(req),
+            LyricsProvider::Custom => Ok(None),
         }
     }
 }
@@ -64,6 +72,44 @@ pub struct Lyrics {
 }
 
 impl Lyrics {
+    pub fn from_custom_text(text: &str) -> Option<Self> {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let timed = parse_lrc(trimmed);
+        if timed.is_empty() {
+            Some(Self {
+                timed: Vec::new(),
+                plain: trimmed.to_string(),
+                provider: LyricsProvider::Custom,
+            })
+        } else {
+            let plain = timed
+                .iter()
+                .map(|(_, line)| line.as_str())
+                .collect::<Vec<_>>()
+                .join("\n");
+            Some(Self {
+                timed,
+                plain,
+                provider: LyricsProvider::Custom,
+            })
+        }
+    }
+
+    pub fn to_edit_text(&self) -> String {
+        if self.timed.is_empty() {
+            self.plain.clone()
+        } else {
+            self.timed
+                .iter()
+                .map(|(secs, line)| format!("[{}]{line}", format_timestamp(*secs)))
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+    }
+
     pub fn active_index(&self, position_secs: f32) -> Option<usize> {
         if self.timed.is_empty() {
             return None;
@@ -246,7 +292,14 @@ fn record_to_lyrics(rec: LrcLibRecord, provider: LyricsProvider) -> Lyrics {
     }
 }
 
-fn parse_lrc(text: &str) -> Vec<(f32, String)> {
+pub(crate) fn format_timestamp(secs: f32) -> String {
+    let total = secs.max(0.0);
+    let min = (total / 60.0).floor() as u32;
+    let sec = total - min as f32 * 60.0;
+    format!("{min:02}:{sec:05.2}")
+}
+
+pub(crate) fn parse_lrc(text: &str) -> Vec<(f32, String)> {
     let mut out = Vec::new();
     for line in text.lines() {
         if let Some((secs, content)) = parse_lrc_line(line) {
@@ -321,6 +374,28 @@ mod tests {
     fn client_uses_lrclib_by_default() {
         assert_eq!(LyricsProvider::default(), LyricsProvider::LrcLib);
         assert!(LyricsProvider::all().contains(&LyricsProvider::LrcLib));
+        assert!(!LyricsProvider::all().contains(&LyricsProvider::Custom));
         assert_eq!(LyricsProvider::all().len(), 3);
+    }
+
+    #[test]
+    fn custom_text_without_timestamps_is_plain() {
+        let lyrics = Lyrics::from_custom_text("first line\nsecond line").unwrap();
+        assert!(lyrics.timed.is_empty());
+        assert_eq!(lyrics.plain, "first line\nsecond line");
+        assert_eq!(lyrics.provider, LyricsProvider::Custom);
+    }
+
+    #[test]
+    fn custom_text_with_timestamps_is_synced() {
+        let lyrics = Lyrics::from_custom_text("[00:12.34]First\n[00:16.80]Second").unwrap();
+        assert_eq!(lyrics.timed.len(), 2);
+        assert_eq!(lyrics.plain, "First\nSecond");
+        assert_eq!(lyrics.to_edit_text(), "[00:12.34]First\n[00:16.80]Second");
+    }
+
+    #[test]
+    fn custom_text_empty_is_none() {
+        assert!(Lyrics::from_custom_text("  \n ").is_none());
     }
 }

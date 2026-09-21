@@ -25,6 +25,12 @@ pub struct LyricsState {
     pub editor: iced::widget::text_editor::Content,
     pub scrolled_to: Option<usize>,
     pub viewport: Option<LyricsViewport>,
+    pub editing: bool,
+    pub edit_content: iced::widget::text_editor::Content,
+    pub edit_name: String,
+    pub editing_custom_name: Option<String>,
+    pub selected_custom: Option<String>,
+    pub custom_names: Vec<String>,
 }
 
 impl LyricsViewMode {
@@ -46,6 +52,12 @@ impl LyricsState {
             editor: iced::widget::text_editor::Content::default(),
             scrolled_to: None,
             viewport: None,
+            editing: false,
+            edit_content: iced::widget::text_editor::Content::default(),
+            edit_name: String::new(),
+            editing_custom_name: None,
+            selected_custom: None,
+            custom_names: Vec::new(),
         }
     }
 

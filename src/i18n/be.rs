@@ -42,6 +42,10 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "Выдзяляльны",
     lyrics_synced: "Сынхранізаваны",
     lyrics_plain: "Звычайны",
+    add_custom: "Дадаць тэкст",
+    lyrics_name: "Назва",
+    edit_lyrics: "Рэдагаваць тэкст",
+    lyrics_editor_hint: "Адзін радок на радок тэксту. Дадайце [mm:ss.xx] напачатку для сынхранізацыі або пакіньце як ёсьць.",
 
     playlist_not_found: "Плэйліст ня знойдзены",
     add_local: "Дадаць лякальны",
@@ -124,6 +128,10 @@ pub const STRINGS: Strings = Strings {
     saved_to_library: "Захавана ў бібліятэку",
     removed_from_library: "Выдалена з бібліятэкі",
     no_lyrics_found: "Для гэтага трэка тэкст ня знойдзены.",
+    lyrics_saved: "Уласны тэкст захаваны",
+    lyrics_deleted: "Уласны тэкст выдалены",
+    lyrics_empty: "Тэкст ня можа быць пустым",
+    lyrics_name_empty: "Дайце тэксту назву",
     select_playlist_drop: "Выберыце плэйліст, каб кінуць у яго трэкі",
     reordered_playlist: "Плэйліст пераўпарадкаваны",
 

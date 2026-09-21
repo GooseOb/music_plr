@@ -203,6 +203,152 @@ impl MusicPlayer {
         self.save_session();
     }
 
+    /// Open a blank editor for a new named custom entry.
+    pub fn start_custom_lyrics_edit(&mut self) {
+        let Some(track) = self.queue.current() else {
+            return;
+        };
+        let track_id = track.primary_id().to_string();
+        let Some(state) = &mut self.lyrics else {
+            return;
+        };
+        state.track_id = Some(track_id);
+        state.edit_name = String::new();
+        state.edit_content = iced::widget::text_editor::Content::default();
+        state.editing = true;
+        state.editing_custom_name = None;
+        state.viewport = None;
+    }
+
+    /// Open the editor prefilled with the named custom entry.
+    pub fn edit_custom_lyrics(&mut self, name: String) {
+        let Some(track) = self.queue.current() else {
+            return;
+        };
+        let track_id = track.primary_id().to_string();
+        let Some(entry) =
+            crate::data::lyrics_cache::LyricsCache::load().get_custom(&track_id, &name)
+        else {
+            return;
+        };
+        let Some(state) = &mut self.lyrics else {
+            return;
+        };
+        state.track_id = Some(track_id);
+        state.edit_name.clone_from(&name);
+        state.edit_content = iced::widget::text_editor::Content::with_text(&entry.to_edit_text());
+        state.editing = true;
+        state.editing_custom_name = Some(name);
+        state.viewport = None;
+    }
+
+    /// Show the named custom entry for the current track.
+    pub fn select_custom_lyrics(&mut self, name: String) -> Task<Message> {
+        let Some(track) = self.queue.current() else {
+            return Task::none();
+        };
+        let track_id = track.primary_id().to_string();
+        let cache = crate::data::lyrics_cache::LyricsCache::load();
+        let Some(entry) = cache.get_custom(&track_id, &name) else {
+            return Task::none();
+        };
+        let custom_names = cache.custom_names(&track_id);
+        if let Some(state) = &mut self.lyrics {
+            let mode = LyricsViewMode::for_lyrics(&entry);
+            state.lyrics = crate::load_state::LoadState::Ready(entry);
+            state.mode = mode;
+            state.track_id = Some(track_id);
+            state.selected_custom = Some(name);
+            state.custom_names = custom_names;
+            state.editing = false;
+            state.scrolled_to = None;
+            state.viewport = None;
+        }
+        self.sync_lyrics_editor();
+        self.scroll_lyrics_to_active()
+    }
+
+    pub fn save_custom_lyrics(&mut self) -> Task<Message> {
+        let (text, name) = self
+            .lyrics
+            .as_ref()
+            .map(|s| (s.edit_content.text(), s.edit_name.trim().to_string()))
+            .unwrap_or_default();
+        if name.is_empty() {
+            self.notify_error(self.strings.lyrics_name_empty.to_string());
+            return Task::none();
+        }
+        let Some(lyrics) = crate::lyrics::Lyrics::from_custom_text(&text) else {
+            self.notify_error(self.strings.lyrics_empty.to_string());
+            return Task::none();
+        };
+        let Some(track_id) = self.lyrics.as_ref().and_then(|s| s.track_id.clone()) else {
+            return Task::none();
+        };
+        let edited = self
+            .lyrics
+            .as_ref()
+            .and_then(|s| s.editing_custom_name.clone());
+        let mut cache = crate::data::lyrics_cache::LyricsCache::load();
+        cache.insert_custom(&track_id, &name, &lyrics);
+        if let Some(old) = edited {
+            if old != name {
+                cache.remove_custom(&track_id, &old);
+            }
+        }
+        let custom_names = cache.custom_names(&track_id);
+        if let Some(state) = &mut self.lyrics {
+            let mode = LyricsViewMode::for_lyrics(&lyrics);
+            state.lyrics = crate::load_state::LoadState::Ready(lyrics);
+            state.mode = mode;
+            state.track_id = Some(track_id);
+            state.selected_custom = Some(name);
+            state.custom_names = custom_names;
+            state.editing = false;
+            state.editing_custom_name = None;
+            state.scrolled_to = None;
+            state.viewport = None;
+        }
+        self.sync_lyrics_editor();
+        self.notify(self.strings.lyrics_saved);
+        self.scroll_lyrics_to_active()
+    }
+
+    pub fn cancel_custom_lyrics_edit(&mut self) {
+        if let Some(state) = &mut self.lyrics {
+            state.editing = false;
+            state.editing_custom_name = None;
+        }
+    }
+
+    pub fn delete_custom_lyrics(&mut self) {
+        let Some(track_id) = self.lyrics.as_ref().and_then(|s| s.track_id.clone()) else {
+            return;
+        };
+        let target = self
+            .lyrics
+            .as_ref()
+            .and_then(|s| s.editing_custom_name.clone())
+            .or_else(|| self.lyrics.as_ref().and_then(|s| s.selected_custom.clone()));
+        let Some(target) = target else {
+            return;
+        };
+        let mut cache = crate::data::lyrics_cache::LyricsCache::load();
+        cache.remove_custom(&track_id, &target);
+        let custom_names = cache.custom_names(&track_id);
+        if let Some(state) = &mut self.lyrics {
+            state.editing = false;
+            state.editing_custom_name = None;
+            state.selected_custom = None;
+            state.custom_names = custom_names;
+            state.lyrics = crate::load_state::LoadState::Loading;
+            state.scrolled_to = None;
+            state.viewport = None;
+        }
+        self.sync_lyrics_editor();
+        self.notify(self.strings.lyrics_deleted);
+    }
+
     /// Load (from cache) or fetch lyrics for the current track when we don't
     /// already hold them; driven by the tick loop so it reacts to the overlay
     /// being shown and track changes.
@@ -213,6 +359,10 @@ impl MusicPlayer {
                 state.track_id = None;
                 state.scrolled_to = None;
                 state.viewport = None;
+                state.editing = false;
+                state.editing_custom_name = None;
+                state.selected_custom = None;
+                state.custom_names = Vec::new();
             }
             self.sync_lyrics_editor();
             return;
@@ -227,11 +377,37 @@ impl MusicPlayer {
         let album = track.album().map(|a| a.name.clone());
         let duration = track.duration();
 
-        if state.track_id.as_deref() == Some(current_id.as_str()) && !state.lyrics.is_loading() {
+        if state.editing {
+            if state.track_id.as_deref() == Some(current_id.as_str()) {
+                return;
+            }
+            state.editing = false;
+            state.editing_custom_name = None;
+        }
+        let same_track = state.track_id.as_deref() == Some(current_id.as_str());
+        if same_track && !state.lyrics.is_loading() {
             return;
         }
-        let cached = crate::data::lyrics_cache::LyricsCache::load()
-            .get_for(&current_id, self.lyrics_client.selected());
+        if !same_track {
+            state.selected_custom = None;
+        }
+        let cache = crate::data::lyrics_cache::LyricsCache::load();
+        let custom_names = cache.custom_names(&current_id);
+        if let Some(name) = state.selected_custom.clone() {
+            if let Some(custom) = cache.get_custom(&current_id, &name) {
+                let mode = LyricsViewMode::for_lyrics(&custom);
+                state.lyrics = crate::load_state::LoadState::Ready(custom);
+                state.track_id = Some(current_id.clone());
+                state.mode = mode;
+                state.scrolled_to = None;
+                state.viewport = None;
+                state.custom_names = custom_names;
+                self.sync_lyrics_editor();
+                return;
+            }
+            state.selected_custom = None;
+        }
+        let cached = cache.get_for(&current_id, self.lyrics_client.selected());
         if let Some(cached_lyrics) = cached {
             let mode = LyricsViewMode::for_lyrics(&cached_lyrics);
             state.lyrics = crate::load_state::LoadState::Ready(cached_lyrics);
@@ -239,6 +415,7 @@ impl MusicPlayer {
             state.mode = mode;
             state.scrolled_to = None;
             state.viewport = None;
+            state.custom_names = custom_names;
             self.sync_lyrics_editor();
             return;
         }
@@ -256,6 +433,7 @@ impl MusicPlayer {
         state.track_id = Some(id.clone());
         state.scrolled_to = None;
         state.viewport = None;
+        state.custom_names = custom_names;
         self.sync_lyrics_editor();
         let no_lyrics = self.strings.no_lyrics_found;
         std::thread::spawn(move || {
@@ -279,6 +457,10 @@ impl MusicPlayer {
             state.track_id = None;
             state.scrolled_to = None;
             state.viewport = None;
+            state.editing = false;
+            state.editing_custom_name = None;
+            state.selected_custom = None;
+            state.custom_names = Vec::new();
         }
         self.sync_lyrics_editor();
     }

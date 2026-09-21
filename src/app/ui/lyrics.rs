@@ -10,8 +10,8 @@ use iced::{
 pub const LYRICS_SCROLL_ID: Id = Id::new("lyrics_scroll");
 
 use super::{
-    shared_components::{empty_state, loading_state, scope_button, scope_tab_row},
-    styles::{button_style_panel_item, fg_secondary},
+    shared_components::{empty_state, loading_state, scope_button, scope_tab_row, text_input_row},
+    styles::{button_style_danger, button_style_panel_item, button_style_primary, fg_secondary},
     theme, Message, MusicPlayer,
 };
 use crate::{
@@ -24,6 +24,9 @@ pub(super) fn view_lyrics<'a>(
     player: &'a MusicPlayer,
     lyrics_state: &'a LyricsState,
 ) -> Element<'a, Message, AppTheme> {
+    if lyrics_state.editing {
+        return view_custom_editor(player, lyrics_state);
+    }
     let track = player.queue.current();
 
     let lyrics_ready = matches!(&lyrics_state.lyrics, LoadState::Ready(_));
@@ -61,11 +64,89 @@ pub(super) fn view_lyrics<'a>(
         .on_right_press(Message::CopyLyrics)
         .into();
 
+    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(3);
+    if track.is_some() {
+        if let Some(name) = &lyrics_state.selected_custom {
+            children.push(view_edit_custom_row(player, name));
+        }
+    }
+    children.push(Container::new(body).height(Length::Fill).into());
+    children.push(view_bottom_controls(player, lyrics_state).into());
+    Column::with_children(children)
+        .spacing(theme::SPACING_MD)
+        .into()
+}
+
+fn view_edit_custom_row<'a>(
+    player: &'a MusicPlayer,
+    name: &'a str,
+) -> Element<'a, Message, AppTheme> {
+    Button::new(Container::new(text(player.strings.edit_lyrics)).center_x(Length::Fill))
+        .width(Length::Fill)
+        .padding([theme::SPACING_XS, theme::SPACING_MD])
+        .on_press(Message::EditCustomLyrics(name.to_string()))
+        .into()
+}
+
+fn view_custom_editor<'a>(
+    player: &'a MusicPlayer,
+    lyrics_state: &'a LyricsState,
+) -> Element<'a, Message, AppTheme> {
+    let editor = iced::widget::text_editor(&lyrics_state.edit_content)
+        .on_action(Message::CustomLyricsEditorAction)
+        .style(|theme: &AppTheme, _| {
+            let p = &theme.palette;
+            iced::widget::text_editor::Style {
+                background: Color::TRANSPARENT.into(),
+                border: iced::Border::default(),
+                placeholder: Color::TRANSPARENT,
+                value: p.fg_secondary,
+                selection: p.accent.scale_alpha(0.4),
+            }
+        })
+        .padding(theme::SPACING_LG)
+        .height(Length::Fill);
+
+    let save_btn = Button::new(Container::new(text(player.strings.save)).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .style(button_style_primary())
+        .on_press(Message::SaveCustomLyrics);
+
+    let cancel_btn =
+        Button::new(Container::new(text(player.strings.cancel)).center_x(Length::Fill))
+            .padding(theme::SPACING_SM)
+            .on_press(Message::CancelCustomLyricsEdit);
+
+    let mut buttons: Vec<Element<'a, Message, AppTheme>> = vec![cancel_btn.into(), save_btn.into()];
+    if lyrics_state.editing_custom_name.is_some() {
+        buttons.push(
+            Button::new(Container::new(text(player.strings.delete)).center_x(Length::Fill))
+                .padding(theme::SPACING_SM)
+                .style(button_style_danger())
+                .on_press(Message::DeleteCustomLyrics)
+                .into(),
+        );
+    }
+
     Column::with_children([
-        Container::new(body).height(Length::Fill).into(),
-        view_bottom_controls(player, lyrics_state).into(),
+        text_input_row(
+            player.strings.lyrics_name,
+            &lyrics_state.edit_name,
+            player.strings.lyrics_name,
+            Message::CustomLyricsNameChanged,
+        ),
+        text(player.strings.lyrics_editor_hint)
+            .size(theme::TEXT_SIZE_SM)
+            .style(fg_secondary())
+            .into(),
+        Container::new(editor).height(Length::Fill).into(),
+        Row::with_children(buttons)
+            .spacing(theme::SPACING_SM)
+            .align_y(alignment::Vertical::Center)
+            .into(),
     ])
     .spacing(theme::SPACING_MD)
+    .padding(theme::SPACING_MD)
     .into()
 }
 
@@ -94,13 +175,30 @@ fn view_bottom_controls<'a>(
     .spacing(theme::SPACING_XS);
 
     let selected_provider = player.lyrics_client.selected();
-    let provider_row = scope_tab_row(crate::lyrics::LyricsProvider::all().iter().map(|provider| {
-        (
-            provider.name().to_string(),
-            *provider == selected_provider,
-            Message::SelectLyricsProvider(*provider),
-        )
-    }));
+    let selected_custom = lyrics_state.selected_custom.as_deref();
+    let provider_row = scope_tab_row(
+        crate::lyrics::LyricsProvider::all()
+            .iter()
+            .map(|provider| {
+                (
+                    provider.name().to_string(),
+                    selected_custom.is_none() && *provider == selected_provider,
+                    Message::SelectLyricsProvider(*provider),
+                )
+            })
+            .chain(lyrics_state.custom_names.iter().map(|name| {
+                (
+                    name.clone(),
+                    selected_custom == Some(name.as_str()),
+                    Message::SelectCustomLyrics(name.clone()),
+                )
+            }))
+            .chain(std::iter::once((
+                player.strings.add_custom.to_string(),
+                false,
+                Message::StartCustomLyricsEdit,
+            ))),
+    );
 
     Row::with_children([
         provider_row,

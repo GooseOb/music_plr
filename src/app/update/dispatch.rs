@@ -121,6 +121,40 @@ impl crate::app::MusicPlayer {
                 self.notify(self.strings.lyrics_copied);
                 iced::clipboard::write(text)
             }
+            Message::CustomLyricsEditorAction(action) => {
+                if let Some(state) = &mut self.lyrics {
+                    if state.editing {
+                        state.edit_content.perform(action);
+                    }
+                }
+                Task::none()
+            }
+            Message::StartCustomLyricsEdit => {
+                self.start_custom_lyrics_edit();
+                Task::none()
+            }
+            Message::EditCustomLyrics(name) => {
+                self.edit_custom_lyrics(name);
+                Task::none()
+            }
+            Message::SelectCustomLyrics(name) => self.select_custom_lyrics(name),
+            Message::CustomLyricsNameChanged(name) => {
+                if let Some(state) = &mut self.lyrics {
+                    if state.editing {
+                        state.edit_name = name;
+                    }
+                }
+                Task::none()
+            }
+            Message::SaveCustomLyrics => self.save_custom_lyrics(),
+            Message::CancelCustomLyricsEdit => {
+                self.cancel_custom_lyrics_edit();
+                Task::none()
+            }
+            Message::DeleteCustomLyrics => {
+                self.delete_custom_lyrics();
+                Task::none()
+            }
             Message::SearchInputChanged(query) => {
                 self.search_query = query;
                 self.update_search_history();
