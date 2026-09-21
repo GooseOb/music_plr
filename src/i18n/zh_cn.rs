@@ -59,6 +59,7 @@ pub const STRINGS: Strings = Strings {
     ctx_artist_radio: "艺术家电台",
     ctx_remove_from_queue: "从队列移除",
     ctx_remove_from_playlist: "从播放列表移除",
+    ctx_remove_from_recent: "从最近播放移除",
     ctx_clear_cache: "清除缓存",
     sub_play_via: "通过……播放",
     sub_download_from: "从……下载",
@@ -163,6 +164,7 @@ pub const STRINGS: Strings = Strings {
     ctx_download_n: |n| format!("下载 {}", zh_tracks(n)),
     ctx_remove_from_queue_n: |n| format!("从队列移除 {}", zh_tracks(n)),
     ctx_remove_from_playlist_n: |n| format!("从播放列表移除 {}", zh_tracks(n)),
+    ctx_remove_from_recent_n: |n| format!("从最近播放移除 {}", zh_tracks(n)),
 
     import_playlist: "导入播放列表",
     import_method_native: "原生",

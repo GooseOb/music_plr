@@ -59,6 +59,7 @@ pub const STRINGS: Strings = Strings {
     ctx_artist_radio: "راديو الفنان",
     ctx_remove_from_queue: "إزالة من قائمة الانتظار",
     ctx_remove_from_playlist: "إزالة من قائمة التشغيل",
+    ctx_remove_from_recent: "إزالة من الأخيرة",
     ctx_clear_cache: "مسح ذاكرة التخزين المؤقت",
     sub_play_via: "تشغيل عبر",
     sub_download_from: "تنزيل من",
@@ -163,6 +164,7 @@ pub const STRINGS: Strings = Strings {
     ctx_download_n: |n| format!("تنزيل {}", ar_tracks(n)),
     ctx_remove_from_queue_n: |n| format!("إزالة {} من قائمة الانتظار", ar_tracks(n)),
     ctx_remove_from_playlist_n: |n| format!("إزالة {} من قائمة التشغيل", ar_tracks(n)),
+    ctx_remove_from_recent_n: |n| format!("إزالة {} من الأخيرة", ar_tracks(n)),
 
     import_playlist: "استيراد قائمة تشغيل",
     import_method_native: "أصلية",

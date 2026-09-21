@@ -59,6 +59,7 @@ pub const STRINGS: Strings = Strings {
     ctx_artist_radio: "アーティストのラジオ",
     ctx_remove_from_queue: "キューから削除",
     ctx_remove_from_playlist: "プレイリストから削除",
+    ctx_remove_from_recent: "最近再生から削除",
     ctx_clear_cache: "キャッシュをクリア",
     sub_play_via: "再生元",
     sub_download_from: "ダウンロード元",
@@ -163,6 +164,7 @@ pub const STRINGS: Strings = Strings {
     ctx_download_n: |n| format!("{} をダウンロード", ja_tracks(n)),
     ctx_remove_from_queue_n: |n| format!("{} をキューから削除", ja_tracks(n)),
     ctx_remove_from_playlist_n: |n| format!("{} をプレイリストから削除", ja_tracks(n)),
+    ctx_remove_from_recent_n: |n| format!("{} を最近再生から削除", ja_tracks(n)),
 
     import_playlist: "プレイリストをインポート",
     import_method_native: "ネイティブ",

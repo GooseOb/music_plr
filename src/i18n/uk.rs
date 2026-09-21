@@ -59,6 +59,7 @@ pub const STRINGS: Strings = Strings {
     ctx_artist_radio: "Радіо виконавця",
     ctx_remove_from_queue: "Видалити з черги",
     ctx_remove_from_playlist: "Видалити з плейлиста",
+    ctx_remove_from_recent: "Видалити з нещодавніх",
     ctx_clear_cache: "Очистити кеш",
     sub_play_via: "Грати через",
     sub_download_from: "Завантажити з",
@@ -163,6 +164,7 @@ pub const STRINGS: Strings = Strings {
     ctx_download_n: |n| format!("Завантажити {}", uk_tracks(n)),
     ctx_remove_from_queue_n: |n| format!("Видалити {} з черги", uk_tracks(n)),
     ctx_remove_from_playlist_n: |n| format!("Видалити {} з плейлиста", uk_tracks(n)),
+    ctx_remove_from_recent_n: |n| format!("Видалити {} з нещодавніх", uk_tracks(n)),
 
     import_playlist: "Імпорт плейлиста",
     import_method_native: "Нативний",

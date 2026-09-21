@@ -59,6 +59,7 @@ pub const STRINGS: Strings = Strings {
     ctx_artist_radio: "कलाकार का रेडियो",
     ctx_remove_from_queue: "कतार से हटाएँ",
     ctx_remove_from_playlist: "प्लेलिस्ट से हटाएँ",
+    ctx_remove_from_recent: "हाल ही में चलाए गए से हटाएँ",
     ctx_clear_cache: "कैश साफ़ करें",
     sub_play_via: "इसके माध्यम से चलाएँ",
     sub_download_from: "से डाउनलोड करें",
@@ -163,6 +164,7 @@ pub const STRINGS: Strings = Strings {
     ctx_download_n: |n| format!("डाउनलोड करें {}", hi_tracks(n)),
     ctx_remove_from_queue_n: |n| format!("{} कतार से हटाएँ", hi_tracks(n)),
     ctx_remove_from_playlist_n: |n| format!("{} प्लेलिस्ट से हटाएँ", hi_tracks(n)),
+    ctx_remove_from_recent_n: |n| format!("{} हाल ही में चलाए गए से हटाएँ", hi_tracks(n)),
 
     import_playlist: "प्लेलिस्ट आयात करें",
     import_method_native: "देशी",

@@ -143,6 +143,7 @@ pub struct Strings {
     pub ctx_artist_radio: &'static str,
     pub ctx_remove_from_queue: &'static str,
     pub ctx_remove_from_playlist: &'static str,
+    pub ctx_remove_from_recent: &'static str,
     pub ctx_clear_cache: &'static str,
     pub sub_play_via: &'static str,
     pub sub_download_from: &'static str,
@@ -243,6 +244,7 @@ pub struct Strings {
     pub ctx_download_n: fn(usize) -> String,
     pub ctx_remove_from_queue_n: fn(usize) -> String,
     pub ctx_remove_from_playlist_n: fn(usize) -> String,
+    pub ctx_remove_from_recent_n: fn(usize) -> String,
 
     pub import_playlist: &'static str,
     pub import_method_native: &'static str,

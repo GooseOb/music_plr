@@ -59,6 +59,7 @@ pub const STRINGS: Strings = Strings {
     ctx_artist_radio: "Радыё выканаўцы",
     ctx_remove_from_queue: "Прыбраць з чаргі",
     ctx_remove_from_playlist: "Прыбраць з плэйліста",
+    ctx_remove_from_recent: "Прыбраць зь нядаўніх",
     ctx_clear_cache: "Ачысьціць кэш",
     sub_play_via: "Граць праз",
     sub_download_from: "Спампаваць з",
@@ -154,7 +155,7 @@ pub const STRINGS: Strings = Strings {
     download_complete: |path| format!("Спампоўваньне завершана! Захавана ў {path}"),
     failed_resolve_on: |title, p, e| format!("Не ўдалося вырашыць «{title}» на {p}: {e}"),
     couldnt_load: |e| format!("Не ўдалося загрузіць: {e}"),
-    couldnt_load_lyrics: |e| format!("Ня ўдалося загрузіць тэкст: {e}"),
+    couldnt_load_lyrics: |e| format!("Не ўдалося загрузіць тэкст: {e}"),
     search_failed: |e| format!("Памылка пошуку: {e}"),
     cache_cleared_for: |p| format!("Кэш ачышчаны для {p}"),
     radio_label: |w, name| format!("Радыё ({w}): {name}"),
@@ -163,6 +164,7 @@ pub const STRINGS: Strings = Strings {
     ctx_download_n: |n| format!("Спампаваць {}", be_tracks(n)),
     ctx_remove_from_queue_n: |n| format!("Прыбраць {} з чаргі", be_tracks(n)),
     ctx_remove_from_playlist_n: |n| format!("Прыбраць {} з плэйліста", be_tracks(n)),
+    ctx_remove_from_recent_n: |n| format!("Прыбраць {} зь нядаўніх", be_tracks(n)),
 
     import_playlist: "Імпарт плэйліста",
     import_method_native: "Натыўны",
@@ -183,7 +185,7 @@ pub const STRINGS: Strings = Strings {
     import_select_folder: "Выбраць папку",
     import_pattern_conflict: |a, b| {
         format!(
-            "Шаблёны «{a}» і «{b}» могуць супасьці для аднаго файла з супярэчлівымі палямі. Выдаліце або выпраўце адзін з іх."
+            "Шаблёны «{a}» і «{b}» могуць супасьці для аднаго файла з супярэчлівымі палямі. Выдаліце або выпраўце адзін зь іх."
         )
     },
     import_playlists_imported: |n| format!("Імпартавана {}", be_tracks(n)),
@@ -227,7 +229,7 @@ pub const STRINGS: Strings = Strings {
     updating: "Абнаўленьне…",
     update_applied: |v| format!("Абноўлена да {v}. Перазапуск…"),
     package_managed: "Ня можна аўтаматычна абнаўляць (няма праў на запіс). Калі ўсталявана праз мэнэджэр пакетаў, выкарыстайце яго для абнаўленьня.",
-    update_failed: |e| format!("Абнаўленне не прайшло: {e}"),
+    update_failed: |e| format!("Абнаўленьне не прайшло: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
     sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),

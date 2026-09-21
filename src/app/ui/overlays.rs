@@ -301,7 +301,14 @@ fn action_label(
             },
             icons::DELETE_ICON,
         ),
-        CtxAction::RemoveFromRecent => (Cow::Borrowed(tr.delete), icons::DELETE_ICON),
+        CtxAction::RemoveFromRecent => (
+            if n > 1 {
+                Cow::Owned((tr.ctx_remove_from_recent_n)(n))
+            } else {
+                Cow::Borrowed(tr.ctx_remove_from_recent)
+            },
+            icons::DELETE_ICON,
+        ),
         CtxAction::ClearCache => (Cow::Borrowed(tr.ctx_clear_cache), icons::CACHE_ICON),
     }
 }

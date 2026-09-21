@@ -59,6 +59,7 @@ pub const STRINGS: Strings = Strings {
     ctx_artist_radio: "Künstler-Radio",
     ctx_remove_from_queue: "Aus Warteschlange entfernen",
     ctx_remove_from_playlist: "Aus Wiedergabeliste entfernen",
+    ctx_remove_from_recent: "Aus Kürzlich gespielt entfernen",
     ctx_clear_cache: "Cache leeren",
     sub_play_via: "Abspielen über",
     sub_download_from: "Herunterladen von",
@@ -163,6 +164,7 @@ pub const STRINGS: Strings = Strings {
     ctx_download_n: |n| format!("{} herunterladen", de_tracks(n)),
     ctx_remove_from_queue_n: |n| format!("{} aus der Warteschlange entfernen", de_tracks(n)),
     ctx_remove_from_playlist_n: |n| format!("{} aus der Wiedergabeliste entfernen", de_tracks(n)),
+    ctx_remove_from_recent_n: |n| format!("{} aus Kürzlich gespielt entfernen", de_tracks(n)),
 
     import_playlist: "Wiedergabeliste importieren",
     import_method_native: "Nativ",
