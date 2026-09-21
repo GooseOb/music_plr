@@ -208,6 +208,7 @@ pub enum Message {
     ContextMenuArtistRadioProvider(ProviderId),
     ContextMenuClearCache,
     ContextMenuClearCacheProvider(ProviderId),
+    ContextMenuAddToQueue(TrackListKind, Vec<usize>),
     ContextMenuRemoveFromPlaylist(Vec<usize>),
     ContextMenuRemoveFromQueue(Vec<usize>),
     ContextMenuEditTrack,

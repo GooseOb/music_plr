@@ -466,6 +466,11 @@ impl crate::app::MusicPlayer {
                 self.handle_remove_from_playlist_batch(&indices);
                 Task::none()
             }
+            Message::ContextMenuAddToQueue(list, indices) => {
+                self.close_context_menu();
+                self.handle_add_to_queue(list, &indices);
+                Task::none()
+            }
             Message::ContextMenuRemoveFromQueue(indices) => {
                 self.close_context_menu();
                 self.handle_remove_from_queue_batch(&indices);

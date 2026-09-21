@@ -198,6 +198,7 @@ pub enum DefaultCtxAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CtxAction {
     Play,
+    AddToQueue,
     Edit,
     GoToArtist,
     AddToPlaylist,
@@ -219,6 +220,7 @@ impl CtxAction {
             CtxAction::GoToArtist => Some(SubmenuKind::GoToArtist),
             CtxAction::ClearCache => Some(SubmenuKind::ClearCache),
             CtxAction::Edit
+            | CtxAction::AddToQueue
             | CtxAction::AddToPlaylist
             | CtxAction::RemoveFromQueue
             | CtxAction::RemoveFromPlaylist => None,
@@ -229,6 +231,9 @@ impl CtxAction {
         use super::message::Message;
         match self {
             CtxAction::Play => Message::ContextMenuPlayTrack(menu.pos),
+            CtxAction::AddToQueue => {
+                Message::ContextMenuAddToQueue(menu.pos.list, menu.target_indices.clone())
+            }
             CtxAction::Edit => Message::ContextMenuEditTrack,
             CtxAction::GoToArtist => Message::ContextMenuGoToArtist,
             CtxAction::AddToPlaylist => Message::TogglePicker(menu.target_indices.clone()),
@@ -293,7 +298,7 @@ impl ContextMenuState {
     /// The visible entries of the main menu, in order. The view renders one
     /// row per entry; keyboard navigation indexes into this list.
     pub fn actions(&self, cache: &StreamCache) -> Vec<CtxAction> {
-        let mut v = vec![CtxAction::Play, CtxAction::Edit];
+        let mut v = vec![CtxAction::Play, CtxAction::AddToQueue, CtxAction::Edit];
         if !self.track.artist.is_empty() {
             v.push(CtxAction::GoToArtist);
         }

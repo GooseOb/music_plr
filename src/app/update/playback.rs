@@ -331,6 +331,24 @@ impl MusicPlayer {
         new_positions
     }
 
+    pub fn handle_add_to_queue(&mut self, list: TrackListKind, indices: &[usize]) {
+        let tracks: Vec<Track> = indices
+            .iter()
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, list)))
+            .collect();
+        if tracks.is_empty() {
+            return;
+        }
+        let inserted = tracks.len();
+        for (j, track) in tracks.into_iter().enumerate() {
+            self.queue.tracks.insert(j + 1, track);
+        }
+        self.save_session();
+        let tr = self.strings;
+        self.notify((tr.added_to)(inserted, tr.queue));
+        self.clear_selection_if_touched(indices, list);
+    }
+
     pub fn handle_remove_from_queue_batch(&mut self, indices: &[usize]) {
         let removed = crate::util::remove_at(&mut self.queue.tracks, indices);
         self.save_session();

@@ -259,6 +259,14 @@ fn action_label(
         CtxAction::Play => (Cow::Borrowed(tr.ctx_play), icons::PLAY_ICON),
         CtxAction::Edit => (Cow::Borrowed(tr.ctx_edit), icons::EDIT_ICON),
         CtxAction::GoToArtist => (Cow::Borrowed(tr.ctx_go_to_artist), icons::ARTIST_ICON),
+        CtxAction::AddToQueue => (
+            if n > 1 {
+                Cow::Owned((tr.ctx_add_to_queue_n)(n))
+            } else {
+                Cow::Borrowed(tr.ctx_add_to_queue)
+            },
+            icons::QUEUE_ICON,
+        ),
         CtxAction::AddToPlaylist => (
             if n > 1 {
                 Cow::Owned((tr.ctx_add_to_playlist_n)(n))
