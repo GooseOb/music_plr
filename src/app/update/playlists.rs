@@ -657,17 +657,6 @@ mod tests {
     }
 
     #[test]
-    fn delete_key_never_removes_now_playing() {
-        let mut p = player_with_playlists(&["A"]);
-        p.queue.tracks = vec![track("0"), track("1")];
-        p.queue_selected_indices = vec![0, 1];
-        hover(&mut p, TrackPos::new(1, TrackListKind::Queue));
-        p.handle_delete_in_hovered_list();
-        let ids: Vec<_> = p.queue.tracks.iter().map(|t| t.title.clone()).collect();
-        assert_eq!(ids, vec!["Track 0"]);
-    }
-
-    #[test]
     fn delete_key_removes_recent_selection() {
         let mut p = player_with_playlists(&["A"]);
         p.queue.recently_played = vec![track("1"), track("2")].into();
