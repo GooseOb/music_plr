@@ -5,24 +5,16 @@ use crate::app::{
     interaction::{ContextMenuFocus, HoverTarget},
     ui::SEARCH_HISTORY_LIST_ID,
     view_data::ViewKind,
-    TrackListSearch,
+    Dialog, TrackListSearch,
 };
 
 impl MusicPlayer {
     /// Arrow-key navigation and Enter activation while the context menu is
     /// open. Mirrors track-list nav: Up/Down move within the focused pane and
     /// wrap at the edges; Left/Right switch between the menu and its submenu.
-    pub fn handle_context_menu_key(
-        &mut self,
-        key: iced::keyboard::key::Physical,
-        modifiers: iced::keyboard::Modifiers,
-    ) -> Task<Message> {
+    pub fn handle_context_menu_key(&mut self, key: iced::keyboard::key::Physical) -> Task<Message> {
         use iced::keyboard::key::{Code, Physical};
-        if matches!(key, Physical::Code(Code::Escape)) && !modifiers.control() {
-            self.close_context_menu();
-            return Task::none();
-        }
-        if self.context_menu.is_none() {
+        if !matches!(self.dialog, Some(Dialog::ContextMenu(_))) {
             return Task::none();
         }
         match key {
@@ -30,7 +22,9 @@ impl MusicPlayer {
             Physical::Code(Code::ArrowDown) => self.step_context_menu_focus(1),
             Physical::Code(Code::ArrowLeft | Code::ArrowRight) => self.context_menu_horizontal(),
             Physical::Code(Code::Enter) => {
-                let menu = self.context_menu.as_ref().expect("checked above");
+                let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
+                    unreachable!("checked above")
+                };
                 let message = match menu.hovered {
                     Some(ContextMenuFocus::Item(i)) => menu
                         .actions(&self.stream_cache)
@@ -55,7 +49,7 @@ impl MusicPlayer {
         // Move within whichever pane focus is currently in; an unfocused menu
         // starts in the main list.
         let focus = {
-            let Some(menu) = self.context_menu.as_ref() else {
+            let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
                 return Task::none();
             };
             let (kind, count, current) = match menu.hovered {
@@ -83,7 +77,7 @@ impl MusicPlayer {
                 None => ContextMenuFocus::Item(next),
             }
         };
-        if let Some(m) = self.context_menu.as_mut() {
+        if let Some(Dialog::ContextMenu(m)) = &mut self.dialog {
             m.hovered = Some(focus);
         }
         Task::none()
@@ -91,7 +85,7 @@ impl MusicPlayer {
 
     fn context_menu_horizontal(&mut self) -> Task<Message> {
         let focus = {
-            let Some(menu) = self.context_menu.as_ref() else {
+            let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
                 return Task::none();
             };
             match menu.hovered {
@@ -118,7 +112,7 @@ impl MusicPlayer {
                 _ => return Task::none(),
             }
         };
-        if let Some(m) = self.context_menu.as_mut() {
+        if let Some(Dialog::ContextMenu(m)) = &mut self.dialog {
             m.hovered = Some(focus);
         }
         Task::none()
@@ -155,8 +149,14 @@ impl MusicPlayer {
         modifiers: iced::keyboard::Modifiers,
     ) -> Task<Message> {
         use iced::keyboard::key::{Code, Physical};
-        if self.context_menu.is_some() {
-            return self.handle_context_menu_key(key, modifiers);
+        if self.dialog.is_some() {
+            if matches!(key, Physical::Code(Code::Escape)) {
+                self.dialog = None;
+                return Task::none();
+            }
+            if matches!(self.dialog, Some(Dialog::ContextMenu(_))) {
+                return self.handle_context_menu_key(key);
+            }
         }
         let task = match key {
             Physical::Code(Code::KeyF) if modifiers.control() || modifiers.logo() => {

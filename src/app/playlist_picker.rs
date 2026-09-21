@@ -3,6 +3,7 @@
 
 use crate::app::interaction::TrackListKind;
 
+#[derive(Debug, Clone)]
 pub struct PlaylistPicker {
     pub indices: Vec<usize>,
     pub list: TrackListKind,

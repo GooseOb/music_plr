@@ -4,7 +4,7 @@ use tracing::debug;
 
 use super::{MusicPlayer, Track, TrackListKind, TrackPos};
 use crate::{
-    app::ViewKind,
+    app::{Dialog, ViewKind},
     data::{cache::StreamCache, JsonStore},
     providers::ProviderId,
 };
@@ -121,9 +121,13 @@ impl MusicPlayer {
     /// lacking the provider id are resolved first (best-effort; the resolve
     /// flow stores the id and then downloads).
     pub fn download_track_via_provider(&mut self, provider: ProviderId) {
-        let Some(menu) = self.take_context_menu() else {
+        let dialog = self.dialog.take();
+        let Some(Dialog::ContextMenu(menu)) = dialog else {
+            self.dialog = dialog;
+            self.bounds.context_menu = None;
             return;
         };
+        self.bounds.context_menu = None;
         let list = menu.pos.list;
         let indices = menu.target_indices;
         let mut to_download: Vec<Track> = Vec::new();

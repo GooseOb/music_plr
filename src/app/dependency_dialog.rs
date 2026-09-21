@@ -20,7 +20,7 @@ pub struct DepOpState {
     pub delete_result: Option<Result<(), String>>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DependencyDialog {
     /// Dependencies detected as missing at startup.
     pub missing: Vec<DepKind>,

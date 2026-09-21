@@ -8,7 +8,7 @@ use super::{
     MediaUpdate, Message, MusicPlayer, Task, ViewData, PREPEND,
 };
 use crate::{
-    app::{interaction::TrackListKind, ViewKind},
+    app::{interaction::TrackListKind, Dialog, ViewKind},
     data::{cache::StreamCache, JsonStore},
 };
 
@@ -298,7 +298,7 @@ impl MusicPlayer {
                 }
                 // The startup dialog reads its completion/toast state from the
                 // shared `dep_ops` map rather than keeping its own copies.
-                if let Some(dialog) = &self.dep_dialog {
+                if let Some(Dialog::Dependencies(dialog)) = &self.dialog {
                     let any_ok = dialog.selected.iter().any(|k| {
                         self.dep_ops
                             .get(k)
@@ -417,7 +417,7 @@ impl MusicPlayer {
                 Task::none()
             }
             BackendResult::EditTrackProviderError(_provider, message) => {
-                if let Some(edit) = &mut self.edit_track {
+                if let Some(Dialog::Edit(edit)) = &mut self.dialog {
                     edit.finding = None;
                 }
                 self.notify_error(message);

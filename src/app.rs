@@ -6,6 +6,7 @@
 //! types so callers can keep using `crate::app::*`.
 
 mod dependency_dialog;
+mod dialog;
 mod edit_track;
 mod import;
 mod interaction;
@@ -18,6 +19,7 @@ mod update;
 mod view_data;
 
 pub use dependency_dialog::DependencyDialog;
+pub use dialog::Dialog;
 pub use edit_track::EditTrackState;
 pub use import::{CsvPreset, ImportCsvField, ImportMethod, ImportPlaylistDialog};
 pub use interaction::{ContextMenuState, TrackListKind, TrackListSearch};

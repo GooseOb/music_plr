@@ -18,13 +18,13 @@ use super::{
         button_style_primary, context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted,
         icon_fg_secondary, scroll_padding,
     },
-    theme, ContextMenuState, Message, MusicPlayer,
+    theme, Message, MusicPlayer,
 };
 use crate::{
     app::{
         dependency_dialog::dep_desc,
         import::ImportPlaylistDialog,
-        interaction::{ContextMenuFocus, CtxAction, SubmenuKind},
+        interaction::{ContextMenuFocus, ContextMenuState, CtxAction, SubmenuKind},
         CsvPreset, EditTrackField, ImportCsvField, ImportMethod,
     },
     deps::DepKind,
@@ -486,7 +486,7 @@ pub(super) fn view_edit_track<'a>(
     let cancel_btn =
         Button::new(Container::new(text(player.strings.cancel)).center_x(Length::Fill))
             .padding(theme::SPACING_SM)
-            .on_press(Message::CloseEditTrack);
+            .on_press(Message::CloseDialog);
 
     let body = Column::with_children([
         Column::with_children([
@@ -525,7 +525,7 @@ pub(super) fn view_edit_track<'a>(
     .width(theme::DIALOG_WIDTH_XL)
     .height(player.window_size.height * 0.7);
 
-    view_dialog(dialog.into(), Message::CloseEditTrack)
+    view_dialog(dialog.into(), Message::CloseDialog)
 }
 
 pub fn pos_absolute(
@@ -579,7 +579,7 @@ pub(super) fn view_playlist_picker(player: &MusicPlayer) -> Element<'_, Message,
             .center_x(Length::Fill),
     )
     .padding(theme::SPACING_SM)
-    .on_press(Message::ClosePicker);
+    .on_press(Message::CloseDialog);
 
     view_dialog(
         Column::with_children([
@@ -597,7 +597,7 @@ pub(super) fn view_playlist_picker(player: &MusicPlayer) -> Element<'_, Message,
         .width(theme::DIALOG_WIDTH)
         .padding(theme::SPACING_MD)
         .into(),
-        Message::ClosePicker,
+        Message::CloseDialog,
     )
 }
 
@@ -628,8 +628,10 @@ pub(super) fn view_dependency_dialog<'a>(
         .missing
         .iter()
         .map(|&kind| match kind {
-            DepKind::YtDlp | DepKind::Python3 => dep_checkbox_row(player, kind, None),
-            DepKind::YtMusicApi if python3_available => dep_checkbox_row(player, kind, None),
+            DepKind::YtDlp | DepKind::Python3 => dep_checkbox_row(player, dialog, kind, None),
+            DepKind::YtMusicApi if python3_available => {
+                dep_checkbox_row(player, dialog, kind, None)
+            }
             DepKind::YtMusicApi => dep_manual_row(player, kind, tr.deps_ytmusicapi_requires_python),
         })
         .collect();
@@ -645,7 +647,7 @@ pub(super) fn view_dependency_dialog<'a>(
         let found_rows = dialog
             .found
             .iter()
-            .map(|&kind| dep_checkbox_row(player, kind, None));
+            .map(|&kind| dep_checkbox_row(player, dialog, kind, None));
         children.push(
             text(tr.deps_found_section_title)
                 .size(theme::TEXT_SIZE_LG)
@@ -692,12 +694,12 @@ pub(super) fn view_dependency_dialog<'a>(
 /// A checkable dependency row with its name, description, and live status.
 fn dep_checkbox_row<'a>(
     player: &'a MusicPlayer,
+    dialog: &'a crate::app::DependencyDialog,
     kind: DepKind,
     note: Option<&'static str>,
 ) -> Element<'a, Message, AppTheme> {
     let tr = &player.strings;
-    let dialog = player.dep_dialog.as_ref();
-    let checked = dialog.is_some_and(|d| d.selected.contains(&kind));
+    let checked = dialog.selected.contains(&kind);
     let op = player.dep_ops.get(&kind);
     let status: Element<'_, Message, AppTheme> =
         dep_install_status(op, tr).unwrap_or_else(|| Space::new().into());
@@ -746,7 +748,7 @@ pub(super) fn view_delete_confirm(
 ) -> Element<'_, Message, AppTheme> {
     let cancel_btn = Button::new(Container::new(text(strings.cancel)).center_x(Length::Fill))
         .padding(theme::SPACING_SM)
-        .on_press(Message::HideDeleteConfirm);
+        .on_press(Message::CloseDialog);
 
     let delete_btn = Button::new(Container::new(text(strings.delete)).center_x(Length::Fill))
         .padding(theme::SPACING_SM)
@@ -771,7 +773,7 @@ pub(super) fn view_delete_confirm(
         .spacing(theme::SPACING_LG)
         .padding(theme::SPACING_XL)
         .into(),
-        Message::HideDeleteConfirm,
+        Message::CloseDialog,
     )
 }
 
@@ -920,7 +922,7 @@ pub(super) fn view_import_playlist<'a>(
         });
     let cancel_btn = Button::new(Container::new(text(tr.cancel)).center_x(Length::Fill))
         .padding(theme::SPACING_SM)
-        .on_press(Message::CloseImportPlaylist);
+        .on_press(Message::CloseDialog);
 
     children.push(
         Row::with_children([cancel_btn.into(), select_btn.into()])
@@ -934,5 +936,5 @@ pub(super) fn view_import_playlist<'a>(
         .padding(theme::SPACING_MD)
         .width(theme::DIALOG_WIDTH_LG);
 
-    view_dialog(dialog_col.into(), Message::CloseImportPlaylist)
+    view_dialog(dialog_col.into(), Message::CloseDialog)
 }

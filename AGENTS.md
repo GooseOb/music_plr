@@ -48,6 +48,7 @@ src/
 ├── app.rs             # Module index: declares submodules + re-exports public types (MusicPlayer, Message, …)
 ├── app/state.rs       # MusicPlayer (all state) + new()/Default + view_data accessors + view()
 ├── app/lyrics_state.rs # LyricsState + LyricsViewMode (lyrics overlay state)
+├── app/dialog.rs       # Dialog (exclusive overlay) + accessors
 ├── app/edit_track.rs   # EditTrackState (track-editing popup working copy)
 ├── app/playlist_picker.rs # PlaylistPicker (add-to-playlist overlay state)
 ├── app/view_data.rs   # ViewData / ViewKind / NavEntry (per-view state)
@@ -77,8 +78,9 @@ src/
 ## State Management
 
 - **`MusicPlayer`** (`app/state.rs`): the single source of truth. Holds audio/queue/playlists/config,
-  mpsc channels, `DragState`, context menu, `nav_history`, `download_registry`, `stream_cache`,
-  `thumbnail_index` (per-provider `thumbnails/<slug>/` dirs on disk, extension sniffed from magic bytes so iced's extension-based loader decodes them), `picker` (resolved target indices for the playlist-picker overlay),
+  mpsc channels, `DragState`, `dialog: Option<Dialog>` (exclusive overlay:
+  Dependencies/Picker/DeleteConfirm/Edit/Import/ContextMenu), `nav_history`, `download_registry`, `stream_cache`,
+  `thumbnail_index` (per-provider `thumbnails/<slug>/` dirs on disk, extension sniffed from magic bytes so iced's extension-based loader decodes them),
   `lyrics`/`lyrics_track_id`/`lyrics_loading`, and `track_list_search` (the in-list Ctrl+F overlay:
   the active `TrackListKind`, live query, matched indices; the current match is just
   `drag.hovered` when it is among the matches). **All per-view state** lives in `view_data`
@@ -115,7 +117,7 @@ src/
 - **Sidebar** (`SIDEBAR_WIDTH = 300.0`): nav buttons (Search/Downloads), scrollable playlist list, create-playlist input, local import.
 - **Main**: global search bar + view (Search / SongRadio / ArtistRadio / Playlist / Downloads).
 - **Queue panel** (`QUEUE_MIN_WIDTH = 240.0`, width `max(window_width*0.2, 240.0)`); **Playbar** (bottom): track info, progress, play/pause/next/prev/queue, volume.
-- **Overlays** (context menu, playlist picker, delete confirm, search-history dropdown) via `iced::widget::Stack`.
+- **Overlays** (exclusive `Dialog`, drop indicator, search-history dropdown, toast) via `iced::widget::Stack`.
 
 ## iced API Notes
 

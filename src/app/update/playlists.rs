@@ -5,13 +5,12 @@ use std::{
 
 use super::{Message, MusicPlayer, Task, Track, ViewData, PREPEND};
 use crate::{
-    app::{update::operation::CaptureBounds, ImportMethod, ImportPlaylistDialog, ViewKind},
+    app::{update::operation::CaptureBounds, Dialog, ImportMethod, ImportPlaylistDialog, ViewKind},
     data::JsonStore,
 };
 
 impl MusicPlayer {
     pub(crate) fn navigate_to_playlist(&mut self, index: usize) -> Task<Message> {
-        self.playlist_picker = None;
         self.lyrics = None;
         self.clear_selection();
         self.drag.cleanup();
@@ -53,6 +52,7 @@ impl MusicPlayer {
         let already_selected =
             matches!(&self.view_data().kind, ViewKind::Playlist(p) if p.index == index);
         if index < self.playlists.playlists.len() && !already_selected {
+            self.dialog = None;
             return self.navigate_to_playlist(index);
         }
         Task::none()
@@ -106,22 +106,24 @@ impl MusicPlayer {
             }
         }
 
-        let mut nav_task = Task::none();
-        if navigate_away {
-            nav_task = self.push_new_view(ViewData::new_search(
+        let nav_task: Task<Message> = if navigate_away {
+            self.push_new_view(ViewData::new_search(
                 String::new(),
                 self.search_provider,
                 self.search_scope,
-            ));
+            ))
         } else if let Some(new_idx) = new_selection {
             let new_name = self.playlists.playlists[new_idx].name.clone();
             if let ViewKind::Playlist(entry) = &mut self.view_data_mut().kind {
                 entry.index = new_idx;
                 entry.name = new_name;
-            }
-        }
+            };
+            CaptureBounds::new().into()
+        } else {
+            Task::none()
+        };
 
-        self.delete_confirm_index = None;
+        self.dialog = None;
         nav_task
     }
 
@@ -188,7 +190,7 @@ impl MusicPlayer {
         let count = self
             .playlists
             .insert_tracks_at(playlist_idx, tracks.iter(), PREPEND);
-        self.playlist_picker = None;
+        self.dialog = None;
         let name = self.playlists.playlists[playlist_idx].name.clone();
         let msg = (self.strings.added_to)(count, &name);
         self.notify(msg);
@@ -292,7 +294,7 @@ impl MusicPlayer {
     /// Open the file/folder picker for the current import method. The picked
     /// path is delivered back through `BackendResult::ImportPathsPicked`.
     pub fn handle_import_pick(&mut self) {
-        let Some(dialog) = &self.import_dialog else {
+        let Some(Dialog::Import(dialog)) = &self.dialog else {
             return;
         };
         let method = dialog.method;
@@ -324,16 +326,18 @@ impl MusicPlayer {
         method: ImportMethod,
         paths: &[PathBuf],
     ) -> Task<Message> {
-        let Some(dialog) = self.import_dialog.clone() else {
+        let dialog = self.dialog.take();
+        let Some(Dialog::Import(import)) = dialog else {
+            self.dialog = dialog;
             return Task::none();
         };
         let (ok, task) = match method {
             ImportMethod::Native => self.import_native(&paths[0]),
-            ImportMethod::Csv => self.import_csv(&paths[0], &dialog),
-            ImportMethod::FileList => self.import_file_list(&paths[0], &dialog),
+            ImportMethod::Csv => self.import_csv(&paths[0], &import),
+            ImportMethod::FileList => self.import_file_list(&paths[0], &import),
         };
-        if ok {
-            self.import_dialog = None;
+        if !ok {
+            self.dialog = Some(Dialog::Import(import));
         }
         task
     }

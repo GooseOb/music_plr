@@ -12,12 +12,10 @@ use iced::Task;
 use crate::{
     app::{
         dependency_dialog::{DepOpState, DependencyDialog},
-        edit_track::EditTrackState,
-        import::ImportPlaylistDialog,
-        interaction::{ContextMenuState, DragState, TrackListSearch, TrackPos},
+        dialog::Dialog,
+        interaction::{DragState, TrackListSearch, TrackPos},
         lyrics_state::LyricsState,
         message::{BackendResult, Message},
-        playlist_picker::PlaylistPicker,
         ui,
         update::operation::CaptureBounds,
         view_data::{RequestIdGenerator, ViewData},
@@ -100,9 +98,9 @@ pub struct MusicPlayer {
     pub thumbnail_index: ThumbnailIndex,
     pub playlists: PlaylistStore,
     pub playlist_create_name: String,
-    pub playlist_picker: Option<PlaylistPicker>,
-    pub delete_confirm_index: Option<usize>,
-    pub import_dialog: Option<ImportPlaylistDialog>,
+    /// Exclusive overlay dialog. Only one can be visible at a time; the view
+    /// renders it on top of the main layout.
+    pub dialog: Option<Dialog>,
 
     pub library: LibraryStore,
     pub library_expanded: bool,
@@ -134,13 +132,6 @@ pub struct MusicPlayer {
 
     pub drag: DragState,
 
-    pub context_menu: Option<ContextMenuState>,
-    pub edit_track: Option<EditTrackState>,
-
-    /// Startup "missing dependencies" dialog, open when external tools the
-    /// app needs are absent. `None` once dismissed or when everything is
-    /// present.
-    pub dep_dialog: Option<DependencyDialog>,
     /// Live status of dependency install/delete operations triggered from the
     /// Settings view (and mirrored from the startup dialog), keyed by dep.
     pub dep_ops: std::collections::HashMap<crate::deps::DepKind, DepOpState>,
@@ -223,9 +214,8 @@ impl MusicPlayer {
             show_queue: false,
             repeat: false,
             thumbnail_index: ThumbnailIndex::load(),
-            playlist_picker: None,
-            delete_confirm_index: None,
-            import_dialog: None,
+            dialog: (!missing_deps.is_empty())
+                .then(|| Dialog::Dependencies(DependencyDialog::new(missing_deps, found_deps))),
             library: LibraryStore::load(),
             library_expanded: false,
             nav_history: vec![ViewData::default()],
@@ -244,8 +234,6 @@ impl MusicPlayer {
                 .checked_sub(std::time::Duration::from_secs(10))
                 .unwrap_or_else(Instant::now),
             drag: DragState::default(),
-            context_menu: None,
-            edit_track: None,
             queue_selected_indices: Vec::new(),
             recent_selected_indices: Vec::new(),
             now_playing_from: None,
@@ -256,8 +244,6 @@ impl MusicPlayer {
             clipboard: Vec::new(),
             last_click: None,
             strings,
-            dep_dialog: (!missing_deps.is_empty())
-                .then(|| DependencyDialog::new(missing_deps, found_deps)),
             dep_ops: std::collections::HashMap::new(),
             update_status: crate::app::update::UpdateStatus::default(),
         };

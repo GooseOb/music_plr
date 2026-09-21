@@ -3,7 +3,7 @@ use iced::{
     Element,
 };
 
-use super::{ContextMenuState, Message, MusicPlayer};
+use super::{Dialog, Message, MusicPlayer};
 use crate::theme::{self, AppTheme};
 
 pub(crate) mod artist;
@@ -48,20 +48,30 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let mut stack = Stack::new().push(layout);
 
-    if let Some(dialog) = &player.dep_dialog {
-        stack = stack.push(overlays::view_dependency_dialog(player, dialog));
-    } else if player.playlist_picker.is_some() {
-        stack = stack.push(overlays::view_playlist_picker(player));
-    } else if player.delete_confirm_index.is_some() {
-        stack = stack.push(overlays::view_delete_confirm(player.strings));
-    } else if let Some(edit) = &player.edit_track {
-        stack = stack.push(overlays::view_edit_track(player, edit));
-    } else if let Some(dialog) = &player.import_dialog {
-        stack = stack.push(overlays::view_import_playlist(player, dialog));
-    } else if let Some(context_menu) = &player.context_menu {
-        stack = stack.push(overlays::view_context_menu(player, context_menu));
-    } else if let Some(rect) = player.drop_indicator_rect() {
-        stack = stack.push(overlays::view_drop_indicator(rect));
+    match &player.dialog {
+        Some(Dialog::Dependencies(dialog)) => {
+            stack = stack.push(overlays::view_dependency_dialog(player, dialog));
+        }
+        Some(Dialog::Picker(_)) => {
+            stack = stack.push(overlays::view_playlist_picker(player));
+        }
+        Some(Dialog::DeleteConfirm(_)) => {
+            stack = stack.push(overlays::view_delete_confirm(player.strings));
+        }
+        Some(Dialog::Edit(edit)) => {
+            stack = stack.push(overlays::view_edit_track(player, edit));
+        }
+        Some(Dialog::Import(dialog)) => {
+            stack = stack.push(overlays::view_import_playlist(player, dialog));
+        }
+        Some(Dialog::ContextMenu(context_menu)) => {
+            stack = stack.push(overlays::view_context_menu(player, context_menu));
+        }
+        None => {
+            if let Some(rect) = player.drop_indicator_rect() {
+                stack = stack.push(overlays::view_drop_indicator(rect));
+            }
+        }
     }
     if player.show_search_history {
         if let Some(input_rect) = player.bounds.search_input {

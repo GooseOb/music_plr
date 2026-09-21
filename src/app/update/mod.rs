@@ -5,7 +5,7 @@ use tracing::{error, warn};
 
 use crate::{
     app::{
-        interaction::{ContextMenuState, TrackListKind, TrackPos},
+        interaction::{TrackListKind, TrackPos},
         message::{BackendResult, Message},
         view_data::ViewData,
         MusicPlayer,

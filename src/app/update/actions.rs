@@ -1,8 +1,9 @@
 use iced::{Point, Task};
 
-use super::{BackendResult, ContextMenuState, MusicPlayer, Track};
+use super::{BackendResult, MusicPlayer, Track};
 use crate::{
     app::{
+        dialog::Dialog,
         interaction::{TrackListKind, TrackPos},
         update, EditTrackState, Message, PlaylistPicker, ViewKind,
     },
@@ -12,12 +13,6 @@ use crate::{
 };
 
 impl MusicPlayer {
-    /// Take the open menu, clearing its captured geometry so a reopened
-    /// menu never renders against stale measurements.
-    pub(crate) fn take_context_menu(&mut self) -> Option<ContextMenuState> {
-        self.bounds.context_menu = None;
-        self.context_menu.take()
-    }
     /// Spawn a download for `track` specifically from `provider` (used by the
     /// "download from [provider]" context-menu flow).
     pub(super) fn spawn_download_thread_for(
@@ -52,10 +47,10 @@ impl MusicPlayer {
     }
 
     pub fn handle_toggle_picker(&mut self, indices: Vec<usize>, list: TrackListKind) {
-        self.playlist_picker = if self.playlist_picker.is_some() {
-            None
+        if matches!(self.dialog, Some(Dialog::Picker(_))) {
+            self.dialog = None;
         } else {
-            Some(PlaylistPicker { indices, list })
+            self.dialog = Some(Dialog::Picker(PlaylistPicker { indices, list }));
         }
     }
 
@@ -200,21 +195,18 @@ impl MusicPlayer {
             vec![index]
         };
 
-        self.context_menu = Some(ContextMenuState {
-            pos,
-            target_indices,
-            position: (point.x, point.y),
-            cursor: (point.x, point.y),
-            in_playlist: matches!(self.view_data().kind, ViewKind::Playlist(_)),
-            track,
-            hovered: None,
-        });
+        self.dialog = Some(Dialog::ContextMenu(
+            crate::app::interaction::ContextMenuState {
+                pos,
+                target_indices,
+                position: (point.x, point.y),
+                cursor: (point.x, point.y),
+                in_playlist: matches!(self.view_data().kind, ViewKind::Playlist(_)),
+                track,
+                hovered: None,
+            },
+        ));
         update::operation::CaptureContextMenu::default().into()
-    }
-
-    pub fn close_context_menu(&mut self) {
-        self.context_menu = None;
-        self.bounds.context_menu = None;
     }
 
     fn track_center_point(&self, pos: TrackPos) -> Option<Point> {
@@ -252,31 +244,45 @@ impl MusicPlayer {
     /// Open the artist page on `provider`, using the track's stored artist
     /// id when present and resolving by name otherwise.
     pub fn handle_context_menu_go_to_artist(&mut self, provider: ProviderId) -> Task<Message> {
-        let Some(track) = self.take_context_menu().map(|m| m.track) else {
+        self.bounds.context_menu = None;
+        let dialog = self.dialog.take();
+        let Some(Dialog::ContextMenu(menu)) = dialog else {
+            self.dialog = dialog;
             return Task::none();
         };
-        self.open_artist(track.provider_artist_id(provider), &track.artist, provider)
+        self.open_artist(
+            menu.track.provider_artist_id(provider),
+            &menu.track.artist,
+            provider,
+        )
     }
 
     pub fn handle_context_menu_song_radio(&mut self, provider: ProviderId) -> Task<Message> {
-        if let Some(track) = self.take_context_menu().map(|m| m.track) {
-            self.start_radio_provider(provider, &track, false)
-        } else {
-            Task::none()
-        }
+        self.bounds.context_menu = None;
+        let dialog = self.dialog.take();
+        let Some(Dialog::ContextMenu(menu)) = dialog else {
+            self.dialog = dialog;
+            return Task::none();
+        };
+        self.start_radio_provider(provider, &menu.track, false)
     }
 
     pub fn handle_context_menu_artist_radio(&mut self, provider: ProviderId) -> Task<Message> {
-        if let Some(track) = self.take_context_menu().map(|m| m.track) {
-            self.start_radio_provider(provider, &track, true)
-        } else {
-            Task::none()
-        }
+        self.bounds.context_menu = None;
+        let dialog = self.dialog.take();
+        let Some(Dialog::ContextMenu(menu)) = dialog else {
+            self.dialog = dialog;
+            return Task::none();
+        };
+        self.start_radio_provider(provider, &menu.track, true)
     }
 
     /// Clear the stream cache for the context menu's track on `provider`.
     pub fn handle_context_menu_clear_cache(&mut self, provider: ProviderId) {
-        let Some(menu) = self.take_context_menu() else {
+        self.bounds.context_menu = None;
+        let dialog = self.dialog.take();
+        let Some(Dialog::ContextMenu(menu)) = dialog else {
+            self.dialog = dialog;
             return;
         };
         if let Some(id) = menu.track.provider_id(provider).map(str::to_string) {
@@ -289,11 +295,16 @@ impl MusicPlayer {
     /// Clear the stream cache for the context menu's track on its current
     /// (source) provider: the direct click on the "Clear cache" parent row.
     pub fn handle_context_menu_clear_cache_current(&mut self) {
-        let provider = match self.context_menu.as_ref() {
-            Some(menu) => menu.track.source,
-            None => return,
+        let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
+            return;
         };
+        let provider = menu.track.source;
         self.handle_context_menu_clear_cache(provider);
+    }
+
+    pub fn close_context_menu(&mut self) {
+        self.dialog = None;
+        self.bounds.context_menu = None;
     }
 
     /// Open the track-editing popup for the track at `pos`, seeding the
@@ -303,14 +314,14 @@ impl MusicPlayer {
         let Some(track) = self.get_track_at(pos) else {
             return;
         };
-        self.edit_track = Some(EditTrackState {
+        self.dialog = Some(Dialog::Edit(EditTrackState {
             title: track.title.clone(),
             artist: track.artist.clone(),
             source: track.source,
             original: track,
             pos,
             finding: None,
-        });
+        }));
     }
 
     /// Resolve an unresolved provider for the track being edited: the "Find"
@@ -318,7 +329,7 @@ impl MusicPlayer {
     /// title/artist and, on success, merges the resolved identity into the
     /// working copy so it can later be selected as the source.
     pub fn handle_edit_track_find_provider(&mut self, provider: ProviderId) {
-        let Some(edit) = &mut self.edit_track else {
+        let Some(Dialog::Edit(edit)) = &mut self.dialog else {
             return;
         };
         if edit.finding.is_some() {
@@ -348,26 +359,35 @@ impl MusicPlayer {
         provider: ProviderId,
         resolved: Option<Track>,
     ) {
-        let Some(edit) = &mut self.edit_track else {
-            return;
-        };
-        edit.finding = None;
-        if let Some(track) = resolved {
-            if let Some(pt) = track.providers.get(&provider) {
-                edit.original.set_provider(provider, pt.clone());
+        let found_on = self.strings.found_on;
+        let could_not_find_on = self.strings.could_not_find_on;
+        {
+            let Some(Dialog::Edit(edit)) = &mut self.dialog else {
+                return;
+            };
+            edit.finding = None;
+            if let Some(track) = resolved {
+                if let Some(pt) = track.providers.get(&provider) {
+                    edit.original.set_provider(provider, pt.clone());
+                }
+            } else {
+                let title = edit.title.clone();
+                let msg = could_not_find_on(&title, provider.label());
+                let _ = edit;
+                self.notify_error(msg);
+                return;
             }
-            self.notify((self.strings.found_on)(provider.label()));
-        } else {
-            let msg = (self.strings.could_not_find_on)(&edit.title, provider.label());
-            self.notify_error(msg);
         }
+        self.notify(found_on(provider.label()));
     }
 
     /// Apply the edited fields back to the track's source list and close the
     /// popup. `source` follows the working copy (changed via the provider
     /// "select" buttons); `title`/`artist` are overwritten from the inputs.
     pub fn apply_edit_track(&mut self) {
-        let Some(edit) = self.edit_track.take() else {
+        let dialog = self.dialog.take();
+        let Some(Dialog::Edit(edit)) = dialog else {
+            self.dialog = dialog;
             return;
         };
         let mut track = edit.original;

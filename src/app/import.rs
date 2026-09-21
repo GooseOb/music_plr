@@ -97,14 +97,6 @@ impl Default for ImportPlaylistDialog {
     }
 }
 
-impl crate::app::MusicPlayer {
-    pub(crate) fn update_import_dialog(&mut self, f: impl FnOnce(&mut ImportPlaylistDialog)) {
-        if let Some(dialog) = &mut self.import_dialog {
-            f(dialog);
-        }
-    }
-}
-
 impl ImportPlaylistDialog {
     /// Return the two patterns (if any) that overlap ambiguously, so the UI
     /// can disable selection and surface an error.

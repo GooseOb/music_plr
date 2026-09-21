@@ -48,15 +48,13 @@ impl MusicPlayer {
     }
 
     pub fn clear_selection(&mut self) {
-        self.selection_mut(TrackListKind::Active).clear();
-        self.selection_mut(TrackListKind::Queue).clear();
-        self.selection_mut(TrackListKind::Recent).clear();
-        self.playlist_picker = None;
+        self.clear_selection_for(TrackListKind::Active);
+        self.clear_selection_for(TrackListKind::Queue);
+        self.clear_selection_for(TrackListKind::Recent);
     }
 
     pub fn clear_selection_for(&mut self, list: TrackListKind) {
         self.selection_mut(list).clear();
-        self.playlist_picker = None;
     }
 
     /// Whether any list currently holds a selection.

@@ -11,6 +11,7 @@ use iced::{Subscription, Task};
 
 use crate::{
     app::{
+        dialog::Dialog,
         import::{ImportCsvField, ImportPlaylistDialog},
         interaction::{DefaultCtxAction, TrackListKind},
         message::{BackendResult, EditTrackField, Message},
@@ -219,85 +220,87 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::AddToPlaylist(playlist_idx) => {
-                if let Some(picker) = self.playlist_picker.take() {
-                    self.handle_add_to_playlist(playlist_idx, &picker.indices, picker.list);
+                if let Some(Dialog::Picker(picker)) = &self.dialog {
+                    let indices = picker.indices.clone();
+                    self.handle_add_to_playlist(playlist_idx, &indices, picker.list);
                 }
                 Task::none()
             }
             Message::TogglePicker(indices) => {
-                let list = self
-                    .context_menu
-                    .as_ref()
-                    .map_or(TrackListKind::Active, |m| m.pos.list);
+                let list = match &self.dialog {
+                    Some(Dialog::ContextMenu(m)) => m.pos.list,
+                    _ => TrackListKind::Active,
+                };
                 self.handle_toggle_picker(indices, list);
                 Task::none()
             }
-            Message::ClosePicker => {
-                self.playlist_picker = None;
+            Message::CloseDialog => {
+                self.dialog = None;
                 Task::none()
             }
             Message::ShowDeleteConfirm(index) => {
-                self.delete_confirm_index = Some(index);
+                self.dialog = Some(Dialog::DeleteConfirm(index));
                 Task::none()
             }
             Message::ConfirmDeletePlaylist => {
-                let mut nav_task = Task::none();
-                if let Some(idx) = self.delete_confirm_index {
-                    nav_task = self.handle_delete_playlist(idx);
+                if let Some(Dialog::DeleteConfirm(idx)) = &self.dialog {
+                    self.handle_delete_playlist(*idx)
+                } else {
+                    Task::none()
                 }
-                self.delete_confirm_index = None;
-                nav_task
-            }
-            Message::HideDeleteConfirm => {
-                self.delete_confirm_index = None;
-                Task::none()
             }
             Message::OpenImportPlaylist => {
-                self.import_dialog = Some(ImportPlaylistDialog::default());
-                Task::none()
-            }
-            Message::CloseImportPlaylist => {
-                self.import_dialog = None;
+                self.dialog = Some(Dialog::Import(ImportPlaylistDialog::default()));
                 Task::none()
             }
             Message::ImportMethodChanged(method) => {
-                self.update_import_dialog(|dialog| dialog.method = method);
+                if let Some(Dialog::Import(dialog)) = &mut self.dialog {
+                    dialog.method = method;
+                }
                 Task::none()
             }
             Message::ImportCsvColChanged(field, value) => {
-                self.update_import_dialog(|dialog| match field {
-                    ImportCsvField::Name => dialog.csv_name_col = value,
-                    ImportCsvField::Artist => dialog.csv_artist_col = value,
-                    ImportCsvField::Album => dialog.csv_album_col = value,
-                });
+                if let Some(Dialog::Import(dialog)) = &mut self.dialog {
+                    match field {
+                        ImportCsvField::Name => dialog.csv_name_col = value,
+                        ImportCsvField::Artist => dialog.csv_artist_col = value,
+                        ImportCsvField::Album => dialog.csv_album_col = value,
+                    }
+                }
                 Task::none()
             }
             Message::ImportCsvPresetChanged(preset) => {
-                self.update_import_dialog(|dialog| dialog.apply_csv_preset(preset));
+                if let Some(Dialog::Import(dialog)) = &mut self.dialog {
+                    dialog.apply_csv_preset(preset);
+                }
                 Task::none()
             }
             Message::ImportPlaylistNameChanged(value) => {
-                self.update_import_dialog(|dialog| dialog.playlist_name = value);
+                if let Some(Dialog::Import(dialog)) = &mut self.dialog {
+                    dialog.playlist_name = value;
+                }
                 Task::none()
             }
             Message::ImportPatternChanged(index, value) => {
-                self.update_import_dialog(|dialog| {
+                if let Some(Dialog::Import(dialog)) = &mut self.dialog {
                     if let Some(slot) = dialog.patterns.get_mut(index) {
                         *slot = value;
                     }
-                });
+                }
                 Task::none()
             }
             Message::ImportAddPattern => {
-                self.update_import_dialog(|dialog| dialog.patterns.push(String::new()));
+                if let Some(Dialog::Import(dialog)) = &mut self.dialog {
+                    dialog.patterns.push(String::new());
+                }
                 Task::none()
             }
             Message::ImportRemovePattern(index) => {
-                self.update_import_dialog(|dialog| {
+                if let Some(Dialog::Import(dialog)) = &mut self.dialog {
                     if index < dialog.patterns.len() {
                         dialog.patterns.remove(index);
                     }
-                });
+                }
                 Task::none()
             }
             Message::ImportSelectFiles => {
@@ -380,10 +383,10 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuGoToArtist => {
-                let provider = match self.context_menu.as_ref() {
-                    Some(menu) => menu.default_go_to_artist_provider(self.config.default_provider),
-                    None => return Task::none(),
+                let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
+                    return Task::none();
                 };
+                let provider = menu.default_go_to_artist_provider(self.config.default_provider);
                 self.handle_context_menu_go_to_artist(provider)
             }
             Message::ContextMenuGoToArtistProvider(provider) => {
@@ -413,7 +416,7 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuHover(focus) => {
-                if let Some(menu) = &mut self.context_menu {
+                if let Some(Dialog::ContextMenu(menu)) = &mut self.dialog {
                     menu.hovered = focus;
                 }
                 Task::none()
@@ -423,10 +426,11 @@ impl crate::app::MusicPlayer {
                 let width_changed = prev
                     .as_ref()
                     .is_none_or(|p| (p.panel.width - panel.width).abs() > f32::EPSILON);
-                let moved = self
-                    .context_menu
-                    .as_mut()
-                    .is_some_and(|menu| menu.flip_position(panel, self.window_size));
+                let window = self.window_size;
+                let moved = match &mut self.dialog {
+                    Some(Dialog::ContextMenu(menu)) => menu.flip_position(panel, window),
+                    _ => false,
+                };
                 let stable = !moved && !width_changed;
                 self.bounds.context_menu = Some(ContextMenuGeometry {
                     panel,
@@ -442,7 +446,7 @@ impl crate::app::MusicPlayer {
                 }
             }
             Message::ContextMenuDefault(action) => {
-                let Some(menu) = self.context_menu.as_ref() else {
+                let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
                     return Task::none();
                 };
                 let provider = menu.default_provider(action, self.config.default_provider);
@@ -468,16 +472,17 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuEditTrack => {
-                let pos = match self.context_menu.as_ref() {
-                    Some(menu) => menu.pos,
-                    None => return Task::none(),
+                let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
+                    return Task::none();
                 };
-                self.close_context_menu();
+                let pos = menu.pos;
+                self.dialog = None;
+                self.bounds.context_menu = None;
                 self.open_edit_track(pos);
                 Task::none()
             }
             Message::EditTrackField(field, value) => {
-                if let Some(edit) = &mut self.edit_track {
+                if let Some(Dialog::Edit(edit)) = &mut self.dialog {
                     match field {
                         EditTrackField::Title => edit.title = value,
                         EditTrackField::Artist => edit.artist = value,
@@ -486,17 +491,13 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::EditTrackSelectProvider(provider) => {
-                if let Some(edit) = &mut self.edit_track {
+                if let Some(Dialog::Edit(edit)) = &mut self.dialog {
                     edit.source = provider;
                 }
                 Task::none()
             }
             Message::EditTrackFindProvider(provider) => {
                 self.handle_edit_track_find_provider(provider);
-                Task::none()
-            }
-            Message::CloseEditTrack => {
-                self.edit_track = None;
                 Task::none()
             }
             Message::SaveEditTrack => {
@@ -508,7 +509,7 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::DepToggle(kind) => {
-                if let Some(dialog) = &mut self.dep_dialog {
+                if let Some(Dialog::Dependencies(dialog)) = &mut self.dialog {
                     if kind.auto_installable() {
                         if dialog.selected.contains(&kind) {
                             dialog.selected.remove(&kind);
@@ -521,7 +522,7 @@ impl crate::app::MusicPlayer {
             }
             Message::DepInstall => self.handle_install_dependencies(),
             Message::DepDismiss => {
-                self.dep_dialog = None;
+                self.dialog = None;
                 // If the active source is no longer searchable (its tools were
                 // not installed), fall back to one that is.
                 if !self.search_provider.capabilities().search {
@@ -574,10 +575,10 @@ impl crate::app::MusicPlayer {
     /// dependency. Results arrive via [`BackendResult::DependencyInstalled`],
     /// drained by the tick and applied in [`Self::process_result`].
     fn handle_install_dependencies(&mut self) -> Task<Message> {
-        let pending = match &self.dep_dialog {
-            Some(dialog) => dialog.pending(&self.dep_ops),
-            None => return Task::none(),
+        let Some(Dialog::Dependencies(dialog)) = &self.dialog else {
+            return Task::none();
         };
+        let pending = dialog.pending(&self.dep_ops);
         let tx = self.result_tx.clone();
         for kind in pending {
             self.dep_ops.entry(kind).or_default().installing = true;
