@@ -120,6 +120,12 @@ pub fn fuzzy_match(query: &str, text: &str) -> bool {
     qi.peek().is_none()
 }
 
+pub fn sorted_targets(indices: &[usize]) -> std::iter::Peekable<std::vec::IntoIter<usize>> {
+    let mut sorted: Vec<usize> = indices.to_vec();
+    sorted.sort_unstable();
+    sorted.into_iter().peekable()
+}
+
 /// Remove the items at `indices` (in any order) from `list`, writing back to the
 /// same collection only once. Indices that are out of bounds are silently
 /// skipped. Returns the number of items actually removed.
@@ -128,17 +134,21 @@ pub fn fuzzy_match(query: &str, text: &str) -> bool {
 /// playlists, and downloads views, so reordering edge-cases are tested in one
 /// place.
 pub fn remove_at<T>(list: &mut Vec<T>, indices: &[usize]) -> usize {
-    let mut sorted: Vec<usize> = indices.to_vec();
-    sorted.sort_unstable();
-    sorted.dedup();
-    let mut removed = 0;
-    for &i in sorted.iter().rev() {
-        if i < list.len() {
-            list.remove(i);
-            removed += 1;
-        }
+    if indices.is_empty() {
+        return 0;
     }
-    removed
+    let mut targets = sorted_targets(indices);
+    let original = list.len();
+    let mut i = 0usize;
+    list.retain(|_| {
+        let drop_it = matches!(targets.peek(), Some(&r) if r == i);
+        if drop_it {
+            targets.next();
+        }
+        i += 1;
+        !drop_it
+    });
+    original - list.len()
 }
 
 /// Reorder `tracks` by moving the items at `indices` to `drop_idx`.

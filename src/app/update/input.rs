@@ -4,7 +4,6 @@ use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData
 use crate::app::{
     interaction::{ContextMenuFocus, HoverTarget},
     ui::SEARCH_HISTORY_LIST_ID,
-    view_data::ViewKind,
     Dialog, TrackListSearch,
 };
 
@@ -202,10 +201,8 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Physical::Code(Code::Delete) => {
-                if matches!(&self.view_data().kind, ViewKind::Playlist(_)) {
-                    self.handle_delete_selected();
-                }
+            Physical::Code(Code::Delete | Code::Backspace) => {
+                self.handle_delete_in_hovered_list();
                 Task::none()
             }
             Physical::Code(Code::ArrowLeft | Code::ArrowRight) => self.toggle_keyboard_list(),

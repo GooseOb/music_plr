@@ -208,6 +208,7 @@ pub enum CtxAction {
     ClearCache,
     RemoveFromQueue,
     RemoveFromPlaylist,
+    RemoveFromRecent,
 }
 
 impl CtxAction {
@@ -223,7 +224,8 @@ impl CtxAction {
             | CtxAction::AddToQueue
             | CtxAction::AddToPlaylist
             | CtxAction::RemoveFromQueue
-            | CtxAction::RemoveFromPlaylist => None,
+            | CtxAction::RemoveFromPlaylist
+            | CtxAction::RemoveFromRecent => None,
         }
     }
 
@@ -241,11 +243,10 @@ impl CtxAction {
             CtxAction::SongRadio => Message::ContextMenuDefault(DefaultCtxAction::SongRadio),
             CtxAction::ArtistRadio => Message::ContextMenuDefault(DefaultCtxAction::ArtistRadio),
             CtxAction::ClearCache => Message::ContextMenuClearCache,
-            CtxAction::RemoveFromQueue => {
-                Message::ContextMenuRemoveFromQueue(menu.target_indices.clone())
-            }
-            CtxAction::RemoveFromPlaylist => {
-                Message::ContextMenuRemoveFromPlaylist(menu.target_indices.clone())
+            CtxAction::RemoveFromQueue
+            | CtxAction::RemoveFromPlaylist
+            | CtxAction::RemoveFromRecent => {
+                Message::ContextMenuRemoveFromList(menu.pos.list, menu.target_indices.clone())
             }
         }
     }
@@ -313,7 +314,9 @@ impl ContextMenuState {
         }
         if self.pos.list == TrackListKind::Queue {
             v.push(CtxAction::RemoveFromQueue);
-        } else if self.in_playlist && self.pos.list != TrackListKind::Recent {
+        } else if self.pos.list == TrackListKind::Recent {
+            v.push(CtxAction::RemoveFromRecent);
+        } else if self.in_playlist {
             v.push(CtxAction::RemoveFromPlaylist);
         }
         v

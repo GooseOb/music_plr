@@ -64,12 +64,13 @@ impl MusicPlayer {
             || !self.selection(TrackListKind::Recent).is_empty()
     }
 
-    /// Clear the selection if any of `indices` was selected — used after a
-    /// batch mutation (remove/delete) that leaves stale selection entries.
+    /// Clear the selection of `list` if any of `indices` was selected — used
+    /// after a batch mutation (remove/delete) that leaves stale selection
+    /// entries. Selections in the other lists are left untouched.
     pub fn clear_selection_if_touched(&mut self, indices: &[usize], list: TrackListKind) {
         let sel = self.selection(list);
         if indices.iter().any(|&i| sel.contains(&i)) {
-            self.clear_selection();
+            self.clear_selection_for(list);
         }
     }
 
@@ -81,7 +82,7 @@ impl MusicPlayer {
         let count = self.track_count(list);
         let sel = self.selection_mut(list);
         sel.clear();
-        sel.extend(0..count);
+        sel.extend(list.first_index()..count);
     }
 
     pub fn get_track_ref_at(&self, pos: TrackPos) -> Option<&Track> {

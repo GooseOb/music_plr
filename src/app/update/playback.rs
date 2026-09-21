@@ -351,12 +351,21 @@ impl MusicPlayer {
 
     pub fn handle_remove_from_queue_batch(&mut self, indices: &[usize]) {
         let removed = crate::util::remove_at(&mut self.queue.tracks, indices);
-        self.save_session();
         self.media_controls_dirty = true;
+        self.save_session();
         let tr = self.strings;
         let msg = (tr.removed_from)(removed, tr.queue);
         self.notify(msg);
         self.clear_selection_if_touched(indices, TrackListKind::Queue);
+    }
+
+    pub fn handle_remove_from_recent_batch(&mut self, indices: &[usize]) {
+        let removed = self.queue.remove_recent_at(indices);
+        self.save_session();
+        let tr = self.strings;
+        let msg = (tr.removed_from)(removed, tr.recently_played);
+        self.notify(msg);
+        self.clear_selection_if_touched(indices, TrackListKind::Recent);
     }
 
     pub fn toggle_play_pause(&mut self) {

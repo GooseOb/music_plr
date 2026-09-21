@@ -302,6 +302,24 @@ impl PlayQueue {
         }
     }
 
+    pub fn remove_recent_at(&mut self, indices: &[usize]) -> usize {
+        if indices.is_empty() {
+            return 0;
+        }
+        let mut targets = crate::util::sorted_targets(indices);
+        let original = self.recently_played.len();
+        let mut i = 0usize;
+        self.recently_played.retain(|_| {
+            let drop_it = matches!(targets.peek(), Some(&r) if r == i);
+            if drop_it {
+                targets.next();
+            }
+            i += 1;
+            !drop_it
+        });
+        original - self.recently_played.len()
+    }
+
     pub fn set_queue(&mut self, tracks: Vec<Track>, max_len: usize) {
         let old = self.current().cloned();
         let new_key = tracks.first().map(Track::cache_key);
@@ -425,6 +443,22 @@ mod tests {
             q.recently_played[2].provider_id(ProviderId::YouTube),
             Some("1")
         );
+    }
+
+    #[test]
+    fn remove_recent_at_unsorted_and_dedup() {
+        let mut q = PlayQueue::new();
+        for i in 1..=5 {
+            q.recently_played
+                .push_back(make_track(&i.to_string(), &format!("url{i}")));
+        }
+        assert_eq!(q.remove_recent_at(&[3, 0, 3, 99]), 2);
+        let ids: Vec<_> = q
+            .recently_played
+            .iter()
+            .map(|t| t.provider_id(ProviderId::YouTube).unwrap_or(""))
+            .collect();
+        assert_eq!(ids, vec!["2", "3", "5"]);
     }
 
     #[test]

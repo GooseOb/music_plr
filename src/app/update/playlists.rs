@@ -197,14 +197,13 @@ impl MusicPlayer {
     }
 
     pub fn handle_remove_from_playlist_batch(&mut self, indices: &[usize]) {
-        if let ViewKind::Playlist(p) = &self.view_data().kind {
-            if p.index < self.playlists.playlists.len() {
-                let removed = self.playlists.remove_tracks_at(p.index, indices);
-                let msg = (self.strings.removed_n)(removed);
-                self.notify(msg);
-                self.clear_selection_if_touched(indices, super::TrackListKind::Active);
-            }
-        }
+        let ViewKind::Playlist(p) = &self.view_data().kind else {
+            return;
+        };
+        let removed = self.playlists.remove_tracks_at(p.index, indices);
+        let msg = (self.strings.removed_n)(removed);
+        self.notify(msg);
+        self.clear_selection_if_touched(indices, super::TrackListKind::Active);
     }
 
     pub fn handle_reorder_tracks_selected(
@@ -288,7 +287,44 @@ impl MusicPlayer {
                 }
             }
         }
-        self.clear_selection();
+        self.clear_selection_for(super::TrackListKind::Active);
+    }
+
+    pub fn handle_delete_in_hovered_list(&mut self) {
+        let list = self
+            .drag
+            .hovered_track()
+            .map_or(super::TrackListKind::Active, |h| h.list);
+        let indices: Vec<usize> = {
+            let sel = self.selection(list);
+            if !sel.is_empty() {
+                sel.to_vec()
+            } else if let Some(h) = self.drag.hovered_track().filter(|h| h.list == list) {
+                vec![h.index]
+            } else {
+                return;
+            }
+        };
+        match list {
+            super::TrackListKind::Queue => {
+                self.handle_remove_from_queue_batch(&indices);
+            }
+            super::TrackListKind::Recent => {
+                self.handle_remove_from_recent_batch(&indices);
+            }
+            super::TrackListKind::Active => {
+                if !matches!(
+                    self.view_data().kind,
+                    ViewKind::Playlist(_) | ViewKind::Downloads
+                ) {
+                    return;
+                }
+                if self.selection(super::TrackListKind::Active).is_empty() {
+                    self.view_data_mut().selection = indices;
+                }
+                self.handle_delete_selected();
+            }
+        }
     }
 
     /// Open the file/folder picker for the current import method. The picked
@@ -474,8 +510,13 @@ impl MusicPlayer {
 #[cfg(test)]
 mod tests {
     use crate::{
-        app::{MusicPlayer, ViewData, ViewKind},
+        app::{
+            interaction::{HoverTarget, TrackListKind, TrackPos},
+            MusicPlayer, ViewData, ViewKind,
+        },
         data::config,
+        providers::ProviderId,
+        types::Track,
     };
 
     fn player_with_playlists(names: &[&str]) -> MusicPlayer {
@@ -487,6 +528,24 @@ mod tests {
         p.nav_history = vec![ViewData::new_playlist(0, String::new())];
         p.nav_history_pos = 0;
         p
+    }
+
+    fn track(id: &str) -> Track {
+        Track::from_provider(
+            ProviderId::YouTube,
+            id.into(),
+            format!("https://example.com/{id}"),
+            format!("Track {id}"),
+            "Artist",
+            10,
+            String::new(),
+            None,
+            None,
+        )
+    }
+
+    fn hover(p: &mut MusicPlayer, pos: TrackPos) {
+        p.drag.set_hovered(HoverTarget::Track(pos));
     }
 
     #[test]
@@ -585,5 +644,100 @@ mod tests {
                 name: "C".into(),
             })
         );
+    }
+
+    #[test]
+    fn delete_key_removes_hovered_queue_track() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.tracks = vec![track("0"), track("1"), track("2")];
+        hover(&mut p, TrackPos::new(1, TrackListKind::Queue));
+        p.handle_delete_in_hovered_list();
+        let ids: Vec<_> = p.queue.tracks.iter().map(|t| t.title.clone()).collect();
+        assert_eq!(ids, vec!["Track 0", "Track 2"]);
+    }
+
+    #[test]
+    fn delete_key_never_removes_now_playing() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.tracks = vec![track("0"), track("1")];
+        p.queue_selected_indices = vec![0, 1];
+        hover(&mut p, TrackPos::new(1, TrackListKind::Queue));
+        p.handle_delete_in_hovered_list();
+        let ids: Vec<_> = p.queue.tracks.iter().map(|t| t.title.clone()).collect();
+        assert_eq!(ids, vec!["Track 0"]);
+    }
+
+    #[test]
+    fn delete_key_removes_recent_selection() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.recently_played = vec![track("1"), track("2")].into();
+        p.recent_selected_indices = vec![0];
+        hover(&mut p, TrackPos::new(0, TrackListKind::Recent));
+        p.handle_delete_in_hovered_list();
+        assert_eq!(p.queue.recently_played.len(), 1);
+        assert_eq!(p.queue.recently_played[0].title, "Track 2");
+    }
+
+    #[test]
+    fn delete_key_removes_hovered_recent_without_selection() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.recently_played = vec![track("1"), track("2")].into();
+        hover(&mut p, TrackPos::new(1, TrackListKind::Recent));
+        p.handle_delete_in_hovered_list();
+        assert_eq!(p.queue.recently_played.len(), 1);
+        assert_eq!(p.queue.recently_played[0].title, "Track 1");
+    }
+
+    #[test]
+    fn delete_key_in_search_view_is_noop() {
+        let mut p = player_with_playlists(&["A"]);
+        p.nav_history = vec![ViewData::new_search(
+            String::new(),
+            ProviderId::YouTube,
+            crate::providers::SearchScope::Songs,
+        )];
+        p.nav_history_pos = 0;
+        p.view_data_mut().set_tracks(vec![track("1")]);
+        p.view_data_mut().selection = vec![0];
+        hover(&mut p, TrackPos::new(0, TrackListKind::Active));
+        p.handle_delete_in_hovered_list();
+        assert_eq!(p.view_tracks().len(), 1);
+        assert_eq!(p.selection(TrackListKind::Active), &[0]);
+    }
+
+    #[test]
+    fn delete_in_one_list_keeps_other_lists_selections() {
+        let mut p = player_with_playlists(&["A"]);
+        p.playlists.playlists[0].tracks = vec![track("a1"), track("a2")];
+        p.queue.tracks = vec![track("0"), track("q1"), track("q2")];
+        p.queue.recently_played = vec![track("r1"), track("r2")].into();
+        p.view_data_mut().selection = vec![0];
+        p.queue_selected_indices = vec![2];
+        p.recent_selected_indices = vec![0];
+
+        hover(&mut p, TrackPos::new(2, TrackListKind::Queue));
+        p.handle_delete_in_hovered_list();
+
+        assert!(p.selection(TrackListKind::Queue).is_empty());
+        assert_eq!(p.selection(TrackListKind::Active), &[0]);
+        assert_eq!(p.selection(TrackListKind::Recent), &[0]);
+    }
+
+    #[test]
+    fn delete_in_recent_keeps_other_lists_selections() {
+        let mut p = player_with_playlists(&["A"]);
+        p.playlists.playlists[0].tracks = vec![track("a1"), track("a2")];
+        p.queue.tracks = vec![track("0"), track("q1")];
+        p.queue.recently_played = vec![track("r1"), track("r2")].into();
+        p.view_data_mut().selection = vec![1];
+        p.queue_selected_indices = vec![1];
+        p.recent_selected_indices = vec![0];
+
+        hover(&mut p, TrackPos::new(0, TrackListKind::Recent));
+        p.handle_delete_in_hovered_list();
+
+        assert!(p.selection(TrackListKind::Recent).is_empty());
+        assert_eq!(p.selection(TrackListKind::Active), &[1]);
+        assert_eq!(p.selection(TrackListKind::Queue), &[1]);
     }
 }

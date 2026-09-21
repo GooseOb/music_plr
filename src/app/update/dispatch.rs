@@ -461,19 +461,18 @@ impl crate::app::MusicPlayer {
                     }
                 }
             }
-            Message::ContextMenuRemoveFromPlaylist(indices) => {
-                self.close_context_menu();
-                self.handle_remove_from_playlist_batch(&indices);
-                Task::none()
-            }
             Message::ContextMenuAddToQueue(list, indices) => {
                 self.close_context_menu();
                 self.handle_add_to_queue(list, &indices);
                 Task::none()
             }
-            Message::ContextMenuRemoveFromQueue(indices) => {
+            Message::ContextMenuRemoveFromList(list, indices) => {
                 self.close_context_menu();
-                self.handle_remove_from_queue_batch(&indices);
+                match list {
+                    TrackListKind::Queue => self.handle_remove_from_queue_batch(&indices),
+                    TrackListKind::Recent => self.handle_remove_from_recent_batch(&indices),
+                    TrackListKind::Active => self.handle_remove_from_playlist_batch(&indices),
+                }
                 Task::none()
             }
             Message::ContextMenuEditTrack => {
