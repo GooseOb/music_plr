@@ -84,6 +84,20 @@ impl crate::app::MusicPlayer {
                 }
                 Task::none()
             }
+            Message::LyricsScrolled {
+                translation_y,
+                viewport_h,
+                content_h,
+            } => {
+                if let Some(state) = &mut self.lyrics {
+                    state.viewport = Some(crate::app::LyricsViewport {
+                        offset_y: translation_y,
+                        height: viewport_h,
+                        content_h,
+                    });
+                }
+                Task::none()
+            }
             Message::KeyPressed { key, modifiers } => self.handle_key_press(key, modifiers),
             Message::LyricsEditorAction(action) => {
                 if let Some(state) = &mut self.lyrics {
@@ -329,15 +343,9 @@ impl crate::app::MusicPlayer {
                 self.save_session();
                 Task::none()
             }
-            Message::ShowLyrics => {
-                self.handle_show_lyrics();
-                Task::none()
-            }
+            Message::ShowLyrics => self.handle_show_lyrics(),
             Message::RevealNowPlaying => self.handle_reveal_now_playing(),
-            Message::SetLyricsViewMode(mode) => {
-                self.set_lyrics_view_mode(mode);
-                Task::none()
-            }
+            Message::SetLyricsViewMode(mode) => self.set_lyrics_view_mode(mode),
             Message::LyricsLineClicked(secs) => {
                 self.seek_to_seconds(secs);
                 Task::none()

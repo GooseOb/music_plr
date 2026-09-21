@@ -1,10 +1,13 @@
 use iced::{
     alignment,
     widget::{
-        scrollable, text, text_editor::Binding, Button, Column, Container, MouseArea, Row, Space,
+        scrollable, text, text_editor::Binding, Button, Column, Container, Id, MouseArea, Row,
+        Space,
     },
     Color, Element, Length,
 };
+
+pub const LYRICS_SCROLL_ID: Id = Id::new("lyrics_scroll");
 
 use super::{
     shared_components::{empty_state, loading_state, scope_button, scope_tab_row},
@@ -31,12 +34,13 @@ pub(super) fn view_lyrics<'a>(
         view_select_editor(&lyrics_state.editor)
     } else {
         let mode = lyrics_state.mode;
+        let scrolled = lyrics_state.scrolled_to;
         let lyrics_state = &lyrics_state.lyrics;
         match (track, lyrics_state) {
             (Some(_), LoadState::Ready(lyrics))
                 if !lyrics.timed.is_empty() && mode == LyricsViewMode::Synced =>
             {
-                view_synced(player, lyrics)
+                view_synced(lyrics, scrolled)
             }
             (Some(_), LoadState::Ready(lyrics)) => Container::new(
                 text(lyrics.plain.clone())
@@ -139,15 +143,12 @@ fn view_select_editor(
         .into()
 }
 
-fn view_synced<'a>(
-    player: &'a MusicPlayer,
-    lyrics: &'a crate::lyrics::Lyrics,
-) -> Element<'a, Message, AppTheme> {
-    let position = player.progress * player.duration;
-    let active = lyrics.active_index(position);
-
+fn view_synced(
+    lyrics: &crate::lyrics::Lyrics,
+    scrolled: Option<usize>,
+) -> Element<'_, Message, AppTheme> {
     let lines = lyrics.timed.iter().enumerate().map(|(i, (secs, line))| {
-        let is_active = active == Some(i);
+        let is_active = scrolled == Some(i);
 
         let centered = Container::new(text(line).size(theme::TEXT_SIZE_XL)).center(Length::Fill);
 
@@ -163,5 +164,11 @@ fn view_synced<'a>(
             .spacing(theme::SPACING_SM)
             .padding(theme::SPACING_LG),
     )
+    .id(LYRICS_SCROLL_ID)
+    .on_scroll(|vp| Message::LyricsScrolled {
+        translation_y: vp.absolute_offset().y,
+        viewport_h: vp.bounds().height,
+        content_h: vp.content_bounds().height,
+    })
     .into()
 }

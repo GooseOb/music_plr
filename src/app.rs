@@ -23,7 +23,7 @@ pub use dialog::Dialog;
 pub use edit_track::EditTrackState;
 pub use import::{CsvPreset, ImportCsvField, ImportMethod, ImportPlaylistDialog};
 pub use interaction::{ContextMenuState, TrackListKind, TrackListSearch};
-pub use lyrics_state::{LyricsState, LyricsViewMode};
+pub use lyrics_state::{LyricsState, LyricsViewMode, LyricsViewport};
 pub use message::{BackendResult, EditTrackField, Message};
 pub use playlist_picker::PlaylistPicker;
 pub use state::{MusicPlayer, PendingCache, Toast};

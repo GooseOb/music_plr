@@ -119,6 +119,11 @@ pub enum Message {
         list: TrackListKind,
         translation_y: f32,
     },
+    LyricsScrolled {
+        translation_y: f32,
+        viewport_h: f32,
+        content_h: f32,
+    },
     KeyPressed {
         key: iced::keyboard::key::Physical,
         modifiers: iced::keyboard::Modifiers,

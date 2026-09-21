@@ -1,11 +1,12 @@
-use iced::{Point, Task};
+use iced::{widget::operation, Point, Task};
 
 use super::{BackendResult, MusicPlayer, Track};
 use crate::{
     app::{
         dialog::Dialog,
         interaction::{TrackListKind, TrackPos},
-        update, EditTrackState, Message, PlaylistPicker, ViewKind,
+        update::operation::{CaptureBounds, CaptureContextMenu},
+        EditTrackState, LyricsViewMode, Message, PlaylistPicker, ViewKind,
     },
     data::JsonStore,
     load_state::LoadState,
@@ -55,11 +56,13 @@ impl MusicPlayer {
     }
 
     /// Toggle the lyrics overlay for the current track.
-    pub fn handle_show_lyrics(&mut self) {
+    pub fn handle_show_lyrics(&mut self) -> Task<Message> {
         if self.lyrics.is_some() {
             self.lyrics = None;
+            CaptureBounds::new().into()
         } else {
             self.lyrics = Some(crate::app::LyricsState::new());
+            self.scroll_lyrics_to_active()
         }
     }
 
@@ -84,20 +87,113 @@ impl MusicPlayer {
             }
             _ => String::new(),
         };
-        if state.mode == crate::app::LyricsViewMode::Selectable {
+        if state.mode == LyricsViewMode::Selectable {
             state.editor = iced::widget::text_editor::Content::with_text(&text);
         }
     }
 
-    pub fn set_lyrics_view_mode(&mut self, mode: crate::app::LyricsViewMode) {
+    pub fn set_lyrics_view_mode(&mut self, mode: LyricsViewMode) -> Task<Message> {
         let Some(state) = &mut self.lyrics else {
-            return;
+            return Task::none();
         };
         if !state.mode_available(mode) {
-            return;
+            return Task::none();
         }
         state.mode = mode;
+        if mode == LyricsViewMode::Synced {
+            state.scrolled_to = None;
+        }
+        state.viewport = None;
         self.sync_lyrics_editor();
+        if mode == LyricsViewMode::Synced {
+            self.scroll_lyrics_to_active()
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn lyrics_active(&self) -> Option<(usize, usize)> {
+        let state = self.lyrics.as_ref()?;
+        if state.mode != LyricsViewMode::Synced {
+            return None;
+        }
+        let LoadState::Ready(lyrics) = &state.lyrics else {
+            return None;
+        };
+        if lyrics.timed.is_empty() {
+            return None;
+        }
+        let position = self.progress * self.duration;
+        Some((lyrics.active_index(position)?, lyrics.timed.len()))
+    }
+
+    fn lyrics_scroll_task(&mut self, index: usize, total: usize) -> Task<Message> {
+        use crate::app::ui::LYRICS_SCROLL_ID;
+        if let Some(vp) = self.lyrics.as_ref().and_then(|s| s.viewport) {
+            let avg = vp.content_h / total.max(1) as f32;
+            let max = (vp.content_h - vp.height).max(0.0);
+            let y = ((index as f32 + 0.5) * avg - vp.height / 2.0).clamp(0.0, max);
+            if let Some(state) = &mut self.lyrics {
+                if let Some(v) = &mut state.viewport {
+                    v.offset_y = y;
+                }
+            }
+            return operation::scroll_to::<Message>(
+                LYRICS_SCROLL_ID.clone(),
+                operation::AbsoluteOffset { x: 0.0, y },
+            );
+        }
+        let frac = if total > 1 {
+            index as f32 / (total - 1) as f32
+        } else {
+            0.0
+        };
+        operation::snap_to::<Message>(
+            LYRICS_SCROLL_ID.clone(),
+            operation::RelativeOffset { x: 0.0, y: frac },
+        )
+    }
+
+    /// Whether the lyrics line at `index` overlaps the viewport, using
+    /// the average line pitch from the last `on_scroll` viewport.
+    /// `None` when no viewport is known yet.
+    fn lyrics_line_visible(&self, index: usize, total: usize) -> Option<bool> {
+        const EPS: f32 = 1.0;
+        let vp = self.lyrics.as_ref().and_then(|s| s.viewport)?;
+        if total == 0 {
+            return None;
+        }
+        let avg = vp.content_h / total as f32;
+        let top = index as f32 * avg;
+        let bottom = top + avg;
+        Some(top < vp.offset_y + vp.height + EPS && bottom > vp.offset_y - EPS)
+    }
+
+    pub(super) fn scroll_lyrics_to_active(&mut self) -> Task<Message> {
+        let Some((index, total)) = self.lyrics_active() else {
+            return Task::none();
+        };
+        if let Some(state) = &mut self.lyrics {
+            state.scrolled_to = Some(index);
+        }
+        self.lyrics_scroll_task(index, total)
+    }
+
+    pub(super) fn maybe_autoscroll_lyrics(&mut self) -> Task<Message> {
+        let Some((active, total)) = self.lyrics_active() else {
+            return Task::none();
+        };
+        let already = self.lyrics.as_ref().and_then(|s| s.scrolled_to);
+        if already == Some(active) {
+            return Task::none();
+        }
+        if let Some(state) = &mut self.lyrics {
+            state.scrolled_to = Some(active);
+        }
+        if self.lyrics_line_visible(active, total) == Some(false) {
+            return Task::none();
+        }
+        self.lyrics_scroll_task(active, total)
     }
 
     /// Switch the active lyrics provider, persist it, and force a refetch.
@@ -115,6 +211,8 @@ impl MusicPlayer {
             if let Some(state) = &mut self.lyrics {
                 state.lyrics = crate::load_state::LoadState::Loading;
                 state.track_id = None;
+                state.scrolled_to = None;
+                state.viewport = None;
             }
             self.sync_lyrics_editor();
             return;
@@ -135,10 +233,12 @@ impl MusicPlayer {
         let cached = crate::data::lyrics_cache::LyricsCache::load()
             .get_for(&current_id, self.lyrics_client.selected());
         if let Some(cached_lyrics) = cached {
-            let mode = crate::app::LyricsViewMode::for_lyrics(&cached_lyrics);
+            let mode = LyricsViewMode::for_lyrics(&cached_lyrics);
             state.lyrics = crate::load_state::LoadState::Ready(cached_lyrics);
             state.track_id = Some(current_id.clone());
             state.mode = mode;
+            state.scrolled_to = None;
+            state.viewport = None;
             self.sync_lyrics_editor();
             return;
         }
@@ -154,6 +254,8 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         state.lyrics = crate::load_state::LoadState::Loading;
         state.track_id = Some(id.clone());
+        state.scrolled_to = None;
+        state.viewport = None;
         self.sync_lyrics_editor();
         let no_lyrics = self.strings.no_lyrics_found;
         std::thread::spawn(move || {
@@ -175,6 +277,8 @@ impl MusicPlayer {
         if let Some(state) = &mut self.lyrics {
             state.lyrics = crate::load_state::LoadState::Loading;
             state.track_id = None;
+            state.scrolled_to = None;
+            state.viewport = None;
         }
         self.sync_lyrics_editor();
     }
@@ -206,7 +310,7 @@ impl MusicPlayer {
                 hovered: None,
             },
         ));
-        update::operation::CaptureContextMenu::default().into()
+        CaptureContextMenu::default().into()
     }
 
     fn track_center_point(&self, pos: TrackPos) -> Option<Point> {

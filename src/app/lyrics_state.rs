@@ -10,12 +10,21 @@ pub enum LyricsViewMode {
     Plain,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct LyricsViewport {
+    pub offset_y: f32,
+    pub height: f32,
+    pub content_h: f32,
+}
+
 #[derive(Debug, Clone)]
 pub struct LyricsState {
     pub track_id: Option<String>,
     pub lyrics: LoadState<Lyrics>,
     pub mode: LyricsViewMode,
     pub editor: iced::widget::text_editor::Content,
+    pub scrolled_to: Option<usize>,
+    pub viewport: Option<LyricsViewport>,
 }
 
 impl LyricsViewMode {
@@ -35,6 +44,8 @@ impl LyricsState {
             lyrics: LoadState::Loading,
             mode: LyricsViewMode::Selectable,
             editor: iced::widget::text_editor::Content::default(),
+            scrolled_to: None,
+            viewport: None,
         }
     }
 

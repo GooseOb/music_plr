@@ -56,6 +56,7 @@ impl MusicPlayer {
 
         if self.lyrics.is_some() {
             self.ensure_lyrics_for_current();
+            task = task.chain(self.maybe_autoscroll_lyrics());
         }
         task
     }
@@ -459,8 +460,7 @@ impl MusicPlayer {
                 Task::none()
             }
             BackendResult::LyricsFetched(result, track_id) => {
-                self.process_lyrics_fetched(result, &track_id);
-                Task::none()
+                self.process_lyrics_fetched(result, &track_id)
             }
             BackendResult::ImportPathsPicked { method, paths } => {
                 if paths.is_empty() {
@@ -539,15 +539,15 @@ impl MusicPlayer {
         &mut self,
         result: Result<crate::lyrics::Lyrics, String>,
         track_id: &str,
-    ) {
+    ) -> Task<Message> {
         if track_id.is_empty() {
-            return;
+            return Task::none();
         }
         let Some(state) = &mut self.lyrics else {
-            return;
+            return Task::none();
         };
         if state.track_id.as_deref() != Some(track_id) {
-            return;
+            return Task::none();
         }
         match result {
             Ok(lyrics) => {
@@ -558,11 +558,17 @@ impl MusicPlayer {
                 let mode = crate::app::LyricsViewMode::for_lyrics(&lyrics);
                 state.lyrics = crate::load_state::LoadState::Ready(lyrics);
                 state.mode = mode;
+                state.scrolled_to = None;
+                state.viewport = None;
             }
             Err(e) => state.lyrics = crate::load_state::LoadState::Failed(e),
         }
         state.track_id = Some(track_id.to_owned());
         self.sync_lyrics_editor();
+        Task::batch([
+            super::operation::CaptureBounds::new().into(),
+            self.scroll_lyrics_to_active(),
+        ])
     }
 
     fn slot_tracks(&self, idx: usize) -> &[crate::types::Track] {
