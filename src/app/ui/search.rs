@@ -397,6 +397,7 @@ pub(super) fn view_search_history(
                     } else {
                         None
                     },
+                    border: iced::border::rounded(theme::RADIUS_SM),
                     ..Default::default()
                 })
                 .id(iced::widget::Id::from(format!("search_history:{i}")));

@@ -29,7 +29,7 @@ pub const RADIUS_SM: f32 = 8.0;
 pub const RADIUS_MD: f32 = 12.0;
 pub const RADIUS_LG: f32 = 16.0;
 pub const SEARCH_BTN_SIZE: f32 = 35.0;
-pub const SEARCH_DROPDOWN_MAX_ITEMS: usize = 5;
+pub const SEARCH_DROPDOWN_MAX_ITEMS: usize = 10;
 
 pub const ICON_SIZE_SM: f32 = 14.0;
 pub const ICON_SIZE_MD: f32 = 16.0;
