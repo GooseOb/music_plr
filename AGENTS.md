@@ -7,7 +7,7 @@ YouTube-search music player with local playback and OS media controls, built wit
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`)
 - **Audio**: rodio + symphonia; **pipeline**: yt-dlp (stream/download)
 - **Media controls**: souvlaki (MPRIS/D-Bus on Linux, SMTC on Windows, Now Playing on macOS); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15; **Logging**: tracing + tracing-subscriber
-- **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default, Genius (keyless web API: lyrics scrape + per-line annotations and song blurb as notes + lazy-loaded `translation_songs` shown in a language picker row under the lyrics), plus named user-added per-track lyrics (plain or LRC-synced) shown as tabs after the providers, editable/deletable from the lyrics view; on-disk cache in `data/lyrics_cache.rs`; AI translate (`translate.rs`, OpenAI-compatible/Ollama, BYOK in Settings) opens the result in the custom-lyrics editor under the target language
+- **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default, Genius (keyless web API: lyrics from embedded `__PRELOADED_STATE__` with container-scrape fallback + per-line annotations and song blurb as notes + lazy-loaded `translation_songs` shown in a language picker row under the lyrics), plus named user-added per-track lyrics (plain or LRC-synced) shown as tabs after the providers, editable/deletable from the lyrics view; on-disk cache in `data/lyrics_cache.rs`; AI translate (`translate.rs`, OpenAI-compatible/Ollama, BYOK in Settings) opens the result in the custom-lyrics editor under the target language
 
 ## Prerequisites
 

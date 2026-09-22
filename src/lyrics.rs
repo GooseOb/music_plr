@@ -504,15 +504,23 @@ fn plain_of(lines: &[LyricLine]) -> String {
         .join("\n")
 }
 
-/// Lyrics text lines from a Genius song page: header blocks skipped, `<br>`s
-/// become line breaks, annotated fragments unwrapped.
+/// Lyrics text lines from a Genius song page. The server-rendered
+/// `data-lyrics-container` blocks are sometimes truncated to a preview, so
+/// the embedded `__PRELOADED_STATE__` (`songPage.lyricsData.body.html`, the
+/// same markup the client renders) wins when present; the containers are the
+/// fallback for pages without it.
 fn scrape_genius_lyrics(html: &str) -> Vec<LyricLine> {
     let mut texts = Vec::new();
-    for block in genius_containers(html) {
-        if block.contains("ContributorsCredit") || block.contains("LyricsHeader") {
-            continue;
+    if let Some(body) = genius_preloaded_body(html) {
+        texts.extend(html_to_lines(&body));
+    }
+    if texts.is_empty() {
+        for block in genius_containers(html) {
+            if block.contains("ContributorsCredit") || block.contains("LyricsHeader") {
+                continue;
+            }
+            texts.extend(html_to_lines(block));
         }
-        texts.extend(html_to_lines(block));
     }
     texts
         .into_iter()
@@ -522,6 +530,134 @@ fn scrape_genius_lyrics(html: &str) -> Vec<LyricLine> {
             description: String::new(),
         })
         .collect()
+}
+
+/// Full-lyrics markup from the page's embedded JSON state, or `None` when
+/// the page carries none (or only a placeholder, e.g. instrumentals).
+fn genius_preloaded_body(html: &str) -> Option<String> {
+    const MARKER: &str = "__PRELOADED_STATE__ = JSON.parse('";
+    let start = html.find(MARKER)? + MARKER.len();
+    let bytes = html.as_bytes();
+    let mut i = start;
+    let end = loop {
+        let byte = *bytes.get(i)?;
+        if byte == b'\\' {
+            i += 2;
+            continue;
+        }
+        if byte == b'\'' && bytes.get(i + 1) == Some(&b')') {
+            break i;
+        }
+        i += 1;
+    };
+    let state: serde_json::Value = serde_json::from_str(&js_unescape(&html[start..end])).ok()?;
+    let lyrics = state.pointer("/songPage/lyricsData")?;
+    if !lyrics
+        .pointer("/lyricsPlaceholderReason")
+        .is_none_or(serde_json::Value::is_null)
+    {
+        return None;
+    }
+    let body = lyrics.pointer("/body/html")?.as_str()?;
+    if body.trim().is_empty() {
+        return None;
+    }
+    Some(body.to_string())
+}
+
+/// Unescape a single-quoted JS string literal into JSON text. Unknown
+/// escapes resolve JS-style (the char itself); octal escapes and any
+/// produced control characters are emitted as `\uXXXX` so the result stays
+/// valid JSON.
+fn js_unescape(payload: &str) -> String {
+    let mut unescaped = String::with_capacity(payload.len());
+    let mut chars = payload.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            unescaped.push(c);
+            continue;
+        }
+        let Some(q) = chars.next() else {
+            unescaped.push('\\');
+            break;
+        };
+        match q {
+            'n' => unescaped.push('\n'),
+            'r' => unescaped.push('\r'),
+            't' => unescaped.push('\t'),
+            'b' => unescaped.push('\u{8}'),
+            'f' => unescaped.push('\u{c}'),
+            'u' => push_js_unicode(&mut chars, &mut unescaped),
+            '0'..='7' => push_js_octal(q, &mut chars, &mut unescaped),
+            _ => unescaped.push(q),
+        }
+    }
+    let mut safe = String::with_capacity(unescaped.len());
+    for c in unescaped.chars() {
+        if (c as u32) < 0x20 && !matches!(c, '\t' | '\n' | '\r') {
+            let _ = write!(safe, "\\u{:04x}", c as u32);
+        } else {
+            safe.push(c);
+        }
+    }
+    safe
+}
+
+fn push_js_unicode(chars: &mut std::str::Chars<'_>, out: &mut String) {
+    let hex: String = chars.clone().take(4).collect();
+    if hex.len() != 4 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        out.push('u');
+        return;
+    }
+    let Ok(high) = u32::from_str_radix(&hex, 16) else {
+        out.push('u');
+        return;
+    };
+    for _ in 0..4 {
+        chars.next();
+    }
+    if (0xd800..0xdc00).contains(&high) {
+        let tail: String = chars.clone().take(6).collect();
+        if let Some(low) = tail
+            .strip_prefix("\\u")
+            .filter(|h| h.len() == 4 && h.chars().all(|c| c.is_ascii_hexdigit()))
+            .and_then(|h| u32::from_str_radix(h, 16).ok())
+            .filter(|low| (0xdc00..0xe000).contains(low))
+        {
+            for _ in 0..6 {
+                chars.next();
+            }
+            let n = 0x1_0000 + ((high - 0xd800) << 10) + (low - 0xdc00);
+            if let Some(c) = char::from_u32(n) {
+                out.push(c);
+                return;
+            }
+        }
+        out.push('\u{fffd}');
+        return;
+    }
+    match char::from_u32(high) {
+        Some(c) => out.push(c),
+        None => out.push('\u{fffd}'),
+    }
+}
+
+fn push_js_octal(first: char, chars: &mut std::str::Chars<'_>, out: &mut String) {
+    let mut digits = String::from(first);
+    for _ in 0..2 {
+        if matches!(chars.clone().next(), Some('0'..='7')) {
+            digits.push(chars.next().unwrap_or('0'));
+        } else {
+            break;
+        }
+    }
+    let n = u32::from_str_radix(&digits, 8).unwrap_or(0);
+    match char::from_u32(n) {
+        Some(c) if (c as u32) >= 0x20 => out.push(c),
+        _ => {
+            let _ = write!(out, "\\u{n:04x}");
+        }
+    }
 }
 
 fn get_genius_json<T: serde::de::DeserializeOwned>(url: &str, what: &str) -> Result<Option<T>> {
@@ -1267,6 +1403,59 @@ mod tests {
         let lines = html_to_lines(blocks[0]);
         assert_eq!(lines, vec!["First", "Secondnesteddeep"]);
         assert_eq!(html_to_lines(blocks[1]), vec!["[Chorus]", "Line"]);
+    }
+
+    #[test]
+    fn js_unescape_handles_quotes_and_unicode() {
+        assert_eq!(js_unescape("it\\'s \\u00e9"), "it's é");
+        assert_eq!(js_unescape("a\\\"b\\\\c\\/d"), "a\"b\\c/d");
+        assert_eq!(js_unescape("line\\nbreak"), "line\nbreak");
+        assert_eq!(js_unescape("\\$5"), "$5");
+        assert_eq!(js_unescape("\\2"), "\\u0002");
+        assert_eq!(js_unescape("\\uD83D\\uDE00"), "😀");
+        assert_eq!(js_unescape("trailing\\"), "trailing\\");
+    }
+
+    fn preloaded_page(body_html: &str) -> String {
+        let mut state = String::from(
+            r#"{"songPage":{"lyricsData":{"lyricsPlaceholderReason":null,"body":{"html":"#,
+        );
+        // `serde_json` escapes `body_html` exactly like the page's `JSON.parse` payload.
+        state.push_str(&serde_json::to_string(body_html).unwrap());
+        state.push_str(r#"}}}}"#);
+        let escaped = state.replace('\\', "\\\\").replace('\'', "\\'");
+        ["x __PRELOADED_STATE__ = JSON.parse('", &escaped, "'); y"].concat()
+    }
+
+    #[test]
+    fn genius_preloaded_body_extracts_embedded_lyrics() {
+        let html = preloaded_page("<p>First o'ne<br/>\nSecond &amp; last</p>");
+        let body = genius_preloaded_body(&html).unwrap();
+        assert!(body.contains("First o'ne"), "{body}");
+        let lines = html_to_lines(&body);
+        assert_eq!(lines, vec!["First o'ne", "Second & last"]);
+    }
+
+    #[test]
+    fn genius_preloaded_body_rejects_placeholders_and_missing_state() {
+        assert!(genius_preloaded_body("<html>no state</html>").is_none());
+        let state = r#"{"songPage":{"lyricsData":{"lyricsPlaceholderReason":"instrumental","body":{"html":"<p>nope</p>"}}}}"#
+            .replace('\\', "\\\\")
+            .replace('\'', "\\'");
+        let html = format!("__PRELOADED_STATE__ = JSON.parse('{state}');");
+        assert!(genius_preloaded_body(&html).is_none());
+    }
+
+    #[test]
+    fn scrape_prefers_preloaded_body_over_truncated_containers() {
+        let mut html =
+            String::from(r#"<div data-lyrics-container="true" class="x">Preview<br/>Only</div>"#);
+        html.push_str(&preloaded_page("<p>Full<br/>Song<br/>Here</p>"));
+        let lines = scrape_genius_lyrics(&html);
+        assert_eq!(
+            lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>(),
+            vec!["Full", "Song", "Here"]
+        );
     }
 
     #[test]

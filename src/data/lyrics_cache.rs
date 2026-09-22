@@ -45,8 +45,14 @@ impl CustomLyricsEntry {
     }
 }
 
+/// Bumped whenever fetched entries may be stale or malformed so one load
+/// drops them; user-authored `custom` entries are irreplaceable and survive.
+const LYRICS_CACHE_VERSION: u32 = 1;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LyricsCache {
+    #[serde(default)]
+    version: u32,
     entries: HashMap<String, Vec<CachedLyrics>>,
     #[serde(default)]
     custom: HashMap<String, Vec<CustomLyricsEntry>>,
@@ -55,6 +61,25 @@ pub struct LyricsCache {
 impl JsonStore for LyricsCache {
     const FILE: &'static str = "lyrics_cache.json";
     const LOCATION: StoreLocation = StoreLocation::Cache;
+}
+
+impl LyricsCache {
+    /// Load the cache, once dropping pre-`version` fetched entries (e.g.
+    /// Genius lyrics scraped truncated before the embedded-state fix) while
+    /// keeping user custom lyrics.
+    pub fn load_migrated() -> Self {
+        let mut cache = Self::load();
+        cache.migrate();
+        cache
+    }
+
+    fn migrate(&mut self) {
+        if self.version < LYRICS_CACHE_VERSION {
+            self.entries.clear();
+            self.version = LYRICS_CACHE_VERSION;
+            self.save();
+        }
+    }
 }
 
 impl LyricsCache {
@@ -145,6 +170,35 @@ mod tests {
 
     fn custom_lyrics(text: &str) -> Lyrics {
         Lyrics::from_custom_text(text).unwrap()
+    }
+
+    #[test]
+    fn migration_drops_fetched_entries_but_keeps_custom() {
+        let mut cache = LyricsCache::default();
+        cache.insert("t1", &custom_lyrics("la"));
+        cache.insert_custom("t1", "Mine", &custom_lyrics("mine"));
+        assert!(cache.get_for("t1", LyricsProvider::Custom).is_some());
+        cache.version = 0;
+        cache.migrate();
+        assert!(cache.get_for("t1", LyricsProvider::Custom).is_none());
+        assert_eq!(cache.custom_names("t1"), vec!["Mine"]);
+        assert_eq!(cache.version, LYRICS_CACHE_VERSION);
+    }
+
+    #[test]
+    fn migration_is_noop_when_current() {
+        let mut cache = LyricsCache::default();
+        cache.insert("t1", &custom_lyrics("la"));
+        cache.version = LYRICS_CACHE_VERSION;
+        cache.migrate();
+        assert!(cache.get_for("t1", LyricsProvider::Custom).is_some());
+    }
+
+    #[test]
+    fn legacy_cache_without_version_parses() {
+        let json = r#"{"entries":{},"custom":{}}"#;
+        let cache: LyricsCache = serde_json::from_str(json).unwrap();
+        assert_eq!(cache.version, 0);
     }
 
     #[test]

@@ -131,7 +131,7 @@ impl MusicPlayer {
         // never show a translation, so `lyrics` is the entry itself here.
         if !translated {
             if let (Some(track_id), Some(name)) = (track_id, custom_name) {
-                let mut cache = crate::data::lyrics_cache::LyricsCache::load();
+                let mut cache = crate::data::lyrics_cache::LyricsCache::load_migrated();
                 cache.insert_custom(&track_id, &name, lyrics);
             }
         }
@@ -414,7 +414,7 @@ impl MusicPlayer {
         };
         let track_id = track.primary_id().to_string();
         let Some(entry) =
-            crate::data::lyrics_cache::LyricsCache::load().get_custom(&track_id, &name)
+            crate::data::lyrics_cache::LyricsCache::load_migrated().get_custom(&track_id, &name)
         else {
             return;
         };
@@ -437,7 +437,7 @@ impl MusicPlayer {
             return Task::none();
         };
         let track_id = track.primary_id().to_string();
-        let cache = crate::data::lyrics_cache::LyricsCache::load();
+        let cache = crate::data::lyrics_cache::LyricsCache::load_migrated();
         let Some(entry) = cache.get_custom(&track_id, &name) else {
             return Task::none();
         };
@@ -488,7 +488,7 @@ impl MusicPlayer {
             .lyrics
             .as_ref()
             .and_then(|s| s.editing_custom_name.clone());
-        let mut cache = crate::data::lyrics_cache::LyricsCache::load();
+        let mut cache = crate::data::lyrics_cache::LyricsCache::load_migrated();
         cache.insert_custom(&track_id, &name, &lyrics);
         if let Some(old) = edited {
             if old != name {
@@ -546,7 +546,7 @@ impl MusicPlayer {
         let Some(target) = target else {
             return;
         };
-        let mut cache = crate::data::lyrics_cache::LyricsCache::load();
+        let mut cache = crate::data::lyrics_cache::LyricsCache::load_migrated();
         cache.remove_custom(&track_id, &target);
         let custom_names = cache.custom_names(&track_id);
         self.flush_note_draft(pane);
@@ -615,7 +615,7 @@ impl MusicPlayer {
             state.selected_custom = None;
             state.reset_translation_state();
         }
-        let cache = crate::data::lyrics_cache::LyricsCache::load();
+        let cache = crate::data::lyrics_cache::LyricsCache::load_migrated();
         let custom_names = cache.custom_names(&current_id);
         if let Some(name) = state.selected_custom.clone() {
             if let Some(custom) = cache.get_custom(&current_id, &name) {
