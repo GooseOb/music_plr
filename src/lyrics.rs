@@ -64,9 +64,17 @@ pub struct LyricsRequest {
     pub duration: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LyricLine {
+    pub time: Option<f32>,
+    pub text: String,
+    #[serde(default)]
+    pub description: String,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lyrics {
-    pub timed: Vec<(f32, String)>,
+    pub lines: Vec<LyricLine>,
     pub plain: String,
     pub provider: LyricsProvider,
 }
@@ -77,49 +85,93 @@ impl Lyrics {
         if trimmed.is_empty() {
             return None;
         }
-        let timed = parse_lrc(trimmed);
-        if timed.is_empty() {
-            Some(Self {
-                timed: Vec::new(),
-                plain: trimmed.to_string(),
-                provider: LyricsProvider::Custom,
-            })
-        } else {
-            let plain = timed
-                .iter()
-                .map(|(_, line)| line.as_str())
-                .collect::<Vec<_>>()
-                .join("\n");
-            Some(Self {
-                timed,
-                plain,
-                provider: LyricsProvider::Custom,
-            })
+        let mut lines = Vec::new();
+        for raw in trimmed.lines() {
+            if let Some(rest) = raw.strip_prefix("##") {
+                lines.push(LyricLine {
+                    time: None,
+                    text: format!("#{rest}"),
+                    description: String::new(),
+                });
+            } else if let Some(note) = raw.strip_prefix('#') {
+                let note = note.strip_prefix(' ').unwrap_or(note);
+                if let Some(last) = lines.last_mut() {
+                    if !last.description.is_empty() {
+                        last.description.push('\n');
+                    }
+                    last.description.push_str(note);
+                }
+            } else if let Some((secs, content)) = parse_lrc_line(raw) {
+                lines.push(LyricLine {
+                    time: Some(secs),
+                    text: content,
+                    description: String::new(),
+                });
+            } else {
+                lines.push(LyricLine {
+                    time: None,
+                    text: raw.to_string(),
+                    description: String::new(),
+                });
+            }
         }
+        if lines.is_empty() {
+            return None;
+        }
+        let plain = lines
+            .iter()
+            .map(|line| line.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        Some(Self {
+            lines,
+            plain,
+            provider: LyricsProvider::Custom,
+        })
     }
 
     pub fn to_edit_text(&self) -> String {
-        if self.timed.is_empty() {
-            self.plain.clone()
-        } else {
-            self.timed
-                .iter()
-                .map(|(secs, line)| format!("[{}]{line}", format_timestamp(*secs)))
-                .collect::<Vec<_>>()
-                .join("\n")
+        let mut out = Vec::new();
+        for line in &self.lines {
+            match line.time {
+                Some(secs) => out.push(format!("[{}]{}", format_timestamp(secs), line.text)),
+                None if line.text.starts_with('#') => out.push(format!("#{}", line.text)),
+                None => out.push(line.text.clone()),
+            }
+            if !line.description.is_empty() {
+                for note in line.description.split('\n') {
+                    if note.is_empty() {
+                        out.push("#".to_string());
+                    } else {
+                        out.push(format!("# {note}"));
+                    }
+                }
+            }
         }
+        out.join("\n")
+    }
+
+    pub fn has_timed(&self) -> bool {
+        self.lines.iter().any(|line| line.time.is_some())
+    }
+
+    pub fn timed_count(&self) -> usize {
+        self.lines.iter().filter(|line| line.time.is_some()).count()
+    }
+
+    pub fn has_notes(&self) -> bool {
+        self.lines.iter().any(|line| !line.description.is_empty())
     }
 
     pub fn active_index(&self, position_secs: f32) -> Option<usize> {
-        if self.timed.is_empty() {
-            return None;
-        }
-        let mut idx = 0;
-        for (i, (t, _)) in self.timed.iter().enumerate() {
-            if *t <= position_secs {
-                idx = i;
-            } else {
-                break;
+        let mut idx = self.lines.iter().position(|line| line.time.is_some())?;
+        for (i, line) in self.lines.iter().enumerate() {
+            if let Some(t) = line.time {
+                if t <= position_secs {
+                    idx = i;
+                } else {
+                    break;
+                }
             }
         }
         Some(idx)
@@ -200,7 +252,7 @@ fn fetch_lyrics_ovh(req: &LyricsRequest) -> Result<Option<Lyrics>> {
         return Ok(None);
     }
     Ok(Some(Lyrics {
-        timed: vec![],
+        lines: Vec::new(),
         plain,
         provider: LyricsProvider::LyricsOvh,
     }))
@@ -265,9 +317,19 @@ fn record_to_lyrics(rec: LrcLibRecord, provider: LyricsProvider) -> Lyrics {
     let synced = rec.synced_lyrics.filter(|s| !s.trim().is_empty());
     let plain = rec.plain_lyrics.filter(|s| !s.trim().is_empty());
     let plain = plain.unwrap_or_default();
-    let timed = synced.as_deref().map(parse_lrc).unwrap_or_default();
+    let lines = synced
+        .as_deref()
+        .map(parse_lrc)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(time, text)| LyricLine {
+            time: Some(time),
+            text,
+            description: String::new(),
+        })
+        .collect();
     Lyrics {
-        timed,
+        lines,
         plain,
         provider,
     }
@@ -331,7 +393,15 @@ mod tests {
     #[test]
     fn active_index_follows_position() {
         let lrc = Lyrics {
-            timed: vec![(0.0, "a".into()), (10.0, "b".into()), (20.0, "c".into())],
+            lines: [0.0, 10.0, 20.0]
+                .into_iter()
+                .zip(["a", "b", "c"])
+                .map(|(time, text)| LyricLine {
+                    time: Some(time),
+                    text: text.into(),
+                    description: String::new(),
+                })
+                .collect(),
             plain: String::new(),
             provider: LyricsProvider::LrcLib,
         };
@@ -344,7 +414,11 @@ mod tests {
     #[test]
     fn active_index_none_when_untimed() {
         let lrc = Lyrics {
-            timed: vec![],
+            lines: vec![LyricLine {
+                time: None,
+                text: "words".into(),
+                description: String::new(),
+            }],
             plain: "words".into(),
             provider: LyricsProvider::LrcLib,
         };
@@ -362,7 +436,7 @@ mod tests {
     #[test]
     fn custom_text_without_timestamps_is_plain() {
         let lyrics = Lyrics::from_custom_text("first line\nsecond line").unwrap();
-        assert!(lyrics.timed.is_empty());
+        assert!(!lyrics.has_timed());
         assert_eq!(lyrics.plain, "first line\nsecond line");
         assert_eq!(lyrics.provider, LyricsProvider::Custom);
     }
@@ -370,9 +444,48 @@ mod tests {
     #[test]
     fn custom_text_with_timestamps_is_synced() {
         let lyrics = Lyrics::from_custom_text("[00:12.34]First\n[00:16.80]Second").unwrap();
-        assert_eq!(lyrics.timed.len(), 2);
+        assert_eq!(lyrics.timed_count(), 2);
         assert_eq!(lyrics.plain, "First\nSecond");
         assert_eq!(lyrics.to_edit_text(), "[00:12.34]First\n[00:16.80]Second");
+    }
+
+    #[test]
+    fn custom_text_notes_attach_to_previous_line() {
+        let lyrics =
+            Lyrics::from_custom_text("[00:12.34]First\n# why it matters\n# second thought\nplain")
+                .unwrap();
+        assert_eq!(lyrics.lines.len(), 2);
+        assert_eq!(
+            lyrics.lines[0].description,
+            "why it matters\nsecond thought"
+        );
+        assert!(lyrics.lines[1].description.is_empty());
+        assert_eq!(lyrics.plain, "First\nplain");
+        assert_eq!(
+            lyrics.to_edit_text(),
+            "[00:12.34]First\n# why it matters\n# second thought\nplain"
+        );
+    }
+
+    #[test]
+    fn custom_text_leading_notes_are_dropped() {
+        let lyrics = Lyrics::from_custom_text("# orphan\n[00:01.00]Real").unwrap();
+        assert_eq!(lyrics.lines.len(), 1);
+        assert!(lyrics.lines[0].description.is_empty());
+    }
+
+    #[test]
+    fn custom_text_hash_lyrics_round_trip() {
+        let lyrics = Lyrics::from_custom_text("## hashtag opener\n# note").unwrap();
+        assert_eq!(lyrics.lines.len(), 1);
+        assert_eq!(lyrics.lines[0].text, "# hashtag opener");
+        assert_eq!(lyrics.lines[0].description, "note");
+        assert_eq!(lyrics.to_edit_text(), "## hashtag opener\n# note");
+    }
+
+    #[test]
+    fn custom_text_notes_only_is_none() {
+        assert!(Lyrics::from_custom_text("# just a note").is_none());
     }
 
     #[test]

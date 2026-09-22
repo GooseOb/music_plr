@@ -18,7 +18,7 @@ A YouTube/SoundCloud/Bandcamp search music player with local playback, downloads
 - **Split panes** — Split the main view with <kbd>\</kbd> (side by side) or <kbd>Shift</kbd>+<kbd>\</kbd> (stacked), up to 4 panes. Each pane has its own search bar, navigation history, and lyrics view; sidebar clicks and keyboard shortcuts target the focused pane (click any pane to focus it). Close a pane from its header or with <kbd>Ctrl</kbd>+<kbd>W</kbd>.
 - **Drag & drop** — Drag tracks between views, into the queue, onto playlists (reorder or turn a card into a local playlist), and into the
   Library.
-- **Lyrics** — Free, no-key LRCLib lyrics with synced lines that seek on click; cached per track. Add your own named custom lyrics per track (plain or `[mm:ss.xx]`-synced) — they appear as tabs next to the providers, editable and deletable from the lyrics view.
+- **Lyrics** — Free, no-key LRCLib lyrics with synced lines that seek on click; cached per track. Add your own named custom lyrics per track (plain or `[mm:ss.xx]`-synced) — they appear as tabs next to the providers, editable and deletable from the lyrics view. Attach multi-line notes to any custom line with `#` comment lines; the active line's note shows in an editable block below the lyrics.
 - **Media controls** — OS media keys / MPRIS (Linux) / SMTC (Windows) / Now Playing (macOS) via souvlaki.
 - **More** — Search history, volume normalization, navigation history, session restore, right-click context menu, dark theme.
 - **Localization** — 13 languages: English, Polski, Español, Português (Brasil), 简体中文, العربية, Беларуская, Français, Deutsch, 日本語, Русский, हिन्दी, Українська.

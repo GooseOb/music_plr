@@ -57,6 +57,7 @@ impl MusicPlayer {
         for pane in self.pane_ids() {
             if self.pane(pane).lyrics.is_some() {
                 self.ensure_lyrics_for_current(pane);
+                self.flush_note_draft(pane);
                 task = task.chain(self.maybe_autoscroll_lyrics(pane));
             }
         }
@@ -575,18 +576,18 @@ impl MusicPlayer {
         let panes: Vec<PaneId> = self.pane_ids();
         let mut cache = None;
         for pane in panes {
+            let waiting = self.pane(pane).lyrics.as_ref().is_some_and(|state| {
+                state.track_id.as_deref() == Some(track_id)
+                    && state.provider == provider
+                    && !state.editing
+            });
+            if !waiting {
+                continue;
+            }
+            self.flush_note_draft(pane);
             let Some(state) = self.pane_mut(pane).lyrics.as_mut() else {
                 continue;
             };
-            if state.track_id.as_deref() != Some(track_id) {
-                continue;
-            }
-            if state.provider != provider {
-                continue;
-            }
-            if state.editing {
-                continue;
-            }
             match &result {
                 Ok(lyrics) => {
                     let cache =
@@ -597,8 +598,12 @@ impl MusicPlayer {
                     state.mode = mode;
                     state.scrolled_to = None;
                     state.viewport = None;
+                    state.reset_note_state();
                 }
-                Err(e) => state.lyrics = crate::load_state::LoadState::Failed(e.clone()),
+                Err(e) => {
+                    state.lyrics = crate::load_state::LoadState::Failed(e.clone());
+                    state.reset_note_state();
+                }
             }
             state.track_id = Some(track_id.to_owned());
             self.sync_lyrics_editor(pane);

@@ -13,7 +13,10 @@ pub fn lyrics_scroll_id(pane: PaneId) -> Id {
 
 use super::{
     shared_components::{empty_state, loading_state, scope_button, scope_tab_row},
-    styles::{button_style_danger, button_style_panel_item, button_style_primary, fg_secondary},
+    styles::{
+        bg_secondary, button_style_danger, button_style_panel_item, button_style_primary,
+        fg_secondary,
+    },
     theme, Message, MusicPlayer,
 };
 use crate::{
@@ -41,12 +44,16 @@ pub(super) fn view_lyrics<'a>(
     } else {
         let mode = lyrics_state.mode;
         let scrolled = lyrics_state.scrolled_to;
+        let picked = lyrics_state.picked_line;
         let lyrics_state = &lyrics_state.lyrics;
         match (track, lyrics_state) {
             (Some(_), LoadState::Ready(lyrics))
-                if !lyrics.timed.is_empty() && mode == LyricsViewMode::Synced =>
+                if lyrics.has_timed() && mode == LyricsViewMode::Synced =>
             {
                 view_synced(pane, lyrics, scrolled)
+            }
+            (Some(_), LoadState::Ready(lyrics)) if lyrics.has_notes() => {
+                view_plain_notes(pane, lyrics, picked)
             }
             (Some(_), LoadState::Ready(lyrics)) => Container::new(
                 text(lyrics.plain.clone())
@@ -67,16 +74,51 @@ pub(super) fn view_lyrics<'a>(
         .on_right_press(Message::CopyLyrics(pane))
         .into();
 
-    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(3);
+    let note_idx = lyrics_state.note_target();
+    let note_visible = match (&lyrics_state.lyrics, note_idx) {
+        (LoadState::Ready(lyrics), Some(idx)) => lyrics.lines.get(idx).is_some_and(|line| {
+            !line.description.is_empty()
+                || (lyrics_state.note_line == Some(idx)
+                    && lyrics_state.note_editor.text().trim_end() != line.description)
+        }),
+        _ => false,
+    };
+
+    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(4);
     if track.is_some() {
         if let Some(name) = &lyrics_state.selected_custom {
             children.push(view_edit_custom_row(player, pane, name));
         }
     }
     children.push(Container::new(body).height(Length::Fill).into());
+    if note_visible {
+        children.push(view_note_block(pane, lyrics_state));
+    }
     children.push(view_bottom_controls(player, pane, lyrics_state).into());
     Column::with_children(children)
         .spacing(theme::SPACING_MD)
+        .into()
+}
+
+fn view_note_block(pane: PaneId, lyrics_state: &LyricsState) -> Element<'_, Message, AppTheme> {
+    let editor = iced::widget::text_editor(&lyrics_state.note_editor)
+        .on_action(move |a| Message::LyricNoteAction(pane, a))
+        .style(|theme: &AppTheme, _| {
+            let p = &theme.palette;
+            iced::widget::text_editor::Style {
+                background: Color::TRANSPARENT.into(),
+                border: iced::Border::default(),
+                placeholder: Color::TRANSPARENT,
+                value: p.fg_secondary,
+                selection: p.accent.scale_alpha(0.4),
+            }
+        })
+        .padding([theme::SPACING_XS, theme::SPACING_MD])
+        .height(Length::Shrink);
+
+    Container::new(editor)
+        .style(bg_secondary())
+        .padding(theme::SPACING_XS)
         .into()
 }
 
@@ -249,21 +291,53 @@ fn view_select_editor(
         .into()
 }
 
+fn view_plain_notes(
+    pane: PaneId,
+    lyrics: &crate::lyrics::Lyrics,
+    picked: Option<usize>,
+) -> Element<'_, Message, AppTheme> {
+    let rows = lyrics.lines.iter().enumerate().map(|(i, line)| {
+        let centered = Container::new(
+            text(&line.text)
+                .size(theme::TEXT_SIZE_LG)
+                .style(fg_secondary()),
+        )
+        .center(Length::Fill);
+
+        Button::new(centered)
+            .padding([theme::SPACING_SM, theme::SPACING_LG])
+            .style(button_style_panel_item(picked == Some(i)))
+            .on_press(Message::SelectLyricLine(pane, i))
+            .into()
+    });
+
+    scrollable(
+        Column::with_children(rows)
+            .spacing(theme::SPACING_SM)
+            .padding(theme::SPACING_LG),
+    )
+    .into()
+}
+
 fn view_synced(
     pane: PaneId,
     lyrics: &crate::lyrics::Lyrics,
     scrolled: Option<usize>,
 ) -> Element<'_, Message, AppTheme> {
-    let lines = lyrics.timed.iter().enumerate().map(|(i, (secs, line))| {
+    let lines = lyrics.lines.iter().enumerate().filter_map(|(i, line)| {
+        let secs = line.time?;
         let is_active = scrolled == Some(i);
 
-        let centered = Container::new(text(line).size(theme::TEXT_SIZE_XL)).center(Length::Fill);
+        let centered =
+            Container::new(text(&line.text).size(theme::TEXT_SIZE_XL)).center(Length::Fill);
 
-        Button::new(centered)
-            .padding([theme::SPACING_SM, theme::SPACING_LG])
-            .style(button_style_panel_item(is_active))
-            .on_press(Message::LyricsLineClicked(*secs))
-            .into()
+        Some(
+            Button::new(centered)
+                .padding([theme::SPACING_SM, theme::SPACING_LG])
+                .style(button_style_panel_item(is_active))
+                .on_press(Message::LyricsLineClicked(secs))
+                .into(),
+        )
     });
 
     scrollable(

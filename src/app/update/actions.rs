@@ -84,15 +84,15 @@ impl MusicPlayer {
     fn sync_editor_content(state: &mut crate::app::LyricsState) {
         let text = match &state.lyrics {
             LoadState::Ready(lyrics) => {
-                if lyrics.timed.is_empty() {
-                    lyrics.plain.clone()
-                } else {
+                if lyrics.has_timed() {
                     lyrics
-                        .timed
+                        .lines
                         .iter()
-                        .map(|(_, line)| line.as_str())
+                        .map(|line| line.text.as_str())
                         .collect::<Vec<_>>()
                         .join("\n")
+                } else {
+                    lyrics.plain.clone()
                 }
             }
             _ => String::new(),
@@ -100,6 +100,73 @@ impl MusicPlayer {
         if state.mode == LyricsViewMode::Selectable {
             state.editor = iced::widget::text_editor::Content::with_text(&text);
         }
+    }
+
+    pub(super) fn flush_note_draft(&mut self, pane: PaneId) {
+        let (idx, text) = match self.pane(pane).lyrics.as_ref() {
+            Some(state) => match state.note_line {
+                Some(idx) => (idx, state.note_editor.text()),
+                None => return,
+            },
+            None => return,
+        };
+        let text = text.trim_end().to_string();
+        let Some(state) = &mut self.pane_mut(pane).lyrics else {
+            return;
+        };
+        let LoadState::Ready(lyrics) = &mut state.lyrics else {
+            return;
+        };
+        let Some(line) = lyrics.lines.get_mut(idx) else {
+            return;
+        };
+        if line.description == text {
+            return;
+        }
+        line.description = text;
+        if let (Some(track_id), Some(name)) =
+            (state.track_id.clone(), state.selected_custom.clone())
+        {
+            let mut cache = crate::data::lyrics_cache::LyricsCache::load();
+            cache.insert_custom(&track_id, &name, lyrics);
+        }
+    }
+
+    pub(super) fn refresh_note_editor(&mut self, pane: PaneId) {
+        let target = self
+            .pane(pane)
+            .lyrics
+            .as_ref()
+            .and_then(crate::app::LyricsState::note_target);
+        let Some(state) = &mut self.pane_mut(pane).lyrics else {
+            return;
+        };
+        if state.note_line == target {
+            return;
+        }
+        state.note_line = target;
+        let text = match (&state.lyrics, target) {
+            (LoadState::Ready(lyrics), Some(idx)) => lyrics
+                .lines
+                .get(idx)
+                .map_or(String::new(), |line| line.description.clone()),
+            _ => String::new(),
+        };
+        state.note_editor = iced::widget::text_editor::Content::with_text(&text);
+    }
+
+    pub(super) fn sync_note_editor(&mut self, pane: PaneId) {
+        self.flush_note_draft(pane);
+        self.refresh_note_editor(pane);
+    }
+
+    pub fn select_lyric_line(&mut self, pane: PaneId, idx: usize) -> Task<Message> {
+        self.flush_note_draft(pane);
+        if let Some(state) = &mut self.pane_mut(pane).lyrics {
+            state.picked_line = Some(idx);
+        }
+        self.refresh_note_editor(pane);
+        Task::none()
     }
 
     pub fn set_lyrics_view_mode(&mut self, pane: PaneId, mode: LyricsViewMode) -> Task<Message> {
@@ -115,6 +182,7 @@ impl MusicPlayer {
         }
         state.viewport = None;
         self.sync_lyrics_editor(pane);
+        self.sync_note_editor(pane);
         if mode == LyricsViewMode::Synced {
             self.scroll_lyrics_to_active(pane)
         } else {
@@ -130,11 +198,11 @@ impl MusicPlayer {
         let LoadState::Ready(lyrics) = &state.lyrics else {
             return None;
         };
-        if lyrics.timed.is_empty() {
+        if !lyrics.has_timed() {
             return None;
         }
         let position = self.progress * self.duration;
-        Some((lyrics.active_index(position)?, lyrics.timed.len()))
+        Some((lyrics.active_index(position)?, lyrics.timed_count()))
     }
 
     fn lyrics_scroll_task(&mut self, pane: PaneId, index: usize, total: usize) -> Task<Message> {
@@ -186,6 +254,7 @@ impl MusicPlayer {
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
             state.scrolled_to = Some(index);
         }
+        self.sync_note_editor(pane);
         self.lyrics_scroll_task(pane, index, total)
     }
 
@@ -200,6 +269,7 @@ impl MusicPlayer {
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
             state.scrolled_to = Some(active);
         }
+        self.sync_note_editor(pane);
         if self.lyrics_line_visible(pane, active, total) == Some(false) {
             return Task::none();
         }
@@ -214,6 +284,7 @@ impl MusicPlayer {
         provider: crate::lyrics::LyricsProvider,
     ) {
         self.lyrics_provider = provider;
+        self.flush_note_draft(pane);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
             state.provider = provider;
             state.lyrics = crate::load_state::LoadState::Loading;
@@ -224,6 +295,7 @@ impl MusicPlayer {
             state.editing_custom_name = None;
             state.selected_custom = None;
             state.custom_names = Vec::new();
+            state.reset_note_state();
         }
         self.sync_lyrics_editor(pane);
         self.save_session();
@@ -235,6 +307,7 @@ impl MusicPlayer {
             return;
         };
         let track_id = track.primary_id().to_string();
+        self.flush_note_draft(pane);
         let Some(state) = &mut self.pane_mut(pane).lyrics else {
             return;
         };
@@ -244,6 +317,7 @@ impl MusicPlayer {
         state.editing = true;
         state.editing_custom_name = None;
         state.viewport = None;
+        state.reset_note_state();
     }
 
     /// Open the editor prefilled with the named custom entry.
@@ -257,6 +331,7 @@ impl MusicPlayer {
         else {
             return;
         };
+        self.flush_note_draft(pane);
         let Some(state) = &mut self.pane_mut(pane).lyrics else {
             return;
         };
@@ -266,6 +341,7 @@ impl MusicPlayer {
         state.editing = true;
         state.editing_custom_name = Some(name);
         state.viewport = None;
+        state.reset_note_state();
     }
 
     /// Show the named custom entry for the current track.
@@ -279,6 +355,7 @@ impl MusicPlayer {
             return Task::none();
         };
         let custom_names = cache.custom_names(&track_id);
+        self.flush_note_draft(pane);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
             let mode = LyricsViewMode::for_lyrics(&entry);
             state.lyrics = crate::load_state::LoadState::Ready(entry);
@@ -289,6 +366,7 @@ impl MusicPlayer {
             state.editing = false;
             state.scrolled_to = None;
             state.viewport = None;
+            state.reset_note_state();
         }
         self.sync_lyrics_editor(pane);
         self.scroll_lyrics_to_active(pane)
@@ -341,6 +419,7 @@ impl MusicPlayer {
             state.editing_custom_name = None;
             state.scrolled_to = None;
             state.viewport = None;
+            state.reset_note_state();
         }
         self.sync_lyrics_editor(pane);
         self.notify(self.strings.lyrics_saved);
@@ -352,6 +431,7 @@ impl MusicPlayer {
             state.editing = false;
             state.editing_custom_name = None;
         }
+        self.refresh_note_editor(pane);
     }
 
     pub fn delete_custom_lyrics(&mut self, pane: PaneId) {
@@ -380,6 +460,7 @@ impl MusicPlayer {
         let mut cache = crate::data::lyrics_cache::LyricsCache::load();
         cache.remove_custom(&track_id, &target);
         let custom_names = cache.custom_names(&track_id);
+        self.flush_note_draft(pane);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
             state.editing = false;
             state.editing_custom_name = None;
@@ -388,6 +469,7 @@ impl MusicPlayer {
             state.lyrics = crate::load_state::LoadState::Loading;
             state.scrolled_to = None;
             state.viewport = None;
+            state.reset_note_state();
         }
         self.sync_lyrics_editor(pane);
         self.notify(self.strings.lyrics_deleted);
@@ -398,6 +480,7 @@ impl MusicPlayer {
     /// being shown and track changes.
     pub(super) fn ensure_lyrics_for_current(&mut self, pane: PaneId) {
         let Some(track) = self.queue.current() else {
+            self.flush_note_draft(pane);
             if let Some(state) = &mut self.pane_mut(pane).lyrics {
                 state.lyrics = crate::load_state::LoadState::Loading;
                 state.track_id = None;
@@ -407,6 +490,7 @@ impl MusicPlayer {
                 state.editing_custom_name = None;
                 state.selected_custom = None;
                 state.custom_names = Vec::new();
+                state.reset_note_state();
             }
             self.sync_lyrics_editor(pane);
             return;
@@ -418,6 +502,7 @@ impl MusicPlayer {
         let duration = track.duration();
         let tx = self.result_tx.clone();
         let no_lyrics = self.strings.no_lyrics_found;
+        self.flush_note_draft(pane);
         let Some(state) = &mut self.pane_mut(pane).lyrics else {
             return;
         };
@@ -448,6 +533,7 @@ impl MusicPlayer {
                 state.scrolled_to = None;
                 state.viewport = None;
                 state.custom_names = custom_names;
+                state.reset_note_state();
                 Self::sync_editor_content(state);
                 return;
             }
@@ -462,6 +548,7 @@ impl MusicPlayer {
             state.scrolled_to = None;
             state.viewport = None;
             state.custom_names = custom_names;
+            state.reset_note_state();
             Self::sync_editor_content(state);
             return;
         }
@@ -478,6 +565,7 @@ impl MusicPlayer {
         state.scrolled_to = None;
         state.viewport = None;
         state.custom_names = custom_names;
+        state.reset_note_state();
         Self::sync_editor_content(state);
         std::thread::spawn(move || {
             let result = match provider.fetch(&req) {
@@ -496,6 +584,7 @@ impl MusicPlayer {
     /// stays open and refetches for the new track.
     pub fn clear_lyrics_for_track_change(&mut self) {
         for pane in self.pane_ids() {
+            self.flush_note_draft(pane);
             if let Some(state) = &mut self.pane_mut(pane).lyrics {
                 state.lyrics = crate::load_state::LoadState::Loading;
                 state.track_id = None;
@@ -505,6 +594,7 @@ impl MusicPlayer {
                 state.editing_custom_name = None;
                 state.selected_custom = None;
                 state.custom_names = Vec::new();
+                state.reset_note_state();
             }
             self.sync_lyrics_editor(pane);
         }

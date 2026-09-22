@@ -597,7 +597,7 @@ mod tests {
             p.pane_mut(id).lyrics.as_mut().unwrap().track_id = Some("track1".into());
         }
         let lyrics = crate::lyrics::Lyrics {
-            timed: vec![],
+            lines: vec![],
             plain: "la".into(),
             provider: LP::LrcLib,
         };

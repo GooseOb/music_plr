@@ -206,6 +206,8 @@ pub enum Message {
     SelectLyricsProvider(PaneId, crate::lyrics::LyricsProvider),
     LyricsEditorAction(PaneId, iced::widget::text_editor::Action),
     CopyLyrics(PaneId),
+    SelectLyricLine(PaneId, usize),
+    LyricNoteAction(PaneId, iced::widget::text_editor::Action),
     StartCustomLyricsEdit(PaneId),
     EditCustomLyrics(PaneId, String),
     SelectCustomLyrics(PaneId, String),
@@ -283,6 +285,8 @@ impl Message {
             | Message::SelectLyricsProvider(pane, _)
             | Message::LyricsEditorAction(pane, _)
             | Message::CopyLyrics(pane)
+            | Message::SelectLyricLine(pane, _)
+            | Message::LyricNoteAction(pane, _)
             | Message::StartCustomLyricsEdit(pane)
             | Message::EditCustomLyrics(pane, _)
             | Message::SelectCustomLyrics(pane, _)
@@ -359,6 +363,8 @@ mod tests {
             Message::SelectLyricsProvider(pane, crate::lyrics::LyricsProvider::LrcLib),
             Message::LyricsEditorAction(pane, editor()),
             Message::CopyLyrics(pane),
+            Message::SelectLyricLine(pane, 0),
+            Message::LyricNoteAction(pane, editor()),
             Message::StartCustomLyricsEdit(pane),
             Message::EditCustomLyrics(pane, String::new()),
             Message::SelectCustomLyrics(pane, String::new()),

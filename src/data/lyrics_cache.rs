@@ -5,19 +5,19 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use super::{JsonStore, StoreLocation};
-use crate::lyrics::{Lyrics, LyricsProvider};
+use crate::lyrics::{LyricLine, Lyrics, LyricsProvider};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CachedLyrics {
     pub plain: String,
-    pub timed: Vec<(f32, String)>,
+    pub lines: Vec<LyricLine>,
     pub provider: LyricsProvider,
 }
 
 impl CachedLyrics {
     pub fn to_lyrics(&self) -> Lyrics {
         Lyrics {
-            timed: self.timed.clone(),
+            lines: self.lines.clone(),
             plain: self.plain.clone(),
             provider: self.provider,
         }
@@ -28,13 +28,13 @@ impl CachedLyrics {
 pub struct CustomLyricsEntry {
     pub name: String,
     pub plain: String,
-    pub timed: Vec<(f32, String)>,
+    pub lines: Vec<LyricLine>,
 }
 
 impl CustomLyricsEntry {
     pub fn to_lyrics(&self) -> Lyrics {
         Lyrics {
-            timed: self.timed.clone(),
+            lines: self.lines.clone(),
             plain: self.plain.clone(),
             provider: LyricsProvider::Custom,
         }
@@ -68,11 +68,11 @@ impl LyricsCache {
         let list = self.entries.entry(track_id.to_string()).or_default();
         if let Some(slot) = list.iter_mut().find(|e| e.provider == lyrics.provider) {
             slot.plain.clone_from(&lyrics.plain);
-            slot.timed.clone_from(&lyrics.timed);
+            slot.lines.clone_from(&lyrics.lines);
         } else {
             list.push(CachedLyrics {
                 plain: lyrics.plain.clone(),
-                timed: lyrics.timed.clone(),
+                lines: lyrics.lines.clone(),
                 provider: lyrics.provider,
             });
         }
@@ -106,12 +106,12 @@ impl LyricsCache {
         let list = self.custom.entry(track_id.to_string()).or_default();
         if let Some(slot) = list.iter_mut().find(|e| e.name == name) {
             slot.plain.clone_from(&lyrics.plain);
-            slot.timed.clone_from(&lyrics.timed);
+            slot.lines.clone_from(&lyrics.lines);
         } else {
             list.push(CustomLyricsEntry {
                 name: name.to_string(),
                 plain: lyrics.plain.clone(),
-                timed: lyrics.timed.clone(),
+                lines: lyrics.lines.clone(),
             });
         }
     }
@@ -148,10 +148,23 @@ mod tests {
         cache.insert_custom("t1", "Live", &custom_lyrics("[00:01.00]la"));
         assert_eq!(cache.custom_names("t1"), vec!["Studio", "Live"]);
         let live = cache.get_custom("t1", "Live").unwrap();
-        assert_eq!(live.timed.len(), 1);
+        assert_eq!(live.timed_count(), 1);
         assert_eq!(live.provider, LyricsProvider::Custom);
         assert!(cache.get_custom("t1", "Missing").is_none());
         assert!(cache.custom_names("other").is_empty());
+    }
+
+    #[test]
+    fn custom_round_trip_preserves_notes() {
+        let mut cache = LyricsCache::default();
+        cache.insert_custom(
+            "t1",
+            "Annotated",
+            &custom_lyrics("[00:01.00]la\n# first\n# second\nplain"),
+        );
+        let got = cache.get_custom("t1", "Annotated").unwrap();
+        assert_eq!(got.lines[0].description, "first\nsecond");
+        assert_eq!(got.plain, "la\nplain");
     }
 
     #[test]

@@ -35,14 +35,17 @@ pub struct LyricsState {
     pub editing_custom_name: Option<String>,
     pub selected_custom: Option<String>,
     pub custom_names: Vec<String>,
+    pub picked_line: Option<usize>,
+    pub note_editor: iced::widget::text_editor::Content,
+    pub note_line: Option<usize>,
 }
 
 impl LyricsViewMode {
     pub fn for_lyrics(lyrics: &Lyrics) -> Self {
-        if lyrics.timed.is_empty() {
-            Self::Plain
-        } else {
+        if lyrics.has_timed() {
             Self::Synced
+        } else {
+            Self::Plain
         }
     }
 }
@@ -63,6 +66,9 @@ impl LyricsState {
             editing_custom_name: None,
             selected_custom: None,
             custom_names: Vec::new(),
+            picked_line: None,
+            note_editor: iced::widget::text_editor::Content::default(),
+            note_line: None,
         }
     }
 
@@ -71,9 +77,27 @@ impl LyricsState {
             return false;
         };
         match mode {
-            LyricsViewMode::Selectable => !(lyrics.timed.is_empty() && lyrics.plain.is_empty()),
-            LyricsViewMode::Synced => !lyrics.timed.is_empty(),
+            LyricsViewMode::Selectable => lyrics.has_timed() || !lyrics.plain.is_empty(),
+            LyricsViewMode::Synced => lyrics.has_timed(),
             LyricsViewMode::Plain => !lyrics.plain.is_empty(),
         }
+    }
+
+    pub fn note_target(&self) -> Option<usize> {
+        let LoadState::Ready(lyrics) = &self.lyrics else {
+            return None;
+        };
+        let idx = match self.mode {
+            LyricsViewMode::Synced => self.scrolled_to.or(self.picked_line),
+            LyricsViewMode::Plain => self.picked_line,
+            LyricsViewMode::Selectable => None,
+        }?;
+        lyrics.lines.get(idx).map(|_| idx)
+    }
+
+    pub fn reset_note_state(&mut self) {
+        self.picked_line = None;
+        self.note_editor = iced::widget::text_editor::Content::default();
+        self.note_line = None;
     }
 }

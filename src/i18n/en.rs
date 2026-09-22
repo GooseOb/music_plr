@@ -45,7 +45,8 @@ pub const STRINGS: Strings = Strings {
     add_custom: "Add custom",
     lyrics_name: "Name",
     edit_lyrics: "Edit lyrics",
-    lyrics_editor_hint: "One line per lyric. Prefix lines with [mm:ss.xx] for synced lyrics, or leave them plain.",
+    lyrics_editor_hint: "One line per lyric. Prefix lines with [mm:ss.xx] for synced lyrics, or leave them plain. Add a `# note` line under any lyric for a note shown below the lyrics.",
+
 
     playlist_not_found: "Playlist not found",
     add_local: "Add local",

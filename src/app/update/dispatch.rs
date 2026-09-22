@@ -125,9 +125,7 @@ impl crate::app::MusicPlayer {
                 };
                 let text = match &state.lyrics {
                     LoadState::Ready(lyrics) => {
-                        if state.mode == crate::app::LyricsViewMode::Synced
-                            && !lyrics.timed.is_empty()
-                        {
+                        if state.mode == crate::app::LyricsViewMode::Synced && lyrics.has_timed() {
                             lyrics.to_edit_text()
                         } else {
                             lyrics.plain.clone()
@@ -140,6 +138,13 @@ impl crate::app::MusicPlayer {
                 }
                 self.notify(self.strings.lyrics_copied);
                 iced::clipboard::write(text)
+            }
+            Message::SelectLyricLine(pane, idx) => self.select_lyric_line(pane, idx),
+            Message::LyricNoteAction(pane, action) => {
+                if let Some(state) = &mut self.pane_mut(pane).lyrics {
+                    state.note_editor.perform(action);
+                }
+                Task::none()
             }
             Message::CustomLyricsEditorAction(pane, action) => {
                 if let Some(state) = &mut self.pane_mut(pane).lyrics {
