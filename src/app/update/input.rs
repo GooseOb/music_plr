@@ -3,7 +3,6 @@ use iced::widget::operation;
 use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData};
 use crate::app::{
     interaction::{ContextMenuFocus, HoverTarget},
-    ui::SEARCH_HISTORY_LIST_ID,
     Dialog, TrackListSearch,
 };
 
@@ -132,10 +131,7 @@ impl MusicPlayer {
                 if self.drag.is_pressed_card() {
                     self.library_expanded = true;
                 }
-                return Task::batch([
-                    super::operation::CaptureBounds::new().into(),
-                    self.handle_drag_update(),
-                ]);
+                return Task::batch([self.capture_bounds_task(), self.handle_drag_update()]);
             }
         }
         Task::none()
@@ -164,10 +160,28 @@ impl MusicPlayer {
             Physical::Code(Code::Slash)
                 if !modifiers.control() && !modifiers.logo() && !modifiers.alt() =>
             {
+                let pane = self.focused_pane_id;
                 Task::batch([
-                    operation::focus::<Message>(crate::app::ui::SEARCH_INPUT_ID),
-                    self.activate_search_input(),
+                    operation::focus::<Message>(crate::app::ui::search_input_id(pane)),
+                    self.activate_search_input(pane),
                 ])
+            }
+            Physical::Code(Code::Backslash)
+                if !modifiers.control() && !modifiers.logo() && !modifiers.alt() =>
+            {
+                let pane = self.focused_pane_id;
+                self.split_pane(
+                    pane,
+                    if modifiers.shift() {
+                        crate::app::SplitDir::Horizontal
+                    } else {
+                        crate::app::SplitDir::Vertical
+                    },
+                )
+            }
+            Physical::Code(Code::KeyW) if modifiers.control() || modifiers.logo() => {
+                let pane = self.focused_pane_id;
+                self.close_pane(pane)
             }
             Physical::Code(Code::Space) => {
                 self.toggle_play_pause();
@@ -183,21 +197,23 @@ impl MusicPlayer {
                 self.open_context_menu_for_hovered_track()
             }
             Physical::Code(Code::Escape) => {
+                let pane = self.focused_pane_id;
                 if self.track_list_search.is_some() {
                     self.track_list_search = None;
-                } else if self.show_search_history {
-                    self.show_search_history = false;
+                } else if self.pane(pane).show_search_history {
+                    self.pane_mut(pane).show_search_history = false;
                     self.drag.clear_hovered_search_history();
-                } else if let Some(hovered) = self.drag.hovered_track() {
-                    self.clear_selection_for(hovered.list);
+                } else if let Some(hovered) = self.focused_hovered_track() {
+                    self.clear_selection_in(hovered.pane, hovered.list);
                 } else if self.has_selection() {
                     self.clear_selection();
                 } else {
-                    return self.handle_navigate_to(ViewData::new_search(
-                        String::new(),
-                        self.search_provider,
-                        self.search_scope,
-                    ));
+                    let provider = self.pane(pane).search_provider;
+                    let scope = self.pane(pane).search_scope;
+                    return self.handle_navigate_to(
+                        pane,
+                        ViewData::new_search(String::new(), provider, scope),
+                    );
                 }
                 Task::none()
             }
@@ -205,12 +221,28 @@ impl MusicPlayer {
                 self.handle_delete_in_hovered_list();
                 Task::none()
             }
+            Physical::Code(Code::ArrowLeft) if modifiers.control() || modifiers.logo() => {
+                self.focus_neighbor(crate::app::pane::PaneDir::Left);
+                Task::none()
+            }
+            Physical::Code(Code::ArrowRight) if modifiers.control() || modifiers.logo() => {
+                self.focus_neighbor(crate::app::pane::PaneDir::Right);
+                Task::none()
+            }
+            Physical::Code(Code::ArrowUp) if modifiers.control() || modifiers.logo() => {
+                self.focus_neighbor(crate::app::pane::PaneDir::Up);
+                Task::none()
+            }
+            Physical::Code(Code::ArrowDown) if modifiers.control() || modifiers.logo() => {
+                self.focus_neighbor(crate::app::pane::PaneDir::Down);
+                Task::none()
+            }
             Physical::Code(Code::ArrowLeft | Code::ArrowRight) => self.toggle_keyboard_list(),
             Physical::Code(Code::ArrowUp) => {
                 if self.track_list_search.is_some() {
                     return self.handle_track_list_search_step(-1);
                 }
-                if self.show_search_history {
+                if self.pane(self.focused_pane_id).show_search_history {
                     return self.step_search_history_hover(-1);
                 }
                 self.step_hovered_track(-1)
@@ -219,15 +251,15 @@ impl MusicPlayer {
                 if self.track_list_search.is_some() {
                     return self.handle_track_list_search_step(1);
                 }
-                if self.show_search_history {
+                if self.pane(self.focused_pane_id).show_search_history {
                     return self.step_search_history_hover(1);
                 }
                 self.step_hovered_track(1)
             }
             Physical::Code(Code::Enter) => {
                 if let Some(i) = self.drag.hovered_search_history() {
-                    return self.handle_search_history_select(i);
-                } else if let Some(hovered) = self.drag.hovered_track() {
+                    return self.handle_search_history_select(self.focused_pane_id, i);
+                } else if let Some(hovered) = self.focused_hovered_track() {
                     self.handle_play_track(hovered);
                 }
                 Task::none()
@@ -252,32 +284,35 @@ impl MusicPlayer {
         if !self.show_queue {
             return Task::none();
         }
+        let pane = self.focused_pane_id;
 
         let target = if self.hovered_list().is_main() {
             self.queue.queue_tab.into()
         } else {
             TrackListKind::Active
         };
-        if self.track_count(target) == 0
-            || self.drag.hovered_track().is_some_and(|p| p.list == target)
+        if self.track_count_in(pane, target) == 0
+            || self.drag.hovered_track().is_some_and(|p| {
+                p.list == target && (target != TrackListKind::Active || p.pane == pane)
+            })
         {
             return Task::none();
         }
         let index = self
             .drag
-            .recall_focus(target)
-            .clamp(target.first_index(), self.track_count(target) - 1);
-        self.move_hovered(TrackPos::new(index, target))
+            .recall_focus(pane, target)
+            .clamp(target.first_index(), self.track_count_in(pane, target) - 1);
+        self.move_hovered(TrackPos::new(index, target, pane))
     }
 
     /// Scroll `pos` into view of its list. `center` forces the row to the
     /// middle of the viewport; otherwise the list only scrolls when `pos` is
     /// outside the visible viewport (reveal).
     fn scroll_track_into_view(&self, pos: TrackPos) -> Task<Message> {
-        let TrackPos { index, list } = pos;
+        let TrackPos { index, list, pane } = pos;
 
         let bounds = if list.is_main() {
-            self.bounds.track.as_ref().map(|g| g.bounds)
+            self.bounds.track_geo(pane).map(|g| g.bounds)
         } else {
             self.bounds.queue.as_ref().map(|g| g.bounds)
         };
@@ -294,8 +329,13 @@ impl MusicPlayer {
         // `scroll_to` with `AbsoluteOffset` sets the scroll position
         // directly, so center the row within the viewport height.
         let absolute = (row_y + crate::theme::ROW_HEIGHT / 2.0 - bounds.height / 2.0).max(0.0);
+        let id = match list {
+            TrackListKind::Queue => crate::app::ui::QUEUE_LIST_ID,
+            TrackListKind::Active => crate::app::ui::track_list_id(pane),
+            TrackListKind::Recent => crate::app::ui::QUEUE_RECENT_LIST_ID,
+        };
         operation::scroll_to::<Message>(
-            list,
+            id,
             operation::AbsoluteOffset {
                 x: 0.0,
                 y: absolute,
@@ -305,23 +345,25 @@ impl MusicPlayer {
 
     /// Move the hovered track by `dir` (-1 up, +1 down) within its list, looping
     /// at both edges, and center it. Starts from the first row when nothing is
-    /// hovered yet.
+    /// hovered yet. Keyboard navigation always acts on the focused pane; a
+    /// hover in another pane is ignored.
     fn step_hovered_track(&mut self, dir: isize) -> Task<Message> {
+        let pane = self.focused_pane_id;
         let list = self.hovered_list();
-        let count = self.track_count(list);
+        let count = self.track_count_in(pane, list);
         if count == 0 {
             return Task::none();
         }
         let first = list.first_index();
-        let new_idx = match self.drag.hovered_track() {
+        let new_idx = match self.focused_hovered_track() {
             Some(pos) if pos.list == list => {
                 let span = count - first;
                 ((pos.index - first).cast_signed() + dir).rem_euclid(span.cast_signed()) as usize
                     + first
             }
-            _ => self.drag.recall_focus(list).clamp(first, count - 1),
+            _ => self.drag.recall_focus(pane, list).clamp(first, count - 1),
         };
-        self.move_hovered(TrackPos::new(new_idx, list))
+        self.move_hovered(TrackPos::new(new_idx, list, pane))
     }
 
     /// Set the hovered track and center it in its list.
@@ -336,7 +378,8 @@ impl MusicPlayer {
     /// in the dropdown viewport — mirroring track-list keyboard nav. Starts
     /// from the first entry when nothing is hovered yet.
     fn step_search_history_hover(&mut self, dir: isize) -> Task<Message> {
-        let count = self.last_filtered_history.len();
+        let pane = self.focused_pane_id;
+        let count = self.pane(pane).last_filtered_history.len();
         if count == 0 {
             return Task::none();
         }
@@ -349,7 +392,7 @@ impl MusicPlayer {
         let y = self
             .bounds
             .search_history
-            .as_ref()
+            .get(&pane)
             .and_then(|g| g.rows.get(new_idx).map(|row| (g, row)))
             .map_or(0.0, |(g, row)| {
                 // Center the row in the viewport, like `scroll_track_into_view`.
@@ -357,7 +400,7 @@ impl MusicPlayer {
                 (row_center - g.bounds.y + g.translation_y - g.bounds.height / 2.0).max(0.0)
             });
         operation::scroll_to::<Message>(
-            SEARCH_HISTORY_LIST_ID,
+            crate::app::ui::search_history_list_id(pane),
             iced::widget::operation::AbsoluteOffset { x: 0.0, y },
         )
     }
@@ -373,9 +416,15 @@ impl MusicPlayer {
             return Task::none();
         };
         let list = pos.list;
-        let matches: Vec<usize> = (0..self.track_count(list)).collect();
+        let pane = if list.is_main() {
+            pos.pane
+        } else {
+            self.focused_pane_id
+        };
+        let matches: Vec<usize> = (0..self.track_count_in(pane, list)).collect();
         self.track_list_search = Some(TrackListSearch {
             list,
+            pane,
             query: String::new(),
             matches,
         });
@@ -384,7 +433,7 @@ impl MusicPlayer {
         let from = pos.index;
         let anchored = self.closest_match(from).unwrap_or(from);
         Task::batch([
-            self.move_hovered(TrackPos::new(anchored, list)),
+            self.move_hovered(TrackPos::new(anchored, list, pane)),
             operation::focus::<Message>(crate::app::ui::track_list_search::TRACK_LIST_SEARCH_ID),
         ])
     }
@@ -410,13 +459,13 @@ impl MusicPlayer {
     /// (kept as-is when it still matches) so the current occurrence follows
     /// the query, and the new current is scrolled into view.
     pub(crate) fn handle_track_list_search_input(&mut self, query: &str) -> Task<Message> {
-        let list = match &self.track_list_search {
-            Some(fs) => fs.list,
+        let (list, pane) = match &self.track_list_search {
+            Some(fs) => (fs.list, fs.pane),
             None => return Task::none(),
         };
         let tracks: &[Track] = match list {
             TrackListKind::Queue => &self.queue.tracks,
-            TrackListKind::Active => self.view_tracks(),
+            TrackListKind::Active => self.view_tracks_in(pane),
             TrackListKind::Recent => self.queue.recently_played.as_slices().0,
         };
         let matches: Vec<usize> = tracks
@@ -432,11 +481,13 @@ impl MusicPlayer {
         fs.query = query.to_string();
         fs.matches = matches;
         let from = match self.drag.hovered_track() {
-            Some(h) if h.list == list => h.index,
+            Some(h) if h.list == list && (list != TrackListKind::Active || h.pane == pane) => {
+                h.index
+            }
             _ => 0,
         };
         let anchored = self.closest_match(from).unwrap_or(from);
-        self.move_hovered(TrackPos::new(anchored, list))
+        self.move_hovered(TrackPos::new(anchored, list, pane))
     }
 
     /// Move the hovered track to the next (`dir = 1`) or previous (`dir = -1`)
@@ -450,8 +501,11 @@ impl MusicPlayer {
         if fs.matches.len() <= 1 {
             return Task::none();
         }
+        let (list, pane) = (fs.list, fs.pane);
         let from = match self.drag.hovered_track() {
-            Some(h) if h.list == fs.list => h.index,
+            Some(h) if h.list == list && (list != TrackListKind::Active || h.pane == pane) => {
+                h.index
+            }
             _ => 0,
         };
         let target = {
@@ -477,6 +531,6 @@ impl MusicPlayer {
                 fs.matches.get(lo).copied().unwrap_or(fs.matches[0])
             }
         };
-        self.move_hovered(TrackPos::new(target, fs.list))
+        self.move_hovered(TrackPos::new(target, list, pane))
     }
 }

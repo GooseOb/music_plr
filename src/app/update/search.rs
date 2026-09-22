@@ -1,6 +1,6 @@
 use super::{mpsc, thread, BackendResult, Message, MusicPlayer, Task, ViewData};
 use crate::{
-    app::{update::operation::CaptureSearchHistoryRows, ViewKind},
+    app::{pane::PaneId, update::operation::CaptureSearchHistoryRows, ViewKind},
     data::library::{LibraryItem, LibraryKind},
     load_state::LoadState,
     providers::ProviderId,
@@ -8,20 +8,20 @@ use crate::{
 };
 
 impl MusicPlayer {
-    pub fn run_search(&mut self) -> Task<Message> {
-        let query = self.search_query.clone();
-        let scope = self.search_scope;
-        let provider = self.search_provider;
+    pub fn run_search(&mut self, pane: PaneId) -> Task<Message> {
+        let query = self.pane(pane).search_query.clone();
+        let scope = self.pane(pane).search_scope;
+        let provider = self.pane(pane).search_provider;
 
         // Switch to Search view. `new_search()` returns an empty, loading
         // state; clear the search-history dropdown.
         // Push as a fresh history slot so the outgoing view survives for Back.
         let new_view = ViewData::new_search(query.clone(), provider, scope);
-        let nav_task = self.push_new_view(new_view);
+        let nav_task = self.push_new_view(pane, new_view);
         let rid = self.request_ids.next();
-        self.view_data_mut().request_id = rid;
-        self.sync_search_scope();
-        self.show_search_history = false;
+        self.view_data_in_mut(pane).request_id = rid;
+        self.sync_search_scope(pane);
+        self.pane_mut(pane).show_search_history = false;
         self.drag.clear_hovered_track();
 
         // A blank query is a browse (charts/trending), not a real search, so
@@ -33,6 +33,7 @@ impl MusicPlayer {
 
         let tx = self.result_tx.clone();
         Self::spawn_backend_thread(
+            rid,
             move || crate::providers::search(provider, &query, scope, 0),
             move |(tracks, tab)| BackendResult::SearchResults(rid, tracks, tab),
             tx,
@@ -45,20 +46,23 @@ impl MusicPlayer {
     /// session, behave like the search button and run a search (a blank
     /// query browses charts/trending).
     pub fn handle_sidebar_search(&mut self) -> Task<Message> {
+        let pane = self.focused_pane_id;
         let Some(last) = &self.last_search_view else {
-            return self.run_search();
+            return self.run_search(pane);
         };
-        if self.view_data().same_kind(last) {
+        if self.view_data_in(pane).same_kind(last) {
             Task::none()
         } else {
-            self.handle_navigate_to(last.clone())
+            self.handle_navigate_to(pane, last.clone())
         }
     }
 
     /// Spawn a background thread that runs `run` (or returns an error), maps
-    /// the result into a `BackendResult`, and sends it on `tx`.
+    /// the result into a `BackendResult`, and sends it on `tx`. Failures carry
+    /// `rid` so the tick can route them to the requesting pane's slot.
     /// All search/radio/browse callers share this one thread body.
     pub(super) fn spawn_backend_thread<T, R, M>(
+        rid: u64,
         run: R,
         make_result: M,
         tx: mpsc::Sender<BackendResult>,
@@ -71,53 +75,58 @@ impl MusicPlayer {
                 let _ = tx.send(make_result(tracks));
             }
             Err(e) => {
-                let _ = tx.send(BackendResult::SearchError(e.to_string()));
+                let _ = tx.send(BackendResult::SearchError(rid, e.to_string()));
             }
         });
     }
 
-    pub fn handle_search_execute(&mut self) -> Task<Message> {
-        if self.show_search_history {
+    pub fn handle_search_execute(&mut self, pane: PaneId) -> Task<Message> {
+        if self.pane(pane).show_search_history {
             if let Some(i) = self.drag.hovered_search_history() {
-                return self.handle_search_history_select(i);
+                return self.handle_search_history_select(pane, i);
             }
         }
-        self.run_search()
+        self.run_search(pane)
     }
 
     pub fn handle_search_scope_changed(
         &mut self,
+        pane: PaneId,
         scope: crate::providers::SearchScope,
     ) -> Task<Message> {
-        if scope != self.search_scope {
-            self.search_scope = scope;
+        if scope != self.pane(pane).search_scope {
+            self.pane_mut(pane).search_scope = scope;
             self.save_session();
-            return self.run_search();
+            return self.run_search(pane);
         }
         Task::none()
     }
 
     pub fn handle_search_provider_changed(
         &mut self,
+        pane: PaneId,
         provider: crate::providers::ProviderId,
     ) -> Task<Message> {
-        if provider != self.search_provider {
-            self.search_provider = provider;
+        if provider != self.pane(pane).search_provider {
+            self.pane_mut(pane).search_provider = provider;
             // Clamp the scope to one the new provider supports.
-            if !provider.supported_scopes().contains(&self.search_scope) {
-                self.search_scope = provider.supported_scopes()[0];
+            if !provider
+                .supported_scopes()
+                .contains(&self.pane(pane).search_scope)
+            {
+                self.pane_mut(pane).search_scope = provider.supported_scopes()[0];
             }
             self.save_session();
-            return self.run_search();
+            return self.run_search(pane);
         }
         Task::none()
     }
 
-    pub fn handle_search_load_more(&mut self) {
-        if !matches!(self.view_data_mut().kind, ViewKind::Search(_)) {
+    pub fn handle_search_load_more(&mut self, pane: PaneId) {
+        if !matches!(self.view_data_in(pane).kind, ViewKind::Search(_)) {
             return;
         }
-        let vd = self.view_data();
+        let vd = self.view_data_in(pane);
         let ViewKind::Search(search) = &vd.kind else {
             return;
         };
@@ -131,21 +140,21 @@ impl MusicPlayer {
 
         // Append targets the slot that issued the original search. The id was
         // zeroed when the initial results landed, so mint a fresh one.
-        let rid = self.slot_request_id();
-        if let ViewKind::Search(s) = &mut self.view_data_mut().kind {
+        let rid = self.slot_request_id(pane);
+        if let ViewKind::Search(s) = &mut self.view_data_in_mut(pane).kind {
             s.append_in_flight = true;
         }
 
-        let query = self.search_query.clone();
+        let query = self.pane(pane).search_query.clone();
         let offset = count;
-        let provider = self.search_provider;
+        let provider = self.pane(pane).search_provider;
         let tx = self.result_tx.clone();
 
         thread::spawn(move || {
             let tracks = match crate::providers::search_more(provider, &query, offset) {
                 Ok(tracks) => tracks,
                 Err(e) => {
-                    let _ = tx.send(BackendResult::SearchError(e.to_string()));
+                    let _ = tx.send(BackendResult::SearchError(rid, e.to_string()));
                     return;
                 }
             };
@@ -153,38 +162,42 @@ impl MusicPlayer {
         });
     }
 
-    pub fn handle_search_history_select(&mut self, index: usize) -> Task<Message> {
-        if index < self.last_filtered_history.len() {
-            self.search_query = self.last_filtered_history[index].clone();
-            self.show_search_history = false;
+    pub fn handle_search_history_select(&mut self, pane: PaneId, index: usize) -> Task<Message> {
+        let query = self.pane(pane).last_filtered_history.get(index).cloned();
+        if let Some(query) = query {
+            self.pane_mut(pane).search_query = query;
+            self.pane_mut(pane).show_search_history = false;
             self.drag.clear_hovered_search_history();
-            self.run_search()
+            self.run_search(pane)
         } else {
             Task::none()
         }
     }
 
-    pub fn handle_delete_search_history(&mut self, index: usize) {
-        if index < self.last_filtered_history.len() {
-            let query = self.last_filtered_history[index].clone();
+    pub fn handle_delete_search_history(&mut self, pane: PaneId, index: usize) {
+        let query = self.pane(pane).last_filtered_history.get(index).cloned();
+        if let Some(query) = query {
             self.search_history.remove(&query);
-            self.update_search_history();
+            self.update_search_history(pane);
         }
     }
 
-    pub fn update_search_history(&mut self) {
-        let query_lower = self.search_query.to_lowercase();
-        self.last_filtered_history = self.search_history.filtered(&query_lower);
-        if self.last_filtered_history.len() > self.config.max_search_history_visible {
-            self.last_filtered_history
-                .truncate(self.config.max_search_history_visible);
+    pub fn update_search_history(&mut self, pane: PaneId) {
+        let query_lower = self.pane(pane).search_query.to_lowercase();
+        let mut filtered = self.search_history.filtered(&query_lower);
+        if filtered.len() > self.config.max_search_history_visible {
+            filtered.truncate(self.config.max_search_history_visible);
         }
+        self.pane_mut(pane).last_filtered_history = filtered;
     }
 
-    pub fn activate_search_input(&mut self) -> iced::Task<crate::app::message::Message> {
-        self.update_search_history();
-        self.show_search_history = true;
-        CaptureSearchHistoryRows::new().into()
+    pub fn activate_search_input(
+        &mut self,
+        pane: PaneId,
+    ) -> iced::Task<crate::app::message::Message> {
+        self.update_search_history(pane);
+        self.pane_mut(pane).show_search_history = true;
+        CaptureSearchHistoryRows::new(pane).into()
     }
 
     /// Start a song or artist radio seeded by `provider`. When the track
@@ -192,6 +205,7 @@ impl MusicPlayer {
     /// spawned thread before querying the radio.
     pub fn start_radio_provider(
         &mut self,
+        pane: PaneId,
         provider: crate::providers::ProviderId,
         track: &Track,
         artist: bool,
@@ -214,9 +228,9 @@ impl MusicPlayer {
         } else {
             ViewKind::SongRadio(label.clone())
         };
-        let nav_task = self.push_new_view(ViewData::new_radio(kind));
+        let nav_task = self.push_new_view(pane, ViewData::new_radio(kind));
         let rid = self.request_ids.next();
-        self.view_data_mut().request_id = rid;
+        self.view_data_in_mut(pane).request_id = rid;
         let word = if artist {
             self.strings.radio_word_artist
         } else {
@@ -245,6 +259,7 @@ impl MusicPlayer {
             crate::providers::radio_song
         };
         Self::spawn_backend_thread(
+            rid,
             move || {
                 let id = if id.is_empty() {
                     let resolved = if artist {
@@ -276,6 +291,7 @@ impl MusicPlayer {
     /// `release` pages).
     pub fn handle_browse(
         &mut self,
+        pane: PaneId,
         kind: &ViewKind,
         provider: crate::providers::ProviderId,
     ) -> Task<Message> {
@@ -283,18 +299,22 @@ impl MusicPlayer {
             .browse_params()
             .expect("start_browse called with a non-browse ViewKind");
         let (id, kind_str, label) = (params.id, params.kind, params.name);
-        let nav_task = self.push_new_view(ViewData {
-            kind: kind.clone(),
-            content: crate::load_state::LoadState::Loading,
-            ..Default::default()
-        });
+        let nav_task = self.push_new_view(
+            pane,
+            ViewData {
+                kind: kind.clone(),
+                content: crate::load_state::LoadState::Loading,
+                ..Default::default()
+            },
+        );
         let rid = self.request_ids.next();
-        self.view_data_mut().request_id = rid;
+        self.view_data_in_mut(pane).request_id = rid;
         let msg = (self.strings.opening)(label);
         self.notify(msg);
         let tx = self.result_tx.clone();
         let id = id.to_string();
         Self::spawn_backend_thread(
+            rid,
             move || crate::providers::browse(provider, &id, kind_str),
             move |(tracks, meta)| BackendResult::BrowseResults(rid, tracks, meta),
             tx,
@@ -302,8 +322,8 @@ impl MusicPlayer {
         nav_task
     }
 
-    pub fn current_library_item(&self) -> Option<LibraryItem> {
-        match &self.view_data().kind {
+    pub fn current_library_item(&self, pane: PaneId) -> Option<LibraryItem> {
+        match &self.view_data_in(pane).kind {
             ViewKind::Artist(a) => Some(LibraryItem {
                 kind: LibraryKind::Artist,
                 id: a.id.clone(),

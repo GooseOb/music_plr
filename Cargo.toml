@@ -7,6 +7,10 @@ license = "MIT"
 repository = "https://github.com/GooseOb/music_plr"
 readme = "README.md"
 
+[profile.dev]
+debug = "line-tables-only"
+incremental = true
+
 [dependencies]
 iced = { version = "0.14", features = ["image", "svg", "tokio", "debug", "canvas", "advanced"] }
 # Pinned to the same version iced resolves to, so we can implement the

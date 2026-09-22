@@ -13,6 +13,7 @@ use super::{
 };
 use crate::{
     app::{
+        pane::PaneId,
         view_data::{AlbumRef, PlaylistRef},
         TrackListKind, ViewKind,
     },
@@ -35,13 +36,17 @@ fn section_kind_label(kind: ArtistSectionKind, tr: &crate::i18n::Strings) -> &st
     }
 }
 
-pub(super) fn view_artist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
-    let ViewKind::Artist(entry) = &player.view_data().kind else {
+pub(super) fn view_artist<'a>(
+    player: &'a MusicPlayer,
+    pane: PaneId,
+) -> Element<'a, Message, AppTheme> {
+    let ViewKind::Artist(entry) = &player.view_data_in(pane).kind else {
         return empty_state(player.strings.not_an_artist_page);
     };
     let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::new();
     children.push(header(
         player,
+        pane,
         &entry.id,
         &entry.name,
         entry.page.header.as_ref(),
@@ -55,8 +60,8 @@ pub(super) fn view_artist<'a>(player: &'a MusicPlayer) -> Element<'a, Message, A
         ArtistSectionKind::Related,
     ] {
         let section = entry.page.section(kind);
-        children.push(section_header(kind, section.provider, player.strings));
-        children.push(section_body(player, section, kind));
+        children.push(section_header(pane, kind, section.provider, player.strings));
+        children.push(section_body(player, pane, section, kind));
     }
 
     scrollable(
@@ -80,6 +85,7 @@ pub(crate) fn header_thumb_key(id: &str) -> String {
 
 /// Provider picker for the header block (thumbnail / description source).
 fn header_provider_picker(
+    pane: PaneId,
     selected: Option<ProviderId>,
     tr: &'static crate::i18n::Strings,
 ) -> Element<'static, Message, AppTheme> {
@@ -92,7 +98,7 @@ fn header_provider_picker(
             (
                 p.label().to_string(),
                 selected == Some(p),
-                Message::ArtistHeaderProviderChanged(p),
+                Message::ArtistHeaderProviderChanged(pane, p),
             )
         })),
     ])
@@ -105,6 +111,7 @@ fn header_provider_picker(
 /// whichever provider's header arrived first.
 fn header<'a>(
     player: &'a MusicPlayer,
+    pane: PaneId,
     id: &str,
     name: &'a str,
     header: Option<&'a crate::providers::ArtistHeader>,
@@ -146,8 +153,12 @@ fn header<'a>(
         );
     }
 
-    let mut actions = vec![header_provider_picker(header_provider, player.strings)];
-    if let Some(item) = player.current_library_item() {
+    let mut actions = vec![header_provider_picker(
+        pane,
+        header_provider,
+        player.strings,
+    )];
+    if let Some(item) = player.current_library_item(pane) {
         let saved = player.library.contains(item.kind, &item.id);
         actions.push(
             Container::new(
@@ -176,6 +187,7 @@ fn header<'a>(
 }
 
 fn section_header(
+    pane: PaneId,
     kind: ArtistSectionKind,
     selected: Option<ProviderId>,
     tr: &'static crate::i18n::Strings,
@@ -184,7 +196,7 @@ fn section_header(
         (
             provider.label(),
             selected == Some(provider),
-            Message::ArtistSectionProviderChanged(kind, provider),
+            Message::ArtistSectionProviderChanged(pane, kind, provider),
         )
     }));
     Container::new(
@@ -210,6 +222,7 @@ fn section_header(
 /// Render one card section's contents into card widgets.
 fn cards<'a>(
     player: &'a MusicPlayer,
+    pane: PaneId,
     provider: ProviderId,
     content: &'a SectionContent,
 ) -> Vec<Element<'a, Message, AppTheme>> {
@@ -226,6 +239,7 @@ fn cards<'a>(
                     &c.title,
                     &subtitle,
                     Message::Browse(
+                        pane,
                         ViewKind::Album(AlbumRef {
                             id: c.id.clone(),
                             name: c.title.clone(),
@@ -249,6 +263,7 @@ fn cards<'a>(
                     &c.title,
                     "",
                     Message::Browse(
+                        pane,
                         ViewKind::PlaylistView(PlaylistRef {
                             id: c.id.clone(),
                             name: c.title.clone(),
@@ -270,6 +285,7 @@ fn cards<'a>(
                     &r.name,
                     &r.stat,
                     Message::OpenArtist {
+                        pane,
                         id: r.id.clone(),
                         name: r.name.clone(),
                         source: provider,
@@ -282,6 +298,7 @@ fn cards<'a>(
 }
 
 fn failed_state<'a>(
+    pane: PaneId,
     provider: Option<ProviderId>,
     kind: ArtistSectionKind,
     e: &str,
@@ -292,7 +309,9 @@ fn failed_state<'a>(
             text((tr.couldnt_load)(e)).into(),
             Button::new(tr.retry)
                 .padding([theme::SPACING_2XS, theme::SPACING_SM])
-                .on_press_maybe(provider.map(|p| Message::ArtistSectionProviderChanged(kind, p)))
+                .on_press_maybe(
+                    provider.map(|p| Message::ArtistSectionProviderChanged(pane, kind, p)),
+                )
                 .into(),
         ])
         .align_x(alignment::Horizontal::Center)
@@ -304,10 +323,11 @@ fn failed_state<'a>(
 
 fn section_body<'a>(
     player: &'a MusicPlayer,
+    pane: PaneId,
     section: &'a ArtistSection,
     kind: ArtistSectionKind,
 ) -> Element<'a, Message, AppTheme> {
-    let view_data = player.view_data();
+    let view_data = player.view_data_in(pane);
 
     if kind == ArtistSectionKind::Popular {
         // Popular tracks live in the view's track list so all the usual
@@ -317,11 +337,11 @@ fn section_body<'a>(
                 if tracks.is_empty() {
                     empty_state(player.strings.nothing_here)
                 } else {
-                    view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
+                    view_track_list(tracks.as_slice(), player, pane, TrackListKind::Active, 0)
                 }
             }
             LoadState::Failed(e) => {
-                return failed_state(section.provider, kind, e, player.strings);
+                return failed_state(pane, section.provider, kind, e, player.strings);
             }
             LoadState::Loading => {
                 return loading_state(player.strings.loading);
@@ -333,14 +353,14 @@ fn section_body<'a>(
     let content = match &section.state {
         LoadState::Ready(content) => content,
         LoadState::Failed(e) => {
-            return failed_state(section.provider, kind, e, player.strings);
+            return failed_state(pane, section.provider, kind, e, player.strings);
         }
         LoadState::Loading => {
             return loading_state(player.strings.loading);
         }
     };
     let provider = section.provider.unwrap_or_default();
-    h_scroll_cards(cards(player, provider, content), player.strings)
+    h_scroll_cards(cards(player, pane, provider, content), player.strings)
 }
 
 /// A horizontal row of square art cards (pic on top, text below).

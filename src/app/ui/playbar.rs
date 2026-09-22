@@ -43,7 +43,12 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
             .map(|id| (id.to_string(), t.source))
     });
 
-    let artist_el = subtitle_artist(artist, theme::TEXT_SIZE_SM, artist_target);
+    let artist_el = subtitle_artist(
+        player.focused_pane_id,
+        artist,
+        theme::TEXT_SIZE_SM,
+        artist_target,
+    );
 
     let track_info =
         Column::with_children([text(title).into(), artist_el]).spacing(theme::SPACING_XXS);
@@ -104,13 +109,14 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     .width(theme::QUEUE_BTN_WIDTH)
     .height(theme::QUEUE_BTN_WIDTH);
 
+    let lyrics_open = player.focused_pane().lyrics.is_some();
     let lyrics_btn = Button::new(
         icons::icon(icons::LYRICS_ICON, theme::ICON_SIZE_MD)
-            .style(icon_playbar_button(player.lyrics.is_some())),
+            .style(icon_playbar_button(lyrics_open)),
     )
     .padding(theme::SPACING_XS)
-    .style(button_style_playbar(player.lyrics.is_some()))
-    .on_press(Message::ShowLyrics)
+    .style(button_style_playbar(lyrics_open))
+    .on_press(Message::ShowLyrics(player.focused_pane_id))
     .width(theme::QUEUE_BTN_WIDTH)
     .height(theme::QUEUE_BTN_WIDTH);
 

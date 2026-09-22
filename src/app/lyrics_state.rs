@@ -1,7 +1,10 @@
 //! Lyrics overlay state: which track's lyrics are shown, the loaded lyrics,
 //! the active view mode, and the edit buffer.
 
-use crate::{load_state::LoadState, lyrics::Lyrics};
+use crate::{
+    load_state::LoadState,
+    lyrics::{Lyrics, LyricsProvider},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LyricsViewMode {
@@ -19,6 +22,7 @@ pub struct LyricsViewport {
 
 #[derive(Debug, Clone)]
 pub struct LyricsState {
+    pub provider: LyricsProvider,
     pub track_id: Option<String>,
     pub lyrics: LoadState<Lyrics>,
     pub mode: LyricsViewMode,
@@ -44,8 +48,9 @@ impl LyricsViewMode {
 }
 
 impl LyricsState {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(provider: LyricsProvider) -> Self {
         Self {
+            provider,
             track_id: None,
             lyrics: LoadState::Loading,
             mode: LyricsViewMode::Selectable,

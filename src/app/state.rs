@@ -14,8 +14,8 @@ use crate::{
         dependency_dialog::{DepOpState, DependencyDialog},
         dialog::Dialog,
         interaction::{DragState, TrackListSearch, TrackPos},
-        lyrics_state::LyricsState,
         message::{BackendResult, Message},
+        pane::{Pane, PaneId, SplitNode},
         ui,
         update::operation::CaptureBounds,
         view_data::{RequestIdGenerator, ViewData},
@@ -27,9 +27,9 @@ use crate::{
         JsonStore,
     },
     i18n::Strings,
-    lyrics::{LyricsClient, LyricsProvider},
+    lyrics::LyricsProvider,
     media_controls::{MediaControlEvent, MediaUpdate},
-    providers::{ProviderId, SearchScope},
+    providers::ProviderId,
     theme::{AppTheme, Palette},
     types::{PlayQueue, Track},
 };
@@ -52,36 +52,28 @@ pub struct MusicPlayer {
     pub audio: AudioPlayer,
     pub config: Config,
     pub strings: &'static Strings,
-    /// Back/forward navigation history. Each entry is a full `View` snapshot;
-    /// `nav_history_pos` indexes the active one, which is the single source of
-    /// truth for which view is active and its data (see [`Self::view_data`]).
-    pub nav_history: Vec<ViewData>,
-    pub nav_history_pos: usize,
+    /// Tiled main-view panes. Each pane owns its navigation history,
+    /// search-bar state, and lyrics overlay; `split_root` arranges them and
+    /// `focused_pane_id` receives ambiguous global actions (sidebar clicks,
+    /// keyboard navigation).
+    pub panes: std::collections::HashMap<PaneId, Pane>,
+    pub split_root: SplitNode,
+    pub focused_pane_id: PaneId,
+    pub next_pane_id: PaneId,
     pub request_ids: RequestIdGenerator,
-    /// The search-bar text. Kept on `MusicPlayer` because the search bar is
-    /// always visible regardless of which view is active.
-    pub search_query: String,
-    /// The active search scope (All / Songs / Videos / Artists / Albums /
-    /// Playlists). Global UI state, like `search_query`.
-    pub search_scope: SearchScope,
-    /// The active search provider (`YouTube` / `SoundCloud` / …). The scope list is
-    /// filtered to this provider's supported scopes. Global UI state.
-    pub search_provider: ProviderId,
     /// Snapshot of the most recent completed search view.
     /// The sidebar "Search" item restores this instead of opening
     /// a blank search; `None` until the first search completes this session.
+    /// Intentionally global (not per-pane): whichever pane searched last wins,
+    /// and sidebar clicks target the focused pane.
     pub last_search_view: Option<ViewData>,
-    /// Whether the search-history dropdown is open (global UI state).
-    pub show_search_history: bool,
-    /// Filtered history list for the dropdown (derived from
-    /// `search_history` + `search_query`).
-    pub last_filtered_history: Vec<String>,
 
     pub queue: PlayQueue,
     pub show_queue: bool,
     pub repeat: bool,
-    pub lyrics_client: LyricsClient,
-    pub lyrics: Option<LyricsState>,
+    /// Default lyrics provider for newly opened lyrics panes. Each pane
+    /// remembers its own selection in `LyricsState::provider`.
+    pub lyrics_provider: LyricsProvider,
 
     pub is_playing: bool,
     pub volume: f32,
@@ -160,7 +152,7 @@ impl Default for MusicPlayer {
 
 impl MusicPlayer {
     pub fn new() -> (Self, Task<Message>) {
-        (Self::default(), CaptureBounds::new().into())
+        (Self::default(), CaptureBounds::with_panes(vec![0]).into())
     }
 
     pub(crate) fn new_with(config: Config) -> Self {
@@ -176,6 +168,7 @@ impl MusicPlayer {
             .copied()
             .filter(|k| crate::deps::is_available(*k) && !crate::deps::installed_via_app(*k))
             .collect();
+        let panes = std::collections::HashMap::from([(0, Pane::new(0))]);
         let mut player = Self {
             audio: AudioPlayer::new(0.8),
             search_history: SearchHistory::load(),
@@ -183,23 +176,13 @@ impl MusicPlayer {
             pending_cache_id: None,
             normalization_cache: crate::audio::load_gains(),
             pending_normalization_id: None,
-            lyrics_client: LyricsClient::new(LyricsProvider::default()),
-            lyrics: None,
+            lyrics_provider: LyricsProvider::default(),
             config,
-            search_query: String::new(),
-            search_scope: SearchScope::Songs,
-            search_provider: if ProviderId::YouTube.capabilities().search {
-                ProviderId::YouTube
-            } else {
-                ProviderId::searchable()
-                    .iter()
-                    .copied()
-                    .find(|p| p.capabilities().search)
-                    .unwrap_or(ProviderId::SoundCloud)
-            },
+            panes,
+            split_root: SplitNode::Leaf(0),
+            focused_pane_id: 0,
+            next_pane_id: 1,
             last_search_view: None,
-            show_search_history: false,
-            last_filtered_history: Vec::new(),
             queue: PlayQueue::new(),
             is_playing: false,
             volume: 0.8,
@@ -218,8 +201,6 @@ impl MusicPlayer {
                 .then(|| Dialog::Dependencies(DependencyDialog::new(missing_deps, found_deps))),
             library: LibraryStore::load(),
             library_expanded: false,
-            nav_history: vec![ViewData::default()],
-            nav_history_pos: 0,
             request_ids: RequestIdGenerator::default(),
             result_tx,
             result_rx,
@@ -267,18 +248,68 @@ impl MusicPlayer {
         player
     }
 
-    /// Borrow the active view state (the live `nav_history[nav_history_pos]`).
-    /// This is the single source of truth for the current view; there is no
-    /// separate `view_data` field, so all reads go through here.
     #[inline]
-    pub fn view_data(&self) -> &ViewData {
-        &self.nav_history[self.nav_history_pos]
+    pub fn pane(&self, id: PaneId) -> &Pane {
+        &self.panes[&id]
     }
 
-    /// Mutably borrow the active view state.
+    #[inline]
+    pub fn pane_mut(&mut self, id: PaneId) -> &mut Pane {
+        self.panes.get_mut(&id).expect("unknown pane")
+    }
+
+    #[inline]
+    pub fn focused_pane(&self) -> &Pane {
+        self.pane(self.focused_pane_id)
+    }
+
+    /// Reset to a deterministic single pane for tests. `new_with` restores
+    /// the real on-disk session, so tests must not assume its shape.
+    #[cfg(test)]
+    pub(crate) fn reset_test_pane(&mut self, history: Vec<ViewData>) {
+        let mut pane = Pane::new(0);
+        pane.nav_history = history;
+        pane.nav_history_pos = 0;
+        self.panes = std::collections::HashMap::from([(0, pane)]);
+        self.split_root = SplitNode::Leaf(0);
+        self.focused_pane_id = 0;
+        self.next_pane_id = 1;
+    }
+
+    pub fn pane_ids(&self) -> Vec<PaneId> {
+        let mut ids: Vec<PaneId> = self.panes.keys().copied().collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// Borrow a pane's active view state (its live
+    /// `nav_history[nav_history_pos]`).
+    #[inline]
+    pub fn view_data_in(&self, id: PaneId) -> &ViewData {
+        self.pane(id).view_data()
+    }
+
+    /// Mutably borrow a pane's active view state.
+    #[inline]
+    pub fn view_data_in_mut(&mut self, id: PaneId) -> &mut ViewData {
+        self.pane_mut(id).view_data_mut()
+    }
+
+    /// Borrow the focused pane's active view state. This is the single source
+    /// of truth for the current view; there is no separate `view_data` field,
+    /// so all reads go through here. Prefer [`Self::view_data_in`] when a
+    /// pane id is already at hand.
+    #[inline]
+    pub fn view_data(&self) -> &ViewData {
+        self.focused_pane().view_data()
+    }
+
+    /// Mutably borrow the focused pane's active view state. Prefer
+    /// [`Self::view_data_in_mut`] when a pane id is already at hand.
     #[inline]
     pub fn view_data_mut(&mut self) -> &mut ViewData {
-        &mut self.nav_history[self.nav_history_pos]
+        let id = self.focused_pane_id;
+        self.view_data_in_mut(id)
     }
 
     pub fn view(&self) -> iced::Element<'_, Message, AppTheme> {

@@ -10,7 +10,8 @@ use super::{
 };
 use crate::{
     app::{
-        interaction::TrackListKind, ui::shared_components::empty_state, view_data::PlaylistEntry,
+        interaction::TrackListKind, pane::PaneId, ui::shared_components::empty_state,
+        view_data::PlaylistEntry,
     },
     icons,
     load_state::LoadState,
@@ -19,6 +20,7 @@ use crate::{
 
 pub(super) fn view_playlist<'a>(
     player: &'a MusicPlayer,
+    pane: PaneId,
     entry: &'a PlaylistEntry,
 ) -> Element<'a, Message, AppTheme> {
     let Some(pl) = player.playlists.playlists.get(entry.index) else {
@@ -60,12 +62,12 @@ pub(super) fn view_playlist<'a>(
     .padding([theme::SPACING_MD, theme::SPACING_XL])
     .into();
 
-    let track_list = view_track_list(&pl.tracks, player, TrackListKind::Active, 0);
+    let track_list = view_track_list(&pl.tracks, player, pane, TrackListKind::Active, 0);
 
     Column::with_children([header, track_list]).into()
 }
 
-pub(super) fn view_downloads(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+pub(super) fn view_downloads(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> {
     let header = Row::with_children([
         icons::icon(icons::DOWNLOAD_ICON, theme::ICON_SIZE_MD)
             .style(icon_fg_muted())
@@ -78,9 +80,9 @@ pub(super) fn view_downloads(player: &MusicPlayer) -> Element<'_, Message, AppTh
     .align_y(alignment::Vertical::Center)
     .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
-    let track_list = match &player.view_data().content {
+    let track_list = match &player.view_data_in(pane).content {
         LoadState::Ready(tracks) if !tracks.is_empty() => {
-            view_track_list(tracks.as_slice(), player, TrackListKind::Active, 0)
+            view_track_list(tracks.as_slice(), player, pane, TrackListKind::Active, 0)
         }
         _ => empty_state(player.strings.no_downloaded_tracks),
     };

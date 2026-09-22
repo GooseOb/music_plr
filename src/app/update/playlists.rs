@@ -5,18 +5,19 @@ use std::{
 
 use super::{Message, MusicPlayer, Task, Track, ViewData, PREPEND};
 use crate::{
-    app::{update::operation::CaptureBounds, Dialog, ImportMethod, ImportPlaylistDialog, ViewKind},
+    app::{pane::PaneId, Dialog, ImportMethod, ImportPlaylistDialog, ViewKind},
     data::JsonStore,
 };
 
 impl MusicPlayer {
     pub(crate) fn navigate_to_playlist(&mut self, index: usize) -> Task<Message> {
-        self.lyrics = None;
+        let pane = self.focused_pane_id;
+        self.pane_mut(pane).lyrics = None;
         self.clear_selection();
         self.drag.cleanup();
         let playlist_name = self.playlists.playlists[index].name.clone();
-        let task = self.push_new_view(ViewData::new_playlist(index, playlist_name));
-        let view = self.view_data().clone();
+        let task = self.push_new_view(pane, ViewData::new_playlist(index, playlist_name));
+        let view = self.view_data_in(pane).clone();
         self.seed_view_thumbnails(&view);
         self.save_session();
         task
@@ -78,50 +79,67 @@ impl MusicPlayer {
         };
         self.playlists.playlists[idx].name = new_name.trim().to_string();
         self.playlists.save();
-        if let ViewKind::Playlist(entry) = &mut self.view_data_mut().kind {
-            entry.name = new_name.trim().to_string();
+        for pane in self.pane_ids() {
+            if let ViewKind::Playlist(entry) = &mut self.view_data_in_mut(pane).kind {
+                if entry.index == idx {
+                    entry.name = new_name.trim().to_string();
+                }
+            }
         }
     }
 
     pub fn handle_delete_playlist(&mut self, index: usize) -> Task<Message> {
         self.playlists.delete(index);
 
-        // The currently viewed playlist may be the one being deleted. A
-        // `Playlist` view must always have a selected playlist, so either keep
-        // a valid adjacent selection or, if none remain, leave for a safe view.
-        let mut navigate_away = false;
-        let mut new_selection: Option<usize> = None;
-        if let ViewKind::Playlist(entry) = &self.view_data().kind {
-            let sp = entry.index;
-            if sp == index {
-                if self.playlists.playlists.is_empty() {
-                    navigate_away = true;
-                } else {
-                    new_selection = Some(index.min(self.playlists.playlists.len() - 1));
+        // Every pane viewing a playlist must stay valid: the deleted one
+        // moves to an adjacent selection (or a safe view when none remain),
+        // and views below it shift down by one. `push_new_view` focuses its
+        // pane, so restore the previous focus afterwards.
+        let prev_focus = self.focused_pane_id;
+        let mut nav_task = Task::none();
+        for pane in self.pane_ids() {
+            let action = match &self.view_data_in(pane).kind {
+                ViewKind::Playlist(entry) if entry.index == index => {
+                    if self.playlists.playlists.is_empty() {
+                        let provider = self.pane(pane).search_provider;
+                        let scope = self.pane(pane).search_scope;
+                        Some((
+                            true,
+                            0,
+                            ViewData::new_search(String::new(), provider, scope),
+                        ))
+                    } else {
+                        Some((
+                            false,
+                            index.min(self.playlists.playlists.len() - 1),
+                            ViewData::new_playlist(0, String::new()),
+                        ))
+                    }
                 }
-            } else if sp > index {
-                // The deleted playlist was above the selected one; shift the
-                // selection down by one so it still points at the same playlist.
-                new_selection = Some(sp - 1);
+                ViewKind::Playlist(entry) if entry.index > index => Some((
+                    false,
+                    entry.index - 1,
+                    ViewData::new_playlist(0, String::new()),
+                )),
+                _ => None,
+            };
+            let Some((navigate_away, new_idx, blank)) = action else {
+                continue;
+            };
+            if navigate_away {
+                nav_task = nav_task.chain(self.push_new_view(pane, blank));
+            } else {
+                let new_name = self.playlists.playlists[new_idx].name.clone();
+                if let ViewKind::Playlist(entry) = &mut self.view_data_in_mut(pane).kind {
+                    entry.index = new_idx;
+                    entry.name = new_name;
+                }
+                nav_task = nav_task.chain(self.capture_bounds_task());
             }
         }
-
-        let nav_task: Task<Message> = if navigate_away {
-            self.push_new_view(ViewData::new_search(
-                String::new(),
-                self.search_provider,
-                self.search_scope,
-            ))
-        } else if let Some(new_idx) = new_selection {
-            let new_name = self.playlists.playlists[new_idx].name.clone();
-            if let ViewKind::Playlist(entry) = &mut self.view_data_mut().kind {
-                entry.index = new_idx;
-                entry.name = new_name;
-            };
-            CaptureBounds::new().into()
-        } else {
-            Task::none()
-        };
+        if self.panes.contains_key(&prev_focus) {
+            self.focused_pane_id = prev_focus;
+        }
 
         self.dialog = None;
         nav_task
@@ -175,6 +193,7 @@ impl MusicPlayer {
 
     pub fn handle_add_to_playlist(
         &mut self,
+        pane: PaneId,
         playlist_idx: usize,
         indices: &[usize],
         list: super::TrackListKind,
@@ -185,7 +204,7 @@ impl MusicPlayer {
 
         let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&i| self.get_track_at(super::TrackPos::new(i, list)))
+            .filter_map(|&i| self.get_track_at(super::TrackPos::new(i, list, pane)))
             .collect();
         let count = self
             .playlists
@@ -196,23 +215,24 @@ impl MusicPlayer {
         self.notify(msg);
     }
 
-    pub fn handle_remove_from_playlist_batch(&mut self, indices: &[usize]) {
-        let ViewKind::Playlist(p) = &self.view_data().kind else {
+    pub fn handle_remove_from_playlist_batch(&mut self, pane: PaneId, indices: &[usize]) {
+        let ViewKind::Playlist(p) = &self.view_data_in(pane).kind else {
             return;
         };
         let removed = self.playlists.remove_tracks_at(p.index, indices);
         let msg = (self.strings.removed_n)(removed);
         self.notify(msg);
-        self.clear_selection_if_touched(indices, super::TrackListKind::Active);
+        self.clear_selection_if_touched_in(pane, indices, super::TrackListKind::Active);
     }
 
     pub fn handle_reorder_tracks_selected(
         &mut self,
+        pane: PaneId,
         drop_idx: usize,
         indices: &[usize],
         selection: &[usize],
     ) -> Vec<usize> {
-        let sp = match &self.view_data().kind {
+        let sp = match &self.view_data_in(pane).kind {
             ViewKind::Playlist(p) => p.index,
             _ => return Vec::new(),
         };
@@ -231,11 +251,12 @@ impl MusicPlayer {
     }
 
     pub fn handle_copy_selected(&mut self) {
+        let pane = self.focused_pane_id;
         self.clipboard.clear();
         let selection: Vec<usize> = self.view_data_mut().selection.clone();
         for &i in &selection {
             if let Some(track) =
-                self.get_track_at(super::TrackPos::new(i, super::TrackListKind::Active))
+                self.get_track_at(super::TrackPos::new(i, super::TrackListKind::Active, pane))
             {
                 self.clipboard.push(track);
             }
@@ -261,7 +282,7 @@ impl MusicPlayer {
         let msg = (self.strings.pasted_into)(count, &name);
         self.notify(msg);
         self.clipboard.clear();
-        CaptureBounds::new().into()
+        self.capture_bounds_task()
     }
 
     pub fn handle_delete_selected(&mut self) {
@@ -271,7 +292,7 @@ impl MusicPlayer {
         let indices: Vec<usize> = self.view_data_mut().selection.clone();
 
         if matches!(self.view_data_mut().kind, ViewKind::Playlist(_)) {
-            self.handle_remove_from_playlist_batch(&indices);
+            self.handle_remove_from_playlist_batch(self.focused_pane_id, &indices);
         } else if let ViewKind::Downloads = &self.view_data().kind {
             if let Some(tracks) = self.view_data_mut().tracks_mut() {
                 let removed_urls: Vec<String> = indices
@@ -291,15 +312,14 @@ impl MusicPlayer {
     }
 
     pub fn handle_delete_in_hovered_list(&mut self) {
-        let list = self
-            .drag
-            .hovered_track()
-            .map_or(super::TrackListKind::Active, |h| h.list);
+        let pane = self.focused_pane_id;
+        let hovered = self.focused_hovered_track();
+        let list = hovered.map_or(super::TrackListKind::Active, |h| h.list);
         let indices: Vec<usize> = {
-            let sel = self.selection(list);
+            let sel = self.selection_in(pane, list);
             if !sel.is_empty() {
                 sel.to_vec()
-            } else if let Some(h) = self.drag.hovered_track().filter(|h| h.list == list) {
+            } else if let Some(h) = hovered.filter(|h| h.list == list) {
                 vec![h.index]
             } else {
                 return;
@@ -314,12 +334,15 @@ impl MusicPlayer {
             }
             super::TrackListKind::Active => {
                 if !matches!(
-                    self.view_data().kind,
+                    self.view_data_in(pane).kind,
                     ViewKind::Playlist(_) | ViewKind::Downloads
                 ) {
                     return;
                 }
-                if self.selection(super::TrackListKind::Active).is_empty() {
+                if self
+                    .selection_in(pane, super::TrackListKind::Active)
+                    .is_empty()
+                {
                     self.view_data_mut().selection = indices;
                 }
                 self.handle_delete_selected();
@@ -498,10 +521,11 @@ impl MusicPlayer {
         if index >= self.playlists.playlists.len() {
             return Task::none();
         }
+        let pane = self.focused_pane_id;
         let name = self.playlists.playlists[index].name.clone();
         self.clear_selection();
         self.drag.cleanup();
-        let task = self.push_new_view(ViewData::new_playlist(index, name));
+        let task = self.push_new_view(pane, ViewData::new_playlist(index, name));
         self.save_session();
         task
     }
@@ -525,8 +549,7 @@ mod tests {
         for n in names {
             p.playlists.create(n);
         }
-        p.nav_history = vec![ViewData::new_playlist(0, String::new())];
-        p.nav_history_pos = 0;
+        p.reset_test_pane(vec![ViewData::new_playlist(0, String::new())]);
         p
     }
 
@@ -551,8 +574,9 @@ mod tests {
     #[test]
     fn deleting_selected_playlist_keeps_view_valid() {
         let mut p = player_with_playlists(&["A", "B", "C"]);
-        p.nav_history = vec![ViewData::new_playlist(1, "B".into())];
-        p.nav_history_pos = 0;
+        let pane = p.focused_pane_id;
+        p.pane_mut(pane).nav_history = vec![ViewData::new_playlist(1, "B".into())];
+        p.pane_mut(pane).nav_history_pos = 0;
 
         // Delete the playlist currently being viewed (B at index 1).
         let _ = p.handle_delete_playlist(1);
@@ -565,8 +589,9 @@ mod tests {
         }
 
         // Deleting a playlist above the selected one shifts the selection down.
-        p.nav_history = vec![ViewData::new_playlist(1, "C".into())];
-        p.nav_history_pos = 0;
+        let pane = p.focused_pane_id;
+        p.pane_mut(pane).nav_history = vec![ViewData::new_playlist(1, "C".into())];
+        p.pane_mut(pane).nav_history_pos = 0;
         let _ = p.handle_delete_playlist(0);
         assert_eq!(
             p.view_data().kind,
@@ -580,8 +605,9 @@ mod tests {
     #[test]
     fn deleting_last_playlist_navigates_away() {
         let mut p = player_with_playlists(&["A"]);
-        p.nav_history = vec![ViewData::new_playlist(0, "A".into())];
-        p.nav_history_pos = 0;
+        let pane = p.focused_pane_id;
+        p.pane_mut(pane).nav_history = vec![ViewData::new_playlist(0, "A".into())];
+        p.pane_mut(pane).nav_history_pos = 0;
 
         // Deleting the only playlist (while viewing it) must leave the
         // Playlist view rather than leaving it with no selection.
@@ -593,8 +619,9 @@ mod tests {
     #[test]
     fn reorder_playlist_moves_row_and_keeps_active_selection() {
         let mut p = player_with_playlists(&["A", "B", "C", "D"]);
-        p.nav_history = vec![ViewData::new_playlist(1, "B".into())];
-        p.nav_history_pos = 0;
+        let pane = p.focused_pane_id;
+        p.pane_mut(pane).nav_history = vec![ViewData::new_playlist(1, "B".into())];
+        p.pane_mut(pane).nav_history_pos = 0;
 
         // Drag playlist B (index 1) down to the end (insertion index 4).
         p.drag.drop_target =
@@ -621,8 +648,9 @@ mod tests {
     #[test]
     fn reorder_playlist_above_active_shifts_selection_down() {
         let mut p = player_with_playlists(&["A", "B", "C", "D"]);
-        p.nav_history = vec![ViewData::new_playlist(2, "C".into())];
-        p.nav_history_pos = 0;
+        let pane = p.focused_pane_id;
+        p.pane_mut(pane).nav_history = vec![ViewData::new_playlist(2, "C".into())];
+        p.pane_mut(pane).nav_history_pos = 0;
 
         // Drag D (index 3) up to the front (insertion index 0).
         p.drag.drop_target =
@@ -650,7 +678,10 @@ mod tests {
     fn delete_key_removes_hovered_queue_track() {
         let mut p = player_with_playlists(&["A"]);
         p.queue.tracks = vec![track("0"), track("1"), track("2")];
-        hover(&mut p, TrackPos::new(1, TrackListKind::Queue));
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(1, TrackListKind::Queue, pane));
+        };
         p.handle_delete_in_hovered_list();
         let ids: Vec<_> = p.queue.tracks.iter().map(|t| t.title.clone()).collect();
         assert_eq!(ids, vec!["Track 0", "Track 2"]);
@@ -661,7 +692,10 @@ mod tests {
         let mut p = player_with_playlists(&["A"]);
         p.queue.recently_played = vec![track("1"), track("2")].into();
         p.recent_selected_indices = vec![0];
-        hover(&mut p, TrackPos::new(0, TrackListKind::Recent));
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(0, TrackListKind::Recent, pane));
+        };
         p.handle_delete_in_hovered_list();
         assert_eq!(p.queue.recently_played.len(), 1);
         assert_eq!(p.queue.recently_played[0].title, "Track 2");
@@ -671,7 +705,10 @@ mod tests {
     fn delete_key_removes_hovered_recent_without_selection() {
         let mut p = player_with_playlists(&["A"]);
         p.queue.recently_played = vec![track("1"), track("2")].into();
-        hover(&mut p, TrackPos::new(1, TrackListKind::Recent));
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(1, TrackListKind::Recent, pane));
+        };
         p.handle_delete_in_hovered_list();
         assert_eq!(p.queue.recently_played.len(), 1);
         assert_eq!(p.queue.recently_played[0].title, "Track 1");
@@ -680,17 +717,21 @@ mod tests {
     #[test]
     fn delete_key_in_search_view_is_noop() {
         let mut p = player_with_playlists(&["A"]);
-        p.nav_history = vec![ViewData::new_search(
+        let pane = p.focused_pane_id;
+        p.pane_mut(pane).nav_history = vec![ViewData::new_search(
             String::new(),
             ProviderId::YouTube,
             crate::providers::SearchScope::Songs,
         )];
-        p.nav_history_pos = 0;
+        p.pane_mut(pane).nav_history_pos = 0;
         p.view_data_mut().set_tracks(vec![track("1")]);
         p.view_data_mut().selection = vec![0];
-        hover(&mut p, TrackPos::new(0, TrackListKind::Active));
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(0, TrackListKind::Active, pane));
+        };
         p.handle_delete_in_hovered_list();
-        assert_eq!(p.view_tracks().len(), 1);
+        assert_eq!(p.view_tracks_in(p.focused_pane_id).len(), 1);
         assert_eq!(p.selection(TrackListKind::Active), &[0]);
     }
 
@@ -704,7 +745,10 @@ mod tests {
         p.queue_selected_indices = vec![2];
         p.recent_selected_indices = vec![0];
 
-        hover(&mut p, TrackPos::new(2, TrackListKind::Queue));
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(2, TrackListKind::Queue, pane));
+        };
         p.handle_delete_in_hovered_list();
 
         assert!(p.selection(TrackListKind::Queue).is_empty());
@@ -722,7 +766,10 @@ mod tests {
         p.queue_selected_indices = vec![1];
         p.recent_selected_indices = vec![0];
 
-        hover(&mut p, TrackPos::new(0, TrackListKind::Recent));
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(0, TrackListKind::Recent, pane));
+        };
         p.handle_delete_in_hovered_list();
 
         assert!(p.selection(TrackListKind::Recent).is_empty());

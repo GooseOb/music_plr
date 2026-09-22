@@ -15,9 +15,7 @@ use crate::{
         import::{ImportCsvField, ImportPlaylistDialog},
         interaction::{DefaultCtxAction, TrackListKind},
         message::{BackendResult, EditTrackField, Message},
-        update::operation::{
-            CaptureBounds, CaptureContextMenu, CaptureSearchHistoryRows, ContextMenuGeometry,
-        },
+        update::operation::{CaptureContextMenu, CaptureSearchHistoryRows, ContextMenuGeometry},
     },
     deps::DepKind,
     load_state::LoadState,
@@ -29,11 +27,16 @@ impl crate::app::MusicPlayer {
     /// a one-to-three-line delegation to a handler in `app/update/`.
     #[allow(clippy::too_many_lines)]
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Some(pane) = message.pane() {
+            if !self.panes.contains_key(&pane) {
+                return Task::none();
+            }
+        }
         match message {
             Message::Tick => self.handle_tick(),
             Message::WindowResized(size) => {
                 self.window_size = size;
-                CaptureBounds::new().into()
+                self.capture_bounds_task()
             }
             Message::WindowOpened(id) => {
                 // On Windows the media-control server needs the window HWND,
@@ -60,24 +63,28 @@ impl crate::app::MusicPlayer {
             Message::CursorMoved(pos) => self.handle_cursor_moved(pos),
             Message::LeftButtonReleased => self.handle_left_release(),
             Message::ListBoundsCaptured(bounds) => {
-                let scroll = bounds.track.as_ref().map_or(0.0, |b| b.translation_y);
+                for (pane, geo) in &bounds.tracks {
+                    if let Some(p) = self.panes.get_mut(pane) {
+                        p.view_data_mut().scroll = geo.translation_y;
+                    }
+                }
                 self.bounds = *bounds;
-                self.view_data_mut().scroll = scroll;
 
                 Task::none()
             }
-            Message::SearchHistoryBoundsCaptured(geo) => {
-                self.bounds.search_history = Some(geo);
+            Message::SearchHistoryBoundsCaptured(pane, geo) => {
+                self.bounds.search_history.insert(pane, geo);
                 Task::none()
             }
             Message::ListScrolled {
+                pane,
                 list,
                 translation_y,
             } => {
                 let geo = match list {
-                    TrackListKind::Queue => &mut self.bounds.queue,
-                    TrackListKind::Active => &mut self.bounds.track,
-                    TrackListKind::Recent => &mut self.bounds.recent,
+                    TrackListKind::Queue => self.bounds.queue.as_mut(),
+                    TrackListKind::Active => self.bounds.tracks.get_mut(&pane),
+                    TrackListKind::Recent => self.bounds.recent.as_mut(),
                 };
                 if let Some(g) = geo {
                     g.translation_y = translation_y;
@@ -85,11 +92,12 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::LyricsScrolled {
+                pane,
                 translation_y,
                 viewport_h,
                 content_h,
             } => {
-                if let Some(state) = &mut self.lyrics {
+                if let Some(state) = &mut self.pane_mut(pane).lyrics {
                     state.viewport = Some(crate::app::LyricsViewport {
                         offset_y: translation_y,
                         height: viewport_h,
@@ -99,16 +107,16 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::KeyPressed { key, modifiers } => self.handle_key_press(key, modifiers),
-            Message::LyricsEditorAction(action) => {
-                if let Some(state) = &mut self.lyrics {
+            Message::LyricsEditorAction(pane, action) => {
+                if let Some(state) = &mut self.pane_mut(pane).lyrics {
                     if !matches!(action, iced::widget::text_editor::Action::Edit(_)) {
                         state.editor.perform(action);
                     }
                 }
                 Task::none()
             }
-            Message::CopyLyrics => {
-                let Some(state) = &self.lyrics else {
+            Message::CopyLyrics(pane) => {
+                let Some(state) = &self.pane(pane).lyrics else {
                     return Task::none();
                 };
                 let text = match &state.lyrics {
@@ -121,59 +129,66 @@ impl crate::app::MusicPlayer {
                 self.notify(self.strings.lyrics_copied);
                 iced::clipboard::write(text)
             }
-            Message::CustomLyricsEditorAction(action) => {
-                if let Some(state) = &mut self.lyrics {
+            Message::CustomLyricsEditorAction(pane, action) => {
+                if let Some(state) = &mut self.pane_mut(pane).lyrics {
                     if state.editing {
                         state.edit_content.perform(action);
                     }
                 }
                 Task::none()
             }
-            Message::StartCustomLyricsEdit => {
-                self.start_custom_lyrics_edit();
+            Message::StartCustomLyricsEdit(pane) => {
+                self.start_custom_lyrics_edit(pane);
                 Task::none()
             }
-            Message::EditCustomLyrics(name) => {
-                self.edit_custom_lyrics(name);
+            Message::EditCustomLyrics(pane, name) => {
+                self.edit_custom_lyrics(pane, name);
                 Task::none()
             }
-            Message::SelectCustomLyrics(name) => self.select_custom_lyrics(name),
-            Message::CustomLyricsNameChanged(name) => {
-                if let Some(state) = &mut self.lyrics {
+            Message::SelectCustomLyrics(pane, name) => self.select_custom_lyrics(pane, name),
+            Message::CustomLyricsNameChanged(pane, name) => {
+                if let Some(state) = &mut self.pane_mut(pane).lyrics {
                     if state.editing {
                         state.edit_name = name;
                     }
                 }
                 Task::none()
             }
-            Message::SaveCustomLyrics => self.save_custom_lyrics(),
-            Message::CancelCustomLyricsEdit => {
-                self.cancel_custom_lyrics_edit();
+            Message::SaveCustomLyrics(pane) => self.save_custom_lyrics(pane),
+            Message::CancelCustomLyricsEdit(pane) => {
+                self.cancel_custom_lyrics_edit(pane);
                 Task::none()
             }
-            Message::DeleteCustomLyrics => {
-                self.delete_custom_lyrics();
+            Message::DeleteCustomLyrics(pane) => {
+                self.delete_custom_lyrics(pane);
                 Task::none()
             }
-            Message::SearchInputChanged(query) => {
-                self.search_query = query;
-                self.update_search_history();
+            Message::SearchInputChanged(pane, query) => {
+                self.pane_mut(pane).search_query = query;
+                self.update_search_history(pane);
                 self.drag.clear_hovered_search_history();
-                CaptureSearchHistoryRows::new().into()
+                CaptureSearchHistoryRows::new(pane).into()
             }
-            Message::SearchExecute => self.handle_search_execute(),
-            Message::SearchScopeChanged(scope) => self.handle_search_scope_changed(scope),
-            Message::SearchProviderChanged(provider) => {
-                self.handle_search_provider_changed(provider)
+            Message::SearchExecute(pane) => self.handle_search_execute(pane),
+            Message::SearchScopeChanged(pane, scope) => {
+                self.handle_search_scope_changed(pane, scope)
             }
-            Message::Browse(kind, provider) => self.handle_browse(&kind, provider),
-            Message::OpenArtist { id, name, source } => self.open_artist(Some(&id), &name, source),
-            Message::ArtistSectionProviderChanged(section, provider) => {
-                self.handle_artist_section_provider_changed(section, provider);
+            Message::SearchProviderChanged(pane, provider) => {
+                self.handle_search_provider_changed(pane, provider)
+            }
+            Message::Browse(pane, kind, provider) => self.handle_browse(pane, &kind, provider),
+            Message::OpenArtist {
+                pane,
+                id,
+                name,
+                source,
+            } => self.open_artist(pane, Some(&id), &name, source),
+            Message::ArtistSectionProviderChanged(pane, section, provider) => {
+                self.handle_artist_section_provider_changed(pane, section, provider);
                 Task::none()
             }
-            Message::ArtistHeaderProviderChanged(provider) => {
-                self.handle_artist_header_provider_changed(provider);
+            Message::ArtistHeaderProviderChanged(pane, provider) => {
+                self.handle_artist_header_provider_changed(pane, provider);
                 Task::none()
             }
             Message::ToggleLibrarySave(item) => {
@@ -190,13 +205,15 @@ impl crate::app::MusicPlayer {
                 self.save_session();
                 Task::none()
             }
-            Message::SearchLoadMore => {
-                self.handle_search_load_more();
+            Message::SearchLoadMore(pane) => {
+                self.handle_search_load_more(pane);
                 Task::none()
             }
-            Message::SearchHistorySelected(index) => self.handle_search_history_select(index),
-            Message::DeleteSearchHistory(index) => {
-                self.handle_delete_search_history(index);
+            Message::SearchHistorySelected(pane, index) => {
+                self.handle_search_history_select(pane, index)
+            }
+            Message::DeleteSearchHistory(pane, index) => {
+                self.handle_delete_search_history(pane, index);
                 Task::none()
             }
             Message::DragPress(pressed) => {
@@ -270,16 +287,16 @@ impl crate::app::MusicPlayer {
             Message::AddToPlaylist(playlist_idx) => {
                 if let Some(Dialog::Picker(picker)) = &self.dialog {
                     let indices = picker.indices.clone();
-                    self.handle_add_to_playlist(playlist_idx, &indices, picker.list);
+                    self.handle_add_to_playlist(picker.pane, playlist_idx, &indices, picker.list);
                 }
                 Task::none()
             }
             Message::TogglePicker(indices) => {
-                let list = match &self.dialog {
-                    Some(Dialog::ContextMenu(m)) => m.pos.list,
-                    _ => TrackListKind::Active,
+                let (pane, list) = match &self.dialog {
+                    Some(Dialog::ContextMenu(m)) => (m.pos.pane, m.pos.list),
+                    _ => (self.focused_pane_id, TrackListKind::Active),
                 };
-                self.handle_toggle_picker(indices, list);
+                self.handle_toggle_picker(pane, indices, list);
                 Task::none()
             }
             Message::CloseDialog => {
@@ -367,7 +384,7 @@ impl crate::app::MusicPlayer {
                 self.show_queue = !self.show_queue;
                 self.save_session();
                 if self.show_queue {
-                    CaptureBounds::new().into()
+                    self.capture_bounds_task()
                 } else {
                     Task::none()
                 }
@@ -377,40 +394,50 @@ impl crate::app::MusicPlayer {
                 self.save_session();
                 Task::none()
             }
-            Message::ShowLyrics => self.handle_show_lyrics(),
+            Message::ShowLyrics(pane) => self.handle_show_lyrics(pane),
             Message::RevealNowPlaying => self.handle_reveal_now_playing(),
-            Message::SetLyricsViewMode(mode) => self.set_lyrics_view_mode(mode),
+            Message::SetLyricsViewMode(pane, mode) => self.set_lyrics_view_mode(pane, mode),
             Message::LyricsLineClicked(secs) => {
                 self.seek_to_seconds(secs);
                 Task::none()
             }
-            Message::SelectLyricsProvider(id) => {
-                self.handle_select_lyrics_provider(id);
+            Message::SelectLyricsProvider(pane, id) => {
+                self.handle_select_lyrics_provider(pane, id);
                 Task::none()
             }
             Message::SwitchQueueTab(tab) => {
                 self.queue.queue_tab = tab;
                 self.drag.clear_hovered_track();
                 self.save_session();
-                CaptureBounds::new().into()
+                self.capture_bounds_task()
             }
-            Message::NavigateTo(data) => {
-                self.lyrics = None;
-                self.handle_navigate_to(data)
+            Message::NavigateTo(pane, data) => {
+                self.pane_mut(pane).lyrics = None;
+                self.handle_navigate_to(pane, data)
             }
             Message::SidebarSearch => {
-                self.lyrics = None;
+                let pane = self.focused_pane_id;
+                self.pane_mut(pane).lyrics = None;
                 self.handle_sidebar_search()
             }
-            Message::NavigateBack => {
-                if self.lyrics.is_some() {
-                    self.lyrics = None;
+            Message::NavigateBack(pane) => {
+                if self.pane(pane).lyrics.is_some() {
+                    self.pane_mut(pane).lyrics = None;
                     Task::none()
                 } else {
-                    self.handle_navigate_back()
+                    self.handle_navigate_back(pane)
                 }
             }
-            Message::NavigateForward => self.handle_navigate_forward(),
+            Message::NavigateForward(pane) => self.handle_navigate_forward(pane),
+            Message::SplitHorizontal(pane) => {
+                self.split_pane(pane, crate::app::SplitDir::Horizontal)
+            }
+            Message::SplitVertical(pane) => self.split_pane(pane, crate::app::SplitDir::Vertical),
+            Message::ClosePane(pane) => self.close_pane(pane),
+            Message::FocusPane(pane) => {
+                self.focus_pane(pane);
+                Task::none()
+            }
             Message::SettingsChanged(change) => {
                 self.handle_settings_change(change);
                 Task::none()
@@ -504,16 +531,24 @@ impl crate::app::MusicPlayer {
                 }
             }
             Message::ContextMenuAddToQueue(list, indices) => {
+                let pane = match &self.dialog {
+                    Some(Dialog::ContextMenu(m)) => m.pos.pane,
+                    _ => self.focused_pane_id,
+                };
                 self.close_context_menu();
-                self.handle_add_to_queue(list, &indices);
+                self.handle_add_to_queue(pane, list, &indices);
                 Task::none()
             }
             Message::ContextMenuRemoveFromList(list, indices) => {
+                let pane = match &self.dialog {
+                    Some(Dialog::ContextMenu(m)) => m.pos.pane,
+                    _ => self.focused_pane_id,
+                };
                 self.close_context_menu();
                 match list {
                     TrackListKind::Queue => self.handle_remove_from_queue_batch(&indices),
                     TrackListKind::Recent => self.handle_remove_from_recent_batch(&indices),
-                    TrackListKind::Active => self.handle_remove_from_playlist_batch(&indices),
+                    TrackListKind::Active => self.handle_remove_from_playlist_batch(pane, &indices),
                 }
                 Task::none()
             }
@@ -571,12 +606,14 @@ impl crate::app::MusicPlayer {
                 self.dialog = None;
                 // If the active source is no longer searchable (its tools were
                 // not installed), fall back to one that is.
-                if !self.search_provider.capabilities().search {
-                    self.search_provider = ProviderId::searchable()
-                        .iter()
-                        .copied()
-                        .find(|p| p.capabilities().search)
-                        .unwrap_or(ProviderId::SoundCloud);
+                for pane in self.pane_ids() {
+                    if !self.pane(pane).search_provider.capabilities().search {
+                        self.pane_mut(pane).search_provider = ProviderId::searchable()
+                            .iter()
+                            .copied()
+                            .find(|p| p.capabilities().search)
+                            .unwrap_or(ProviderId::SoundCloud);
+                    }
                 }
                 Task::none()
             }

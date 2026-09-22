@@ -134,6 +134,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_name_empty: "Дайце тэксту назву",
     select_playlist_drop: "Выберыце плэйліст, каб кінуць у яго трэкі",
     reordered_playlist: "Плэйліст пераўпарадкаваны",
+    max_panes_reached: "Дасягнута максімальная колькасць панэляў",
 
     n_saved: |n| format!("Захавана: {n}"),
     n_plays: |n| format!("{} прайграваньняў", crate::util::format_count(n)),

@@ -2,7 +2,7 @@
 
 use iced::{Point, Rectangle};
 
-use super::ViewData;
+use super::{pane::PaneId, ViewData};
 use crate::{
     app::{
         interaction::{self, ContextMenuFocus, DefaultCtxAction, TrackListKind, TrackPos},
@@ -27,9 +27,13 @@ pub enum BackendResult {
     /// A `YouTube` player-client race event from a download thread; the tick
     /// loop surfaces it as a toast.
     PlayerClientEvent(crate::providers::ClientEvent),
-    SearchError(String),
+    SearchError(u64, String),
     ThumbnailDownloaded(ProviderId, String),
-    LyricsFetched(Result<Lyrics, String>, String),
+    LyricsFetched(
+        Result<Lyrics, String>,
+        String,
+        crate::lyrics::LyricsProvider,
+    ),
     NormalizationComputed(String, f32),
     CardPlaylistReady(usize, String, Vec<Track>),
     /// An artist id was resolved on `provider` (by name) for the page that
@@ -110,16 +114,18 @@ pub enum Message {
     CursorMoved(Point),
     LeftButtonReleased,
     ListBoundsCaptured(Box<CaptureBounds>),
-    SearchHistoryBoundsCaptured(crate::app::update::operation::ListGeometry),
+    SearchHistoryBoundsCaptured(PaneId, crate::app::update::operation::ListGeometry),
     ContextMenuBoundsCaptured {
         panel: Rectangle,
         row_offsets: Vec<f32>,
     },
     ListScrolled {
+        pane: PaneId,
         list: TrackListKind,
         translation_y: f32,
     },
     LyricsScrolled {
+        pane: PaneId,
         translation_y: f32,
         viewport_h: f32,
         content_h: f32,
@@ -129,21 +135,22 @@ pub enum Message {
         modifiers: iced::keyboard::Modifiers,
     },
 
-    SearchInputChanged(String),
-    SearchExecute,
-    SearchScopeChanged(crate::providers::SearchScope),
-    SearchProviderChanged(ProviderId),
-    SearchLoadMore,
-    SearchHistorySelected(usize),
-    DeleteSearchHistory(usize),
-    Browse(ViewKind, ProviderId),
+    SearchInputChanged(PaneId, String),
+    SearchExecute(PaneId),
+    SearchScopeChanged(PaneId, crate::providers::SearchScope),
+    SearchProviderChanged(PaneId, ProviderId),
+    SearchLoadMore(PaneId),
+    SearchHistorySelected(PaneId, usize),
+    DeleteSearchHistory(PaneId, usize),
+    Browse(PaneId, ViewKind, ProviderId),
     OpenArtist {
+        pane: PaneId,
         id: String,
         name: String,
         source: ProviderId,
     },
-    ArtistSectionProviderChanged(crate::providers::ArtistSectionKind, ProviderId),
-    ArtistHeaderProviderChanged(ProviderId),
+    ArtistSectionProviderChanged(PaneId, crate::providers::ArtistSectionKind, ProviderId),
+    ArtistHeaderProviderChanged(PaneId, ProviderId),
     DragPress(interaction::Pressed),
     HoverStart(interaction::HoverTarget),
     HoverEnd(interaction::HoverTarget),
@@ -187,25 +194,29 @@ pub enum Message {
     SwitchQueueTab(QueueTab),
     RevealNowPlaying,
     ToggleRepeat,
-    ShowLyrics,
-    SetLyricsViewMode(crate::app::LyricsViewMode),
+    ShowLyrics(PaneId),
+    SetLyricsViewMode(PaneId, crate::app::LyricsViewMode),
     LyricsLineClicked(f32),
-    SelectLyricsProvider(crate::lyrics::LyricsProvider),
-    LyricsEditorAction(iced::widget::text_editor::Action),
-    CopyLyrics,
-    StartCustomLyricsEdit,
-    EditCustomLyrics(String),
-    SelectCustomLyrics(String),
-    CustomLyricsNameChanged(String),
-    CustomLyricsEditorAction(iced::widget::text_editor::Action),
-    SaveCustomLyrics,
-    CancelCustomLyricsEdit,
-    DeleteCustomLyrics,
+    SelectLyricsProvider(PaneId, crate::lyrics::LyricsProvider),
+    LyricsEditorAction(PaneId, iced::widget::text_editor::Action),
+    CopyLyrics(PaneId),
+    StartCustomLyricsEdit(PaneId),
+    EditCustomLyrics(PaneId, String),
+    SelectCustomLyrics(PaneId, String),
+    CustomLyricsNameChanged(PaneId, String),
+    CustomLyricsEditorAction(PaneId, iced::widget::text_editor::Action),
+    SaveCustomLyrics(PaneId),
+    CancelCustomLyricsEdit(PaneId),
+    DeleteCustomLyrics(PaneId),
 
-    NavigateTo(ViewData),
+    NavigateTo(PaneId, ViewData),
     SidebarSearch,
-    NavigateBack,
-    NavigateForward,
+    NavigateBack(PaneId),
+    NavigateForward(PaneId),
+    SplitHorizontal(PaneId),
+    SplitVertical(PaneId),
+    ClosePane(PaneId),
+    FocusPane(PaneId),
 
     SettingsChanged(crate::app::update::SettingsChange),
     SettingsResetDefaults,
@@ -243,6 +254,60 @@ pub enum Message {
     UpdateApp,
 }
 
+impl Message {
+    /// The pane this message targets, if any. The dispatcher drops messages
+    /// for panes that no longer exist (e.g. an action sent before a close was
+    /// processed). `Queue`/`Recent` positions live in the global panel and
+    /// carry no pane.
+    pub fn pane(&self) -> Option<PaneId> {
+        let active_pane = |pos: &TrackPos| pos.list.is_main().then_some(pos.pane);
+        match self {
+            Message::SearchInputChanged(pane, _)
+            | Message::SearchExecute(pane)
+            | Message::SearchScopeChanged(pane, _)
+            | Message::SearchProviderChanged(pane, _)
+            | Message::SearchLoadMore(pane)
+            | Message::SearchHistorySelected(pane, _)
+            | Message::DeleteSearchHistory(pane, _)
+            | Message::Browse(pane, _, _)
+            | Message::ArtistSectionProviderChanged(pane, _, _)
+            | Message::ArtistHeaderProviderChanged(pane, _)
+            | Message::ShowLyrics(pane)
+            | Message::SetLyricsViewMode(pane, _)
+            | Message::SelectLyricsProvider(pane, _)
+            | Message::LyricsEditorAction(pane, _)
+            | Message::CopyLyrics(pane)
+            | Message::StartCustomLyricsEdit(pane)
+            | Message::EditCustomLyrics(pane, _)
+            | Message::SelectCustomLyrics(pane, _)
+            | Message::CustomLyricsNameChanged(pane, _)
+            | Message::CustomLyricsEditorAction(pane, _)
+            | Message::SaveCustomLyrics(pane)
+            | Message::CancelCustomLyricsEdit(pane)
+            | Message::DeleteCustomLyrics(pane)
+            | Message::NavigateTo(pane, _)
+            | Message::NavigateBack(pane)
+            | Message::NavigateForward(pane)
+            | Message::SplitHorizontal(pane)
+            | Message::SplitVertical(pane)
+            | Message::ClosePane(pane)
+            | Message::FocusPane(pane)
+            | Message::OpenArtist { pane, .. }
+            | Message::ListScrolled { pane, .. }
+            | Message::SearchHistoryBoundsCaptured(pane, _)
+            | Message::LyricsScrolled { pane, .. } => Some(*pane),
+            Message::DragPress(interaction::Pressed::Track(pos))
+            | Message::TrackRightClicked(pos)
+            | Message::PlayTrackAt(pos)
+            | Message::ContextMenuPlayTrack(pos)
+            | Message::HoverStart(interaction::HoverTarget::Track(pos))
+            | Message::HoverEnd(interaction::HoverTarget::Track(pos))
+            | Message::ContextMenuPlayViaProvider(_, pos) => active_pane(pos),
+            _ => None,
+        }
+    }
+}
+
 /// Editable text fields of a [`Track`](crate::types::Track) in the track
 /// editing popup. `source` is excluded: it is changed only via the provider
 /// "select" buttons, never a text input.
@@ -250,4 +315,102 @@ pub enum Message {
 pub enum EditTrackField {
     Title,
     Artist,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        app::interaction::{HoverTarget, Pressed},
+        providers::{ArtistSectionKind, SearchScope},
+    };
+
+    /// Every pane-scoped message must report its pane so the dispatcher can
+    /// drop actions for closed panes. Extend this list when adding a
+    /// `PaneId`-carrying variant.
+    #[test]
+    fn pane_scoped_messages_report_their_pane() {
+        let pane = 7;
+        let pos = TrackPos::new(0, TrackListKind::Active, pane);
+        let editor = || iced::widget::text_editor::Action::SelectAll;
+        let messages = vec![
+            Message::SearchInputChanged(pane, String::new()),
+            Message::SearchExecute(pane),
+            Message::SearchScopeChanged(pane, SearchScope::Songs),
+            Message::SearchProviderChanged(pane, ProviderId::YouTube),
+            Message::SearchLoadMore(pane),
+            Message::SearchHistorySelected(pane, 0),
+            Message::DeleteSearchHistory(pane, 0),
+            Message::Browse(pane, ViewKind::Downloads, ProviderId::YouTube),
+            Message::ArtistSectionProviderChanged(
+                pane,
+                ArtistSectionKind::Popular,
+                ProviderId::YouTube,
+            ),
+            Message::ArtistHeaderProviderChanged(pane, ProviderId::YouTube),
+            Message::ShowLyrics(pane),
+            Message::SetLyricsViewMode(pane, crate::app::LyricsViewMode::Synced),
+            Message::SelectLyricsProvider(pane, crate::lyrics::LyricsProvider::LrcLib),
+            Message::LyricsEditorAction(pane, editor()),
+            Message::CopyLyrics(pane),
+            Message::StartCustomLyricsEdit(pane),
+            Message::EditCustomLyrics(pane, String::new()),
+            Message::SelectCustomLyrics(pane, String::new()),
+            Message::CustomLyricsNameChanged(pane, String::new()),
+            Message::CustomLyricsEditorAction(pane, editor()),
+            Message::SaveCustomLyrics(pane),
+            Message::CancelCustomLyricsEdit(pane),
+            Message::DeleteCustomLyrics(pane),
+            Message::NavigateTo(pane, ViewData::default()),
+            Message::NavigateBack(pane),
+            Message::NavigateForward(pane),
+            Message::SplitHorizontal(pane),
+            Message::SplitVertical(pane),
+            Message::ClosePane(pane),
+            Message::FocusPane(pane),
+            Message::OpenArtist {
+                pane,
+                id: String::new(),
+                name: String::new(),
+                source: ProviderId::YouTube,
+            },
+            Message::ListScrolled {
+                pane,
+                list: TrackListKind::Active,
+                translation_y: 0.0,
+            },
+            Message::LyricsScrolled {
+                pane,
+                translation_y: 0.0,
+                viewport_h: 0.0,
+                content_h: 0.0,
+            },
+            Message::SearchHistoryBoundsCaptured(
+                pane,
+                crate::app::update::operation::ListGeometry::default(),
+            ),
+            Message::DragPress(Pressed::Track(pos)),
+            Message::TrackRightClicked(pos),
+            Message::PlayTrackAt(pos),
+            Message::ContextMenuPlayTrack(pos),
+            Message::HoverStart(HoverTarget::Track(pos)),
+            Message::HoverEnd(HoverTarget::Track(pos)),
+            Message::ContextMenuPlayViaProvider(ProviderId::YouTube, pos),
+        ];
+        assert!(!messages.is_empty());
+        for msg in messages {
+            assert_eq!(msg.pane(), Some(pane), "{msg:?}");
+        }
+
+        // `Queue`/`Recent` rows live in the global panel and carry no pane.
+        assert_eq!(
+            Message::PlayTrackAt(TrackPos::new(0, TrackListKind::Queue, pane)).pane(),
+            None
+        );
+        assert_eq!(
+            Message::PlayTrackAt(TrackPos::new(0, TrackListKind::Recent, pane)).pane(),
+            None
+        );
+        assert_eq!(Message::Tick.pane(), None);
+    }
 }

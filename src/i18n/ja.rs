@@ -134,6 +134,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_name_empty: "歌詞に名前を付けてください",
     select_playlist_drop: "曲を置く先のプレイリストを選択",
     reordered_playlist: "プレイリストを並べ替えました",
+    max_panes_reached: "ペインの最大数に達しました",
 
     n_saved: |n| format!("{n} 件保存"),
     n_plays: |n| format!("{} 回再生", crate::util::format_count(n)),

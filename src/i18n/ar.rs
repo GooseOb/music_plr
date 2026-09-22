@@ -134,6 +134,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_name_empty: "أعطِ كلماتك اسمًا",
     select_playlist_drop: "اختر قائمة تشغيل لإفلات الأغاني فيها",
     reordered_playlist: "تم إعادة ترتيب قائمة التشغيل",
+    max_panes_reached: "تم الوصول إلى الحد الأقصى لعدد الأجزاء",
 
     n_saved: |n| format!("{n} محفوظة"),
     n_plays: |n| format!("{} تشغيل", crate::util::format_count(n)),

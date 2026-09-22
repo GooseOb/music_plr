@@ -21,6 +21,7 @@ use super::{
 use crate::{
     app::{
         interaction::{HoverTarget, Pressed, PressedDrag, TrackListKind},
+        pane::PaneId,
         ui::overlays::pos_absolute,
         view_data::SearchData,
     },
@@ -32,7 +33,13 @@ use crate::{
     types::Track,
 };
 
-pub const SEARCH_INPUT_ID: Id = Id::new("search_input");
+pub fn search_input_id(pane: PaneId) -> Id {
+    Id::from(format!("search_input:{pane}"))
+}
+
+pub fn search_history_list_id(pane: PaneId) -> Id {
+    Id::from(format!("search_history_list:{pane}"))
+}
 
 fn scope_label(scope: crate::providers::SearchScope, player: &MusicPlayer) -> &str {
     let tr = player.strings;
@@ -45,15 +52,19 @@ fn scope_label(scope: crate::providers::SearchScope, player: &MusicPlayer) -> &s
     }
 }
 
-pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+pub(super) fn view_search_bar(
+    player: &MusicPlayer,
+    pane: PaneId,
+) -> Element<'_, Message, AppTheme> {
+    let pane_state = player.pane(pane);
     let input = text_input(
-        (player.strings.search_placeholder)(player.search_provider).as_str(),
-        &player.search_query,
+        (player.strings.search_placeholder)(pane_state.search_provider).as_str(),
+        &pane_state.search_query,
     )
-    .on_input(Message::SearchInputChanged)
-    .on_submit(Message::SearchExecute)
+    .on_input(move |q| Message::SearchInputChanged(pane, q))
+    .on_submit(Message::SearchExecute(pane))
     .padding([theme::SPACING_SM, theme::SPACING_MD])
-    .id(SEARCH_INPUT_ID)
+    .id(search_input_id(pane))
     .width(Length::Fill)
     .into();
 
@@ -63,8 +74,8 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
             .style(button_style_primary())
             .width(theme::SEARCH_BTN_SIZE)
             .height(theme::SEARCH_BTN_SIZE)
-            .on_press_maybe(if player.search_provider.capabilities().search {
-                Some(Message::SearchExecute)
+            .on_press_maybe(if pane_state.search_provider.capabilities().search {
+                Some(Message::SearchExecute(pane))
             } else {
                 None
             })
@@ -81,25 +92,21 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
             .map(|&provider| {
                 (
                     provider.label().to_string(),
-                    player.search_provider == provider,
-                    Message::SearchProviderChanged(provider),
+                    pane_state.search_provider == provider,
+                    Message::SearchProviderChanged(pane, provider),
                 )
             }),
     );
 
-    let scope_row = scope_tab_row(
-        player
-            .search_provider
-            .supported_scopes()
-            .iter()
-            .map(|&scope| {
-                (
-                    scope_label(scope, player).to_string(),
-                    player.search_scope == scope,
-                    Message::SearchScopeChanged(scope),
-                )
-            }),
-    );
+    let scope_row = scope_tab_row(pane_state.search_provider.supported_scopes().iter().map(
+        |&scope| {
+            (
+                scope_label(scope, player).to_string(),
+                pane_state.search_scope == scope,
+                Message::SearchScopeChanged(pane, scope),
+            )
+        },
+    ));
 
     let rows = Column::with_children([
         controls.into(),
@@ -120,23 +127,25 @@ pub(super) fn view_search_bar(player: &MusicPlayer) -> Element<'_, Message, AppT
 
 pub(super) fn view_search<'a>(
     player: &'a MusicPlayer,
+    pane: PaneId,
     search: &'a SearchData,
 ) -> Element<'a, Message, AppTheme> {
     let tab = &search.tab;
-    let content = &player.view_data().content;
+    let content = &player.view_data_in(pane).content;
     match content {
         LoadState::Failed(e) => empty_state((player.strings.search_failed)(e)),
         LoadState::Loading => loading_state(player.strings.searching),
         LoadState::Ready(results) if tab.is_track_tab() => {
-            view_search_track_tab(player, search, results)
+            view_search_track_tab(player, pane, search, results)
         }
-        LoadState::Ready(_) => view_search_card_tab(player, search, tab),
+        LoadState::Ready(_) => view_search_card_tab(player, pane, search, tab),
     }
 }
 
 /// The Songs/Videos tab: a scrollable, paged track list with "Load More".
 fn view_search_track_tab<'a>(
     player: &'a MusicPlayer,
+    pane: PaneId,
     search: &SearchData,
     results: &'a [Track],
 ) -> Element<'a, Message, AppTheme> {
@@ -145,7 +154,13 @@ fn view_search_track_tab<'a>(
     if results.is_empty() {
         children.push(empty_state(player.strings.no_tracks_found));
     } else {
-        children.push(view_track_list(results, player, TrackListKind::Active, 0));
+        children.push(view_track_list(
+            results,
+            player,
+            pane,
+            TrackListKind::Active,
+            0,
+        ));
 
         if !search.exhausted {
             let btn = Button::new(text(if search.append_in_flight {
@@ -155,7 +170,7 @@ fn view_search_track_tab<'a>(
             }))
             .padding(theme::SPACING_SM)
             .width(Length::Fill)
-            .on_press_maybe((!search.append_in_flight).then_some(Message::SearchLoadMore));
+            .on_press_maybe((!search.append_in_flight).then_some(Message::SearchLoadMore(pane)));
 
             children.push(Container::new(btn).padding(theme::SPACING_SM).into());
         }
@@ -167,6 +182,7 @@ fn view_search_track_tab<'a>(
 /// An Artists/Albums/Playlists tab: the concrete card list, filling the page.
 fn view_search_card_tab<'a>(
     player: &'a MusicPlayer,
+    pane: PaneId,
     search: &SearchData,
     tab: &'a SearchTab,
 ) -> Element<'a, Message, AppTheme> {
@@ -191,7 +207,7 @@ fn view_search_card_tab<'a>(
             thumbnail: c.thumbnail.clone(),
             provider: search.provider,
         };
-        card_row(player, i, &c.id, &c.title, &c.subtitle, &item)
+        card_row(player, pane, i, &c.id, &c.title, &c.subtitle, &item)
     });
 
     scrollable(Column::with_children(cards)).into()
@@ -203,6 +219,7 @@ fn view_search_card_tab<'a>(
 /// trailing bookmark button toggles library membership.
 fn card_row<'a>(
     player: &'a MusicPlayer,
+    pane: PaneId,
     index: usize,
     id: &'a str,
     title: &'a str,
@@ -229,12 +246,12 @@ fn card_row<'a>(
     let is_hovered = player.drag.is_hovered_card(item);
     let is_dragging_this = matches!(
         player.drag.pressed,
-        Some(PressedDrag { what: Pressed::Card(ref c), .. }) if c == item
+        Some(PressedDrag { what: Pressed::Card(ref c, _), .. }) if c == item
     );
     let hover_item = item.clone();
     let main = MouseArea::new(main)
         .interaction(player.drag.clickable_cursor_interaction())
-        .on_press(Message::DragPress(Pressed::Card(item.clone())))
+        .on_press(Message::DragPress(Pressed::Card(item.clone(), Some(pane))))
         .on_enter(Message::HoverStart(HoverTarget::Card(hover_item.clone())))
         .on_exit(Message::HoverEnd(HoverTarget::Card(hover_item.clone())));
     track_row(
@@ -263,12 +280,13 @@ pub(super) fn browse_meta(badge: &str, date: &str) -> Option<String> {
 
 pub(super) fn view_browse<'a>(
     player: &'a MusicPlayer,
+    pane: PaneId,
     provider: ProviderId,
     label: &'a str,
     thumb_key: &str,
     meta: Option<String>,
 ) -> Element<'a, Message, AppTheme> {
-    let content = &player.view_data().content;
+    let content = &player.view_data_in(pane).content;
 
     let image = thumbnail(
         theme::PAGE_THUMBNAIL_SIZE,
@@ -282,7 +300,7 @@ pub(super) fn view_browse<'a>(
                 .size(theme::TEXT_SIZE_SM)
                 .style(fg_secondary())
                 .into(),
-            view_library_button(player),
+            view_library_button(player, pane),
         ])
         .spacing(theme::SPACING_MD)
         .into(),
@@ -296,16 +314,16 @@ pub(super) fn view_browse<'a>(
         player.strings,
         player.strings.loading,
     ) {
-        Ok(tracks) => view_track_list(tracks, player, TrackListKind::Active, 0),
+        Ok(tracks) => view_track_list(tracks, player, pane, TrackListKind::Active, 0),
         Err(el) => el,
     };
 
     Column::with_children([header.into(), track_list]).into()
 }
 
-fn view_library_button(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+fn view_library_button(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> {
     let item = player
-        .current_library_item()
+        .current_library_item(pane)
         .expect("view_library_button should only be called when a library item is present");
     let saved = player.library.contains(item.kind, &item.id);
     toggle_bookmark_button(saved)
@@ -315,9 +333,10 @@ fn view_library_button(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
 pub(super) fn view_search_radio<'a>(
     player: &'a MusicPlayer,
+    pane: PaneId,
     label: &'a str,
 ) -> Element<'a, Message, AppTheme> {
-    let content = &player.view_data().content;
+    let content = &player.view_data_in(pane).content;
 
     let header = Container::new(text(label).width(Length::Fill).center())
         .padding([theme::SPACING_SM, theme::SPACING_XL]);
@@ -327,22 +346,22 @@ pub(super) fn view_search_radio<'a>(
         player.strings,
         player.strings.generating_radio,
     ) {
-        Ok(tracks) => view_track_list(tracks, player, TrackListKind::Active, 0),
+        Ok(tracks) => view_track_list(tracks, player, pane, TrackListKind::Active, 0),
         Err(el) => el,
     };
 
     Column::with_children([header.into(), track_list]).into()
 }
 
-pub const SEARCH_HISTORY_LIST_ID: Id = Id::new("search_history_list");
-
 pub(super) fn view_search_history(
     player: &MusicPlayer,
+    pane: PaneId,
     input_rect: Rectangle,
 ) -> Element<'_, Message, AppTheme> {
     let p = &player.app_theme.palette;
+    let pane_state = player.pane(pane);
 
-    let content: Element<'_, Message, AppTheme> = if player.last_filtered_history.is_empty() {
+    let content: Element<'_, Message, AppTheme> = if pane_state.last_filtered_history.is_empty() {
         Container::new(
             text(player.strings.no_recent_searches)
                 .style(fg_secondary())
@@ -351,7 +370,7 @@ pub(super) fn view_search_history(
         .padding([theme::SPACING_XS, theme::SPACING_MD])
         .into()
     } else {
-        let items = player
+        let items = pane_state
             .last_filtered_history
             .iter()
             .enumerate()
@@ -378,7 +397,7 @@ pub(super) fn view_search_history(
                             text_color,
                             ..Default::default()
                         })
-                        .on_press(Message::SearchHistorySelected(i))
+                        .on_press(Message::SearchHistorySelected(pane, i))
                         .into(),
                         Button::new(
                             icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM)
@@ -386,7 +405,7 @@ pub(super) fn view_search_history(
                         )
                         .padding(theme::SPACING_XS)
                         .style(button_style_hist())
-                        .on_press(Message::DeleteSearchHistory(i))
+                        .on_press(Message::DeleteSearchHistory(pane, i))
                         .into(),
                     ])
                     .align_y(alignment::Vertical::Center),
@@ -410,11 +429,11 @@ pub(super) fn view_search_history(
         let dropdown_height = player
             .bounds
             .search_history
-            .as_ref()
+            .get(&pane)
             .map_or(0.0, |g| g.bounds.height);
 
         scrollable(Column::with_children(items).padding(scroll_padding()))
-            .id(SEARCH_HISTORY_LIST_ID)
+            .id(search_history_list_id(pane))
             .height(dropdown_height)
             .into()
     };

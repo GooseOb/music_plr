@@ -134,6 +134,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_name_empty: "Дайте тексту название",
     select_playlist_drop: "Выберите плейлист, чтобы бросить в него треки",
     reordered_playlist: "Плейлист переупорядочен",
+    max_panes_reached: "Достигнуто максимальное число панелей",
 
     n_saved: |n| format!("Сохранено: {n}"),
     n_plays: |n| format!("{} воспроизведений", crate::util::format_count(n)),

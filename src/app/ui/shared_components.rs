@@ -11,6 +11,7 @@ use super::styles::{
 use crate::{
     app::{
         dependency_dialog::DepOpState,
+        pane::PaneId,
         ui::{spinner::spinner, styles::icon_playbar_button},
         Message,
     },
@@ -156,6 +157,7 @@ pub fn toggle_bookmark_button(is_saved: bool) -> Button<'static, Message, AppThe
 }
 
 pub fn subtitle_artist(
+    pane: PaneId,
     name: &str,
     size: u32,
     artist_target: Option<(String, crate::providers::ProviderId)>,
@@ -166,6 +168,7 @@ pub fn subtitle_artist(
             .padding(0)
             .style(super::styles::button_style_album())
             .on_press(Message::OpenArtist {
+                pane,
                 id,
                 name: name.to_string(),
                 source,
@@ -197,7 +200,7 @@ pub fn labeled_input<'a>(
 }
 
 pub fn disabled_text_input_row<'a>(label: &'a str, value: &str) -> Element<'a, Message, AppTheme> {
-    labeled_input(label, value, "", None)
+    labeled_input(label, value, "", None::<fn(String) -> Message>)
 }
 
 pub fn text_input_row<'a>(

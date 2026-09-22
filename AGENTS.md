@@ -6,9 +6,8 @@ YouTube-search music player with local playback and OS media controls, built wit
 
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`)
 - **Audio**: rodio + symphonia; **pipeline**: yt-dlp (stream/download)
-- **Media controls**: souvlaki (cross-platform: MPRIS/D-Bus on Linux, SMTC on Windows, Now Playing on macOS; pure-Rust zbus backend on Linux); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15
+- **Media controls**: souvlaki (MPRIS/D-Bus on Linux, SMTC on Windows, Now Playing on macOS); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15; **Logging**: tracing + tracing-subscriber
 - **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default, plus named user-added per-track lyrics (plain or LRC-synced) shown as tabs after the providers, editable/deletable from the lyrics view; on-disk cache in `data/lyrics_cache.rs`
-- **Logging**: tracing + tracing-subscriber
 
 ## Prerequisites
 
@@ -28,9 +27,7 @@ cargo +nightly fmt && cargo clippy && cargo test
 **Do not commit unless explicitly asked.** Leave changes in the working tree and report what changed; the user decides when and how it lands. This applies to `git commit` and anything that implicitly commits (`git merge`, `git rebase`, `git stash`, `git checkout` over local edits). Never `push`, amend, or rewrite history unprompted.
 
 When a commit _is_ requested: one logical change per commit, imperative subject under ~72 chars,
-and a body explaining **why** when it isn't obvious from the diff.
-
-Run `cargo +nightly fmt && cargo clippy && cargo test` before handing work back, committed or not.
+and a body explaining **why** when it isn't obvious from the diff. Run `cargo +nightly fmt && cargo clippy && cargo test` before handing work back, committed or not.
 
 ## Conventions
 
@@ -46,16 +43,17 @@ Run `cargo +nightly fmt && cargo clippy && cargo test` before handing work back,
 src/
 ├── main.rs            # Entry point
 ├── app.rs             # Module index: declares submodules + re-exports public types (MusicPlayer, Message, …)
-├── app/state.rs       # MusicPlayer (all state) + new()/Default + view_data accessors + view()
-├── app/lyrics_state.rs # LyricsState + LyricsViewMode (lyrics overlay state)
+├── app/state.rs       # MusicPlayer (all state) + new()/Default + pane/view accessors + view()
+├── app/pane.rs         # Pane (per-pane nav history + search bar + lyrics) + SplitNode tiling tree
+├── app/lyrics_state.rs # LyricsState + LyricsViewMode (per-pane lyrics state)
 ├── app/dialog.rs       # Dialog (exclusive overlay) + accessors
 ├── app/edit_track.rs   # EditTrackState (track-editing popup working copy)
 ├── app/playlist_picker.rs # PlaylistPicker (add-to-playlist overlay state)
-├── app/view_data.rs   # ViewData / ViewKind / NavEntry (per-view state)
-├── app/message.rs     # Message + BackendResult
-├── app/interaction.rs # TrackListKind, TrackPos, DragState, ContextMenuState
+├── app/view_data.rs   # ViewData / ViewKind (per-view state)
+├── app/message.rs     # Message + BackendResult (pane-scoped messages carry PaneId)
+├── app/interaction.rs # TrackListKind, TrackPos (+pane), DragState, ContextMenuState
 ├── app/import.rs     # ImportPlaylistDialog + filename-pattern matching/conflict engine
-├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, track_list)
+├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, split, track_list)
 ├── app/update/        # Per-domain handlers; dispatch.rs holds the top-level update()/subscription() dispatcher
 ├── audio/mod.rs       # AudioPlayer: rodio sink + yt-dlp process management
 ├── audio/growing.rs   # GrowingMediaSource (the still-growing file reader)
@@ -78,46 +76,44 @@ src/
 ## State Management
 
 - **`MusicPlayer`** (`app/state.rs`): the single source of truth. Holds audio/queue/playlists/config,
-  mpsc channels, `DragState`, `dialog: Option<Dialog>` (exclusive overlay:
-  Dependencies/Picker/DeleteConfirm/Edit/Import/ContextMenu), `nav_history`, `download_registry`, `stream_cache`,
-  `thumbnail_index` (per-provider `thumbnails/<slug>/` dirs on disk, extension sniffed from magic bytes so iced's extension-based loader decodes them),
-  `lyrics`/`lyrics_track_id`/`lyrics_loading`, and `track_list_search` (the in-list Ctrl+F overlay:
-  the active `TrackListKind`, live query, matched indices; the current match is just
-  `drag.hovered` when it is among the matches). **All per-view state** lives in `view_data`
-  (search `exhausted`, radio label, selected playlist); no separate `View`/`RadioKind` enum.
-- **`TrackListKind`** (`app/interaction.rs`): `Queue` / `Active` / `Recent` — the single carrier for "which track list?" across messages, `DragState`, selection, and scroll targeting. Helpers: `scrollable_id()` (each list has its own, so scroll ops can't hit the wrong widget), `first_index()` (1 for Queue, whose now-playing row renders outside the scrollable), `is_interactive()` (false for read-only `Recent`), `in_queue_panel()` (Queue+Recent share a geometry slot). Pass this instead of a bool.
-- **`TrackPos`** (`app/interaction.rs`): `{ index, list }` — an index is only meaningful against its list, so they travel together. Carried by `TrackPressed`/`TrackHoverStart`/`TrackRightClicked`/`PlayTrackAtIndex`/`ContextMenuPlayTrack`, `DragState`'s `pressed` (`Pressed::Track`), `last_click`, and the `get_track_at`/`toggle_selection` accessors. Pass this instead of a loose `(usize, TrackListKind)` pair.
+  mpsc channels, `DragState`, `dialog: Option<Dialog>` (exclusive overlay),
+  `panes: HashMap<PaneId, Pane>` + `split_root: SplitNode` + `focused_pane_id` (tiled main views;
+  sidebar/queue/playbar stay global), `download_registry`, `stream_cache`, `thumbnail_index`,
+  and `track_list_search` (in-list Ctrl+F: owning pane + `TrackListKind`, query, matches).
+  **All per-view state** lives in `view_data`; no separate `View`/`RadioKind` enum.
+- **`Pane`** (`app/pane.rs`): per-pane `nav_history` (capped at 20), search-bar state, and
+  `lyrics: Option<LyricsState>`. Splitting forks the pane (lyrics included; dropdowns reset);
+  `SplitNode` is an equally-weighted `Leaf`/`Row`/`Column` tree (max 4 panes, `SplitDir::Horizontal` =
+  side-by-side); `focused_pane_id` receives sidebar clicks, pane hover, and keyboard nav.
+- **`TrackListKind`** (`app/interaction.rs`): `Queue` / `Active` / `Recent` — the single carrier for "which track list?" across messages, `DragState`, selection, and scroll targeting. Helpers: `first_index()` (1 for Queue, whose now-playing row renders outside the scrollable). Pass this instead of a bool. Scrollable/input/scroll widget ids are per-pane (`track_list_id(pane)` etc. in `ui/`), so scroll ops can't hit the wrong pane.
+- **`TrackPos`** (`app/interaction.rs`): `{ index, list, pane }` — an index is only meaningful against its list, so they travel together (`pane` matters for `Active`; `Queue`/`Recent` normalize to `0` and ignore it). Carried by `TrackPressed`/`TrackRightClicked`/`PlayTrackAt`/`ContextMenuPlayTrack`, `DragState`'s `pressed` (`Pressed::Track`), `last_click`, and the `get_track_at`/`toggle_selection` accessors. Pass this instead of a loose `(usize, TrackListKind)` pair.
 - **`ContextMenuState`**: `pos: TrackPos` + selection-aware `target_indices`. Ops apply to all
   selected if the right-clicked track is selected, else just it; "Play"/radio target only it.
-  `Recent` tracks come from `recently_played` (queue/playlist items suppressed).
-- **`DragState`** (`app/interaction.rs`): one `pressed: Option<Pressed>` (dragged thing:
-  `Track(TrackPos)` / `Card(LibraryItem)` / `Playlist(usize)` row) and one `hovered: Option<HoverTarget>`
-  (cursor target; `Track` doubles as the keyboard-navigation focus), and `dragged: Option<(TrackListKind, Vec<usize>)>` — the dragged
-  track indices, resolved once at press time (selection if the pressed track is selected, else just it);
-  stored with its list because `pressed` is taken before drop handling. Single enum field each. `drop_target`
-  resolves the active drag: `Track`/`Playlist`/`Library` (insertion line), `PlaylistAdd` (track→existing
-  playlist, row highlighted), `PlaylistReorder { from, to }`. Same-list reorders; cross-list copies move
-  all selected; cards dropped on the playlist list become local playlists (`create_at` + bg `browse`).
-  Cleaned via `cleanup()`; accessors `pressed_track()`/`hovered_track()`/`set_hovered*`.
-- **Selection / list access** (`app/update/selection.rs`): `selection`, `toggle_selection`, `clear_selection`, `view_tracks`, `get_track_at`, `track_count` — all keyed by a `TrackListKind`. `Recent` has no selection: `selection` returns `&[]` and mutations are no-ops.
-- **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError`, `ThumbnailDownloaded(provider, id)` (marks that entry downloaded), `LyricsFetched(Option<Lyrics>, String)` (sets `lyrics`, caches to `lyrics_cache.json`, auto-cleared on track change), `NormalizationComputed(String, f32)` (caches a per-track gain in memory; read on subsequent plays), `CardPlaylistReady(usize, String, Vec<Track>)` (a dragged card became a playlist; fills the playlist at the given index with the browsed tracks). 250ms tick drains → `process_result`.
+  `Recent` tracks come from `recently_played` (queue/playlist items suppressed). Right-click focuses the source pane.
+- **`DragState`** (`app/interaction.rs`): one `pressed: Option<Pressed>` (dragged thing),
+  one `hovered: Option<HoverTarget>` (cursor target; `Track` doubles as keyboard focus),
+  and `dragged: Option<(PaneId, TrackListKind, Vec<usize>)>` (indices resolved at press time).
+  `drop_target`: `Track`/`Playlist`/`Library` (insertion line), `PlaylistAdd`, `PlaylistReorder`.
+  Same-pane reorders; cross-list/pane copies move all selected; cards dropped on playlists become local playlists.
+  Cleaned via `cleanup()`; accessors `hovered_track()`/`set_hovered*`.
+- **Selection / list access** (`app/update/selection.rs`): `selection_in`, `toggle_selection`, `clear_selection`, `view_tracks_in`, `get_track_at`, `track_count_in` — keyed by pane + `TrackListKind` (unscoped shims target the focused pane).
+- **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError(u64, String)` (the rid routes to the requesting pane's slot), `ThumbnailDownloaded(provider, id)` (marks that entry downloaded), `LyricsFetched(Result<Lyrics, String>, String, LyricsProvider)` (applies to lyrics panes waiting on that track+provider; tick refetches per pane on track change), `NormalizationComputed(String, f32)` (caches a per-track gain in memory; read on subsequent plays), `CardPlaylistReady(usize, String, Vec<Track>)` (a dragged card became a playlist; fills the playlist at the given index with the browsed tracks). 250ms tick drains → `process_result`.
 - **Media controls**: souvlaki thread → souvlaki's `MediaControlEvent` → `process_media_event` (tick); `MediaUpdate` flows main → thread.
-- **Nav history**: full `ViewData` in `NavEntry.data` (no separate `view`/`snapshot`); capped at 20. `push_nav_entry()` snapshots live `view_data`.
 
 ## Data Flow & Navigation
 
 - User → `Message` → `update()` → handler (spawns bg thread or mutates state). 250ms tick drains `result_rx` → `process_result`, `media_event_rx` → `process_media_event`; syncs audio, detects stream end → auto-next, sends media-control updates, updates progress. `view()` reads `&MusicPlayer`.
-- `nav_history: Vec<NavEntry>` + `nav_history_pos`; Back if `pos > 0`, Forward if `pos + 1 < len`.
-- `handle_navigate_to(data: ViewData)`: truncates at `pos+1`, installs target `ViewData` (no-op self-nav skipped via `ViewData::same_kind`), pushes, advances `pos`.
-- `push_nav_entry`: from `process_result` when search/radio results arrive. `SearchResultsAppend` syncs in place; "Load More" hidden once a page returns < `SEARCH_PAGE_SIZE`.
-- `Downloads` kind renders `ViewData.tracks` (synced from `DownloadRegistry` in tick); `Playlist` tracks read from `PlaylistStore` via `MusicPlayer::view_tracks`.
+- `nav_history: Vec<ViewData>` + `nav_history_pos` per pane; Back if `pos > 0`, Forward if `pos + 1 < len`. `\` splits side-by-side, `Shift+\` stacks, `Ctrl+W`/header `X` closes (max 4 panes), `Ctrl`+Arrows move focus between adjacent panes with wraparound holding row/column (`SplitNode::neighbor`, `wrap_edge`); sidebar clicks, `/`, and keyboard nav target the focused pane (click or hover any pane to focus; `push_new_view` focuses its pane).
+- `handle_navigate_to(pane, data: ViewData)`: truncates at `pos+1`, installs target `ViewData` (no-op self-nav skipped via `ViewData::same_kind`), pushes, advances `pos`.
+- Results route by request id to the requesting pane's slot (`slot_for_request` scans all panes). `SearchResultsAppend` syncs in place; "Load More" hidden once a page returns < `SEARCH_PAGE_SIZE`.
+- `Downloads` kind renders `ViewData.tracks` (synced from `DownloadRegistry` in tick); `Playlist` tracks read from `PlaylistStore` via `MusicPlayer::view_tracks_in`.
 
 ## UI Layout
 
 - **Sidebar** (`SIDEBAR_WIDTH = 300.0`): nav buttons (Search/Downloads), scrollable playlist list, create-playlist input, local import.
-- **Main**: global search bar + view (Search / SongRadio / ArtistRadio / Playlist / Downloads).
+- **Main**: `SplitNode` tiling of panes; each pane has its own search bar + view (Search / SongRadio / ArtistRadio / Playlist / Downloads / per-pane Lyrics). Split panes show a header (Back/Forward, title, close); single-pane mode has no extra chrome.
 - **Queue panel** (`QUEUE_MIN_WIDTH = 240.0`, width `max(window_width*0.2, 240.0)`); **Playbar** (bottom): track info, progress, play/pause/next/prev/queue, volume.
-- **Overlays** (exclusive `Dialog`, drop indicator, search-history dropdown, toast) via `iced::widget::Stack`.
+- **Overlays** (exclusive `Dialog`, drop indicator, per-pane search-history dropdown, toast) via `iced::widget::Stack`.
 
 ## iced API Notes
 
@@ -144,7 +140,7 @@ src/
 - `radio_song()`/`radio_artist()`: YouTube uses ytmusicapi's watch-playlist engine (`watch` mode, seeded by `video_id`/`browseId`, no yt-dlp fallback — needs Python + ytmusicapi); Last.fm uses `track.getsimilar` / top-tracks of similar artists; `download()`/`download_audio()` → `yt-dlp --extract-audio` MP3.
 - `theme/`: `Palette`+`AppTheme` (`mod.rs`), constants (`layout.rs`, re-exported), `Catalog` impls (`catalog.rs`).
 - **Artist page**: `ViewKind::Artist(ArtistEntry { id, name, source, page })` carries a serializable `ArtistPageState` (`providers/artist_page.rs`) - known per-provider artist ids, header, and a `sections: [ArtistSection; 4]` array indexed by `ArtistSectionKind` (each: selected provider + `LoadState<SectionContent>`); section ops (`start_section_load`, `serve_cached_section`, `merge_kind`, `fail_section`, `card_thumbs`) live on the type. `spawn_artist_kinds_fetch(provider, id, kinds)` (`ArtistDataKind`: Header/Popular/Albums/Playlists/Related) fetches only the requested pieces and delivers them incrementally - YT/MusicBrainz/Bandcamp/Last.fm answer in one call and split it, SoundCloud runs each endpoint as its own tokio task so sections land (and fail) independently. `open_artist()` loads the source provider's full page plus a Header-only companion fetch for each other header-capable provider (YouTube, SoundCloud, Bandcamp, Last.fm), in parallel; a section-picker switch serves from cache when covered, else loads just that kind. Results arrive as `BackendResult::ArtistIdResolved` + one `BackendResult::ArtistSectionLoaded` per kind and merge into the section currently selecting that provider; fetched kinds accumulate per provider in `CachedArtistPage` (page + which kinds arrived) so switching back is request-free. Popular tracks double as the view's track list.
-- `ViewKind` (`app/view_data.rs`): `Search(SearchData)`/`SongRadio`/`ArtistRadio`/`Artist`/`Album(BrowseRef)`/`PlaylistView(BrowseRef)`/`Playlist(PlaylistEntry)`/`Downloads`/`Settings`/`Lyrics`. Variants hold data structs; callers destructure `kind` once and read child fields directly (no per-field accessor methods).
+- `ViewKind` (`app/view_data.rs`): `Search(SearchData)`/`SongRadio`/`ArtistRadio`/`Artist`/`Album(BrowseRef)`/`PlaylistView(BrowseRef)`/`Playlist(PlaylistEntry)`/`Downloads`/`Settings`. Variants hold data structs; callers destructure `kind` once and read child fields directly (no per-field accessor methods).
 - `load_state.rs`: `LoadState<T, E = String>` (`Ready(T)` / `Failed(E)` / `Loading`) — used by `ViewData.content` (tracks + loading + error), `ArtistSection.state`, and `LyricsState.lyrics`.
 - `util.rs`: `format_duration`, `fuzzy_match`, `plural_suffix`, `try_probe_duration`, `remove_at`, `reorder_tracks` (unit-tested).
 

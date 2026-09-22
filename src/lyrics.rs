@@ -126,25 +126,6 @@ impl Lyrics {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct LyricsClient {
-    selected: LyricsProvider,
-}
-
-impl LyricsClient {
-    pub fn new(selected: LyricsProvider) -> Self {
-        Self { selected }
-    }
-
-    pub fn selected(&self) -> LyricsProvider {
-        self.selected
-    }
-
-    pub fn fetch(&self, req: &LyricsRequest) -> Result<Option<Lyrics>> {
-        self.selected.fetch(req)
-    }
-}
-
 fn fetch_lrclib(req: &LyricsRequest) -> Result<Option<Lyrics>> {
     fetch_lrclib_compat(req, LRCLIB_BASE, LyricsProvider::LrcLib)
 }

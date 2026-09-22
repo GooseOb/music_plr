@@ -1,6 +1,6 @@
 use super::{thread, BackendResult, Message, MusicPlayer, Task, ViewData};
 use crate::{
-    app::{view_data::ArtistEntry, ViewKind},
+    app::{pane::PaneId, view_data::ArtistEntry, ViewKind},
     load_state::LoadState,
     providers::{
         spawn_artist_kinds_fetch, ArtistDataKind, ArtistKindData, ArtistKindResult,
@@ -24,6 +24,7 @@ fn same_popular_ids(
 impl MusicPlayer {
     pub fn open_artist(
         &mut self,
+        pane: PaneId,
         id: Option<&str>,
         name: &str,
         source: ProviderId,
@@ -39,25 +40,28 @@ impl MusicPlayer {
         });
         // Popular tracks render from the view's track list; keep it in the
         // Loading state until they arrive instead of an empty "Nothing here".
-        let nav_task = self.push_new_view(ViewData {
-            kind,
-            content: LoadState::Loading,
-            ..Default::default()
-        });
+        let nav_task = self.push_new_view(
+            pane,
+            ViewData {
+                kind,
+                content: LoadState::Loading,
+                ..Default::default()
+            },
+        );
         let rid = self.request_ids.next();
-        self.view_data_mut().request_id = rid;
+        self.view_data_in_mut(pane).request_id = rid;
         let msg = (self.strings.opening_artist)(name);
         self.notify(msg);
 
         // Source: everything it can serve. YouTube answers in one request;
         // SoundCloud runs all five endpoints concurrently.
-        self.load_artist_page(rid, name, source, ArtistDataKind::ALL);
+        self.load_artist_page(pane, rid, name, source, ArtistDataKind::ALL);
         // Companion headers (e.g. SoundCloud followers or a Last.fm bio on
         // a YouTube artist page) — one cheap header-only request per other
         // header-capable provider, so the header picker switches request-free.
         for &provider in ProviderId::header_providers() {
             if provider != source {
-                self.load_artist_page(rid, name, provider, &[ArtistDataKind::Header]);
+                self.load_artist_page(pane, rid, name, provider, &[ArtistDataKind::Header]);
             }
         }
         nav_task
@@ -69,13 +73,14 @@ impl MusicPlayer {
     /// is available.
     fn load_artist_page(
         &mut self,
+        pane: PaneId,
         rid: u64,
         name: &str,
         provider: ProviderId,
         kinds: &'static [ArtistDataKind],
     ) {
         let known_id = {
-            let ViewKind::Artist(entry) = &mut self.view_data_mut().kind else {
+            let ViewKind::Artist(entry) = &mut self.view_data_in_mut(pane).kind else {
                 return;
             };
             entry.page.provider_ids.get(&provider).cloned()
@@ -135,11 +140,11 @@ impl MusicPlayer {
 
     /// Reuse the slot's live request id so results keep matching this
     /// view even across several concurrent loads.
-    pub(super) fn slot_request_id(&mut self) -> u64 {
-        let current = self.view_data().request_id;
+    pub(super) fn slot_request_id(&mut self, pane: PaneId) -> u64 {
+        let current = self.view_data_in(pane).request_id;
         if current == 0 {
             let next = self.request_ids.next();
-            self.view_data_mut().request_id = next;
+            self.view_data_in_mut(pane).request_id = next;
             next
         } else {
             current
@@ -148,13 +153,14 @@ impl MusicPlayer {
 
     pub fn handle_artist_section_provider_changed(
         &mut self,
+        pane: PaneId,
         section_kind: ArtistSectionKind,
         provider: ProviderId,
     ) {
         let name;
         let served;
         {
-            let ViewKind::Artist(entry) = &mut self.view_data_mut().kind else {
+            let ViewKind::Artist(entry) = &mut self.view_data_in_mut(pane).kind else {
                 return;
             };
 
@@ -170,28 +176,28 @@ impl MusicPlayer {
             if let SectionContent::Tracks(tracks) = content {
                 // Popular tracks mirror into the view's track list so the
                 // usual interactions keep working on them.
-                let slot = self.view_data_mut();
+                let slot = self.view_data_in_mut(pane);
                 slot.set_tracks(tracks);
                 slot.selection.clear();
             }
             return;
         }
         if section_kind == ArtistSectionKind::Popular {
-            self.view_data_mut().content = LoadState::Loading;
+            self.view_data_in_mut(pane).content = LoadState::Loading;
         }
         // A fresh attempt must be allowed to toast its own failure.
         self.artist_error_dedup = None;
-        let rid = self.slot_request_id();
-        self.load_artist_page(rid, &name, provider, section_kind.data_kinds());
+        let rid = self.slot_request_id(pane);
+        self.load_artist_page(pane, rid, &name, provider, section_kind.data_kinds());
     }
 
     /// Cache a freshly resolved per-provider artist id on the page that
     /// requested it.
     pub fn apply_artist_id_resolved(&mut self, rid: u64, provider: ProviderId, resolved_id: &str) {
-        let Some(idx) = self.slot_for_request(rid) else {
+        let Some((pane, idx)) = self.slot_for_request(rid) else {
             return;
         };
-        if let ViewKind::Artist(entry) = &mut self.nav_history[idx].kind {
+        if let ViewKind::Artist(entry) = &mut self.pane_mut(pane).nav_history[idx].kind {
             entry
                 .page
                 .provider_ids
@@ -209,33 +215,34 @@ impl MusicPlayer {
         kind: ArtistDataKind,
         result: Result<ArtistKindData, String>,
     ) {
-        let Some(idx) = self.slot_for_request(rid) else {
+        let Some((pane, idx)) = self.slot_for_request(rid) else {
             return;
         };
-        let ViewKind::Artist(entry) = &mut self.nav_history[idx].kind else {
+        let ViewKind::Artist(entry) = &mut self.pane_mut(pane).nav_history[idx].kind else {
             return;
         };
-        let page = &mut entry.page;
+        let artist_page = &mut entry.page;
         let succeeded = result.is_ok();
         match result {
             Ok(data) => {
-                page.pages
+                artist_page
+                    .pages
                     .entry(provider)
                     .or_default()
                     .merge_kind(kind, &data);
                 if let ArtistKindData::Header(header) = &data {
-                    page.merge_header(provider, Some(header));
+                    artist_page.merge_header(provider, Some(header));
                 } else {
                     let section_kind = ArtistSectionKind::ALL
                         .into_iter()
                         .find(|k| k.data_kind() == kind);
                     if let Some(section_kind) = section_kind {
-                        if page.section(section_kind).provider == Some(provider) {
-                            page.section_mut(section_kind).state =
+                        if artist_page.section(section_kind).provider == Some(provider) {
+                            artist_page.section_mut(section_kind).state =
                                 LoadState::Ready(data.to_section_content());
                             if section_kind == ArtistSectionKind::Popular {
                                 if let ArtistKindData::Popular(tracks) = data {
-                                    let slot = &mut self.nav_history[idx];
+                                    let slot = &mut self.pane_mut(pane).nav_history[idx];
                                     Self::install_popular_tracks(slot, tracks, provider);
                                 }
                             }
@@ -245,12 +252,12 @@ impl MusicPlayer {
             }
             Err(ref msg) => {
                 tracing::warn!("artist {kind:?} load failed: {msg}");
-                page.fail_section(provider, kind, msg);
+                artist_page.fail_section(provider, kind, msg);
                 if kind == ArtistDataKind::Popular
-                    && page.section(ArtistSectionKind::Popular).provider == Some(provider)
-                    && self.nav_history[idx].content.is_loading()
+                    && artist_page.section(ArtistSectionKind::Popular).provider == Some(provider)
+                    && self.pane(pane).nav_history[idx].content.is_loading()
                 {
-                    self.nav_history[idx].content = LoadState::Failed(msg.clone());
+                    self.pane_mut(pane).nav_history[idx].content = LoadState::Failed(msg.clone());
                 }
                 // One logical failure fans out to one message per kind;
                 // surface only the first as a toast.
@@ -264,8 +271,8 @@ impl MusicPlayer {
             if self.artist_error_dedup == Some((rid, provider)) {
                 self.artist_error_dedup = None;
             }
-            self.finalize_view(idx);
-            let view = self.nav_history[idx].clone();
+            self.finalize_view(pane, idx);
+            let view = self.pane(pane).nav_history[idx].clone();
             self.seed_artist_thumbnails(&view);
         }
     }
@@ -302,19 +309,19 @@ impl MusicPlayer {
     /// Switch which provider supplies the header block (picture, bio). If
     /// that provider's header data is already cached it is applied instantly;
     /// otherwise a header-only fetch is kicked off.
-    pub fn handle_artist_header_provider_changed(&mut self, provider: ProviderId) {
+    pub fn handle_artist_header_provider_changed(&mut self, pane: PaneId, provider: ProviderId) {
         let (name, cache_hit) = {
-            let ViewKind::Artist(entry) = &mut self.view_data_mut().kind else {
+            let ViewKind::Artist(entry) = &mut self.view_data_in_mut(pane).kind else {
                 return;
             };
-            let (name, page) = (&entry.name, &mut entry.page);
-            page.header_provider = Some(provider);
-            let cached = page
+            let (name, artist_page) = (&entry.name, &mut entry.page);
+            artist_page.header_provider = Some(provider);
+            let cached = artist_page
                 .pages
                 .get(&provider)
                 .filter(|c| c.covers(&[ArtistDataKind::Header]))
                 .and_then(|c| c.page.header.clone());
-            if let (Some(existing), Some(incoming)) = (&mut page.header, &cached) {
+            if let (Some(existing), Some(incoming)) = (&mut artist_page.header, &cached) {
                 existing.image.clone_from(&incoming.image);
                 existing.description.clone_from(&incoming.description);
             }
@@ -323,12 +330,12 @@ impl MusicPlayer {
         if cache_hit {
             // The newly selected provider's picture may never have been
             // seeded before (only the previous owner's was), so queue it.
-            let view = self.view_data().clone();
+            let view = self.view_data_in(pane).clone();
             self.seed_artist_thumbnails(&view);
             return;
         }
-        let rid = self.slot_request_id();
-        self.load_artist_page(rid, &name, provider, &[ArtistDataKind::Header]);
+        let rid = self.slot_request_id(pane);
+        self.load_artist_page(pane, rid, &name, provider, &[ArtistDataKind::Header]);
     }
 
     /// Seed thumbnail downloads for the artist header and all card rows of

@@ -105,7 +105,7 @@ fn library_row<'a>(
     };
     let is_dragging_this = matches!(
         player.drag.pressed,
-        Some(PressedDrag { what: Pressed::Card(ref c), .. }) if c == item
+        Some(PressedDrag { what: Pressed::Card(ref c, _), .. }) if c == item
     );
     let text_color = if is_active || is_dragging_this {
         p.fg
@@ -142,7 +142,7 @@ fn library_row<'a>(
         .id(iced::widget::Id::from(format!("library:{index}"))),
     )
     .interaction(player.drag.clickable_cursor_interaction())
-    .on_press(Message::DragPress(Pressed::Card(item.clone())))
+    .on_press(Message::DragPress(Pressed::Card(item.clone(), None)))
     .on_enter(Message::HoverStart(HoverTarget::LibraryCard(
         hover_item.clone(),
     )))
@@ -194,16 +194,22 @@ fn nav_icon_button(
 pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let p = &player.app_theme.palette;
 
-    let can_back = player.can_navigate_back();
-    let can_forward = player.can_navigate_forward();
+    let focused = player.focused_pane_id;
+    let can_back = player.can_navigate_back(focused);
+    let can_forward = player.can_navigate_forward(focused);
 
     let nav_buttons = Row::with_children([
-        nav_icon_button(can_back, icons::BACK_ICON, p, Message::NavigateBack),
+        nav_icon_button(
+            can_back,
+            icons::BACK_ICON,
+            p,
+            Message::NavigateBack(focused),
+        ),
         nav_icon_button(
             can_forward,
             icons::FORWARD_ICON,
             p,
-            Message::NavigateForward,
+            Message::NavigateForward(focused),
         ),
     ])
     .spacing(theme::SPACING_XS)
@@ -213,7 +219,11 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     let nav_items: Vec<Element<'_, Message, AppTheme>> = vec![
         sidebar_nav_item(
             player.strings.search,
-            ViewData::new_search(String::new(), player.search_provider, player.search_scope),
+            ViewData::new_search(
+                String::new(),
+                player.focused_pane().search_provider,
+                player.focused_pane().search_scope,
+            ),
             player,
             None,
         ),
@@ -237,7 +247,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .iter()
         .enumerate()
         .map(|(i, pl)| {
-            let is_active = match &player.view_data().kind {
+            let is_active = match &player.focused_pane().view_data().kind {
                 ViewKind::Playlist(entry) => entry.index == i,
                 _ => false,
             };
@@ -394,9 +404,9 @@ fn sidebar_nav_item<'a>(
     // blank landing view; it restores the last search instead of navigating
     // to that blank view, so `same_kind` doesn't apply.
     let is_active = if is_search_item {
-        matches!(player.view_data().kind, ViewKind::Search(_))
+        matches!(player.focused_pane().view_data().kind, ViewKind::Search(_))
     } else {
-        player.view_data().same_kind(&target)
+        player.focused_pane().view_data().same_kind(&target)
     };
     let icon_name: &[u8] = match target.kind {
         ViewKind::Search { .. } => icons::SEARCH_ICON,
@@ -418,7 +428,7 @@ fn sidebar_nav_item<'a>(
     let on_press = if is_search_item {
         Message::SidebarSearch
     } else {
-        Message::NavigateTo(target)
+        Message::NavigateTo(player.focused_pane_id, target)
     };
 
     sidebar_button(Row::with_children(children))

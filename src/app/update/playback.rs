@@ -4,14 +4,14 @@ use tracing::debug;
 
 use super::{MusicPlayer, Track, TrackListKind, TrackPos};
 use crate::{
-    app::{Dialog, ViewKind},
+    app::{pane::PaneId, Dialog, ViewKind},
     data::{cache::StreamCache, JsonStore},
     providers::ProviderId,
 };
 
 impl MusicPlayer {
     pub fn handle_play_track(&mut self, pos: TrackPos) {
-        let TrackPos { index, list } = pos;
+        let TrackPos { index, list, pane } = pos;
         match list {
             TrackListKind::Recent => {
                 if let Some(track) = self.get_track_at(pos) {
@@ -23,7 +23,7 @@ impl MusicPlayer {
                 self.set_queue(queue.to_vec());
             }
             TrackListKind::Active => {
-                let queue = self.view_tracks().get(index..).unwrap_or(&[]);
+                let queue = self.view_tracks_in(pane).get(index..).unwrap_or(&[]);
                 self.set_queue(queue.to_vec());
                 self.record_now_playing_origin();
             }
@@ -38,7 +38,7 @@ impl MusicPlayer {
     /// Persist `track` back into the list it came from (`pos`), so a resolved
     /// provider id survives and the source view/queue reflects it.
     pub(super) fn set_track_at(&mut self, pos: TrackPos, track: Track) {
-        let TrackPos { index, list } = pos;
+        let TrackPos { index, list, pane } = pos;
         match list {
             TrackListKind::Queue => {
                 if let Some(t) = self.queue.tracks.get_mut(index) {
@@ -48,7 +48,7 @@ impl MusicPlayer {
             TrackListKind::Active => {
                 // Avoid holding a `view_data_mut` borrow across the playlist
                 // store access by deciding the target first.
-                let target = match &self.view_data().kind {
+                let target = match &self.view_data_in(pane).kind {
                     ViewKind::Playlist(entry) => Some(entry.index),
                     _ => None,
                 };
@@ -63,7 +63,7 @@ impl MusicPlayer {
                     }
                     None => {
                         if let Some(t) = self
-                            .view_data_mut()
+                            .view_data_in_mut(pane)
                             .tracks_mut()
                             .and_then(|ts| ts.get_mut(index))
                         {
@@ -129,14 +129,15 @@ impl MusicPlayer {
         };
         self.bounds.context_menu = None;
         let list = menu.pos.list;
+        let pane = menu.pos.pane;
         let indices = menu.target_indices;
         let mut to_download: Vec<Track> = Vec::new();
         for &idx in &indices {
-            if let Some(track) = self.get_track_at(TrackPos::new(idx, list)) {
+            if let Some(track) = self.get_track_at(TrackPos::new(idx, list, pane)) {
                 if track.can_download_from(provider) {
                     to_download.push(track);
                 } else {
-                    let pos = TrackPos::new(idx, list);
+                    let pos = TrackPos::new(idx, list, pane);
                     self.resolve_provider(provider, track, pos, false);
                 }
             }
@@ -156,7 +157,7 @@ impl MusicPlayer {
         let title = track.title.clone();
         let msg = (self.strings.resolving_on)(&title, provider.label());
         self.notify(msg);
-        let rid = self.slot_request_id();
+        let rid = self.slot_request_id(pos.pane);
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
             let resolved = crate::providers::resolve_id(provider, &track);
@@ -331,10 +332,10 @@ impl MusicPlayer {
         new_positions
     }
 
-    pub fn handle_add_to_queue(&mut self, list: TrackListKind, indices: &[usize]) {
+    pub fn handle_add_to_queue(&mut self, pane: PaneId, list: TrackListKind, indices: &[usize]) {
         let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&i| self.get_track_at(TrackPos::new(i, list)))
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, list, pane)))
             .collect();
         if tracks.is_empty() {
             return;
@@ -346,7 +347,7 @@ impl MusicPlayer {
         self.save_session();
         let tr = self.strings;
         self.notify((tr.added_to)(inserted, tr.queue));
-        self.clear_selection_if_touched(indices, list);
+        self.clear_selection_if_touched_in(pane, indices, list);
     }
 
     pub fn handle_remove_from_queue_batch(&mut self, indices: &[usize]) {

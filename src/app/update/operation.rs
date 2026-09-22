@@ -28,21 +28,25 @@
 //! message without re-walking the whole widget tree (sidebar/library/queue/
 //! track/recent + search input). See that struct for details.
 
+use std::collections::HashMap;
+
 use iced::{widget::Id, Rectangle, Task};
 use iced_core::widget::operation::{Operation, Outcome, Scrollable};
 
 use crate::{
     app::{
+        interaction::TrackListKind,
+        pane::PaneId,
         ui::{
-            QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID, SEARCH_HISTORY_LIST_ID, SEARCH_INPUT_ID,
-            TRACK_LIST_ID,
+            search_history_list_id, search_input_id, track_list_id, QUEUE_LIST_ID,
+            QUEUE_RECENT_LIST_ID,
         },
         Message,
     },
     theme,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ListGeometry {
     pub bounds: Rectangle,
     pub translation_y: f32,
@@ -52,13 +56,29 @@ pub struct ListGeometry {
 pub const SIDEBAR_LIST_ID: Id = Id::new("sidebar_playlist_list");
 pub const LIBRARY_LIST_ID: Id = Id::new("sidebar_library_list");
 
-/// Whether `id` is one of the scrollable lists whose row geometry we capture.
-fn is_tracked_list(id: &Id) -> bool {
-    *id == SIDEBAR_LIST_ID
-        || *id == LIBRARY_LIST_ID
-        || *id == QUEUE_LIST_ID
-        || *id == QUEUE_RECENT_LIST_ID
-        || *id == TRACK_LIST_ID
+/// Which scrollable list contains a point. `Track` carries its owning pane
+/// because every pane renders its own main track list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContainingList {
+    Queue,
+    Recent,
+    Track(PaneId),
+    Sidebar,
+    Library,
+}
+
+impl ContainingList {
+    /// The track list and owning pane for track-containing lists. `focused`
+    /// fills in the pane for the global `Queue`/`Recent` panel, whose rows
+    /// carry no pane. `None` for sidebar/library hits.
+    pub fn track_target(self, focused: PaneId) -> Option<(TrackListKind, PaneId)> {
+        match self {
+            ContainingList::Queue => Some((TrackListKind::Queue, focused)),
+            ContainingList::Track(pane) => Some((TrackListKind::Active, pane)),
+            ContainingList::Recent => Some((TrackListKind::Recent, focused)),
+            ContainingList::Sidebar | ContainingList::Library => None,
+        }
+    }
 }
 
 #[derive(Default, Clone, Debug)]
@@ -66,13 +86,14 @@ pub struct CaptureBounds {
     pub sidebar: Option<ListGeometry>,
     pub library: Option<ListGeometry>,
     pub queue: Option<ListGeometry>,
-    pub track: Option<ListGeometry>,
+    pub tracks: HashMap<PaneId, ListGeometry>,
     pub recent: Option<ListGeometry>,
     /// Captured separately by [`CaptureSearchHistoryRows`] (see that struct).
-    pub search_history: Option<ListGeometry>,
-    pub search_input: Option<Rectangle>,
+    pub search_history: HashMap<PaneId, ListGeometry>,
+    pub search_inputs: HashMap<PaneId, Rectangle>,
     /// Captured by [`CaptureContextMenu`] when the context menu opens.
     pub context_menu: Option<ContextMenuGeometry>,
+    panes: Vec<PaneId>,
     current: Option<Id>,
 }
 
@@ -87,36 +108,75 @@ impl CaptureBounds {
         Self::default()
     }
 
-    fn geo_mut(&mut self, id: &Id) -> &mut Option<ListGeometry> {
-        if *id == SIDEBAR_LIST_ID {
-            &mut self.sidebar
-        } else if *id == LIBRARY_LIST_ID {
-            &mut self.library
-        } else if *id == QUEUE_LIST_ID {
-            &mut self.queue
-        } else if *id == QUEUE_RECENT_LIST_ID {
-            &mut self.recent
-        } else {
-            // Callers only pass tracked ids (`current` is always one, and
-            // `scrollable` bails on untracked ids before reaching here).
-            &mut self.track
+    pub fn with_panes(panes: Vec<PaneId>) -> Self {
+        Self {
+            panes,
+            ..Self::default()
         }
     }
 
-    /// The list (by `Id`) whose bounds contain `point`, if any. Iteration order
-    /// matches `scrollable` priority; lists don't overlap so the first hit wins.
-    pub fn get_containing(&self, point: iced::Point) -> Option<(Id, &ListGeometry)> {
-        for (id, geo) in [
-            (QUEUE_LIST_ID.clone(), &self.queue),
-            (TRACK_LIST_ID.clone(), &self.track),
-            (QUEUE_RECENT_LIST_ID.clone(), &self.recent),
-            (SIDEBAR_LIST_ID.clone(), &self.sidebar),
-            (LIBRARY_LIST_ID.clone(), &self.library),
-        ] {
-            if let Some(g) = geo {
-                if g.bounds.contains(point) {
-                    return Some((id, g));
-                }
+    pub fn track_geo(&self, pane: PaneId) -> Option<&ListGeometry> {
+        self.tracks.get(&pane)
+    }
+
+    fn is_tracked(&self, id: &Id) -> bool {
+        *id == SIDEBAR_LIST_ID
+            || *id == LIBRARY_LIST_ID
+            || *id == QUEUE_LIST_ID
+            || *id == QUEUE_RECENT_LIST_ID
+            || self.panes.iter().any(|p| *id == track_list_id(*p))
+    }
+
+    fn pane_of(&self, id: &Id) -> Option<PaneId> {
+        self.panes
+            .iter()
+            .copied()
+            .find(|p| *id == track_list_id(*p))
+    }
+
+    fn geo_mut(&mut self, id: &Id) -> Option<&mut ListGeometry> {
+        if *id == SIDEBAR_LIST_ID {
+            return Some(self.sidebar.get_or_insert_with(ListGeometry::default));
+        }
+        if *id == LIBRARY_LIST_ID {
+            return Some(self.library.get_or_insert_with(ListGeometry::default));
+        }
+        if *id == QUEUE_LIST_ID {
+            return Some(self.queue.get_or_insert_with(ListGeometry::default));
+        }
+        if *id == QUEUE_RECENT_LIST_ID {
+            return Some(self.recent.get_or_insert_with(ListGeometry::default));
+        }
+        let pane = self.pane_of(id)?;
+        Some(self.tracks.entry(pane).or_default())
+    }
+
+    /// The list whose bounds contain `point`, if any. Lists don't overlap so
+    /// the first hit wins.
+    pub fn get_containing(&self, point: iced::Point) -> Option<(ContainingList, &ListGeometry)> {
+        if let Some(g) = &self.queue {
+            if g.bounds.contains(point) {
+                return Some((ContainingList::Queue, g));
+            }
+        }
+        if let Some(g) = &self.recent {
+            if g.bounds.contains(point) {
+                return Some((ContainingList::Recent, g));
+            }
+        }
+        for (pane, g) in &self.tracks {
+            if g.bounds.contains(point) {
+                return Some((ContainingList::Track(*pane), g));
+            }
+        }
+        if let Some(g) = &self.sidebar {
+            if g.bounds.contains(point) {
+                return Some((ContainingList::Sidebar, g));
+            }
+        }
+        if let Some(g) = &self.library {
+            if g.bounds.contains(point) {
+                return Some((ContainingList::Library, g));
             }
         }
         None
@@ -140,23 +200,28 @@ impl Operation<Message> for CaptureBounds {
             self.current = None;
             return;
         };
-        if !is_tracked_list(id) {
+        if !self.is_tracked(id) {
             self.current = None;
             return;
         }
         self.current = Some(id.clone());
-        *self.geo_mut(id) = Some(ListGeometry {
-            bounds,
-            translation_y: translation.y,
-            rows: Vec::new(),
-        });
+        if let Some(geo) = self.geo_mut(id) {
+            *geo = ListGeometry {
+                bounds,
+                translation_y: translation.y,
+                rows: Vec::new(),
+            };
+        }
     }
 
     fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
         let Some(target) = self.current.clone() else {
             return;
         };
-        if target == QUEUE_LIST_ID || target == TRACK_LIST_ID || target == QUEUE_RECENT_LIST_ID {
+        if target == QUEUE_LIST_ID
+            || target == QUEUE_RECENT_LIST_ID
+            || self.pane_of(&target).is_some()
+        {
             return;
         }
         if id.is_some() {
@@ -172,8 +237,16 @@ impl Operation<Message> for CaptureBounds {
         bounds: Rectangle,
         _state: &mut dyn iced_core::widget::operation::TextInput,
     ) {
-        if id == Some(&SEARCH_INPUT_ID) {
-            self.search_input = Some(bounds);
+        let Some(id) = id else {
+            return;
+        };
+        if let Some(pane) = self
+            .panes
+            .iter()
+            .copied()
+            .find(|p| *id == search_input_id(*p))
+        {
+            self.search_inputs.insert(pane, bounds);
         }
     }
 
@@ -184,6 +257,7 @@ impl Operation<Message> for CaptureBounds {
 
 #[derive(Default, Clone, Debug)]
 pub struct CaptureSearchHistoryRows {
+    pane: PaneId,
     geo: Option<ListGeometry>,
     current: bool,
 }
@@ -195,8 +269,11 @@ impl From<CaptureSearchHistoryRows> for Task<Message> {
 }
 
 impl CaptureSearchHistoryRows {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(pane: PaneId) -> Self {
+        Self {
+            pane,
+            ..Self::default()
+        }
     }
 }
 
@@ -213,7 +290,7 @@ impl Operation<Message> for CaptureSearchHistoryRows {
         translation: iced::Vector,
         _state: &mut dyn Scrollable,
     ) {
-        if id == Some(&SEARCH_HISTORY_LIST_ID) {
+        if id == Some(&search_history_list_id(self.pane)) {
             self.current = true;
             self.geo = Some(ListGeometry {
                 bounds,
@@ -240,7 +317,7 @@ impl Operation<Message> for CaptureSearchHistoryRows {
                     let last = theme::SEARCH_DROPDOWN_MAX_ITEMS.min(geo.rows.len()) - 1;
                     geo.bounds.height = geo.rows[last].y + geo.rows[last].height - geo.bounds.y;
                 }
-                Outcome::Some(Message::SearchHistoryBoundsCaptured(geo))
+                Outcome::Some(Message::SearchHistoryBoundsCaptured(self.pane, geo))
             }
             None => Outcome::None,
         }

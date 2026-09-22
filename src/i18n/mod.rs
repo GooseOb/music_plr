@@ -218,6 +218,7 @@ pub struct Strings {
     pub lyrics_name_empty: &'static str,
     pub select_playlist_drop: &'static str,
     pub reordered_playlist: &'static str,
+    pub max_panes_reached: &'static str,
 
     pub n_saved: fn(usize) -> String,
     pub n_plays: fn(u64) -> String,

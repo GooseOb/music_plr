@@ -134,6 +134,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_name_empty: "请为歌词起个名字",
     select_playlist_drop: "选择一个播放列表以放入曲目",
     reordered_playlist: "播放列表已重新排序",
+    max_panes_reached: "已达到最大窗格数",
 
     n_saved: |n| format!("已保存 {n} 项"),
     n_plays: |n| format!("{} 次播放", crate::util::format_count(n)),

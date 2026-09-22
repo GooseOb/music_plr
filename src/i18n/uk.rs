@@ -131,9 +131,10 @@ pub const STRINGS: Strings = Strings {
     lyrics_saved: "Власний текст збережено",
     lyrics_deleted: "Власний текст видалено",
     lyrics_empty: "Текст не може бути порожнім",
-    lyrics_name_empty: "Дайте тексту назву",
+    lyrics_name_empty: "Дайте назву тексту",
     select_playlist_drop: "Оберіть плейлист, щоб додати треки",
     reordered_playlist: "Плейлист переупорядковано",
+    max_panes_reached: "Досягнуто максимальну кількість панелей",
 
     n_saved: |n| format!("Збережено: {n}"),
     n_plays: |n| format!("{} відтворень", crate::util::format_count(n)),

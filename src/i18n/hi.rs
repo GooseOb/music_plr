@@ -134,6 +134,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_name_empty: "अपने बोलों को एक नाम दें",
     select_playlist_drop: "ट्रैक डालने के लिए एक प्लेलिस्ट चुनें",
     reordered_playlist: "प्लेलिस्ट पुनः व्यवस्थित की गई",
+    max_panes_reached: "अधिकतम पैन संख्या तक पहुँच गए",
 
     n_saved: |n| format!("{n} सहेजे गए"),
     n_plays: |n| format!("{} प्लेबैक", crate::util::format_count(n)),

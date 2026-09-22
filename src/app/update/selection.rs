@@ -6,28 +6,36 @@
 use super::{MusicPlayer, Track};
 use crate::app::{
     interaction::{TrackListKind, TrackPos},
+    pane::PaneId,
     ViewKind,
 };
 
 impl MusicPlayer {
-    pub fn selection(&self, list: TrackListKind) -> &[usize] {
+    pub fn selection_in(&self, pane: PaneId, list: TrackListKind) -> &[usize] {
         match list {
             TrackListKind::Queue => &self.queue_selected_indices,
-            TrackListKind::Active => &self.view_data().selection,
+            TrackListKind::Active => &self.pane(pane).view_data().selection,
             TrackListKind::Recent => &self.recent_selected_indices,
         }
     }
 
-    fn selection_mut(&mut self, list: TrackListKind) -> &mut Vec<usize> {
+    /// Focused-pane shorthand for [`Self::selection_in`]. Prefer the `_in`
+    /// form when a pane is already at hand (e.g. per-pane loops).
+    #[inline]
+    pub fn selection(&self, list: TrackListKind) -> &[usize] {
+        self.selection_in(self.focused_pane_id, list)
+    }
+
+    fn selection_mut_in(&mut self, pane: PaneId, list: TrackListKind) -> &mut Vec<usize> {
         match list {
             TrackListKind::Queue => &mut self.queue_selected_indices,
-            TrackListKind::Active => &mut self.view_data_mut().selection,
+            TrackListKind::Active => &mut self.pane_mut(pane).view_data_mut().selection,
             TrackListKind::Recent => &mut self.recent_selected_indices,
         }
     }
 
-    pub fn view_tracks(&self) -> &[Track] {
-        let vd = self.view_data();
+    pub fn view_tracks_in(&self, pane: PaneId) -> &[Track] {
+        let vd = self.view_data_in(pane);
         match &vd.kind {
             ViewKind::Playlist(entry) => self
                 .playlists
@@ -39,7 +47,7 @@ impl MusicPlayer {
     }
 
     pub fn toggle_selection(&mut self, pos: TrackPos) {
-        let sel = self.selection_mut(pos.list);
+        let sel = self.selection_mut_in(pos.pane, pos.list);
         if let Some(at) = sel.iter().position(|&i| i == pos.index) {
             sel.remove(at);
         } else {
@@ -48,48 +56,75 @@ impl MusicPlayer {
     }
 
     pub fn clear_selection(&mut self) {
-        self.clear_selection_for(TrackListKind::Active);
+        let panes: Vec<PaneId> = self.panes.keys().copied().collect();
+        for pane in panes {
+            self.clear_selection_in(pane, TrackListKind::Active);
+        }
         self.clear_selection_for(TrackListKind::Queue);
         self.clear_selection_for(TrackListKind::Recent);
     }
 
+    pub fn clear_selection_in(&mut self, pane: PaneId, list: TrackListKind) {
+        self.selection_mut_in(pane, list).clear();
+    }
+
+    /// Focused-pane shorthand for [`Self::clear_selection_in`].
+    #[inline]
     pub fn clear_selection_for(&mut self, list: TrackListKind) {
-        self.selection_mut(list).clear();
+        let pane = self.focused_pane_id;
+        self.clear_selection_in(pane, list);
     }
 
     /// Whether any list currently holds a selection.
     pub fn has_selection(&self) -> bool {
-        !self.selection(TrackListKind::Active).is_empty()
-            || !self.selection(TrackListKind::Queue).is_empty()
+        !self.selection(TrackListKind::Queue).is_empty()
             || !self.selection(TrackListKind::Recent).is_empty()
+            || self
+                .panes
+                .keys()
+                .any(|p| !self.selection_in(*p, TrackListKind::Active).is_empty())
     }
 
     /// Clear the selection of `list` if any of `indices` was selected — used
     /// after a batch mutation (remove/delete) that leaves stale selection
     /// entries. Selections in the other lists are left untouched.
-    pub fn clear_selection_if_touched(&mut self, indices: &[usize], list: TrackListKind) {
-        let sel = self.selection(list);
+    pub fn clear_selection_if_touched_in(
+        &mut self,
+        pane: PaneId,
+        indices: &[usize],
+        list: TrackListKind,
+    ) {
+        let sel = self.selection_in(pane, list);
         if indices.iter().any(|&i| sel.contains(&i)) {
-            self.clear_selection_for(list);
+            self.clear_selection_in(pane, list);
         }
     }
 
+    /// Focused-pane shorthand for [`Self::clear_selection_if_touched_in`].
+    #[inline]
+    pub fn clear_selection_if_touched(&mut self, indices: &[usize], list: TrackListKind) {
+        let pane = self.focused_pane_id;
+        self.clear_selection_if_touched_in(pane, indices, list);
+    }
+
     pub(crate) fn handle_select_all(&mut self) {
+        let pane = self.focused_pane_id;
         let list = self
             .drag
             .hovered_track()
+            .filter(|h| h.pane == pane || !h.list.is_main())
             .map_or(TrackListKind::Active, |h| h.list);
-        let count = self.track_count(list);
-        let sel = self.selection_mut(list);
+        let count = self.track_count_in(pane, list);
+        let sel = self.selection_mut_in(pane, list);
         sel.clear();
         sel.extend(list.first_index()..count);
     }
 
     pub fn get_track_ref_at(&self, pos: TrackPos) -> Option<&Track> {
-        let TrackPos { index, list } = pos;
+        let TrackPos { index, list, pane } = pos;
         match list {
             TrackListKind::Queue => self.queue.tracks.get(index),
-            TrackListKind::Active => self.view_tracks().get(index),
+            TrackListKind::Active => self.view_tracks_in(pane).get(index),
             TrackListKind::Recent => self.queue.recently_played.get(index),
         }
     }
@@ -98,10 +133,27 @@ impl MusicPlayer {
         self.get_track_ref_at(pos).cloned()
     }
 
+    /// The hovered track when it belongs to the focused pane. Keyboard
+    /// navigation always acts on the focused pane; a hover in another pane is
+    /// ignored. Queue/Recent rows live in the global panel and always count.
+    pub fn focused_hovered_track(&self) -> Option<TrackPos> {
+        let pos = self.drag.hovered_track()?;
+        if pos.list.is_main() && pos.pane != self.focused_pane_id {
+            None
+        } else {
+            Some(pos)
+        }
+    }
+
     /// Whether `pos` is a match in the active track list search (any occurrence).
     pub fn is_track_list_match(&self, pos: TrackPos) -> bool {
         match &self.track_list_search {
-            Some(fs) if fs.list == pos.list => fs.matches.contains(&pos.index),
+            Some(fs)
+                if fs.list == pos.list
+                    && (fs.list != TrackListKind::Active || fs.pane == pos.pane) =>
+            {
+                fs.matches.contains(&pos.index)
+            }
             _ => false,
         }
     }
@@ -117,11 +169,12 @@ impl MusicPlayer {
     }
 
     /// Counts the queue's now-playing entry at index 0, which `first_index`
-    /// skips.
-    pub fn track_count(&self, list: TrackListKind) -> usize {
+    /// skips. `pane` is ignored for `Queue`/`Recent`, which live in the
+    /// global panel.
+    pub fn track_count_in(&self, pane: PaneId, list: TrackListKind) -> usize {
         match list {
             TrackListKind::Queue => self.queue.tracks.len(),
-            TrackListKind::Active => self.view_tracks().len(),
+            TrackListKind::Active => self.view_tracks_in(pane).len(),
             TrackListKind::Recent => self.queue.recently_played.len(),
         }
     }
@@ -137,12 +190,11 @@ mod tests {
         // without D-Bus, and nav history is reset to a deterministic Search
         // view (so `view_tracks` reads `view_data.tracks`).
         let mut p = MusicPlayer::new_with(config::Config::default());
-        p.nav_history = vec![ViewData::new_search(
+        p.reset_test_pane(vec![ViewData::new_search(
             String::new(),
             crate::providers::ProviderId::YouTube,
             crate::providers::SearchScope::Songs,
-        )];
-        p.nav_history_pos = 0;
+        )]);
         p
     }
 
@@ -165,8 +217,8 @@ mod tests {
         let mut p = player();
         p.queue.recently_played.push_back(track("1"));
         p.queue.recently_played.push_back(track("2"));
-        let pos0 = TrackPos::new(0, TrackListKind::Recent);
-        let pos1 = TrackPos::new(1, TrackListKind::Recent);
+        let pos0 = TrackPos::new(0, TrackListKind::Recent, p.focused_pane_id);
+        let pos1 = TrackPos::new(1, TrackListKind::Recent, p.focused_pane_id);
 
         assert!(p.selection(TrackListKind::Recent).is_empty());
         p.toggle_selection(pos0);
@@ -187,8 +239,8 @@ mod tests {
         p.queue.tracks = vec![track("1"), track("2")];
         p.view_data_mut().set_tracks(vec![track("1")]);
 
-        let q = TrackPos::new(0, TrackListKind::Queue);
-        let a = TrackPos::new(0, TrackListKind::Active);
+        let q = TrackPos::new(0, TrackListKind::Queue, p.focused_pane_id);
+        let a = TrackPos::new(0, TrackListKind::Active, p.focused_pane_id);
         p.toggle_selection(q);
         p.toggle_selection(a);
         assert_eq!(p.selection(TrackListKind::Queue), &[0]);

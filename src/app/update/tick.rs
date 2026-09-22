@@ -8,7 +8,7 @@ use super::{
     MediaUpdate, Message, MusicPlayer, Task, ViewData, PREPEND,
 };
 use crate::{
-    app::{interaction::TrackListKind, Dialog, ViewKind},
+    app::{interaction::TrackListKind, pane::PaneId, Dialog, ViewKind},
     data::{cache::StreamCache, JsonStore},
 };
 
@@ -54,9 +54,11 @@ impl MusicPlayer {
         self.update_media_controls_if_dirty();
         self.flush_session();
 
-        if self.lyrics.is_some() {
-            self.ensure_lyrics_for_current();
-            task = task.chain(self.maybe_autoscroll_lyrics());
+        for pane in self.pane_ids() {
+            if self.pane(pane).lyrics.is_some() {
+                self.ensure_lyrics_for_current(pane);
+                task = task.chain(self.maybe_autoscroll_lyrics(pane));
+            }
         }
         task
     }
@@ -127,8 +129,8 @@ impl MusicPlayer {
         }
     }
 
-    fn capture_bounds_task() -> Task<Message> {
-        super::operation::CaptureBounds::new().into()
+    pub(super) fn capture_bounds_task(&self) -> Task<Message> {
+        super::operation::CaptureBounds::with_panes(self.pane_ids()).into()
     }
 
     fn update_media_controls_if_dirty(&mut self) {
@@ -228,33 +230,45 @@ impl MusicPlayer {
 
     /// Fill in missing badge/date/thumbnail on the browsed album view once
     /// metadata arrives from the backend.
-    fn apply_album_meta(&mut self, idx: usize, meta: crate::providers::AlbumMeta) {
-        if let ViewKind::Album(r) = &mut self.nav_history[idx].kind {
+    fn apply_album_meta(&mut self, pane: PaneId, idx: usize, meta: crate::providers::AlbumMeta) {
+        let crate::providers::AlbumMeta {
+            badge,
+            date,
+            thumbnail,
+        } = meta;
+        let seed = match &self.pane(pane).nav_history.get(idx).map(|v| &v.kind) {
+            Some(ViewKind::Album(r)) if r.thumbnail.is_empty() && !thumbnail.is_empty() => {
+                Some((r.provider, r.id.clone()))
+            }
+            _ => None,
+        };
+        if let Some((provider, id)) = seed {
+            self.thumbnail_index.ensure(provider, &id, &thumbnail);
+        }
+        if let ViewKind::Album(r) = &mut self.pane_mut(pane).nav_history[idx].kind {
             if r.badge.is_empty() {
-                r.badge = meta.badge;
+                r.badge = badge;
             }
             if r.date.is_empty() {
-                r.date = meta.date;
+                r.date = date;
             }
-            if r.thumbnail.is_empty() && !meta.thumbnail.is_empty() {
-                self.thumbnail_index
-                    .ensure(r.provider, &r.id.clone(), &meta.thumbnail);
-                r.thumbnail = meta.thumbnail;
+            if r.thumbnail.is_empty() && !thumbnail.is_empty() {
+                r.thumbnail = thumbnail;
             }
         }
     }
 
-    fn install_results(&mut self, idx: usize, tracks: Vec<crate::types::Track>) {
-        let slot = &mut self.nav_history[idx];
+    fn install_results(&mut self, pane: PaneId, idx: usize, tracks: Vec<crate::types::Track>) {
+        let slot = &mut self.pane_mut(pane).nav_history[idx];
         slot.set_tracks(tracks);
         slot.selection.clear();
         slot.request_id = 0;
-        self.finalize_view(idx);
+        self.finalize_view(pane, idx);
     }
 
-    pub(crate) fn finalize_view(&mut self, idx: usize) {
+    pub(crate) fn finalize_view(&mut self, pane: PaneId, idx: usize) {
         self.save_session();
-        self.seed_view_thumbnails(&self.nav_history[idx].clone());
+        self.seed_view_thumbnails(&self.pane(pane).nav_history[idx].clone());
     }
 
     fn process_search_results(
@@ -264,8 +278,8 @@ impl MusicPlayer {
         tab: crate::providers::SearchTab,
     ) {
         // Apply to the slot that requested this search.
-        if let Some(idx) = self.slot_for_request(rid) {
-            if let ViewKind::Search(s) = &mut self.nav_history[idx].kind {
+        if let Some((pane, idx)) = self.slot_for_request(rid) {
+            if let ViewKind::Search(s) = &mut self.pane_mut(pane).nav_history[idx].kind {
                 let count = if tab.is_track_tab() {
                     tracks.len()
                 } else {
@@ -275,9 +289,9 @@ impl MusicPlayer {
                 // pagination, so it is always exhausted.
                 s.exhausted = s.query.trim().is_empty() || count < crate::theme::SEARCH_PAGE_SIZE;
                 s.tab = tab;
-                self.install_results(idx, tracks);
+                self.install_results(pane, idx, tracks);
                 // Snapshot the completed search for the sidebar "Search" item.
-                self.last_search_view = Some(self.nav_history[idx].clone());
+                self.last_search_view = Some(self.pane(pane).nav_history[idx].clone());
             }
         }
     }
@@ -321,40 +335,44 @@ impl MusicPlayer {
             }
             BackendResult::SearchResults(rid, tracks, tab) => {
                 self.process_search_results(rid, tracks, tab);
-                Self::capture_bounds_task()
+                self.capture_bounds_task()
             }
             BackendResult::SearchResultsAppend(rid, tracks) => {
                 let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
-                if let Some(idx) = self.slot_for_request(rid) {
-                    let slot = &mut self.nav_history[idx];
-                    if let Some(existing) = slot.tracks_mut() {
-                        existing.extend(tracks);
-                    }
-                    if let ViewKind::Search(s) = &mut slot.kind {
-                        s.exhausted = exhausted;
-                        s.append_in_flight = false;
-                    }
-                    slot.request_id = 0;
-                    if let Some(last_search) = &mut self.last_search_view {
-                        if rid == last_search.request_id {
-                            self.last_search_view = Some(slot.clone());
+                if let Some((pane, idx)) = self.slot_for_request(rid) {
+                    {
+                        let slot = &mut self.pane_mut(pane).nav_history[idx];
+                        if let Some(existing) = slot.tracks_mut() {
+                            existing.extend(tracks);
                         }
+                        if let ViewKind::Search(s) = &mut slot.kind {
+                            s.exhausted = exhausted;
+                            s.append_in_flight = false;
+                        }
+                        slot.request_id = 0;
                     }
-                    self.finalize_view(idx);
-                    Self::capture_bounds_task()
+                    if self
+                        .last_search_view
+                        .as_ref()
+                        .is_some_and(|l| rid == l.request_id)
+                    {
+                        self.last_search_view = Some(self.pane(pane).nav_history[idx].clone());
+                    }
+                    self.finalize_view(pane, idx);
+                    self.capture_bounds_task()
                 } else {
                     Task::none()
                 }
             }
             BackendResult::BrowseResults(rid, tracks, meta) => {
                 // Apply to the slot that issued the browse, matched by request id
-                if let Some(idx) = self.slot_for_request(rid) {
-                    self.install_results(idx, tracks);
+                if let Some((pane, idx)) = self.slot_for_request(rid) {
+                    self.install_results(pane, idx, tracks);
                     if let Some(meta) = meta {
-                        self.apply_album_meta(idx, meta);
+                        self.apply_album_meta(pane, idx, meta);
                     }
                 }
-                Self::capture_bounds_task()
+                self.capture_bounds_task()
             }
             BackendResult::ArtistIdResolved {
                 rid,
@@ -371,7 +389,7 @@ impl MusicPlayer {
                 data,
             } => {
                 self.apply_artist_section(rid, provider, kind, *data);
-                Self::capture_bounds_task()
+                self.capture_bounds_task()
             }
             BackendResult::CardPlaylistReady(idx, name, tracks) => {
                 // A dragged card turned into a playlist; the browse result
@@ -383,21 +401,21 @@ impl MusicPlayer {
                     let msg = (self.strings.added_to)(count, &name);
                     self.notify(msg);
                 }
-                Self::capture_bounds_task()
+                self.capture_bounds_task()
             }
             BackendResult::RadioResults(rid, label, tracks) => {
-                if let Some(idx) = self.slot_for_request(rid) {
-                    let kind = match self.nav_history[idx].kind {
+                if let Some((pane, idx)) = self.slot_for_request(rid) {
+                    let kind = match self.pane(pane).nav_history[idx].kind {
                         ViewKind::ArtistRadio(_) => ViewKind::ArtistRadio(label),
                         _ => ViewKind::SongRadio(label),
                     };
-                    self.nav_history[idx].kind = kind;
-                    self.install_results(idx, tracks);
+                    self.pane_mut(pane).nav_history[idx].kind = kind;
+                    self.install_results(pane, idx, tracks);
                 }
-                Self::capture_bounds_task()
+                self.capture_bounds_task()
             }
             BackendResult::DownloadComplete(track, _provider) => {
-                self.process_download_complete(track);
+                self.process_download_complete(&track);
                 Task::none()
             }
             BackendResult::DownloadError(msg) => {
@@ -409,8 +427,8 @@ impl MusicPlayer {
                 self.notify_client_event(event);
                 Task::none()
             }
-            BackendResult::SearchError(msg) => {
-                self.process_search_error(msg);
+            BackendResult::SearchError(rid, msg) => {
+                self.process_search_error(rid, msg);
                 Task::none()
             }
             BackendResult::EditTrackProviderResolved(provider, resolved) => {
@@ -459,8 +477,8 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            BackendResult::LyricsFetched(result, track_id) => {
-                self.process_lyrics_fetched(result, &track_id)
+            BackendResult::LyricsFetched(result, track_id, provider) => {
+                self.process_lyrics_fetched(&result, &track_id, provider)
             }
             BackendResult::ImportPathsPicked { method, paths } => {
                 if paths.is_empty() {
@@ -501,106 +519,139 @@ impl MusicPlayer {
         }
     }
 
-    /// A failed search/browse/radio fetch: surface the error on the current
-    /// view only while it is still waiting (never wiping loaded results),
-    /// plus a toast.
-    fn process_search_error(&mut self, msg: String) {
-        if matches!(
-            self.view_data().kind,
-            ViewKind::Search(_)
-                | ViewKind::SongRadio(_)
-                | ViewKind::ArtistRadio(_)
-                | ViewKind::Album(_)
-                | ViewKind::PlaylistView(_)
-        ) {
-            self.view_data_mut().set_failed(msg.clone());
-            if let ViewKind::Search(s) = &mut self.view_data_mut().kind {
-                s.append_in_flight = false;
+    /// A failed search/browse/radio fetch: surface the error on the
+    /// requesting pane's view only while it is still waiting (never wiping
+    /// loaded results), plus a toast.
+    fn process_search_error(&mut self, rid: u64, msg: String) {
+        if let Some((pane, idx)) = self.slot_for_request(rid) {
+            let slot = &mut self.pane_mut(pane).nav_history[idx];
+            if matches!(
+                slot.kind,
+                ViewKind::Search(_)
+                    | ViewKind::SongRadio(_)
+                    | ViewKind::ArtistRadio(_)
+                    | ViewKind::Album(_)
+                    | ViewKind::PlaylistView(_)
+            ) {
+                slot.set_failed(msg.clone());
+                if let ViewKind::Search(s) = &mut slot.kind {
+                    s.append_in_flight = false;
+                }
             }
         }
         self.notify_error(msg);
     }
 
-    fn process_download_complete(&mut self, track: crate::types::Track) {
+    fn process_download_complete(&mut self, track: &crate::types::Track) {
         let path = track.local_path().unwrap_or_default();
         self.download_registry.register(track.clone());
         let msg = (self.strings.download_complete)(&path);
         self.notify(msg);
         self.thumbnail_index
             .mark_downloaded(track.source, track.primary_id());
-        if matches!(self.view_data().kind, ViewKind::Downloads) {
-            if let Some(tracks) = self.view_data_mut().tracks_mut() {
-                tracks.push(track);
+        let panes: Vec<PaneId> = self.pane_ids();
+        for pane in panes {
+            if matches!(self.view_data_in(pane).kind, ViewKind::Downloads) {
+                if let Some(tracks) = self.view_data_in_mut(pane).tracks_mut() {
+                    tracks.push(track.clone());
+                }
             }
         }
     }
 
+    /// A lyrics fetch finished: apply it to every pane waiting on lyrics
+    /// for that track from that provider. Panes are independent — a pane
+    /// showing another provider keeps its own state and fetch.
     fn process_lyrics_fetched(
         &mut self,
-        result: Result<crate::lyrics::Lyrics, String>,
+        result: &Result<crate::lyrics::Lyrics, String>,
         track_id: &str,
+        provider: crate::lyrics::LyricsProvider,
     ) -> Task<Message> {
         if track_id.is_empty() {
             return Task::none();
         }
-        let Some(state) = &mut self.lyrics else {
-            return Task::none();
-        };
-        if state.track_id.as_deref() != Some(track_id) {
-            return Task::none();
-        }
-        if state.editing {
-            return Task::none();
-        }
-        match result {
-            Ok(lyrics) => {
-                if let Some(id) = state.track_id.as_ref() {
-                    let mut cache = crate::data::lyrics_cache::LyricsCache::load();
-                    cache.insert(id, &lyrics);
-                }
-                let mode = crate::app::LyricsViewMode::for_lyrics(&lyrics);
-                state.lyrics = crate::load_state::LoadState::Ready(lyrics);
-                state.mode = mode;
-                state.scrolled_to = None;
-                state.viewport = None;
+        let mut tasks = Vec::new();
+        let panes: Vec<PaneId> = self.pane_ids();
+        let mut cache = None;
+        for pane in panes {
+            let Some(state) = self.pane_mut(pane).lyrics.as_mut() else {
+                continue;
+            };
+            if state.track_id.as_deref() != Some(track_id) {
+                continue;
             }
-            Err(e) => state.lyrics = crate::load_state::LoadState::Failed(e),
+            if state.provider != provider {
+                continue;
+            }
+            if state.editing {
+                continue;
+            }
+            match &result {
+                Ok(lyrics) => {
+                    let cache = cache
+                        .get_or_insert_with(crate::data::lyrics_cache::LyricsCache::load);
+                    cache.insert(track_id, lyrics);
+                    let mode = crate::app::LyricsViewMode::for_lyrics(lyrics);
+                    state.lyrics = crate::load_state::LoadState::Ready(lyrics.clone());
+                    state.mode = mode;
+                    state.scrolled_to = None;
+                    state.viewport = None;
+                }
+                Err(e) => state.lyrics = crate::load_state::LoadState::Failed(e.clone()),
+            }
+            state.track_id = Some(track_id.to_owned());
+            self.sync_lyrics_editor(pane);
+            tasks.push(self.scroll_lyrics_to_active(pane));
         }
-        state.track_id = Some(track_id.to_owned());
-        self.sync_lyrics_editor();
-        Task::batch([
-            super::operation::CaptureBounds::new().into(),
-            self.scroll_lyrics_to_active(),
-        ])
+        if tasks.is_empty() {
+            Task::none()
+        } else {
+            tasks.insert(0, self.capture_bounds_task());
+            Task::batch(tasks)
+        }
     }
 
-    fn slot_tracks(&self, idx: usize) -> &[crate::types::Track] {
-        match self.nav_history.get(idx).map(|v| &v.kind) {
+    fn slot_tracks(&self, pane: PaneId, idx: usize) -> &[crate::types::Track] {
+        match self.pane(pane).nav_history.get(idx).map(|v| &v.kind) {
             Some(ViewKind::Playlist(entry)) => self
                 .playlists
                 .playlists
                 .get(entry.index)
                 .map_or(&[], |p| &p.tracks),
-            _ => self.nav_history.get(idx).map_or(&[], |v| v.tracks()),
+            _ => self
+                .pane(pane)
+                .nav_history
+                .get(idx)
+                .map_or(&[], |v| v.tracks()),
         }
     }
 
     fn set_track_at_slot(
         &mut self,
+        pane: PaneId,
         history_idx: usize,
         track_idx: usize,
         track: crate::types::Track,
     ) {
-        if let Some(ViewKind::Playlist(entry)) = self.nav_history.get(history_idx).map(|v| &v.kind)
+        let target = match self
+            .pane(pane)
+            .nav_history
+            .get(history_idx)
+            .map(|v| &v.kind)
         {
-            if let Some(pl) = self.playlists.playlists.get_mut(entry.index) {
+            Some(ViewKind::Playlist(entry)) => Some(entry.index),
+            _ => None,
+        };
+        if let Some(sp) = target {
+            if let Some(pl) = self.playlists.playlists.get_mut(sp) {
                 if let Some(t) = pl.tracks.get_mut(track_idx) {
                     *t = track.clone();
                 }
             }
             self.playlists.save();
         }
-        if let Some(slot) = self.nav_history.get_mut(history_idx) {
+        if let Some(slot) = self.pane_mut(pane).nav_history.get_mut(history_idx) {
             if let Some(t) = slot.tracks_mut().and_then(|ts| ts.get_mut(track_idx)) {
                 *t = track;
             }
@@ -633,11 +684,11 @@ impl MusicPlayer {
                 None
             };
 
-            if let Some(slot) = slot {
-                self.set_track_at_slot(slot, pos.index, original.clone());
+            if let Some((pane, slot)) = slot {
+                self.set_track_at_slot(pane, slot, pos.index, original.clone());
                 if play {
                     let queue = self
-                        .slot_tracks(slot)
+                        .slot_tracks(pane, slot)
                         .get(pos.index..)
                         .unwrap_or(&[])
                         .to_vec();

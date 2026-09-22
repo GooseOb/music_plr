@@ -135,9 +135,15 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 
     let now_playing_row: Element<'_, Message, AppTheme> =
         if let Some(track) = player.queue.current() {
-            Container::new(track_row_layout(Space::new().into(), track, player, false))
-                .height(theme::ROW_HEIGHT)
-                .into()
+            Container::new(track_row_layout(
+                Space::new().into(),
+                track,
+                player,
+                player.focused_pane_id,
+                false,
+            ))
+            .height(theme::ROW_HEIGHT)
+            .into()
         } else {
             Container::new(
                 text(player.strings.no_track_playing)
@@ -166,7 +172,13 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .padding(theme::SPACING_MD)
         .into()
     } else {
-        view_track_list(upcoming, player, TrackListKind::Queue, offset)
+        view_track_list(
+            upcoming,
+            player,
+            player.focused_pane_id,
+            TrackListKind::Queue,
+            offset,
+        )
     };
 
     Column::with_children([
@@ -196,12 +208,18 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
         return empty_state(player.strings.no_recently_played_tracks);
     }
 
-    virtual_scrollable(tracks.len(), TrackListKind::Recent, player, |i| {
-        view_track_row(
-            &tracks[i],
-            TrackPos::new(i, TrackListKind::Recent),
-            player,
-            false,
-        )
-    })
+    virtual_scrollable(
+        tracks.len(),
+        player.focused_pane_id,
+        TrackListKind::Recent,
+        player,
+        |i| {
+            view_track_row(
+                &tracks[i],
+                TrackPos::new(i, TrackListKind::Recent, player.focused_pane_id),
+                player,
+                false,
+            )
+        },
+    )
 }

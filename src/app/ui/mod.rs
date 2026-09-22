@@ -18,14 +18,15 @@ mod settings;
 mod shared_components;
 mod sidebar;
 pub(crate) mod spinner;
+mod split;
 mod styles;
 mod track_list;
 pub(super) mod track_list_search;
-pub use lyrics::LYRICS_SCROLL_ID;
+pub use lyrics::lyrics_scroll_id;
 pub use queue::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID};
-pub use search::{SEARCH_HISTORY_LIST_ID, SEARCH_INPUT_ID};
+pub use search::{search_history_list_id, search_input_id};
+pub use track_list::track_list_id;
 use track_list::view_track_list;
-pub use track_list::TRACK_LIST_ID;
 
 /// Id of the context-menu panel and its rows. Rows all share one id;
 /// `CaptureBounds` records their bounds in visit (top-to-bottom) order so a
@@ -36,7 +37,7 @@ pub const CONTEXT_MENU_ROW_ID: Id = Id::new("context_menu_row");
 pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let mut body = vec![
         sidebar::view_sidebar(player),
-        content::view_main_content(player),
+        split::view_split_tree(player, &player.split_root),
     ];
     if player.show_queue {
         body.push(queue::view_queue_panel(player));
@@ -74,9 +75,11 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             }
         }
     }
-    if player.show_search_history {
-        if let Some(input_rect) = player.bounds.search_input {
-            stack = stack.push(search::view_search_history(player, input_rect));
+    for pane in player.pane_ids() {
+        if player.pane(pane).show_search_history {
+            if let Some(input_rect) = player.bounds.search_inputs.get(&pane).copied() {
+                stack = stack.push(search::view_search_history(player, pane, input_rect));
+            }
         }
     }
     if let Some(notification) = &player.notification {

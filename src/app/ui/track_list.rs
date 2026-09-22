@@ -4,7 +4,9 @@ use iced::{
     Element, Length,
 };
 
-pub const TRACK_LIST_ID: Id = Id::new("track_list");
+pub fn track_list_id(pane: PaneId) -> Id {
+    Id::from(format!("track_list:{pane}"))
+}
 
 use super::{
     shared_components::{
@@ -16,6 +18,7 @@ use super::{
 use crate::{
     app::{
         interaction::{row_id, HoverTarget, Pressed, TrackListKind, TrackPos},
+        pane::PaneId,
         ui::styles::fg_accent,
         update::operation::ListGeometry,
     },
@@ -27,6 +30,7 @@ use crate::{
 pub(super) fn view_track_list<'a>(
     tracks: &'a [Track],
     player: &'a MusicPlayer,
+    pane: PaneId,
     list: TrackListKind,
     index_offset: usize,
 ) -> Element<'a, Message, AppTheme> {
@@ -35,10 +39,13 @@ pub(super) fn view_track_list<'a>(
     }
 
     let show_album = list == TrackListKind::Active
-        && !matches!(player.view_data().kind, crate::app::ViewKind::Album(_));
+        && !matches!(
+            player.view_data_in(pane).kind,
+            crate::app::ViewKind::Album(_)
+        );
     let show_plays = list == TrackListKind::Active
         && matches!(
-            player.view_data().kind,
+            player.view_data_in(pane).kind,
             crate::app::ViewKind::Search(_)
                 | crate::app::ViewKind::SongRadio(_)
                 | crate::app::ViewKind::ArtistRadio(_)
@@ -47,10 +54,10 @@ pub(super) fn view_track_list<'a>(
                 | crate::app::ViewKind::PlaylistView(_)
         );
 
-    virtual_scrollable(tracks.len(), list, player, |i| {
+    virtual_scrollable(tracks.len(), pane, list, player, |i| {
         view_track_row_inner(
             &tracks[i],
-            TrackPos::new(i + index_offset, list),
+            TrackPos::new(i + index_offset, list, pane),
             player,
             show_album,
             show_plays,
@@ -60,6 +67,7 @@ pub(super) fn view_track_list<'a>(
 
 pub(super) fn virtual_scrollable<'a, F>(
     count: usize,
+    pane: PaneId,
     list: TrackListKind,
     player: &'a MusicPlayer,
     render_row: F,
@@ -69,7 +77,7 @@ where
 {
     let geo = match list {
         TrackListKind::Queue => player.bounds.queue.as_ref(),
-        TrackListKind::Active => player.bounds.track.as_ref(),
+        TrackListKind::Active => player.bounds.track_geo(pane),
         TrackListKind::Recent => player.bounds.recent.as_ref(),
     };
     let children: Vec<Element<'a, Message, AppTheme>> = match geo {
@@ -112,10 +120,16 @@ where
         }
     };
 
+    let id = match list {
+        TrackListKind::Queue => crate::app::ui::QUEUE_LIST_ID,
+        TrackListKind::Active => track_list_id(pane),
+        TrackListKind::Recent => crate::app::ui::QUEUE_RECENT_LIST_ID,
+    };
     scrollable(Column::with_children(children))
-        .id(list)
+        .id(id)
         .height(Length::Fill)
         .on_scroll(move |vp| Message::ListScrolled {
+            pane,
             list,
             translation_y: vp.absolute_offset().y,
         })
@@ -175,7 +189,7 @@ fn view_track_row_inner<'a>(
     show_plays: bool,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let is_selected = player.selection(pos.list).contains(&pos.index);
+    let is_selected = player.selection_in(pos.pane, pos.list).contains(&pos.index);
     let is_hovered = player.drag.hovered_track() == Some(pos);
     let is_dragging = player.is_dragging_track(pos);
     let is_current = player
@@ -205,7 +219,7 @@ fn view_track_row_inner<'a>(
 
     let leading = leading_control(pos, track, player);
 
-    let inner = track_row_layout_inner(leading, track, player, show_album, show_plays);
+    let inner = track_row_layout_inner(leading, track, player, pos.pane, show_album, show_plays);
 
     let track_area = MouseArea::new(inner)
         .interaction(player.drag.clickable_cursor_interaction())
@@ -223,7 +237,7 @@ fn view_track_row_inner<'a>(
     track_row(
         track_area,
         row_bg,
-        Some(row_id(pos.list, pos.index)),
+        Some(row_id(pos.list, pos.index, pos.pane)),
         border,
     )
     .into()
@@ -237,15 +251,17 @@ pub(super) fn track_row_layout<'a>(
     leading: Element<'a, Message, AppTheme>,
     track: &'a Track,
     player: &'a MusicPlayer,
+    pane: PaneId,
     show_album: bool,
 ) -> Row<'a, Message, AppTheme> {
-    track_row_layout_inner(leading, track, player, show_album, false)
+    track_row_layout_inner(leading, track, player, pane, show_album, false)
 }
 
 fn track_row_layout_inner<'a>(
     leading: Element<'a, Message, AppTheme>,
     track: &'a Track,
     player: &'a MusicPlayer,
+    pane: PaneId,
     show_album: bool,
     show_plays: bool,
 ) -> Row<'a, Message, AppTheme> {
@@ -263,6 +279,7 @@ fn track_row_layout_inner<'a>(
                 Button::new(text(album.name.clone()).size(theme::TEXT_SIZE_SM))
                     .style(button_style_album())
                     .on_press(Message::Browse(
+                        pane,
                         crate::app::ViewKind::Album(crate::app::view_data::AlbumRef {
                             id: album.id.clone(),
                             name: album.name.clone(),
@@ -321,6 +338,7 @@ fn track_row_layout_inner<'a>(
 
     let artist_id = track.provider_artist_id(track.source);
     let artist_subtitle = subtitle_artist(
+        pane,
         &track.artist,
         theme::TEXT_SIZE_SM,
         artist_id.map(|id| (id.to_string(), track.source)),

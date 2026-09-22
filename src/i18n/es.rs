@@ -134,6 +134,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_name_empty: "Ponle un nombre a tu letra",
     select_playlist_drop: "Selecciona una lista para soltar las pistas",
     reordered_playlist: "Lista reordenada",
+    max_panes_reached: "Número máximo de paneles alcanzado",
 
     n_saved: |n| format!("{n} guardado{}", if n == 1 { "" } else { "s" }),
     n_plays: |n| format!("{} reproducciones", crate::util::format_count(n)),
