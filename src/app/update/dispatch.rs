@@ -124,7 +124,15 @@ impl crate::app::MusicPlayer {
                     return Task::none();
                 };
                 let text = match &state.lyrics {
-                    LoadState::Ready(lyrics) => lyrics.plain.clone(),
+                    LoadState::Ready(lyrics) => {
+                        if state.mode == crate::app::LyricsViewMode::Synced
+                            && !lyrics.timed.is_empty()
+                        {
+                            lyrics.to_edit_text()
+                        } else {
+                            lyrics.plain.clone()
+                        }
+                    }
                     _ => return Task::none(),
                 };
                 if text.is_empty() {
