@@ -15,10 +15,10 @@ A YouTube/SoundCloud/Bandcamp search music player with local playback, downloads
 - **Artist pages** — Header with stats plus Most popular, Albums, Playlists, and Fans-also-like sections, each with its own provider picker.
 - **Radio** — Song radio and artist radio from search results.
 - **Queue** — Queue panel with Up Next and Recently Played tabs.
-- **Split panes** — Split the main view with.
+- **Split panes** — Split the main view.
 - **Drag & drop** — Drag tracks between views, into the queue, onto playlists (reorder or turn a card into a local playlist), and into the
   Library.
-- **Lyrics** — Free, no-key LRCLib lyrics with synced lines that seek on click; cached per track. Add your own named custom lyrics per track (plain or `[mm:ss.xx]`-synced) — they appear as tabs next to the providers, editable and deletable from the lyrics view. Attach multi-line notes to any custom line with `#` comment lines; the active line's note shows in an editable block below the lyrics. **Translate with AI** — translate the active lyrics (with learner notes) via any OpenAI-compatible server or local Ollama; the API key, server URL, and model live in Settings, and the result opens in the lyrics editor for review.
+- **Lyrics** — Free, no-key LRCLib lyrics with synced lines that seek on click, plus Genius with per-line annotations and the song blurb; cached per track. Add your own named custom lyrics per track (plain or `[mm:ss.xx]`-synced) — they appear as tabs next to the providers, editable and deletable from the lyrics view. Attach multi-line notes to any custom line with `#` comment lines; the active line's note shows in an editable block below the lyrics. **Translate with AI** — translate the active lyrics (with learner notes) via any OpenAI-compatible server or local Ollama; the API key, server URL, and model live in Settings, and the result opens in the lyrics editor for review.
 - **Media controls** — OS media keys / MPRIS (Linux) / SMTC (Windows) / Now Playing (macOS) via souvlaki.
 - **More** — Search history, volume normalization, navigation history, session restore, right-click context menu, dark theme.
 - **Localization** — 13 languages: English, Polski, Español, Português (Brasil), 简体中文, العربية, Беларуская, Français, Deutsch, 日本語, Русский, हिन्दी, Українська.
@@ -88,7 +88,7 @@ to the `languages!` macro in `src/i18n/mod.rs` — the `Language` enum and picke
 - **yt-dlp** — YouTube audio streaming and downloads
 - **Python 3** + `ytmusicapi` — YouTube Music search (optional; falls back to yt-dlp)
 - **D-Bus** session bus (Linux) — for MPRIS
-- Network access — lyrics fetch live from [LRCLib](https://lrclib.net) (no key)
+- Network access — lyrics fetch live from [LRCLib](https://lrclib.net) and [Genius](https://genius.com) (no keys)
 
 ```sh
 cargo build

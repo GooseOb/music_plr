@@ -11,7 +11,7 @@ pub fn lyrics_scroll_id(pane: PaneId) -> Id {
 }
 
 use super::{
-    shared_components::{empty_state, loading_state, scope_button, scope_tab_row_h_scroll},
+    shared_components::{empty_state, loading_state, scope_tab_row_h_scroll},
     styles::{
         bg_secondary, button_style_danger, button_style_panel_item, button_style_primary,
         fg_secondary,
@@ -213,14 +213,15 @@ fn view_bottom_controls<'a>(
         player.strings.lyrics_plain,
     ];
 
-    let picker = Row::with_children(MODES.iter().zip(labels).map(|(&mode, label)| {
-        let selected = lyrics_state.mode == mode;
-        let available = lyrics_state.mode_available(mode);
-        scope_button(label, selected)
-            .on_press_maybe(available.then_some(Message::SetLyricsViewMode(pane, mode)))
-            .into()
-    }))
-    .spacing(theme::SPACING_XS);
+    let picker = scope_tab_row_h_scroll(MODES.iter().zip(labels).map(|(&mode, label)| {
+        (
+            label,
+            lyrics_state.mode == mode,
+            lyrics_state
+                .mode_available(mode)
+                .then_some(Message::SetLyricsViewMode(pane, mode)),
+        )
+    }));
 
     let selected_provider = lyrics_state.provider;
     let selected_custom = lyrics_state.selected_custom.as_deref();
@@ -231,34 +232,37 @@ fn view_bottom_controls<'a>(
                 (
                     provider.name().to_string(),
                     selected_custom.is_none() && *provider == selected_provider,
-                    Message::SelectLyricsProvider(pane, *provider),
+                    Some(Message::SelectLyricsProvider(pane, *provider)),
                 )
             })
             .chain(lyrics_state.custom_names.iter().map(|name| {
                 (
                     name.clone(),
                     selected_custom == Some(name.as_str()),
-                    Message::SelectCustomLyrics(pane, name.clone()),
+                    Some(Message::SelectCustomLyrics(pane, name.clone())),
                 )
             }))
             .chain([
                 (
                     player.strings.translate_with_ai.to_string(),
                     false,
-                    Message::OpenTranslateDialog(pane),
+                    Some(Message::OpenTranslateDialog(pane)),
                 ),
                 (
                     player.strings.add_custom.to_string(),
                     false,
-                    Message::StartCustomLyricsEdit(pane),
+                    Some(Message::StartCustomLyricsEdit(pane)),
                 ),
             ]),
     );
 
-    Row::with_children([provider_row, picker.into()])
-        .spacing(theme::SPACING_SM)
-        .padding(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center)
+    Row::with_children([
+        Container::new(provider_row).align_left(Length::Fill).into(),
+        Container::new(picker).align_right(Length::Fill).into(),
+    ])
+    .spacing(theme::SPACING_SM)
+    .padding(theme::SPACING_SM)
+    .align_y(alignment::Vertical::Center)
 }
 
 fn view_select_editor(

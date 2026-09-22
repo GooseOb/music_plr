@@ -92,7 +92,7 @@ pub(super) fn view_search_bar(
                 (
                     provider.label().to_string(),
                     pane_state.search_provider == provider,
-                    Message::SearchProviderChanged(pane, provider),
+                    Some(Message::SearchProviderChanged(pane, provider)),
                 )
             }),
     );
@@ -103,7 +103,7 @@ pub(super) fn view_search_bar(
                 (
                     scope_label(scope, player).to_string(),
                     pane_state.search_scope == scope,
-                    Message::SearchScopeChanged(pane, scope),
+                    Some(Message::SearchScopeChanged(pane, scope)),
                 )
             },
         ));

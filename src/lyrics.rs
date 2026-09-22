@@ -1,6 +1,6 @@
 //! Lyrics fetching, backed by a handful of free, no-API-key providers.
 
-use std::fmt::Write as _;
+use std::{collections::HashMap, fmt::Write as _};
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -10,6 +10,7 @@ use crate::util::urlencode;
 pub const LRCLIB_BASE: &str = "https://lrclib.net/api";
 pub const LRCMUX_BASE: &str = "https://lrcmux.dev/api";
 pub const LYRICS_OVH_BASE: &str = "https://api.lyrics.ovh/v1";
+pub const GENIUS_BASE: &str = "https://genius.com/api";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum LyricsProvider {
@@ -20,6 +21,8 @@ pub enum LyricsProvider {
     LrcMux,
     #[serde(rename = "lyrics_ovh")]
     LyricsOvh,
+    #[serde(rename = "genius")]
+    Genius,
     #[serde(rename = "custom")]
     Custom,
 }
@@ -30,6 +33,7 @@ impl LyricsProvider {
             LyricsProvider::LrcLib => "LRCLib",
             LyricsProvider::LrcMux => "LrcMux",
             LyricsProvider::LyricsOvh => "Lyrics.ovh",
+            LyricsProvider::Genius => "Genius",
             LyricsProvider::Custom => "Custom",
         }
     }
@@ -42,6 +46,7 @@ impl LyricsProvider {
         &[
             LyricsProvider::LrcLib,
             LyricsProvider::LrcMux,
+            LyricsProvider::Genius,
             LyricsProvider::LyricsOvh,
         ]
     }
@@ -51,6 +56,7 @@ impl LyricsProvider {
             LyricsProvider::LrcLib => fetch_lrclib(req),
             LyricsProvider::LrcMux => fetch_lrcmux(req),
             LyricsProvider::LyricsOvh => fetch_lyrics_ovh(req),
+            LyricsProvider::Genius => fetch_genius(req),
             LyricsProvider::Custom => Ok(None),
         }
     }
@@ -258,6 +264,468 @@ fn fetch_lyrics_ovh(req: &LyricsRequest) -> Result<Option<Lyrics>> {
     }))
 }
 
+// Genius is keyless: the same `genius.com/api` endpoints the website
+// itself uses answer without a token. Lyrics are not in the API, so the
+// song page HTML is scraped (`data-lyrics-container` blocks); per-line
+// annotations come from `referents` and the song blurb from `songs/{id}`,
+// both mapped onto `LyricLine.description` notes.
+fn fetch_genius(req: &LyricsRequest) -> Result<Option<Lyrics>> {
+    let query = format!("{} {}", req.artist.trim(), req.title.trim());
+    let query = query.trim();
+    if query.is_empty() {
+        return Ok(None);
+    }
+    let url = format!(
+        "{GENIUS_BASE}/search/multi?per_page=5&q={}",
+        urlencode(query)
+    );
+    let search: GeniusSearchResponse = match get_genius_json(&url, "Genius")? {
+        Some(body) => body,
+        None => return Ok(None),
+    };
+    let songs: Vec<&GeniusSongHit> = search
+        .response
+        .sections
+        .iter()
+        .flat_map(|s| s.hits.iter())
+        .filter_map(|h| h.result.as_ref())
+        .filter(|r| r.kind == "song")
+        .collect();
+    let Some(hit) = songs
+        .iter()
+        .filter_map(|h| score_genius_hit(req, h).map(|score| (*h, score)))
+        .max_by_key(|(_, score)| *score)
+        .map(|(hit, _)| hit)
+    else {
+        return Ok(None);
+    };
+
+    let Some(html) = get_genius_html(&hit.url, "Genius")? else {
+        return Ok(None);
+    };
+    let mut texts = Vec::new();
+    for block in genius_containers(&html) {
+        if block.contains("ContributorsCredit") || block.contains("LyricsHeader") {
+            continue;
+        }
+        texts.extend(html_to_lines(block));
+    }
+    if texts.is_empty() {
+        return Ok(None);
+    }
+    let mut lines: Vec<LyricLine> = texts
+        .into_iter()
+        .map(|text| LyricLine {
+            time: None,
+            text,
+            description: String::new(),
+        })
+        .collect();
+
+    let annotations = fetch_genius_annotations(hit.id).unwrap_or_default();
+    if !annotations.is_empty() {
+        for line in &mut lines {
+            if let Some(notes) = annotations.get(&normalize_lyric(&line.text)) {
+                line.description = notes.join("\n\n");
+            }
+        }
+    }
+    if let Ok(Some(blurb)) = fetch_genius_description(&hit.api_path) {
+        if let Some(first) = lines.first_mut() {
+            if first.description.is_empty() {
+                first.description = format!("About this song:\n{blurb}");
+            } else {
+                first.description.push_str("\n\nAbout this song:\n");
+                first.description.push_str(&blurb);
+            }
+        }
+    }
+
+    let plain = lines
+        .iter()
+        .map(|line| line.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok(Some(Lyrics {
+        lines,
+        plain,
+        provider: LyricsProvider::Genius,
+    }))
+}
+
+fn get_genius_json<T: serde::de::DeserializeOwned>(url: &str, what: &str) -> Result<Option<T>> {
+    match agent()
+        .get(url)
+        .header("Accept", "application/json")
+        .header("User-Agent", GENIUS_USER_AGENT)
+        .call()
+    {
+        Ok(mut r) => {
+            Ok(Some(r.body_mut().read_json().with_context(|| {
+                format!("{what} response was not valid JSON")
+            })?))
+        }
+        Err(ureq::Error::StatusCode(404)) => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("{what} request failed")),
+    }
+}
+
+fn get_genius_html(url: &str, what: &str) -> Result<Option<String>> {
+    match agent()
+        .get(url)
+        .header("Accept", "text/html")
+        .header("User-Agent", GENIUS_USER_AGENT)
+        .call()
+    {
+        Ok(mut r) => {
+            Ok(Some(r.body_mut().read_to_string().with_context(|| {
+                format!("{what} response was not valid text")
+            })?))
+        }
+        Err(ureq::Error::StatusCode(404)) => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("{what} request failed")),
+    }
+}
+
+const GENIUS_USER_AGENT: &str = concat!(
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 ",
+    "(KHTML, like Gecko) Chrome/126.0 Safari/537.36 goosemusic/0.1"
+);
+
+/// Relevance score for a Genius song hit, or `None` when it is unusable
+/// (instrumental, lyrics missing) or matches the wrong song. Title must
+/// overlap either way; a non-empty artist that overlaps neither way rejects
+/// the hit so same-title covers don't win.
+fn score_genius_hit(req: &LyricsRequest, hit: &GeniusSongHit) -> Option<u32> {
+    if hit.instrumental {
+        return None;
+    }
+    if !hit.lyrics_state.is_empty() && hit.lyrics_state != "complete" {
+        return None;
+    }
+    let title = normalize_lyric(&req.title);
+    let artist = normalize_lyric(&req.artist);
+    let hit_title = normalize_lyric(&hit.title);
+    let hit_artist = normalize_lyric(&hit.artist_names);
+    if title.is_empty() || hit_title.is_empty() {
+        return None;
+    }
+    if !hit_title.contains(&title) && !title.contains(&hit_title) {
+        return None;
+    }
+    let mut score = 2;
+    if !artist.is_empty() && !hit_artist.is_empty() {
+        if hit_artist == artist {
+            score += 3;
+        } else if hit_artist.contains(&artist) || artist.contains(&hit_artist) {
+            score += 2;
+        } else {
+            return None;
+        }
+    }
+    if hit_title == title {
+        score += 2;
+    }
+    Some(score)
+}
+
+/// Annotation bodies keyed by normalized lyric line. Referent fragments span
+/// one or more lines, so each fragment line maps to the same body.
+fn fetch_genius_annotations(song_id: u64) -> Result<HashMap<String, Vec<String>>> {
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
+    for page in 1..=3 {
+        let url = format!(
+            "{GENIUS_BASE}/referents?song_id={song_id}&text_format=plain&per_page=50&page={page}"
+        );
+        let resp: GeniusReferentsResponse = match get_genius_json(&url, "Genius")? {
+            Some(body) => body,
+            None => break,
+        };
+        for referent in &resp.response.referents {
+            let body = referent
+                .annotations
+                .iter()
+                .filter_map(|a| a.body.as_ref())
+                .map(|b| b.plain.trim())
+                .find(|b| !b.is_empty());
+            let Some(body) = body else { continue };
+            for line in referent.range.content.lines() {
+                let key = normalize_lyric(line);
+                if !key.is_empty() {
+                    out.entry(key).or_default().push(body.to_string());
+                }
+            }
+        }
+        if resp.response.next_page.is_none() {
+            break;
+        }
+    }
+    Ok(out)
+}
+
+fn fetch_genius_description(api_path: &str) -> Result<Option<String>> {
+    let url = format!("https://genius.com{api_path}?text_format=plain");
+    let resp: GeniusSongResponse = match get_genius_json(&url, "Genius")? {
+        Some(body) => body,
+        None => return Ok(None),
+    };
+    let blurb = resp
+        .response
+        .song
+        .description
+        .as_ref()
+        .map(|d| d.plain.trim())
+        .filter(|d| !d.is_empty());
+    Ok(blurb.map(str::to_string))
+}
+
+#[derive(Debug, Deserialize)]
+struct GeniusSearchResponse {
+    #[serde(default)]
+    response: GeniusSearchInner,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GeniusSearchInner {
+    #[serde(default)]
+    sections: Vec<GeniusSection>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeniusSection {
+    #[serde(default)]
+    hits: Vec<GeniusHit>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeniusHit {
+    #[serde(default)]
+    result: Option<GeniusSongHit>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GeniusSongHit {
+    #[serde(rename = "_type", default)]
+    kind: String,
+    #[serde(default)]
+    id: u64,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    artist_names: String,
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    api_path: String,
+    #[serde(default)]
+    lyrics_state: String,
+    #[serde(default)]
+    instrumental: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeniusReferentsResponse {
+    #[serde(default)]
+    response: GeniusReferentsInner,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GeniusReferentsInner {
+    #[serde(default)]
+    referents: Vec<GeniusReferent>,
+    #[serde(default)]
+    next_page: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GeniusReferent {
+    #[serde(default)]
+    range: GeniusRange,
+    #[serde(default)]
+    annotations: Vec<GeniusAnnotation>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GeniusRange {
+    #[serde(default)]
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeniusAnnotation {
+    #[serde(default)]
+    body: Option<GeniusText>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GeniusText {
+    #[serde(default)]
+    plain: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GeniusSongResponse {
+    #[serde(default)]
+    response: GeniusSongInner,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GeniusSongInner {
+    #[serde(default)]
+    song: GeniusSong,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GeniusSong {
+    #[serde(default)]
+    description: Option<GeniusText>,
+}
+
+/// Inner HTML of every `data-lyrics-container` block on a Genius song page.
+/// Depth-counted so nested `<div>`s don't cut the block short.
+fn genius_containers(html: &str) -> Vec<&str> {
+    const MARKER: &str = "data-lyrics-container=\"true\"";
+    let mut out = Vec::new();
+    let mut search = 0;
+    while let Some(found) = html[search..].find(MARKER) {
+        let marker = search + found;
+        let Some(tag_end) = html[marker..].find('>').map(|i| marker + i + 1) else {
+            break;
+        };
+        let mut depth = 1;
+        let mut i = tag_end;
+        let mut end = None;
+        while depth > 0 {
+            let Some(lt) = html[i..].find('<').map(|p| i + p) else {
+                break;
+            };
+            if html[lt..].starts_with("</div") {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(lt);
+                    break;
+                }
+                i = lt + 5;
+            } else if html[lt..].starts_with("<div") {
+                let Some(gt) = html[lt..].find('>').map(|p| lt + p) else {
+                    break;
+                };
+                if !html[lt..=gt].ends_with("/>") {
+                    depth += 1;
+                }
+                i = gt + 1;
+            } else {
+                i = lt + 1;
+            }
+        }
+        match end {
+            Some(e) => {
+                out.push(&html[tag_end..e]);
+                search = e + 6;
+            }
+            None => break,
+        }
+    }
+    out
+}
+
+/// Flatten a lyrics container to text lines: `<br>`s become newlines, all
+/// other tags are stripped, entities decoded, blank lines dropped.
+fn html_to_lines(block: &str) -> Vec<String> {
+    let mut text = String::with_capacity(block.len());
+    let mut i = 0;
+    while i < block.len() {
+        if block[i..].starts_with('<') {
+            if block[i..].starts_with("<br") {
+                text.push('\n');
+            }
+            match block[i..].find('>') {
+                Some(p) => i += p + 1,
+                None => break,
+            }
+        } else {
+            let ch = block[i..].chars().next().unwrap_or('\0');
+            if ch == '\0' {
+                break;
+            }
+            text.push(ch);
+            i += ch.len_utf8();
+        }
+    }
+    decode_entities(&text)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn decode_entities(text: &str) -> String {
+    if !text.contains('&') {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < text.len() {
+        if !text[i..].starts_with('&') {
+            let ch = text[i..].chars().next().unwrap_or('\0');
+            if ch == '\0' {
+                break;
+            }
+            out.push(ch);
+            i += ch.len_utf8();
+            continue;
+        }
+        let semi = text[i..].find(';').filter(|&p| p <= 12).map(|p| i + p);
+        let Some(semi) = semi else {
+            out.push('&');
+            i += 1;
+            continue;
+        };
+        let entity = &text[i + 1..semi];
+        let decoded = match entity {
+            "amp" => Some('&'),
+            "lt" => Some('<'),
+            "gt" => Some('>'),
+            "quot" => Some('"'),
+            "apos" | "#39" => Some('\''),
+            "nbsp" => Some('\u{a0}'),
+            _ if entity.starts_with("#x") || entity.starts_with("#X") => {
+                u32::from_str_radix(&entity[2..], 16)
+                    .ok()
+                    .and_then(char::from_u32)
+            }
+            _ if entity.starts_with('#') => {
+                entity[1..].parse::<u32>().ok().and_then(char::from_u32)
+            }
+            _ => None,
+        };
+        if let Some(ch) = decoded {
+            out.push(ch);
+            i = semi + 1;
+        } else {
+            out.push('&');
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Lowercase, unify quotes, and collapse whitespace so Genius fragments
+/// (curly apostrophes, `"\n "` separators) match scraped lyric lines.
+fn normalize_lyric(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '\u{2018}' | '\u{2019}' | '\u{201a}' | '\u{201b}' | '\u{2032}' | '\u{2035}' | '`'
+            | '\u{b4}' => out.push('\''),
+            '\u{201c}' | '\u{201d}' | '\u{201e}' | '\u{201f}' => out.push('"'),
+            _ => out.extend(ch.to_lowercase()),
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[derive(Debug, Deserialize)]
 struct LrcLibRecord {
     #[serde(rename = "syncedLyrics", default)]
@@ -429,8 +897,9 @@ mod tests {
     fn client_uses_lrclib_by_default() {
         assert_eq!(LyricsProvider::default(), LyricsProvider::LrcLib);
         assert!(LyricsProvider::all().contains(&LyricsProvider::LrcLib));
+        assert!(LyricsProvider::all().contains(&LyricsProvider::Genius));
         assert!(!LyricsProvider::all().contains(&LyricsProvider::Custom));
-        assert_eq!(LyricsProvider::all().len(), 3);
+        assert_eq!(LyricsProvider::all().len(), 4);
     }
 
     #[test]
@@ -491,5 +960,131 @@ mod tests {
     #[test]
     fn custom_text_empty_is_none() {
         assert!(Lyrics::from_custom_text("  \n ").is_none());
+    }
+
+    fn genius_req(artist: &str, title: &str) -> LyricsRequest {
+        LyricsRequest {
+            artist: artist.into(),
+            title: title.into(),
+            album: String::new(),
+            duration: 0,
+        }
+    }
+
+    fn genius_hit(title: &str, artist: &str) -> GeniusSongHit {
+        GeniusSongHit {
+            kind: "song".into(),
+            id: 1,
+            title: title.into(),
+            artist_names: artist.into(),
+            url: "https://genius.com/x".into(),
+            api_path: "/songs/1".into(),
+            lyrics_state: "complete".into(),
+            instrumental: false,
+        }
+    }
+
+    #[test]
+    fn genius_hit_scoring_accepts_match() {
+        let req = genius_req("Nirvana", "Smells Like Teen Spirit");
+        let hit = genius_hit("Smells Like Teen Spirit", "Nirvana");
+        assert!(score_genius_hit(&req, &hit).is_some());
+    }
+
+    #[test]
+    fn genius_hit_scoring_accepts_featured_artist_overlap() {
+        let req = genius_req("Nirvana", "Smells Like Teen Spirit (Official Video)");
+        let hit = genius_hit("Smells Like Teen Spirit", "Nirvana");
+        assert!(score_genius_hit(&req, &hit).is_some());
+    }
+
+    #[test]
+    fn genius_hit_scoring_rejects_wrong_artist_and_title() {
+        let req = genius_req("Nirvana", "Smells Like Teen Spirit");
+        assert!(score_genius_hit(&req, &genius_hit("Smells Like Teen Spirit", "Weezer")).is_none());
+        assert!(score_genius_hit(&req, &genius_hit("Come As You Are", "Nirvana")).is_none());
+    }
+
+    #[test]
+    fn genius_hit_scoring_skips_instrumental_and_incomplete() {
+        let req = genius_req("Nirvana", "Smells Like Teen Spirit");
+        let mut hit = genius_hit("Smells Like Teen Spirit", "Nirvana");
+        hit.instrumental = true;
+        assert!(score_genius_hit(&req, &hit).is_none());
+        hit.instrumental = false;
+        hit.lyrics_state = "unreleased".into();
+        assert!(score_genius_hit(&req, &hit).is_none());
+    }
+
+    #[test]
+    fn genius_hit_deserializes_search_result() {
+        let json = r#"{"result":{"_type":"song","id":52968,"title":"Smells Like Teen Spirit","artist_names":"Nirvana","url":"https://genius.com/Nirvana-smells-like-teen-spirit-lyrics","api_path":"/songs/52968","lyrics_state":"complete","instrumental":false}}"#;
+        let hit: GeniusHit = serde_json::from_str(json).unwrap();
+        let song = hit.result.unwrap();
+        assert_eq!(song.kind, "song");
+        assert_eq!(song.id, 52968);
+        let req = genius_req("Nirvana", "Smells Like Teen Spirit");
+        assert!(score_genius_hit(&req, &song).is_some());
+    }
+
+    #[test]
+    fn genius_normalize_unifies_quotes_and_space() {
+        assert_eq!(
+            normalize_lyric("With the lights out, it’s  less\ndangerous"),
+            "with the lights out, it's less dangerous"
+        );
+        assert_eq!(normalize_lyric("  HELLO   World "), "hello world");
+    }
+
+    #[test]
+    fn genius_decode_entities_handles_named_and_numeric() {
+        assert_eq!(
+            decode_entities("it&#x27;s &amp; &quot;us&quot; &#39;ok&#39;"),
+            "it's & \"us\" 'ok'"
+        );
+        assert_eq!(decode_entities("a &unknown; b & c"), "a &unknown; b & c");
+    }
+
+    #[test]
+    fn genius_containers_extract_nested_blocks() {
+        let html = concat!(
+            r#"<div data-lyrics-container="true" class="x">First<br/>Second<span>nested<div>deep</div></span></div>"#,
+            r#"<div data-lyrics-container="true" class="x"><br/>[Chorus]<br/>Line</div>"#,
+        );
+        let blocks = genius_containers(html);
+        assert_eq!(blocks.len(), 2);
+        let lines = html_to_lines(blocks[0]);
+        assert_eq!(lines, vec!["First", "Secondnesteddeep"]);
+        assert_eq!(html_to_lines(blocks[1]), vec!["[Chorus]", "Line"]);
+    }
+
+    #[test]
+    fn genius_html_to_lines_strips_annotated_links() {
+        let block = concat!(
+            "[Chorus]<br/>With the lights out, it&#x27;s less dangerous<br/>",
+            r#"<a href="/x" class="y"><span>Here we are now, entertain us<br/>I feel stupid</span></a>"#,
+        );
+        assert_eq!(
+            html_to_lines(block),
+            vec![
+                "[Chorus]",
+                "With the lights out, it's less dangerous",
+                "Here we are now, entertain us",
+                "I feel stupid",
+            ]
+        );
+    }
+
+    #[test]
+    fn genius_annotation_key_matches_despite_quote_style() {
+        let fragment = "With the lights out, it’s less dangerous";
+        let line = "With the lights out, it's less dangerous";
+        assert_eq!(normalize_lyric(fragment), normalize_lyric(line));
+        let multi = "Hello, hello, hello, how low\n Hello, hello, hello";
+        let keys: Vec<String> = multi.lines().map(normalize_lyric).collect();
+        assert_eq!(
+            keys,
+            vec!["hello, hello, hello, how low", "hello, hello, hello"]
+        );
     }
 }

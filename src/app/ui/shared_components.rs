@@ -138,17 +138,19 @@ where
 
 /// Horizontally scrollable variant of [`scope_tab_row`]: same chips, no
 /// wrapping, overflowing tabs scroll instead of spilling onto extra lines.
-/// `width` controls the scroller footprint: `Fill` to take remaining space,
-/// `Shrink` to hug its content (e.g. a right-aligned trailing row after a
-/// `Fill` sibling).
+/// The message is `Option` so tabs can be disabled (`None`); `Fill` parents
+/// control the scroller footprint (e.g. a right-aligned trailing row after
+/// a `Fill` sibling).
 pub fn scope_tab_row_h_scroll<I, S>(items: I) -> Element<'static, Message, AppTheme>
 where
-    I: IntoIterator<Item = (S, bool, Message)>,
+    I: IntoIterator<Item = (S, bool, Option<Message>)>,
     S: text::IntoFragment<'static>,
 {
-    let tabs = items
-        .into_iter()
-        .map(|(label, selected, on_press)| scope_button(label, selected).on_press(on_press).into());
+    let tabs = items.into_iter().map(|(label, selected, on_press)| {
+        scope_button(label, selected)
+            .on_press_maybe(on_press)
+            .into()
+    });
     scrollable(Row::with_children(tabs).spacing(theme::SPACING_XS))
         .direction(scrollable::Direction::Horizontal(
             scrollable::Scrollbar::new()
