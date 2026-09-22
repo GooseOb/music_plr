@@ -100,6 +100,20 @@ pub enum BackendResult {
     UpdateProgress(u64, u64),
     /// The update download/extract/staged-apply finished.
     UpdateComplete(Result<String, String>),
+    /// An AI lyrics translation finished; the text opens in the custom-lyrics
+    /// editor of `pane` under `language` when the track still matches.
+    TranslationDone {
+        pane: PaneId,
+        track_id: String,
+        language: String,
+        text: String,
+    },
+    TranslationError {
+        pane: PaneId,
+        message: String,
+    },
+    TranslationModels(Vec<String>),
+    TranslationModelsError(String),
 }
 
 #[derive(Debug, Clone)]
@@ -216,6 +230,14 @@ pub enum Message {
     SaveCustomLyrics(PaneId),
     CancelCustomLyricsEdit(PaneId),
     DeleteCustomLyrics(PaneId),
+    OpenTranslateDialog(PaneId),
+    TranslateLanguageChanged(String),
+    TranslateLanguageSubmit,
+    TranslatePromptAction(iced::widget::text_editor::Action),
+    TranslateResetPrompt,
+    TranslateSubmit,
+    RequestTranslationModels,
+    TranslationModelsFilterChanged(String),
 
     NavigateTo(PaneId, ViewData),
     SidebarSearch,
@@ -295,6 +317,7 @@ impl Message {
             | Message::SaveCustomLyrics(pane)
             | Message::CancelCustomLyricsEdit(pane)
             | Message::DeleteCustomLyrics(pane)
+            | Message::OpenTranslateDialog(pane)
             | Message::NavigateTo(pane, _)
             | Message::NavigateBack(pane)
             | Message::NavigateForward(pane)
@@ -373,6 +396,7 @@ mod tests {
             Message::SaveCustomLyrics(pane),
             Message::CancelCustomLyricsEdit(pane),
             Message::DeleteCustomLyrics(pane),
+            Message::OpenTranslateDialog(pane),
             Message::NavigateTo(pane, ViewData::default()),
             Message::NavigateBack(pane),
             Message::NavigateForward(pane),

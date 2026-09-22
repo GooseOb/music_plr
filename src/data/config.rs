@@ -21,6 +21,28 @@ pub struct Config {
     /// disables). `serde(default)` keeps pre-existing `config.json` files
     /// parsing after the upgrade instead of resetting the whole config.
     pub cookie_browser: Option<String>,
+    #[serde(default = "default_translation_base_url")]
+    pub translation_base_url: String,
+    #[serde(default)]
+    pub translation_api_key: String,
+    #[serde(default = "default_translation_model")]
+    pub translation_model: String,
+    #[serde(default)]
+    pub translation_language: String,
+    #[serde(default = "default_translation_prompt")]
+    pub translation_prompt: String,
+}
+
+fn default_translation_base_url() -> String {
+    crate::translate::DEFAULT_BASE_URL.to_string()
+}
+
+fn default_translation_model() -> String {
+    crate::translate::DEFAULT_MODEL.to_string()
+}
+
+fn default_translation_prompt() -> String {
+    crate::translate::DEFAULT_PROMPT.to_string()
 }
 
 impl Default for Config {
@@ -36,6 +58,11 @@ impl Default for Config {
             language: Language::from_system_locale().unwrap_or_default(),
             theme_kind: ThemeKind::Dark,
             cookie_browser: None,
+            translation_base_url: default_translation_base_url(),
+            translation_api_key: String::new(),
+            translation_model: default_translation_model(),
+            translation_language: String::new(),
+            translation_prompt: default_translation_prompt(),
         }
     }
 }
@@ -68,6 +95,11 @@ mod tests {
         assert_eq!(cfg.cache_max_size_mb, 1024);
         assert_eq!(cfg.max_recently_played, 50);
         assert_eq!(cfg.cookie_browser, None);
+        assert_eq!(cfg.translation_base_url, crate::translate::DEFAULT_BASE_URL);
+        assert_eq!(cfg.translation_model, crate::translate::DEFAULT_MODEL);
+        assert_eq!(cfg.translation_prompt, crate::translate::DEFAULT_PROMPT);
+        assert!(cfg.translation_api_key.is_empty());
+        assert!(cfg.translation_language.is_empty());
     }
 
     #[test]
@@ -83,9 +115,34 @@ mod tests {
             language: Language::Pl,
             theme_kind: ThemeKind::Light,
             cookie_browser: Some("firefox".into()),
+            translation_base_url: "https://api.openai.com/v1".into(),
+            translation_api_key: "sk-test".into(),
+            translation_model: "gpt-4o-mini".into(),
+            translation_language: "Spanish".into(),
+            translation_prompt: "translate".into(),
         };
 
         let json = serde_json::to_string(&cfg).unwrap();
         assert_eq!(serde_json::from_str::<Config>(&json).unwrap(), cfg);
+    }
+
+    #[test]
+    fn config_without_translation_fields_keeps_defaults() {
+        let json = r#"{
+            "download_dir": "/tmp/music",
+            "max_search_history_visible": 10,
+            "max_search_history_stored": 100,
+            "cache_max_size_mb": 1024,
+            "max_recently_played": 50,
+            "volume_normalization": false,
+            "default_provider": "YouTube",
+            "language": "En",
+            "theme_kind": "dark",
+            "cookie_browser": null
+        }"#;
+        let cfg = serde_json::from_str::<Config>(json).unwrap();
+        assert_eq!(cfg.translation_base_url, crate::translate::DEFAULT_BASE_URL);
+        assert_eq!(cfg.translation_model, crate::translate::DEFAULT_MODEL);
+        assert_eq!(cfg.translation_prompt, crate::translate::DEFAULT_PROMPT);
     }
 }

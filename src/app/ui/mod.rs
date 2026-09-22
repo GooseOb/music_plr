@@ -73,6 +73,9 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         Some(Dialog::Import(dialog)) => {
             stack = stack.push(overlays::view_import_playlist(player, dialog));
         }
+        Some(Dialog::Translate(dialog)) => {
+            stack = stack.push(overlays::view_translate_dialog(player, dialog));
+        }
         Some(Dialog::ContextMenu(context_menu)) => {
             stack = stack.push(overlays::view_context_menu(player, context_menu));
         }

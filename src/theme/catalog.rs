@@ -249,7 +249,7 @@ impl widget::text_editor::Catalog for AppTheme {
     fn default<'a>() -> Self::Class<'a> {
         Box::new(|theme, _status| widget::text_editor::Style {
             background: iced::Background::Color(theme.palette.bg_tertiary),
-            border: iced::Border::default(),
+            border: iced::border::rounded(RADIUS_MD),
             placeholder: theme.palette.fg_muted,
             value: theme.palette.fg,
             selection: theme.palette.accent.scale_alpha(0.4),

@@ -21,6 +21,7 @@ mod lyrics;
 mod media_controls;
 mod providers;
 mod theme;
+mod translate;
 mod types;
 mod util;
 

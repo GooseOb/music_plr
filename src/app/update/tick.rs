@@ -481,6 +481,23 @@ impl MusicPlayer {
             BackendResult::LyricsFetched(result, track_id, provider) => {
                 self.process_lyrics_fetched(&result, &track_id, provider)
             }
+            BackendResult::TranslationDone {
+                pane,
+                track_id,
+                language,
+                text,
+            } => self.process_translation_done(pane, &track_id, &language, &text),
+            BackendResult::TranslationError { pane, message } => {
+                self.process_translation_error(pane, &message)
+            }
+            BackendResult::TranslationModels(models) => {
+                self.process_translation_models(models);
+                Task::none()
+            }
+            BackendResult::TranslationModelsError(message) => {
+                self.process_translation_models_error(&message);
+                Task::none()
+            }
             BackendResult::ImportPathsPicked { method, paths } => {
                 if paths.is_empty() {
                     Task::none()

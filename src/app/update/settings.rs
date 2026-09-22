@@ -18,6 +18,9 @@ pub enum SettingsChange {
     Language(crate::i18n::Language),
     Theme(crate::theme::ThemeKind),
     CookieBrowser(Option<String>),
+    TranslationBaseUrl(String),
+    TranslationApiKey(String),
+    TranslationModel(String),
 }
 
 impl MusicPlayer {
@@ -79,6 +82,21 @@ impl MusicPlayer {
             SettingsChange::CookieBrowser(browser) => {
                 crate::deps::set_cookie_browser(browser.clone());
                 self.set_config(|c| c.cookie_browser = browser);
+            }
+            SettingsChange::TranslationBaseUrl(url) => {
+                let url = url.trim().to_string();
+                if !url.is_empty() {
+                    self.set_config(|c| c.translation_base_url = url);
+                }
+            }
+            SettingsChange::TranslationApiKey(key) => {
+                self.set_config(|c| c.translation_api_key = key.trim().to_string());
+            }
+            SettingsChange::TranslationModel(model) => {
+                let model = model.trim().to_string();
+                if !model.is_empty() {
+                    self.set_config(|c| c.translation_model = model);
+                }
             }
         }
     }

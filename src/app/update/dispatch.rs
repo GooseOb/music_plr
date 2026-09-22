@@ -180,6 +180,32 @@ impl crate::app::MusicPlayer {
                 self.delete_custom_lyrics(pane);
                 Task::none()
             }
+            Message::OpenTranslateDialog(pane) => self.open_translate_dialog(pane),
+            Message::TranslateLanguageChanged(value) => {
+                self.handle_translate_language_changed(value);
+                Task::none()
+            }
+            Message::TranslateLanguageSubmit => {
+                self.handle_translate_language_submit();
+                Task::none()
+            }
+            Message::TranslatePromptAction(action) => {
+                self.handle_translate_prompt_action(action);
+                Task::none()
+            }
+            Message::TranslateResetPrompt => {
+                self.handle_translate_reset_prompt();
+                Task::none()
+            }
+            Message::TranslateSubmit => self.submit_translation(),
+            Message::RequestTranslationModels => {
+                self.request_translation_models();
+                Task::none()
+            }
+            Message::TranslationModelsFilterChanged(value) => {
+                self.translation_models_filter = value;
+                Task::none()
+            }
             Message::SearchInputChanged(pane, query) => {
                 self.pane_mut(pane).search_query = query;
                 self.update_search_history(pane);
@@ -337,6 +363,7 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::CloseDialog => {
+                self.save_translate_prefs();
                 self.dialog = None;
                 Task::none()
             }

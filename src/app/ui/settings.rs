@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{checkbox, scrollable, text, Button, Column, Container, Space},
+    widget::{checkbox, scrollable, text, text_input, Button, Column, Container, Space},
     Element, Length,
 };
 
@@ -52,6 +52,97 @@ fn cookie_browser_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme
     }
     let row = scope_tab_row(items);
     Column::with_children([text(player.strings.cookie_browser_lbl).into(), row])
+        .spacing(theme::SPACING_SM)
+        .align_x(alignment::Horizontal::Left)
+        .into()
+}
+
+fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let cfg = &player.config;
+    let base_url = text_input_row(
+        player.strings.translation_base_url_lbl,
+        &cfg.translation_base_url,
+        crate::translate::DEFAULT_BASE_URL,
+        |s| Message::SettingsChanged(SettingsChange::TranslationBaseUrl(s)),
+    );
+    let api_key = Column::with_children([
+        Container::new(text(player.strings.translation_api_key_lbl))
+            .padding([0.0, theme::SPACING_XS])
+            .into(),
+        text_input("", &cfg.translation_api_key)
+            .secure(true)
+            .on_input(|s| Message::SettingsChanged(SettingsChange::TranslationApiKey(s)))
+            .padding([theme::SPACING_SM, theme::SPACING_MD])
+            .into(),
+    ])
+    .spacing(theme::SPACING_XS)
+    .into();
+    let model = text_input_row(
+        player.strings.translation_model_lbl,
+        &cfg.translation_model,
+        crate::translate::DEFAULT_MODEL,
+        |s| Message::SettingsChanged(SettingsChange::TranslationModel(s)),
+    );
+    let loading = player
+        .translation_models
+        .as_ref()
+        .is_some_and(crate::load_state::LoadState::is_loading);
+    let refresh = Button::new(text(player.strings.translation_refresh_models))
+        .padding([theme::SPACING_XS, theme::SPACING_MD])
+        .on_press_maybe((!loading).then_some(Message::RequestTranslationModels))
+        .into();
+    let mut children: Vec<Element<'_, Message, AppTheme>> = vec![base_url, api_key, model, refresh];
+    match &player.translation_models {
+        None => {}
+        Some(crate::load_state::LoadState::Loading) => {
+            children.push(text(player.strings.loading).style(fg_secondary()).into());
+        }
+        Some(crate::load_state::LoadState::Failed(e)) => {
+            children.push(
+                text((player.strings.translation_models_failed)(e))
+                    .style(fg_secondary())
+                    .into(),
+            );
+        }
+        Some(crate::load_state::LoadState::Ready(models)) if models.is_empty() => {
+            children.push(
+                text(player.strings.translation_no_models)
+                    .style(fg_secondary())
+                    .into(),
+            );
+        }
+        Some(crate::load_state::LoadState::Ready(models)) => {
+            children.push(
+                text_input(
+                    player.strings.find_in_list,
+                    &player.translation_models_filter,
+                )
+                .on_input(Message::TranslationModelsFilterChanged)
+                .padding(theme::SPACING_SM)
+                .into(),
+            );
+            let visible: Vec<&String> = models
+                .iter()
+                .filter(|name| crate::util::fuzzy_match(&player.translation_models_filter, name))
+                .collect();
+            if visible.is_empty() {
+                children.push(
+                    text(player.strings.no_results_found)
+                        .style(fg_secondary())
+                        .into(),
+                );
+            } else {
+                children.push(scope_tab_row(visible.into_iter().map(|name| {
+                    (
+                        name.clone(),
+                        *name == cfg.translation_model,
+                        Message::SettingsChanged(SettingsChange::TranslationModel(name.clone())),
+                    )
+                })));
+            }
+        }
+    }
+    Column::with_children(children)
         .spacing(theme::SPACING_SM)
         .align_x(alignment::Horizontal::Left)
         .into()
@@ -223,6 +314,10 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
                 default_provider_section(player),
                 cookie_browser_section(player),
             ],
+        ),
+        section(
+            player.strings.sec_translation,
+            [translation_section(player)],
         ),
         section(player.strings.sec_storage, [download_dir, cache_size]),
         section(

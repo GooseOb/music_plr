@@ -242,11 +242,18 @@ fn view_bottom_controls<'a>(
                     Message::SelectCustomLyrics(pane, name.clone()),
                 )
             }))
-            .chain(std::iter::once((
-                player.strings.add_custom.to_string(),
-                false,
-                Message::StartCustomLyricsEdit(pane),
-            ))),
+            .chain([
+                (
+                    player.strings.translate_with_ai.to_string(),
+                    false,
+                    Message::OpenTranslateDialog(pane),
+                ),
+                (
+                    player.strings.add_custom.to_string(),
+                    false,
+                    Message::StartCustomLyricsEdit(pane),
+                ),
+            ]),
     );
 
     Row::with_children([

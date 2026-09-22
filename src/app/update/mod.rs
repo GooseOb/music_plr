@@ -29,6 +29,7 @@ mod session;
 pub mod settings;
 pub use settings::SettingsChange;
 mod tick;
+mod translate;
 
 mod updates;
 pub use updates::{

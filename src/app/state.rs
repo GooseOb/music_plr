@@ -27,6 +27,7 @@ use crate::{
         JsonStore,
     },
     i18n::Strings,
+    load_state::LoadState,
     lyrics::LyricsProvider,
     media_controls::{MediaControlEvent, MediaUpdate},
     providers::ProviderId,
@@ -134,6 +135,11 @@ pub struct MusicPlayer {
 
     pub queue_selected_indices: Vec<usize>,
     pub recent_selected_indices: Vec<usize>,
+    /// Model ids fetched from the configured translation server for the
+    /// Settings picker. Session-only (`None` until first requested).
+    pub translation_models: Option<LoadState<Vec<String>>>,
+    /// Session-only substring filter for the fetched translation model list.
+    pub translation_models_filter: String,
 
     pub now_playing_from: Option<ViewData>,
 
@@ -221,6 +227,8 @@ impl MusicPlayer {
             drag: DragState::default(),
             queue_selected_indices: Vec::new(),
             recent_selected_indices: Vec::new(),
+            translation_models: None,
+            translation_models_filter: String::new(),
             now_playing_from: None,
             track_list_search: None,
             app_theme,

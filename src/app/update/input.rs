@@ -153,6 +153,7 @@ impl MusicPlayer {
         let shift = modifiers.shift();
         if self.dialog.is_some() {
             if matches!(key, Physical::Code(Code::Escape)) {
+                self.save_translate_prefs();
                 self.dialog = None;
                 return Task::none();
             }

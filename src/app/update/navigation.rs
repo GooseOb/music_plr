@@ -218,6 +218,7 @@ impl MusicPlayer {
             Some(crate::app::Dialog::ContextMenu(m)) => Some(m.pos.pane),
             Some(crate::app::Dialog::Picker(p)) => Some(p.pane),
             Some(crate::app::Dialog::Edit(e)) => Some(e.pos.pane),
+            Some(crate::app::Dialog::Translate(d)) => Some(d.pane),
             _ => None,
         };
         if dialog_pane == Some(pane) {

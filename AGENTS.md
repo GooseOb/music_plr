@@ -7,7 +7,7 @@ YouTube-search music player with local playback and OS media controls, built wit
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`)
 - **Audio**: rodio + symphonia; **pipeline**: yt-dlp (stream/download)
 - **Media controls**: souvlaki (MPRIS/D-Bus on Linux, SMTC on Windows, Now Playing on macOS); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd 0.15; **Logging**: tracing + tracing-subscriber
-- **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default, plus named user-added per-track lyrics (plain or LRC-synced) shown as tabs after the providers, editable/deletable from the lyrics view; on-disk cache in `data/lyrics_cache.rs`
+- **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default, plus named user-added per-track lyrics (plain or LRC-synced) shown as tabs after the providers, editable/deletable from the lyrics view; on-disk cache in `data/lyrics_cache.rs`; AI translate (`translate.rs`, OpenAI-compatible/Ollama, BYOK in Settings) opens the result in the custom-lyrics editor under the target language
 
 ## Prerequisites
 
@@ -54,6 +54,7 @@ src/
 ├── app/message.rs     # Message + BackendResult (pane-scoped messages carry PaneId)
 ├── app/interaction.rs # TrackListKind, TrackPos (+pane), DragState, ContextMenuState
 ├── app/import.rs     # ImportPlaylistDialog + filename-pattern matching/conflict engine
+├── app/translate_dialog.rs # TranslateDialog (AI-translate popup: language + prompt + in-flight flag)
 ├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, split, track_list)
 ├── app/update/        # Per-domain handlers; dispatch.rs holds the top-level update()/subscription() dispatcher
 ├── audio/mod.rs       # AudioPlayer: rodio sink + yt-dlp process management
@@ -69,6 +70,7 @@ src/
 ├── media_controls.rs  # OS media controls via souvlaki (MPRIS/SMTC/Now Playing)
 ├── types.rs           # Track, TrackSource, PlayQueue
 ├── lyrics.rs          # LyricsProvider enum + LyricsClient (provider registry)
+├── translate.rs       # AI translation via OpenAI-compatible chat completions (hosted or Ollama-local)
 ├── icons.rs           # SVG embedding via include_bytes! + icon()
 ├── load_state.rs      # LoadState<T, E>: Ready/Failed/Loading fetch-state wrapper
 └── util.rs            # format_duration, fuzzy_match, remove_at, reorder_tracks
@@ -98,7 +100,7 @@ src/
   Same-pane reorders; cross-list/pane copies move all selected; cards dropped on playlists become local playlists.
   Cleaned via `cleanup()`; accessors `hovered_track()`/`set_hovered*`.
 - **Selection / list access** (`app/update/selection.rs`): `selection_in`, `toggle_selection`, `clear_selection`, `view_tracks_in`, `get_track_at`, `track_count_in` — keyed by pane + `TrackListKind` (unscoped shims target the focused pane).
-- **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError(u64, String)` (the rid routes to the requesting pane's slot), `ThumbnailDownloaded(provider, id)` (marks that entry downloaded), `LyricsFetched(Result<Lyrics, String>, String, LyricsProvider)` (applies to lyrics panes waiting on that track+provider; tick refetches per pane on track change), `NormalizationComputed(String, f32)` (caches a per-track gain in memory; read on subsequent plays), `CardPlaylistReady(usize, String, Vec<Track>)` (a dragged card became a playlist; fills the playlist at the given index with the browsed tracks). 250ms tick drains → `process_result`.
+- **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError(u64, String)` (the rid routes to the requesting pane's slot), `ThumbnailDownloaded(provider, id)` (marks that entry downloaded), `LyricsFetched(Result<Lyrics, String>, String, LyricsProvider)` (applies to lyrics panes waiting on that track+provider; tick refetches per pane on track change), `NormalizationComputed(String, f32)` (caches a per-track gain in memory; read on subsequent plays), `CardPlaylistReady(usize, String, Vec<Track>)` (a dragged card became a playlist; fills the playlist at the given index with the browsed tracks), `TranslationDone/Error` (AI translation opens in the custom-lyrics editor under the target language). 250ms tick drains → `process_result`.
 - **Media controls**: souvlaki thread → souvlaki's `MediaControlEvent` → `process_media_event` (tick); `MediaUpdate` flows main → thread.
 
 ## Data Flow & Navigation
