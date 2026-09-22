@@ -601,6 +601,7 @@ mod tests {
             lines: vec![],
             plain: "la".into(),
             provider: LP::LrcLib,
+            translations: vec![],
         };
         let _ = p.process_result(BackendResult::LyricsFetched(
             Ok(lyrics),

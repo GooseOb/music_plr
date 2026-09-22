@@ -34,7 +34,8 @@ pub(super) fn view_lyrics<'a>(
     }
     let track = player.queue.current();
 
-    let lyrics_ready = matches!(&lyrics_state.lyrics, LoadState::Ready(_));
+    let displayed = lyrics_state.displayed_lyrics();
+    let lyrics_ready = displayed.is_some();
 
     let body: Element<'a, Message, AppTheme> = if lyrics_state.mode == LyricsViewMode::Selectable
         && lyrics_ready
@@ -44,25 +45,15 @@ pub(super) fn view_lyrics<'a>(
         let mode = lyrics_state.mode;
         let scrolled = lyrics_state.scrolled_to;
         let picked = lyrics_state.picked_line;
-        let lyrics_state = &lyrics_state.lyrics;
-        match (track, lyrics_state) {
-            (Some(_), LoadState::Ready(lyrics))
-                if lyrics.has_timed() && mode == LyricsViewMode::Synced =>
-            {
-                view_synced(pane, lyrics, scrolled)
-            }
-            (Some(_), LoadState::Ready(lyrics)) if lyrics.has_notes() => {
-                view_plain_notes(pane, lyrics, picked)
-            }
-            (Some(_), LoadState::Ready(lyrics)) => Container::new(
-                text(lyrics.plain.clone())
-                    .size(theme::TEXT_SIZE_LG)
-                    .center()
-                    .style(fg_secondary())
-                    .width(Length::Fill),
-            )
-            .padding(theme::SPACING_LG)
-            .into(),
+        match (track, &lyrics_state.lyrics) {
+            (Some(_), LoadState::Ready(_)) => match displayed {
+                Some(lyrics) if lyrics.has_timed() && mode == LyricsViewMode::Synced => {
+                    view_synced(pane, lyrics, scrolled)
+                }
+                Some(lyrics) => view_plain_notes(pane, lyrics, picked),
+                // `displayed` is always `Some` once lyrics are ready.
+                None => empty_state(""),
+            },
             (Some(_), LoadState::Loading) => loading_state(player.strings.looking_up_lyrics),
             (Some(_), LoadState::Failed(e)) => empty_state((player.strings.couldnt_load_lyrics)(e)),
             (None, _) => empty_state(player.strings.play_a_track_for_lyrics),
@@ -74,8 +65,8 @@ pub(super) fn view_lyrics<'a>(
         .into();
 
     let note_idx = lyrics_state.note_target();
-    let note_visible = match (&lyrics_state.lyrics, note_idx) {
-        (LoadState::Ready(lyrics), Some(idx)) => lyrics.lines.get(idx).is_some_and(|line| {
+    let note_visible = match (displayed, note_idx) {
+        (Some(lyrics), Some(idx)) => lyrics.lines.get(idx).is_some_and(|line| {
             !line.description.is_empty()
                 || (lyrics_state.note_line == Some(idx)
                     && lyrics_state.note_editor.text().trim_end() != line.description)
@@ -83,10 +74,13 @@ pub(super) fn view_lyrics<'a>(
         _ => false,
     };
 
-    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(4);
+    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(5);
     children.push(Container::new(body).height(Length::Fill).into());
     if note_visible {
         children.push(view_note_block(pane, lyrics_state));
+    }
+    if let Some(row) = view_translation_row(player, pane, lyrics_state) {
+        children.push(row);
     }
     if track.is_some() {
         if let Some(name) = &lyrics_state.selected_custom {
@@ -195,6 +189,52 @@ fn view_custom_editor<'a>(
     .spacing(theme::SPACING_MD)
     .padding(theme::SPACING_MD)
     .into()
+}
+
+/// Language picker shown below the lyrics when the provider ships
+/// translations for this track. Translations lazy-load on selection; the
+/// in-flight language is disabled until its fetch settles.
+fn view_translation_row<'a>(
+    player: &'a MusicPlayer,
+    pane: PaneId,
+    lyrics_state: &'a LyricsState,
+) -> Option<Element<'a, Message, AppTheme>> {
+    let LoadState::Ready(lyrics) = &lyrics_state.lyrics else {
+        return None;
+    };
+    if lyrics.translations.is_empty() {
+        return None;
+    }
+    let selected = lyrics_state.selected_translation.as_deref();
+    let loading = lyrics_state.loading_translation.as_deref();
+    let original = (
+        player.strings.lyrics_original.to_string(),
+        selected.is_none(),
+        Some(Message::SelectLyricsTranslation(pane, None)),
+    );
+    let languages = lyrics.translations.iter().map(|translation| {
+        let language = translation.language.clone();
+        let busy = loading == Some(language.as_str());
+        (
+            crate::lyrics::language_name(&translation.language),
+            selected == Some(language.as_str()) && translation.is_loaded(),
+            (!busy).then_some(Message::SelectLyricsTranslation(pane, Some(language))),
+        )
+    });
+    let row = scope_tab_row_h_scroll(std::iter::once(original).chain(languages));
+    Some(
+        Row::with_children([
+            text(player.strings.lyrics_translations)
+                .size(theme::TEXT_SIZE_SM)
+                .style(fg_secondary())
+                .into(),
+            Container::new(row).align_left(Length::Fill).into(),
+        ])
+        .spacing(theme::SPACING_SM)
+        .padding([0.0, theme::SPACING_SM])
+        .align_y(alignment::Vertical::Center)
+        .into(),
+    )
 }
 
 fn view_bottom_controls<'a>(

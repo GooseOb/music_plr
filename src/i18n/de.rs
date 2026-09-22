@@ -42,6 +42,8 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "Auswählbar",
     lyrics_synced: "Synchronisiert",
     lyrics_plain: "Einfach",
+    lyrics_translations: "Übersetzungen",
+    lyrics_original: "Original",
     add_custom: "Text hinzufügen",
     lyrics_name: "Name",
     translate_with_ai: "Mit KI übersetzen",

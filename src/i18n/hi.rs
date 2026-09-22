@@ -42,6 +42,8 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "चयन योग्य",
     lyrics_synced: "सिंक किए गए",
     lyrics_plain: "सादा",
+    lyrics_translations: "अनुवाद",
+    lyrics_original: "मूल",
     add_custom: "बोल जोड़ें",
     lyrics_name: "नाम",
     translate_with_ai: "AI से अनुवाद करें",

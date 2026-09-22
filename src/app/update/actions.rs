@@ -82,8 +82,8 @@ impl MusicPlayer {
     }
 
     fn sync_editor_content(state: &mut crate::app::LyricsState) {
-        let text = match &state.lyrics {
-            LoadState::Ready(lyrics) => {
+        let text = match state.displayed_lyrics() {
+            Some(lyrics) => {
                 if lyrics.has_timed() {
                     lyrics
                         .lines
@@ -95,7 +95,7 @@ impl MusicPlayer {
                     lyrics.plain.clone()
                 }
             }
-            _ => String::new(),
+            None => String::new(),
         };
         if state.mode == LyricsViewMode::Selectable {
             state.editor = iced::widget::text_editor::Content::with_text(&text);
@@ -114,7 +114,10 @@ impl MusicPlayer {
         let Some(state) = &mut self.pane_mut(pane).lyrics else {
             return;
         };
-        let LoadState::Ready(lyrics) = &mut state.lyrics else {
+        let track_id = state.track_id.clone();
+        let custom_name = state.selected_custom.clone();
+        let translated = state.selected_translation.is_some();
+        let Some(lyrics) = state.displayed_lyrics_mut() else {
             return;
         };
         let Some(line) = lyrics.lines.get_mut(idx) else {
@@ -124,11 +127,13 @@ impl MusicPlayer {
             return;
         }
         line.description = text;
-        if let (Some(track_id), Some(name)) =
-            (state.track_id.clone(), state.selected_custom.clone())
-        {
-            let mut cache = crate::data::lyrics_cache::LyricsCache::load();
-            cache.insert_custom(&track_id, &name, lyrics);
+        // Note drafts on provider lyrics are session-only; custom entries
+        // never show a translation, so `lyrics` is the entry itself here.
+        if !translated {
+            if let (Some(track_id), Some(name)) = (track_id, custom_name) {
+                let mut cache = crate::data::lyrics_cache::LyricsCache::load();
+                cache.insert_custom(&track_id, &name, lyrics);
+            }
         }
     }
 
@@ -145,8 +150,8 @@ impl MusicPlayer {
             return;
         }
         state.note_line = target;
-        let text = match (&state.lyrics, target) {
-            (LoadState::Ready(lyrics), Some(idx)) => lyrics
+        let text = match (state.displayed_lyrics(), target) {
+            (Some(lyrics), Some(idx)) => lyrics
                 .lines
                 .get(idx)
                 .map_or(String::new(), |line| line.description.clone()),
@@ -195,9 +200,7 @@ impl MusicPlayer {
         if state.mode != LyricsViewMode::Synced {
             return None;
         }
-        let LoadState::Ready(lyrics) = &state.lyrics else {
-            return None;
-        };
+        let lyrics = state.displayed_lyrics()?;
         if !lyrics.has_timed() {
             return None;
         }
@@ -294,11 +297,95 @@ impl MusicPlayer {
             state.editing = false;
             state.editing_custom_name = None;
             state.selected_custom = None;
+            state.reset_translation_state();
             state.custom_names = Vec::new();
             state.reset_note_state();
         }
         self.sync_lyrics_editor(pane);
         self.save_session();
+    }
+
+    /// Switch the displayed lyrics of one pane between the original and a
+    /// loaded translation. Unloaded translations are fetched in the
+    /// background; the pane keeps showing the original meanwhile.
+    pub fn handle_select_lyrics_translation(
+        &mut self,
+        pane: PaneId,
+        language: Option<String>,
+    ) -> Task<Message> {
+        let Some(track) = self.queue.current() else {
+            return Task::none();
+        };
+        let track_id = track.primary_id().to_string();
+        let tx = self.result_tx.clone();
+        let no_lyrics = self.strings.no_lyrics_found;
+        self.flush_note_draft(pane);
+        let Some(state) = &mut self.pane_mut(pane).lyrics else {
+            return Task::none();
+        };
+        let provider = state.provider;
+        let ready = matches!(state.lyrics, LoadState::Ready(_));
+        if !ready || state.editing || state.selected_custom.is_some() {
+            return Task::none();
+        }
+        if state.selected_translation == language {
+            return Task::none();
+        }
+        let source = language.as_deref().and_then(|lang| {
+            let LoadState::Ready(lyrics) = &state.lyrics else {
+                return None;
+            };
+            lyrics
+                .translations
+                .iter()
+                .find(|t| t.language == lang)
+                .and_then(|t| t.source.clone())
+        });
+        match language {
+            None => {
+                state.selected_translation = None;
+                state.loading_translation = None;
+                if let Some(lyrics) = state.displayed_lyrics() {
+                    state.mode = LyricsViewMode::for_lyrics(lyrics);
+                }
+                state.scrolled_to = None;
+                state.viewport = None;
+                state.reset_note_state();
+            }
+            Some(language) => match source {
+                None => {
+                    state.selected_translation = Some(language);
+                    state.loading_translation = None;
+                    if let Some(lyrics) = state.displayed_lyrics() {
+                        state.mode = LyricsViewMode::for_lyrics(lyrics);
+                    }
+                    state.scrolled_to = None;
+                    state.viewport = None;
+                    state.reset_note_state();
+                }
+                Some(source) => {
+                    state.selected_translation = Some(language.clone());
+                    state.loading_translation = Some(language.clone());
+                    let id = track_id.clone();
+                    std::thread::spawn(move || {
+                        let result = match provider.fetch_translation(&language, &source) {
+                            Ok(Some(translation)) => Ok(translation),
+                            Ok(None) => Err(no_lyrics.to_string()),
+                            Err(e) => {
+                                tracing::warn!("Lyrics translation lookup failed: {e}");
+                                Err(e.to_string())
+                            }
+                        };
+                        let _ = tx.send(BackendResult::LyricsTranslationFetched(
+                            result, id, provider,
+                        ));
+                    });
+                    return Task::none();
+                }
+            },
+        }
+        self.sync_lyrics_editor(pane);
+        self.scroll_lyrics_to_active(pane)
     }
 
     /// Open a blank editor for a new named custom entry.
@@ -362,6 +449,7 @@ impl MusicPlayer {
             state.mode = mode;
             state.track_id = Some(track_id);
             state.selected_custom = Some(name);
+            state.reset_translation_state();
             state.custom_names = custom_names;
             state.editing = false;
             state.scrolled_to = None;
@@ -414,6 +502,7 @@ impl MusicPlayer {
             state.mode = mode;
             state.track_id = Some(track_id);
             state.selected_custom = Some(name);
+            state.reset_translation_state();
             state.custom_names = custom_names;
             state.editing = false;
             state.editing_custom_name = None;
@@ -465,6 +554,7 @@ impl MusicPlayer {
             state.editing = false;
             state.editing_custom_name = None;
             state.selected_custom = None;
+            state.reset_translation_state();
             state.custom_names = custom_names;
             state.lyrics = crate::load_state::LoadState::Loading;
             state.scrolled_to = None;
@@ -478,6 +568,7 @@ impl MusicPlayer {
     /// Load (from cache) or fetch lyrics for the current track when we don't
     /// already hold them; driven by the tick loop so it reacts to the overlay
     /// being shown and track changes.
+    #[allow(clippy::too_many_lines)]
     pub(super) fn ensure_lyrics_for_current(&mut self, pane: PaneId) {
         let Some(track) = self.queue.current() else {
             self.flush_note_draft(pane);
@@ -489,6 +580,7 @@ impl MusicPlayer {
                 state.editing = false;
                 state.editing_custom_name = None;
                 state.selected_custom = None;
+                state.reset_translation_state();
                 state.custom_names = Vec::new();
                 state.reset_note_state();
             }
@@ -521,6 +613,7 @@ impl MusicPlayer {
         }
         if !same_track {
             state.selected_custom = None;
+            state.reset_translation_state();
         }
         let cache = crate::data::lyrics_cache::LyricsCache::load();
         let custom_names = cache.custom_names(&current_id);
@@ -533,6 +626,7 @@ impl MusicPlayer {
                 state.scrolled_to = None;
                 state.viewport = None;
                 state.custom_names = custom_names;
+                state.reset_translation_state();
                 state.reset_note_state();
                 Self::sync_editor_content(state);
                 return;
@@ -548,6 +642,7 @@ impl MusicPlayer {
             state.scrolled_to = None;
             state.viewport = None;
             state.custom_names = custom_names;
+            state.reset_translation_state();
             state.reset_note_state();
             Self::sync_editor_content(state);
             return;
@@ -565,6 +660,7 @@ impl MusicPlayer {
         state.scrolled_to = None;
         state.viewport = None;
         state.custom_names = custom_names;
+        state.reset_translation_state();
         state.reset_note_state();
         Self::sync_editor_content(state);
         std::thread::spawn(move || {
@@ -593,6 +689,7 @@ impl MusicPlayer {
                 state.editing = false;
                 state.editing_custom_name = None;
                 state.selected_custom = None;
+                state.reset_translation_state();
                 state.custom_names = Vec::new();
                 state.reset_note_state();
             }

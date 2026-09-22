@@ -481,6 +481,9 @@ impl MusicPlayer {
             BackendResult::LyricsFetched(result, track_id, provider) => {
                 self.process_lyrics_fetched(&result, &track_id, provider)
             }
+            BackendResult::LyricsTranslationFetched(result, track_id, provider) => {
+                self.process_lyrics_translation_fetched(&result, &track_id, provider)
+            }
             BackendResult::TranslationDone {
                 pane,
                 track_id,
@@ -615,16 +618,114 @@ impl MusicPlayer {
                     state.mode = mode;
                     state.scrolled_to = None;
                     state.viewport = None;
+                    state.reset_translation_state();
                     state.reset_note_state();
                 }
                 Err(e) => {
                     state.lyrics = crate::load_state::LoadState::Failed(e.clone());
+                    state.reset_translation_state();
                     state.reset_note_state();
                 }
             }
             state.track_id = Some(track_id.to_owned());
             self.sync_lyrics_editor(pane);
             tasks.push(self.scroll_lyrics_to_active(pane));
+        }
+        if tasks.is_empty() {
+            Task::none()
+        } else {
+            tasks.insert(0, self.capture_bounds_task());
+            Task::batch(tasks)
+        }
+    }
+
+    /// A lazy translation finished: merge it into every pane holding ready
+    /// lyrics for that track from that provider. Only panes still waiting on
+    /// this language switch to it; the rest keep their selection and pick the
+    /// content up from the cache.
+    fn process_lyrics_translation_fetched(
+        &mut self,
+        result: &Result<crate::lyrics::TranslatedLyrics, String>,
+        track_id: &str,
+        provider: crate::lyrics::LyricsProvider,
+    ) -> Task<Message> {
+        if track_id.is_empty() {
+            return Task::none();
+        }
+        let mut tasks = Vec::new();
+        let panes: Vec<PaneId> = self.pane_ids();
+        let mut cache = None;
+        for pane in panes {
+            let waiting = self.pane(pane).lyrics.as_ref().is_some_and(|state| {
+                state.track_id.as_deref() == Some(track_id)
+                    && state.provider == provider
+                    && !state.editing
+                    && matches!(state.lyrics, crate::load_state::LoadState::Ready(_))
+            });
+            if !waiting {
+                continue;
+            }
+            let language = match &result {
+                Ok(t) => t.language.clone(),
+                Err(_) => match self
+                    .pane(pane)
+                    .lyrics
+                    .as_ref()
+                    .and_then(|s| s.loading_translation.clone())
+                {
+                    Some(language) => language,
+                    None => continue,
+                },
+            };
+            let wants_it = self.pane(pane).lyrics.as_ref().is_some_and(|state| {
+                state.loading_translation.as_deref() == Some(language.as_str())
+            });
+            if !wants_it {
+                continue;
+            }
+            self.flush_note_draft(pane);
+            let mut failure = None;
+            {
+                let Some(state) = self.pane_mut(pane).lyrics.as_mut() else {
+                    continue;
+                };
+                state.loading_translation = None;
+                match &result {
+                    Ok(translation) => {
+                        let crate::load_state::LoadState::Ready(lyrics) = &mut state.lyrics else {
+                            continue;
+                        };
+                        if let Some(slot) = lyrics
+                            .translations
+                            .iter_mut()
+                            .find(|t| t.language == language)
+                        {
+                            *slot = translation.clone();
+                        } else {
+                            lyrics.translations.push(translation.clone());
+                        }
+                        let cache =
+                            cache.get_or_insert_with(crate::data::lyrics_cache::LyricsCache::load);
+                        cache.insert(track_id, lyrics);
+                        state.selected_translation = Some(language.clone());
+                        let mode = crate::app::LyricsViewMode::for_lyrics(&translation.lyrics);
+                        state.mode = mode;
+                        state.scrolled_to = None;
+                        state.viewport = None;
+                        state.reset_note_state();
+                    }
+                    Err(e) => {
+                        failure = Some(e.clone());
+                        state.reset_note_state();
+                    }
+                }
+                state.track_id = Some(track_id.to_owned());
+            }
+            self.sync_lyrics_editor(pane);
+            tasks.push(self.scroll_lyrics_to_active(pane));
+            if let Some(message) = failure {
+                self.notify_error(message);
+            }
         }
         if tasks.is_empty() {
             Task::none()

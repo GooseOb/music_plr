@@ -42,6 +42,8 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "قابلة للتحديد",
     lyrics_synced: "متزامنة",
     lyrics_plain: "عادية",
+    lyrics_translations: "الترجمات",
+    lyrics_original: "الأصلي",
     add_custom: "إضافة كلمات",
     lyrics_name: "الاسم",
     translate_with_ai: "ترجم بالذكاء الاصطناعي",

@@ -10,9 +10,7 @@ use crate::{
 impl MusicPlayer {
     fn translate_source_text(&self, pane: PaneId) -> Option<String> {
         let state = self.pane(pane).lyrics.as_ref()?;
-        let LoadState::Ready(lyrics) = &state.lyrics else {
-            return None;
-        };
+        let lyrics = state.displayed_lyrics()?;
         let text = lyrics.to_edit_text();
         (!text.trim().is_empty()).then_some(text)
     }

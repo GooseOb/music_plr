@@ -42,6 +42,8 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "Виділюваний",
     lyrics_synced: "Синхронізований",
     lyrics_plain: "Звичайний",
+    lyrics_translations: "Переклади",
+    lyrics_original: "Оригінал",
     add_custom: "Додати текст",
     lyrics_name: "Назва",
     translate_with_ai: "Перекласти з ШІ",

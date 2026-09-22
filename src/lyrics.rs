@@ -60,6 +60,20 @@ impl LyricsProvider {
             LyricsProvider::Custom => Ok(None),
         }
     }
+
+    /// Fetch one lazy translation by its opaque `source` key from an
+    /// unloaded [`TranslatedLyrics`]. Only Genius stores translations, so
+    /// every other provider returns `Ok(None)`.
+    pub fn fetch_translation(
+        self,
+        language: &str,
+        source: &str,
+    ) -> Result<Option<TranslatedLyrics>> {
+        match self {
+            LyricsProvider::Genius => fetch_genius_translation(language, source),
+            _ => Ok(None),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -78,11 +92,128 @@ pub struct LyricLine {
     pub description: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Lyrics {
     pub lines: Vec<LyricLine>,
     pub plain: String,
     pub provider: LyricsProvider,
+    #[serde(default)]
+    pub translations: Vec<TranslatedLyrics>,
+}
+
+/// A translated version of a track's lyrics. `lyrics` is empty while
+/// `source` holds the opaque provider fetch key; selecting the language
+/// lazy-loads the content and clears `source`.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TranslatedLyrics {
+    pub language: String,
+    pub lyrics: Lyrics,
+    #[serde(default)]
+    pub source: Option<String>,
+}
+
+impl TranslatedLyrics {
+    pub fn is_loaded(&self) -> bool {
+        self.source.is_none()
+    }
+
+    pub fn unloaded(language: &str, source: &str) -> Self {
+        Self {
+            language: language.to_string(),
+            lyrics: Lyrics {
+                lines: Vec::new(),
+                plain: String::new(),
+                provider: LyricsProvider::Genius,
+                translations: Vec::new(),
+            },
+            source: Some(source.to_string()),
+        }
+    }
+}
+
+/// Display name for an ISO 639 language code; unknown codes fall back to
+/// the uppercased code itself.
+pub fn language_name(code: &str) -> String {
+    match code {
+        "af" => "Afrikaans",
+        "am" => "Amharic",
+        "ar" => "Arabic",
+        "az" => "Azerbaijani",
+        "be" => "Belarusian",
+        "bg" => "Bulgarian",
+        "bn" => "Bengali",
+        "ca" => "Catalan",
+        "cs" => "Czech",
+        "cy" => "Welsh",
+        "da" => "Danish",
+        "de" => "German",
+        "el" => "Greek",
+        "en" => "English",
+        "es" => "Spanish",
+        "et" => "Estonian",
+        "eu" => "Basque",
+        "fa" => "Persian",
+        "fi" => "Finnish",
+        "fr" => "French",
+        "ga" => "Irish",
+        "gl" => "Galician",
+        "gu" => "Gujarati",
+        "ha" => "Hausa",
+        "he" | "iw" => "Hebrew",
+        "hi" => "Hindi",
+        "hr" => "Croatian",
+        "hu" => "Hungarian",
+        "hy" => "Armenian",
+        "id" => "Indonesian",
+        "is" => "Icelandic",
+        "it" => "Italian",
+        "ja" => "Japanese",
+        "ka" => "Georgian",
+        "kk" => "Kazakh",
+        "km" => "Khmer",
+        "kn" => "Kannada",
+        "ko" => "Korean",
+        "ky" => "Kyrgyz",
+        "lo" => "Lao",
+        "lt" => "Lithuanian",
+        "lv" => "Latvian",
+        "mk" => "Macedonian",
+        "ml" => "Malayalam",
+        "mn" => "Mongolian",
+        "mr" => "Marathi",
+        "ms" => "Malay",
+        "my" => "Burmese",
+        "nb" | "no" => "Norwegian",
+        "ne" => "Nepali",
+        "nl" => "Dutch",
+        "pa" => "Punjabi",
+        "pl" => "Polish",
+        "pt" => "Portuguese",
+        "ro" => "Romanian",
+        "ru" => "Russian",
+        "si" => "Sinhala",
+        "sk" => "Slovak",
+        "sl" => "Slovenian",
+        "sr" => "Serbian",
+        "sv" => "Swedish",
+        "sw" => "Swahili",
+        "ta" => "Tamil",
+        "te" => "Telugu",
+        "tg" => "Tajik",
+        "th" => "Thai",
+        "tk" => "Turkmen",
+        "tl" => "Tagalog",
+        "tr" => "Turkish",
+        "uk" => "Ukrainian",
+        "ur" => "Urdu",
+        "uz" => "Uzbek",
+        "vi" => "Vietnamese",
+        "yo" => "Yoruba",
+        "zh" => "Chinese",
+        "zu" => "Zulu",
+        _ => return code.to_ascii_uppercase(),
+    }
+    .to_string()
 }
 
 impl Lyrics {
@@ -133,6 +264,7 @@ impl Lyrics {
             lines,
             plain,
             provider: LyricsProvider::Custom,
+            translations: Vec::new(),
         })
     }
 
@@ -261,6 +393,7 @@ fn fetch_lyrics_ovh(req: &LyricsRequest) -> Result<Option<Lyrics>> {
         lines: Vec::new(),
         plain,
         provider: LyricsProvider::LyricsOvh,
+        translations: Vec::new(),
     }))
 }
 
@@ -303,24 +436,10 @@ fn fetch_genius(req: &LyricsRequest) -> Result<Option<Lyrics>> {
     let Some(html) = get_genius_html(&hit.url, "Genius")? else {
         return Ok(None);
     };
-    let mut texts = Vec::new();
-    for block in genius_containers(&html) {
-        if block.contains("ContributorsCredit") || block.contains("LyricsHeader") {
-            continue;
-        }
-        texts.extend(html_to_lines(block));
-    }
-    if texts.is_empty() {
+    let mut lines = scrape_genius_lyrics(&html);
+    if lines.is_empty() {
         return Ok(None);
     }
-    let mut lines: Vec<LyricLine> = texts
-        .into_iter()
-        .map(|text| LyricLine {
-            time: None,
-            text,
-            description: String::new(),
-        })
-        .collect();
 
     let annotations = fetch_genius_annotations(hit.id).unwrap_or_default();
     if !annotations.is_empty() {
@@ -330,27 +449,79 @@ fn fetch_genius(req: &LyricsRequest) -> Result<Option<Lyrics>> {
             }
         }
     }
-    if let Ok(Some(blurb)) = fetch_genius_description(&hit.api_path) {
-        if let Some(first) = lines.first_mut() {
-            if first.description.is_empty() {
-                first.description = format!("About this song:\n{blurb}");
-            } else {
-                first.description.push_str("\n\nAbout this song:\n");
-                first.description.push_str(&blurb);
+    let mut translations = Vec::new();
+    if let Ok(Some(details)) = fetch_genius_song_details(&hit.api_path) {
+        if let Some(blurb) = details.blurb {
+            if let Some(first) = lines.first_mut() {
+                if first.description.is_empty() {
+                    first.description = format!("About this song:\n{blurb}");
+                } else {
+                    first.description.push_str("\n\nAbout this song:\n");
+                    first.description.push_str(&blurb);
+                }
             }
         }
+        translations = details.translations;
     }
 
-    let plain = lines
-        .iter()
-        .map(|line| line.text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
+    let plain = plain_of(&lines);
     Ok(Some(Lyrics {
         lines,
         plain,
         provider: LyricsProvider::Genius,
+        translations,
     }))
+}
+
+/// Scrape a translation page (a separate Genius song) into a loaded entry.
+/// Only Genius stores translations; other providers return `Ok(None)`.
+fn fetch_genius_translation(language: &str, url: &str) -> Result<Option<TranslatedLyrics>> {
+    let Some(html) = get_genius_html(url, "Genius")? else {
+        return Ok(None);
+    };
+    let lines = scrape_genius_lyrics(&html);
+    if lines.is_empty() {
+        return Ok(None);
+    }
+    let plain = plain_of(&lines);
+    Ok(Some(TranslatedLyrics {
+        language: language.to_string(),
+        lyrics: Lyrics {
+            lines,
+            plain,
+            provider: LyricsProvider::Genius,
+            translations: Vec::new(),
+        },
+        source: None,
+    }))
+}
+
+fn plain_of(lines: &[LyricLine]) -> String {
+    lines
+        .iter()
+        .map(|line| line.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Lyrics text lines from a Genius song page: header blocks skipped, `<br>`s
+/// become line breaks, annotated fragments unwrapped.
+fn scrape_genius_lyrics(html: &str) -> Vec<LyricLine> {
+    let mut texts = Vec::new();
+    for block in genius_containers(html) {
+        if block.contains("ContributorsCredit") || block.contains("LyricsHeader") {
+            continue;
+        }
+        texts.extend(html_to_lines(block));
+    }
+    texts
+        .into_iter()
+        .map(|text| LyricLine {
+            time: None,
+            text,
+            description: String::new(),
+        })
+        .collect()
 }
 
 fn get_genius_json<T: serde::de::DeserializeOwned>(url: &str, what: &str) -> Result<Option<T>> {
@@ -463,20 +634,41 @@ fn fetch_genius_annotations(song_id: u64) -> Result<HashMap<String, Vec<String>>
     Ok(out)
 }
 
-fn fetch_genius_description(api_path: &str) -> Result<Option<String>> {
-    let url = format!("https://genius.com{api_path}?text_format=plain");
+struct GeniusSongDetails {
+    blurb: Option<String>,
+    translations: Vec<TranslatedLyrics>,
+}
+
+fn fetch_genius_song_details(api_path: &str) -> Result<Option<GeniusSongDetails>> {
+    let url = format!("{GENIUS_BASE}{api_path}?text_format=plain");
     let resp: GeniusSongResponse = match get_genius_json(&url, "Genius")? {
         Some(body) => body,
         None => return Ok(None),
     };
-    let blurb = resp
-        .response
-        .song
+    let song = resp.response.song;
+    let blurb = song
         .description
         .as_ref()
         .map(|d| d.plain.trim())
-        .filter(|d| !d.is_empty());
-    Ok(blurb.map(str::to_string))
+        .filter(|d| !d.is_empty())
+        .map(str::to_string);
+    let mut seen = std::collections::HashSet::new();
+    let translations = song
+        .translation_songs
+        .iter()
+        .filter(|t| {
+            !t.hidden
+                && t.lyrics_state == "complete"
+                && !t.language.is_empty()
+                && t.language != song.language
+                && seen.insert(t.language.clone())
+        })
+        .map(|t| TranslatedLyrics::unloaded(&t.language, &t.url))
+        .collect();
+    Ok(Some(GeniusSongDetails {
+        blurb,
+        translations,
+    }))
 }
 
 #[derive(Debug, Deserialize)]
@@ -579,6 +771,22 @@ struct GeniusSongInner {
 struct GeniusSong {
     #[serde(default)]
     description: Option<GeniusText>,
+    #[serde(default)]
+    language: String,
+    #[serde(default)]
+    translation_songs: Vec<GeniusTranslationHit>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct GeniusTranslationHit {
+    #[serde(default)]
+    language: String,
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    lyrics_state: String,
+    #[serde(default)]
+    hidden: bool,
 }
 
 /// Inner HTML of every `data-lyrics-container` block on a Genius song page.
@@ -800,6 +1008,7 @@ fn record_to_lyrics(rec: LrcLibRecord, provider: LyricsProvider) -> Lyrics {
         lines,
         plain,
         provider,
+        translations: Vec::new(),
     }
 }
 
@@ -872,6 +1081,7 @@ mod tests {
                 .collect(),
             plain: String::new(),
             provider: LyricsProvider::LrcLib,
+            translations: Vec::new(),
         };
         assert_eq!(lrc.active_index(5.0), Some(0));
         assert_eq!(lrc.active_index(10.0), Some(1));
@@ -889,6 +1099,7 @@ mod tests {
             }],
             plain: "words".into(),
             provider: LyricsProvider::LrcLib,
+            translations: Vec::new(),
         };
         assert_eq!(lrc.active_index(5.0), None);
     }
@@ -1073,6 +1284,55 @@ mod tests {
                 "I feel stupid",
             ]
         );
+    }
+
+    #[test]
+    fn language_names_cover_genius_codes() {
+        assert_eq!(language_name("ru"), "Russian");
+        assert_eq!(language_name("iw"), "Hebrew");
+        assert_eq!(language_name("he"), "Hebrew");
+        assert_eq!(language_name("pt"), "Portuguese");
+        assert_eq!(language_name("xx"), "XX");
+    }
+
+    #[test]
+    fn translated_lyrics_loading_flag_follows_source() {
+        let unloaded = TranslatedLyrics::unloaded("ru", "https://genius.com/x");
+        assert!(!unloaded.is_loaded());
+        assert!(unloaded.lyrics.lines.is_empty());
+        let loaded = TranslatedLyrics {
+            language: "ru".into(),
+            lyrics: Lyrics::from_custom_text("la").unwrap(),
+            source: None,
+        };
+        assert!(loaded.is_loaded());
+    }
+
+    #[test]
+    fn lyrics_with_translations_serde_round_trip() {
+        let mut lyrics = Lyrics::from_custom_text("la").unwrap();
+        lyrics
+            .translations
+            .push(TranslatedLyrics::unloaded("ru", "https://genius.com/x"));
+        let json = serde_json::to_string(&lyrics).unwrap();
+        let back: Lyrics = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, lyrics);
+        assert!(!back.translations[0].is_loaded());
+    }
+
+    #[test]
+    fn lyrics_without_translations_field_still_parse() {
+        let json = r#"{"lines":[],"plain":"la","provider":"lrclib"}"#;
+        let lyrics: Lyrics = serde_json::from_str(json).unwrap();
+        assert!(lyrics.translations.is_empty());
+    }
+
+    #[test]
+    fn genius_song_deserializes_translation_songs() {
+        let json = r#"{"response":{"song":{"language":"en","description":{"plain":"blurb"},"translation_songs":[{"language":"ru","url":"https://genius.com/x-lyrics","lyrics_state":"complete","hidden":false},{"language":"","url":"https://genius.com/y","lyrics_state":"complete","hidden":false}]}}}"#;
+        let resp: GeniusSongResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(resp.response.song.translation_songs.len(), 2);
+        assert_eq!(resp.response.song.translation_songs[0].language, "ru");
     }
 
     #[test]

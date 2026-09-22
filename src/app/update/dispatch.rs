@@ -18,7 +18,6 @@ use crate::{
         update::operation::{CaptureContextMenu, CaptureSearchHistoryRows, ContextMenuGeometry},
     },
     deps::DepKind,
-    load_state::LoadState,
     providers::ProviderId,
 };
 
@@ -123,15 +122,15 @@ impl crate::app::MusicPlayer {
                 let Some(state) = &self.pane(pane).lyrics else {
                     return Task::none();
                 };
-                let text = match &state.lyrics {
-                    LoadState::Ready(lyrics) => {
+                let text = match state.displayed_lyrics() {
+                    Some(lyrics) => {
                         if state.mode == crate::app::LyricsViewMode::Synced && lyrics.has_timed() {
                             lyrics.to_edit_text()
                         } else {
                             lyrics.plain.clone()
                         }
                     }
-                    _ => return Task::none(),
+                    None => return Task::none(),
                 };
                 if text.is_empty() {
                     return Task::none();
@@ -468,6 +467,9 @@ impl crate::app::MusicPlayer {
             Message::SelectLyricsProvider(pane, id) => {
                 self.handle_select_lyrics_provider(pane, id);
                 Task::none()
+            }
+            Message::SelectLyricsTranslation(pane, language) => {
+                self.handle_select_lyrics_translation(pane, language)
             }
             Message::SwitchQueueTab(tab) => self.switch_queue_tab(tab),
             Message::NavigateTo(pane, data) => {

@@ -42,6 +42,8 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "可选中",
     lyrics_synced: "已同步",
     lyrics_plain: "纯文本",
+    lyrics_translations: "翻译",
+    lyrics_original: "原文",
     add_custom: "添加歌词",
     lyrics_name: "名称",
     translate_with_ai: "用 AI 翻译",

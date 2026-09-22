@@ -5,13 +5,15 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use super::{JsonStore, StoreLocation};
-use crate::lyrics::{LyricLine, Lyrics, LyricsProvider};
+use crate::lyrics::{LyricLine, Lyrics, LyricsProvider, TranslatedLyrics};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CachedLyrics {
     pub plain: String,
     pub lines: Vec<LyricLine>,
     pub provider: LyricsProvider,
+    #[serde(default)]
+    pub translations: Vec<TranslatedLyrics>,
 }
 
 impl CachedLyrics {
@@ -20,6 +22,7 @@ impl CachedLyrics {
             lines: self.lines.clone(),
             plain: self.plain.clone(),
             provider: self.provider,
+            translations: self.translations.clone(),
         }
     }
 }
@@ -37,6 +40,7 @@ impl CustomLyricsEntry {
             lines: self.lines.clone(),
             plain: self.plain.clone(),
             provider: LyricsProvider::Custom,
+            translations: Vec::new(),
         }
     }
 }
@@ -69,11 +73,13 @@ impl LyricsCache {
         if let Some(slot) = list.iter_mut().find(|e| e.provider == lyrics.provider) {
             slot.plain.clone_from(&lyrics.plain);
             slot.lines.clone_from(&lyrics.lines);
+            slot.translations.clone_from(&lyrics.translations);
         } else {
             list.push(CachedLyrics {
                 plain: lyrics.plain.clone(),
                 lines: lyrics.lines.clone(),
                 provider: lyrics.provider,
+                translations: lyrics.translations.clone(),
             });
         }
         self.save();

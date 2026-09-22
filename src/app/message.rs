@@ -34,6 +34,13 @@ pub enum BackendResult {
         String,
         crate::lyrics::LyricsProvider,
     ),
+    /// One lazy translation finished loading for `track_id` from `provider`;
+    /// merged into the ready lyrics of waiting panes.
+    LyricsTranslationFetched(
+        Result<crate::lyrics::TranslatedLyrics, String>,
+        String,
+        crate::lyrics::LyricsProvider,
+    ),
     NormalizationComputed(String, f32),
     CardPlaylistReady(usize, String, Vec<Track>),
     /// An artist id was resolved on `provider` (by name) for the page that
@@ -218,6 +225,7 @@ pub enum Message {
     SetLyricsViewMode(PaneId, crate::app::LyricsViewMode),
     LyricsLineClicked(f32),
     SelectLyricsProvider(PaneId, crate::lyrics::LyricsProvider),
+    SelectLyricsTranslation(PaneId, Option<String>),
     LyricsEditorAction(PaneId, iced::widget::text_editor::Action),
     CopyLyrics(PaneId),
     SelectLyricLine(PaneId, usize),
@@ -305,6 +313,7 @@ impl Message {
             | Message::ShowLyrics(pane)
             | Message::SetLyricsViewMode(pane, _)
             | Message::SelectLyricsProvider(pane, _)
+            | Message::SelectLyricsTranslation(pane, _)
             | Message::LyricsEditorAction(pane, _)
             | Message::CopyLyrics(pane)
             | Message::SelectLyricLine(pane, _)
