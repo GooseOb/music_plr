@@ -2,15 +2,14 @@ use iced::{
     alignment,
     widget::{
         button, container, opaque, scrollable, text, text_input, Button, Column, Container, Id,
-        MouseArea, Row, Space,
+        MouseArea, Row,
     },
     Element, Length, Rectangle,
 };
 
 use super::{
     shared_components::{
-        empty_state, inner_row_layout, loading_state, scope_tab_row, thumbnail,
-        toggle_bookmark_button, track_row,
+        empty_state, inner_row_layout, loading_state, thumbnail, toggle_bookmark_button, track_row,
     },
     styles::{
         bg_search_hist, bg_secondary, button_style_hist, button_style_primary, fg_secondary,
@@ -22,7 +21,7 @@ use crate::{
     app::{
         interaction::{HoverTarget, Pressed, PressedDrag, TrackListKind},
         pane::PaneId,
-        ui::overlays::pos_absolute,
+        ui::{overlays::pos_absolute, shared_components::scope_tab_row_h_scroll},
         view_data::SearchData,
     },
     data::library::LibraryKind,
@@ -85,7 +84,7 @@ pub(super) fn view_search_bar(
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center);
 
-    let provider_row = scope_tab_row(
+    let provider_row = scope_tab_row_h_scroll(
         ProviderId::searchable()
             .iter()
             .filter(|p| p.capabilities().search)
@@ -98,23 +97,27 @@ pub(super) fn view_search_bar(
             }),
     );
 
-    let scope_row = scope_tab_row(pane_state.search_provider.supported_scopes().iter().map(
-        |&scope| {
-            (
-                scope_label(scope, player).to_string(),
-                pane_state.search_scope == scope,
-                Message::SearchScopeChanged(pane, scope),
-            )
-        },
-    ));
+    let scope_row =
+        scope_tab_row_h_scroll(pane_state.search_provider.supported_scopes().iter().map(
+            |&scope| {
+                (
+                    scope_label(scope, player).to_string(),
+                    pane_state.search_scope == scope,
+                    Message::SearchScopeChanged(pane, scope),
+                )
+            },
+        ));
 
     let rows = Column::with_children([
         controls.into(),
         Row::with_children([
-            scope_row,
-            Space::new().width(Length::Fill).into(),
-            provider_row,
+            Container::new(scope_row).align_left(Length::Fill).into(),
+            Container::new(provider_row)
+                .align_right(Length::Fill)
+                .into(),
         ])
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center)
         .into(),
     ])
     .spacing(theme::SPACING_SM);

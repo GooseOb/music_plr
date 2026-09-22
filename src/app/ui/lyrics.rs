@@ -2,7 +2,6 @@ use iced::{
     alignment,
     widget::{
         scrollable, text, text_editor::Binding, Button, Column, Container, Id, MouseArea, Row,
-        Space,
     },
     Color, Element, Length,
 };
@@ -12,7 +11,7 @@ pub fn lyrics_scroll_id(pane: PaneId) -> Id {
 }
 
 use super::{
-    shared_components::{empty_state, loading_state, scope_button, scope_tab_row},
+    shared_components::{empty_state, loading_state, scope_button, scope_tab_row_h_scroll},
     styles::{
         bg_secondary, button_style_danger, button_style_panel_item, button_style_primary,
         fg_secondary,
@@ -85,14 +84,14 @@ pub(super) fn view_lyrics<'a>(
     };
 
     let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(4);
-    if track.is_some() {
-        if let Some(name) = &lyrics_state.selected_custom {
-            children.push(view_edit_custom_row(player, pane, name));
-        }
-    }
     children.push(Container::new(body).height(Length::Fill).into());
     if note_visible {
         children.push(view_note_block(pane, lyrics_state));
+    }
+    if track.is_some() {
+        if let Some(name) = &lyrics_state.selected_custom {
+            children.push(view_edit_custom_button(player, pane, name));
+        }
     }
     children.push(view_bottom_controls(player, pane, lyrics_state).into());
     Column::with_children(children)
@@ -122,7 +121,7 @@ fn view_note_block(pane: PaneId, lyrics_state: &LyricsState) -> Element<'_, Mess
         .into()
 }
 
-fn view_edit_custom_row<'a>(
+fn view_edit_custom_button<'a>(
     player: &'a MusicPlayer,
     pane: PaneId,
     name: &'a str,
@@ -225,7 +224,7 @@ fn view_bottom_controls<'a>(
 
     let selected_provider = lyrics_state.provider;
     let selected_custom = lyrics_state.selected_custom.as_deref();
-    let provider_row = scope_tab_row(
+    let provider_row = scope_tab_row_h_scroll(
         crate::lyrics::LyricsProvider::all()
             .iter()
             .map(|provider| {
@@ -256,13 +255,10 @@ fn view_bottom_controls<'a>(
             ]),
     );
 
-    Row::with_children([
-        provider_row,
-        Space::new().width(Length::Fill).into(),
-        picker.into(),
-    ])
-    .padding(theme::SPACING_SM)
-    .align_y(alignment::Vertical::Center)
+    Row::with_children([provider_row, picker.into()])
+        .spacing(theme::SPACING_SM)
+        .padding(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center)
 }
 
 fn view_select_editor(

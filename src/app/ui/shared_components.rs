@@ -1,6 +1,9 @@
 use iced::{
     alignment,
-    widget::{container, image, text, text_input, Button, Column, Container, Id, ProgressBar, Row},
+    widget::{
+        container, image, scrollable, text, text_input, Button, Column, Container, Id, ProgressBar,
+        Row,
+    },
     Color, Element, Length,
 };
 
@@ -130,6 +133,28 @@ where
     Row::with_children(tabs)
         .spacing(theme::SPACING_XS)
         .wrap()
+        .into()
+}
+
+/// Horizontally scrollable variant of [`scope_tab_row`]: same chips, no
+/// wrapping, overflowing tabs scroll instead of spilling onto extra lines.
+/// `width` controls the scroller footprint: `Fill` to take remaining space,
+/// `Shrink` to hug its content (e.g. a right-aligned trailing row after a
+/// `Fill` sibling).
+pub fn scope_tab_row_h_scroll<I, S>(items: I) -> Element<'static, Message, AppTheme>
+where
+    I: IntoIterator<Item = (S, bool, Message)>,
+    S: text::IntoFragment<'static>,
+{
+    let tabs = items
+        .into_iter()
+        .map(|(label, selected, on_press)| scope_button(label, selected).on_press(on_press).into());
+    scrollable(Row::with_children(tabs).spacing(theme::SPACING_XS))
+        .direction(scrollable::Direction::Horizontal(
+            scrollable::Scrollbar::new()
+                .width(theme::SPACING_XXS)
+                .scroller_width(theme::SPACING_XXS),
+        ))
         .into()
 }
 
