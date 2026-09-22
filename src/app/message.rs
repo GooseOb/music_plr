@@ -134,6 +134,7 @@ pub enum Message {
         key: iced::keyboard::key::Physical,
         modifiers: iced::keyboard::Modifiers,
     },
+    ModifiersChanged(iced::keyboard::Modifiers),
 
     SearchInputChanged(PaneId, String),
     SearchExecute(PaneId),
@@ -166,6 +167,11 @@ pub enum Message {
     Seek(f32),
 
     CreatePlaylist,
+    OpenPlaylistJump,
+    PlaylistJumpInput(String),
+    PlaylistJumpConfirm,
+    PlaylistJumpOpen(usize),
+    PlaylistJumpOpenPlay(usize),
     NewPlaylistNameChanged(String),
     RenamePlaylist(String),
     AddLocalMusic,

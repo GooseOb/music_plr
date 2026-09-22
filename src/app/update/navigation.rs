@@ -277,6 +277,26 @@ impl MusicPlayer {
         }
     }
 
+    pub fn focus_pane_at(&mut self, index: usize) {
+        let mut leaves = Vec::new();
+        self.split_root.leaves(&mut leaves);
+        if let Some(&id) = leaves.get(index) {
+            self.focus_pane(id);
+        }
+    }
+
+    pub fn focus_next_pane(&mut self, dir: isize) {
+        let mut leaves = Vec::new();
+        self.split_root.leaves(&mut leaves);
+        let cur = leaves
+            .iter()
+            .position(|&id| id == self.focused_pane_id)
+            .unwrap_or(0)
+            .cast_signed();
+        let next = leaves[((cur + dir).rem_euclid(leaves.len().max(1).cast_signed())) as usize];
+        self.focus_pane(next);
+    }
+
     /// Move keyboard focus to the pane adjacent to the focused one in `dir`,
     /// wrapping to the far edge past the last pane (like track navigation
     /// wraps at list ends).
@@ -522,6 +542,25 @@ mod tests {
         assert_eq!(p.focused_pane_id, pane);
         p.focus_neighbor(PaneDir::Up);
         assert_eq!(p.focused_pane_id, bottom);
+    }
+
+    #[test]
+    fn pane_cycle_and_jump_follow_leaf_order() {
+        let mut p = player();
+        let pane = p.focused_pane_id;
+        let _ = p.split_pane(pane, SplitDir::Horizontal);
+        let fork = p.focused_pane_id;
+        assert_ne!(pane, fork);
+        p.focus_next_pane(1);
+        assert_eq!(p.focused_pane_id, pane);
+        p.focus_next_pane(-1);
+        assert_eq!(p.focused_pane_id, fork);
+        p.focus_pane_at(0);
+        assert_eq!(p.focused_pane_id, pane);
+        p.focus_pane_at(1);
+        assert_eq!(p.focused_pane_id, fork);
+        p.focus_pane_at(9);
+        assert_eq!(p.focused_pane_id, fork);
     }
 
     #[test]

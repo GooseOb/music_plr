@@ -46,6 +46,12 @@ impl MusicPlayer {
         }
     }
 
+    pub fn select_range_in(&mut self, pane: PaneId, list: TrackListKind, from: usize, to: usize) {
+        let sel = self.selection_mut_in(pane, list);
+        sel.clear();
+        sel.extend(from.min(to)..=from.max(to));
+    }
+
     pub fn toggle_selection(&mut self, pos: TrackPos) {
         let sel = self.selection_mut_in(pos.pane, pos.list);
         if let Some(at) = sel.iter().position(|&i| i == pos.index) {

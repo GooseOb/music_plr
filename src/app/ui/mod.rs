@@ -23,6 +23,7 @@ mod styles;
 mod track_list;
 pub(super) mod track_list_search;
 pub use lyrics::lyrics_scroll_id;
+pub use overlays::playlist_jump_input_id;
 pub use queue::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID};
 pub use search::{search_history_list_id, search_input_id};
 pub use track_list::track_list_id;
@@ -56,6 +57,12 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         }
         Some(Dialog::Picker(_)) => {
             stack = stack.push(overlays::view_playlist_picker(player));
+        }
+        Some(Dialog::PlaylistJump(jump)) => {
+            stack = stack.push(overlays::view_playlist_jump(player, jump));
+        }
+        Some(Dialog::Shortcuts) => {
+            stack = stack.push(overlays::view_shortcuts(player));
         }
         Some(Dialog::DeleteConfirm(_)) => {
             stack = stack.push(overlays::view_delete_confirm(player.strings));

@@ -108,7 +108,11 @@ pub struct MusicPlayer {
     pub pending_normalization_id: Option<String>,
 
     pub clipboard: Vec<Track>,
+    pub modifiers: iced::keyboard::Modifiers,
     pub last_click: Option<(TrackPos, std::time::Instant)>,
+    pub selection_anchor: Option<TrackPos>,
+    pub pending_vim_g: Option<Instant>,
+    pub muted_volume: Option<f32>,
 
     pub result_tx: mpsc::Sender<BackendResult>,
     pub result_rx: mpsc::Receiver<BackendResult>,
@@ -223,7 +227,11 @@ impl MusicPlayer {
             bounds: CaptureBounds::default(),
             window_size: iced::Size::default(),
             clipboard: Vec::new(),
+            modifiers: iced::keyboard::Modifiers::empty(),
             last_click: None,
+            selection_anchor: None,
+            pending_vim_g: None,
+            muted_volume: None,
             strings,
             dep_ops: std::collections::HashMap::new(),
             update_status: crate::app::update::UpdateStatus::default(),

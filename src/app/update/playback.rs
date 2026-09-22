@@ -417,6 +417,31 @@ impl MusicPlayer {
         self.media_controls_dirty = true;
     }
 
+    pub fn adjust_volume(&mut self, delta: f32) {
+        if delta > 0.0 {
+            self.muted_volume = None;
+        }
+        self.set_volume(self.volume + delta);
+    }
+
+    pub fn toggle_mute(&mut self) {
+        if self.volume > 0.0 {
+            self.muted_volume = Some(self.volume);
+            self.set_volume(0.0);
+        } else {
+            let restore = self.muted_volume.take().unwrap_or(0.8);
+            self.set_volume(restore);
+        }
+    }
+
+    pub fn seek_by_seconds(&mut self, delta: f32) {
+        if self.duration <= 0.0 {
+            return;
+        }
+        let pos = self.progress * self.duration + delta;
+        self.seek(pos / self.duration);
+    }
+
     pub fn seek(&mut self, frac: f32) {
         let frac = frac.clamp(0.0, 1.0);
         self.progress = frac;

@@ -3,9 +3,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use iced::widget::operation;
+
 use super::{Message, MusicPlayer, Task, Track, ViewData, PREPEND};
 use crate::{
-    app::{pane::PaneId, Dialog, ImportMethod, ImportPlaylistDialog, ViewKind},
+    app::{pane::PaneId, Dialog, ImportMethod, ImportPlaylistDialog, PlaylistJump, ViewKind},
     data::JsonStore,
 };
 
@@ -47,6 +49,74 @@ impl MusicPlayer {
         self.playlist_create_name.clear();
         let msg = (self.strings.playlist_created)(&name);
         self.notify(msg);
+    }
+
+    pub fn cycle_playlist(&mut self, dir: isize) -> Task<Message> {
+        if self.playlists.playlists.is_empty() {
+            self.notify(self.strings.nothing_here);
+            return Task::none();
+        }
+        let len = self.playlists.playlists.len().cast_signed();
+        let cur = match &self.view_data().kind {
+            ViewKind::Playlist(p) => p.index.cast_signed(),
+            _ => {
+                if dir < 0 {
+                    0
+                } else {
+                    -1
+                }
+            }
+        };
+        let next = ((cur + dir).rem_euclid(len)) as usize;
+        self.handle_select_playlist(next)
+    }
+
+    pub fn open_playlist_jump(&mut self) -> Task<Message> {
+        self.dialog = Some(Dialog::PlaylistJump(PlaylistJump::default()));
+        operation::focus::<Message>(crate::app::ui::playlist_jump_input_id())
+    }
+
+    pub(crate) fn playlist_jump_filtered(&self) -> Vec<usize> {
+        let names: Vec<String> = self
+            .playlists
+            .playlists
+            .iter()
+            .map(|p| p.name.clone())
+            .collect();
+        match &self.dialog {
+            Some(Dialog::PlaylistJump(jump)) => jump.filtered(&names),
+            _ => Vec::new(),
+        }
+    }
+
+    pub fn step_playlist_jump(&mut self, dir: isize) -> Task<Message> {
+        let filtered = self.playlist_jump_filtered();
+        if filtered.is_empty() {
+            return Task::none();
+        }
+        if let Some(Dialog::PlaylistJump(jump)) = &mut self.dialog {
+            jump.selected = ((jump.selected.cast_signed() + dir)
+                .rem_euclid(filtered.len().cast_signed()))
+            .cast_unsigned();
+        }
+        Task::none()
+    }
+
+    pub fn confirm_playlist_jump(&mut self, play: bool) -> Task<Message> {
+        let filtered = self.playlist_jump_filtered();
+        let selected = match &self.dialog {
+            Some(Dialog::PlaylistJump(jump)) => jump.selected,
+            _ => return Task::none(),
+        };
+        let Some(&index) = filtered.get(selected) else {
+            return Task::none();
+        };
+        self.dialog = None;
+        if play {
+            self.handle_open_and_play_playlist(index)
+        } else {
+            self.handle_select_playlist(index)
+        }
     }
 
     pub fn handle_select_playlist(&mut self, index: usize) -> Task<Message> {
@@ -536,7 +606,7 @@ mod tests {
     use crate::{
         app::{
             interaction::{HoverTarget, TrackListKind, TrackPos},
-            MusicPlayer, ViewData, ViewKind,
+            Message, MusicPlayer, ViewData, ViewKind,
         },
         data::config,
         providers::ProviderId,
@@ -569,6 +639,82 @@ mod tests {
 
     fn hover(p: &mut MusicPlayer, pos: TrackPos) {
         p.drag.set_hovered(HoverTarget::Track(pos));
+    }
+
+    #[test]
+    fn cycle_playlist_wraps_and_handles_empty() {
+        let mut p = player_with_playlists(&["A", "B"]);
+        let _ = p.cycle_playlist(1);
+        assert!(matches!(
+            &p.view_data().kind,
+            ViewKind::Playlist(e) if e.index == 1
+        ));
+        let _ = p.cycle_playlist(1);
+        assert!(matches!(
+            &p.view_data().kind,
+            ViewKind::Playlist(e) if e.index == 0
+        ));
+        let _ = p.cycle_playlist(-1);
+        assert!(matches!(
+            &p.view_data().kind,
+            ViewKind::Playlist(e) if e.index == 1
+        ));
+        p.playlists.playlists.clear();
+        let _ = p.cycle_playlist(1);
+    }
+
+    #[test]
+    fn jump_confirm_plays_only_with_shift_held() {
+        use iced::keyboard::Modifiers;
+        let mut p = player_with_playlists(&["A"]);
+        // `new_with` restores the real on-disk session queue; drop it so the
+        // test starts from an empty queue.
+        p.queue.tracks.clear();
+        // MusicBrainz is search-only: confirming play still fills the queue
+        // but never spawns a streamer, keeping the test hermetic.
+        p.playlists.playlists[0].tracks = vec![Track::from_provider(
+            ProviderId::MusicBrainz,
+            "x".into(),
+            "https://example.com/x".into(),
+            "Track x".to_string(),
+            "Artist",
+            10,
+            String::new(),
+            None,
+            None,
+        )];
+
+        let _ = p.open_playlist_jump();
+        let _ = p.update(Message::PlaylistJumpConfirm);
+        assert!(matches!(
+            &p.view_data().kind,
+            ViewKind::Playlist(e) if e.index == 0
+        ));
+        assert!(p.queue.tracks.is_empty());
+
+        let _ = p.open_playlist_jump();
+        let _ = p.update(Message::ModifiersChanged(Modifiers::SHIFT));
+        let _ = p.update(Message::PlaylistJumpConfirm);
+        assert_eq!(p.queue.tracks.len(), 1);
+        assert_eq!(p.queue.tracks[0].title, "Track x");
+    }
+
+    #[test]
+    fn playlist_jump_filters_by_name() {
+        use crate::app::PlaylistJump;
+        let jump = PlaylistJump::default();
+        assert_eq!(
+            jump.filtered(&["A".to_string(), "B".to_string()]),
+            vec![0, 1]
+        );
+        let jump = PlaylistJump {
+            query: "bet".into(),
+            selected: 0,
+        };
+        assert_eq!(
+            jump.filtered(&["Alpha".to_string(), "Beta".to_string()]),
+            vec![1]
+        );
     }
 
     #[test]

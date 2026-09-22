@@ -107,6 +107,10 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::KeyPressed { key, modifiers } => self.handle_key_press(key, modifiers),
+            Message::ModifiersChanged(modifiers) => {
+                self.modifiers = modifiers;
+                Task::none()
+            }
             Message::LyricsEditorAction(pane, action) => {
                 if let Some(state) = &mut self.pane_mut(pane).lyrics {
                     if !matches!(action, iced::widget::text_editor::Action::Edit(_)) {
@@ -261,6 +265,26 @@ impl crate::app::MusicPlayer {
                 self.handle_create_playlist();
                 Task::none()
             }
+            Message::OpenPlaylistJump => self.open_playlist_jump(),
+            Message::PlaylistJumpInput(query) => {
+                if let Some(Dialog::PlaylistJump(jump)) = &mut self.dialog {
+                    jump.query = query;
+                    jump.selected = 0;
+                }
+                Task::none()
+            }
+            Message::PlaylistJumpConfirm => {
+                let play = self.modifiers.shift();
+                self.confirm_playlist_jump(play)
+            }
+            Message::PlaylistJumpOpen(index) => {
+                self.dialog = None;
+                self.handle_select_playlist(index)
+            }
+            Message::PlaylistJumpOpenPlay(index) => {
+                self.dialog = None;
+                self.handle_open_and_play_playlist(index)
+            }
             Message::NewPlaylistNameChanged(name) => {
                 self.playlist_create_name = name;
                 Task::none()
@@ -405,12 +429,7 @@ impl crate::app::MusicPlayer {
                 self.handle_select_lyrics_provider(pane, id);
                 Task::none()
             }
-            Message::SwitchQueueTab(tab) => {
-                self.queue.queue_tab = tab;
-                self.drag.clear_hovered_track();
-                self.save_session();
-                self.capture_bounds_task()
-            }
+            Message::SwitchQueueTab(tab) => self.switch_queue_tab(tab),
             Message::NavigateTo(pane, data) => {
                 self.pane_mut(pane).lyrics = None;
                 self.handle_navigate_to(pane, data)
@@ -753,6 +772,9 @@ impl crate::app::MusicPlayer {
                 key: physical_key,
                 modifiers,
             }),
+            iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)) => {
+                Some(Message::ModifiersChanged(modifiers))
+            }
             iced::Event::Window(iced::window::Event::CloseRequested) => Some(Message::WindowClose),
             iced::Event::Window(iced::window::Event::Resized(size)) => {
                 Some(Message::WindowResized(size))

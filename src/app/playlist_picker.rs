@@ -11,3 +11,23 @@ pub struct PlaylistPicker {
     /// Owning pane for `Active` positions; ignored for `Queue`/`Recent`.
     pub pane: PaneId,
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct PlaylistJump {
+    pub query: String,
+    pub selected: usize,
+}
+
+impl PlaylistJump {
+    pub fn filtered(&self, names: &[String]) -> Vec<usize> {
+        if self.query.trim().is_empty() {
+            return (0..names.len()).collect();
+        }
+        names
+            .iter()
+            .enumerate()
+            .filter(|(_, name)| crate::util::fuzzy_match(&self.query, name))
+            .map(|(i, _)| i)
+            .collect()
+    }
+}

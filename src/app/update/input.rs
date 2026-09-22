@@ -1,9 +1,13 @@
 use iced::widget::operation;
 
 use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData};
-use crate::app::{
-    interaction::{ContextMenuFocus, HoverTarget},
-    Dialog, TrackListSearch,
+use crate::{
+    app::{
+        interaction::{ContextMenuFocus, HoverTarget},
+        pane::PaneId,
+        Dialog, TrackListSearch,
+    },
+    types::QueueTab,
 };
 
 impl MusicPlayer {
@@ -144,6 +148,9 @@ impl MusicPlayer {
         modifiers: iced::keyboard::Modifiers,
     ) -> Task<Message> {
         use iced::keyboard::key::{Code, Physical};
+        let ctrl = modifiers.control() || modifiers.logo();
+        let alt = modifiers.alt();
+        let shift = modifiers.shift();
         if self.dialog.is_some() {
             if matches!(key, Physical::Code(Code::Escape)) {
                 self.dialog = None;
@@ -152,52 +159,62 @@ impl MusicPlayer {
             if matches!(self.dialog, Some(Dialog::ContextMenu(_))) {
                 return self.handle_context_menu_key(key);
             }
+            if matches!(self.dialog, Some(Dialog::PlaylistJump(_))) {
+                return self.handle_playlist_jump_key(key, modifiers);
+            }
         }
         let task = match key {
-            Physical::Code(Code::KeyF) if modifiers.control() || modifiers.logo() => {
-                self.open_track_list_search()
-            }
-            Physical::Code(Code::Slash)
-                if !modifiers.control() && !modifiers.logo() && !modifiers.alt() =>
-            {
+            Physical::Code(Code::KeyF) if ctrl && !alt => self.open_track_list_search(),
+            Physical::Code(Code::KeyK) if ctrl && !alt => self.open_playlist_jump(),
+            Physical::Code(Code::Slash) if !ctrl && !alt && !shift => {
                 let pane = self.focused_pane_id;
                 Task::batch([
                     operation::focus::<Message>(crate::app::ui::search_input_id(pane)),
                     self.activate_search_input(pane),
                 ])
             }
-            Physical::Code(Code::Backslash)
-                if !modifiers.control() && !modifiers.logo() && !modifiers.alt() =>
-            {
+            Physical::Code(Code::Slash) if !ctrl && !alt && shift => {
+                self.open_shortcuts();
+                Task::none()
+            }
+            Physical::Code(Code::F1) if !ctrl && !alt => {
+                self.open_shortcuts();
+                Task::none()
+            }
+            Physical::Code(Code::Backslash) if !ctrl && !alt => {
                 let pane = self.focused_pane_id;
                 self.split_pane(
                     pane,
-                    if modifiers.shift() {
+                    if shift {
                         crate::app::SplitDir::Horizontal
                     } else {
                         crate::app::SplitDir::Vertical
                     },
                 )
             }
-            Physical::Code(Code::KeyW) if modifiers.control() || modifiers.logo() => {
+            Physical::Code(Code::KeyW) if ctrl && !alt => {
                 let pane = self.focused_pane_id;
                 self.close_pane(pane)
             }
-            Physical::Code(Code::Space) => {
+            Physical::Code(Code::Space) if ctrl && !alt => self.toggle_selection_on_focused(),
+            Physical::Code(Code::Space) if !ctrl && !alt => {
                 self.toggle_play_pause();
                 Task::none()
             }
             Physical::Code(Code::ContextMenu) => self.open_context_menu_for_hovered_track(),
-            Physical::Code(Code::F10)
-                if modifiers.shift() && !modifiers.control() && !modifiers.logo() =>
-            {
+            Physical::Code(Code::F10) if shift && !ctrl => {
                 self.open_context_menu_for_hovered_track()
             }
-            Physical::Code(Code::Enter) if modifiers.control() || modifiers.logo() => {
+            Physical::Code(Code::Enter) if ctrl && !alt => {
                 self.open_context_menu_for_hovered_track()
+            }
+            Physical::Code(Code::Enter) if alt && !ctrl => {
+                let pane = self.focused_pane_id;
+                self.run_search(pane)
             }
             Physical::Code(Code::Escape) => {
                 let pane = self.focused_pane_id;
+                self.selection_anchor = None;
                 if self.track_list_search.is_some() {
                     self.track_list_search = None;
                 } else if self.pane(pane).show_search_history {
@@ -217,28 +234,63 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Physical::Code(Code::Delete | Code::Backspace) => {
+            Physical::Code(Code::Delete) => {
                 self.handle_delete_in_hovered_list();
                 Task::none()
             }
-            Physical::Code(Code::ArrowLeft) if modifiers.control() || modifiers.logo() => {
+            Physical::Code(Code::ArrowLeft) if ctrl && !alt => {
                 self.focus_neighbor(crate::app::pane::PaneDir::Left);
                 Task::none()
             }
-            Physical::Code(Code::ArrowRight) if modifiers.control() || modifiers.logo() => {
+            Physical::Code(Code::ArrowRight) if ctrl && !alt => {
                 self.focus_neighbor(crate::app::pane::PaneDir::Right);
                 Task::none()
             }
-            Physical::Code(Code::ArrowUp) if modifiers.control() || modifiers.logo() => {
+            Physical::Code(Code::ArrowUp) if ctrl && !alt => {
                 self.focus_neighbor(crate::app::pane::PaneDir::Up);
                 Task::none()
             }
-            Physical::Code(Code::ArrowDown) if modifiers.control() || modifiers.logo() => {
+            Physical::Code(Code::ArrowDown) if ctrl && !alt => {
                 self.focus_neighbor(crate::app::pane::PaneDir::Down);
                 Task::none()
             }
-            Physical::Code(Code::ArrowLeft | Code::ArrowRight) => self.toggle_keyboard_list(),
-            Physical::Code(Code::ArrowUp) => {
+            Physical::Code(Code::ArrowLeft) if alt && !ctrl => {
+                let pane = self.focused_pane_id;
+                self.handle_navigate_back(pane)
+            }
+            Physical::Code(Code::ArrowRight) if alt && !ctrl => {
+                let pane = self.focused_pane_id;
+                self.handle_navigate_forward(pane)
+            }
+            Physical::Code(Code::ArrowUp) if alt && !ctrl => self.cycle_playlist(-1),
+            Physical::Code(Code::ArrowDown) if alt && !ctrl => self.cycle_playlist(1),
+            Physical::Code(Code::ArrowLeft | Code::ArrowRight | Code::KeyH) if !ctrl && !alt => {
+                self.toggle_keyboard_list()
+            }
+            Physical::Code(Code::KeyL) if !ctrl && !alt && !shift => self.toggle_keyboard_list(),
+            Physical::Code(Code::KeyL) if !ctrl && !alt && shift => {
+                let pane = self.focused_pane_id;
+                self.handle_show_lyrics(pane)
+            }
+            Physical::Code(Code::ArrowUp) if shift && !ctrl && !alt => {
+                if self.track_list_search.is_some() {
+                    return self.handle_track_list_search_step(-1);
+                }
+                if self.pane(self.focused_pane_id).show_search_history {
+                    return self.step_search_history_hover(-1);
+                }
+                self.extend_hovered_selection(-1)
+            }
+            Physical::Code(Code::ArrowDown) if shift && !ctrl && !alt => {
+                if self.track_list_search.is_some() {
+                    return self.handle_track_list_search_step(1);
+                }
+                if self.pane(self.focused_pane_id).show_search_history {
+                    return self.step_search_history_hover(1);
+                }
+                self.extend_hovered_selection(1)
+            }
+            Physical::Code(Code::ArrowUp | Code::KeyK) if !ctrl && !alt && !shift => {
                 if self.track_list_search.is_some() {
                     return self.handle_track_list_search_step(-1);
                 }
@@ -247,7 +299,7 @@ impl MusicPlayer {
                 }
                 self.step_hovered_track(-1)
             }
-            Physical::Code(Code::ArrowDown) => {
+            Physical::Code(Code::ArrowDown | Code::KeyJ) if !ctrl && !alt && !shift => {
                 if self.track_list_search.is_some() {
                     return self.handle_track_list_search_step(1);
                 }
@@ -255,6 +307,104 @@ impl MusicPlayer {
                     return self.step_search_history_hover(1);
                 }
                 self.step_hovered_track(1)
+            }
+            Physical::Code(Code::KeyJ) if shift && !ctrl && !alt => {
+                if self.track_list_search.is_some() {
+                    return self.handle_track_list_search_step(1);
+                }
+                if self.pane(self.focused_pane_id).show_search_history {
+                    return self.step_search_history_hover(1);
+                }
+                self.extend_hovered_selection(1)
+            }
+            Physical::Code(Code::KeyK) if shift && !ctrl && !alt => {
+                if self.track_list_search.is_some() {
+                    return self.handle_track_list_search_step(-1);
+                }
+                if self.pane(self.focused_pane_id).show_search_history {
+                    return self.step_search_history_hover(-1);
+                }
+                self.extend_hovered_selection(-1)
+            }
+            Physical::Code(Code::KeyG) if shift && !ctrl && !alt => {
+                self.move_hovered_to_edge(false)
+            }
+            Physical::Code(Code::KeyG) if !ctrl && !alt && !shift => {
+                let now = std::time::Instant::now();
+                let is_double = self
+                    .pending_vim_g
+                    .is_some_and(|t| now.duration_since(t) < std::time::Duration::from_secs(2));
+                if is_double {
+                    self.pending_vim_g = None;
+                    self.move_hovered_to_edge(true)
+                } else {
+                    self.pending_vim_g = Some(now);
+                    Task::none()
+                }
+            }
+            Physical::Code(Code::Home) if !ctrl && !alt => self.move_hovered_to_edge(true),
+            Physical::Code(Code::End) if !ctrl && !alt => self.move_hovered_to_edge(false),
+            Physical::Code(Code::PageUp) if !ctrl && !alt => {
+                let pane = self.focused_pane_id;
+                let steps = self.page_stride(pane, self.hovered_list());
+                self.step_hovered_track_by(-1, steps, false)
+            }
+            Physical::Code(Code::PageDown) if !ctrl && !alt => {
+                let pane = self.focused_pane_id;
+                let steps = self.page_stride(pane, self.hovered_list());
+                self.step_hovered_track_by(1, steps, false)
+            }
+            Physical::Code(Code::KeyU) if ctrl && !alt => {
+                let pane = self.focused_pane_id;
+                let steps = (self.page_stride(pane, self.hovered_list()) / 2).max(1);
+                self.step_hovered_track_by(-1, steps, false)
+            }
+            Physical::Code(Code::KeyD) if ctrl && !alt => {
+                let pane = self.focused_pane_id;
+                let steps = (self.page_stride(pane, self.hovered_list()) / 2).max(1);
+                self.step_hovered_track_by(1, steps, false)
+            }
+            Physical::Code(Code::KeyP) if alt && !ctrl => {
+                let pane = self.focused_pane_id;
+                self.cycle_search_provider(pane, if shift { -1 } else { 1 });
+                Task::none()
+            }
+            Physical::Code(Code::KeyS) if alt && !ctrl => {
+                let pane = self.focused_pane_id;
+                self.cycle_search_scope(pane, if shift { -1 } else { 1 });
+                Task::none()
+            }
+            Physical::Code(
+                Code::Digit1 | Code::Digit2 | Code::Digit3 | Code::Digit4 | Code::Digit5,
+            ) if alt && !ctrl => {
+                let index = match key {
+                    Physical::Code(Code::Digit1) => 0,
+                    Physical::Code(Code::Digit2) => 1,
+                    Physical::Code(Code::Digit3) => 2,
+                    Physical::Code(Code::Digit4) => 3,
+                    _ => 4,
+                };
+                let pane = self.focused_pane_id;
+                if let Some(&provider) = crate::providers::ProviderId::searchable().get(index) {
+                    self.stage_search_provider(pane, provider);
+                }
+                Task::none()
+            }
+            Physical::Code(Code::Digit1 | Code::Digit2 | Code::Digit3 | Code::Digit4)
+                if ctrl && !alt =>
+            {
+                let index = match key {
+                    Physical::Code(Code::Digit1) => 0,
+                    Physical::Code(Code::Digit2) => 1,
+                    Physical::Code(Code::Digit3) => 2,
+                    _ => 3,
+                };
+                self.focus_pane_at(index);
+                Task::none()
+            }
+            Physical::Code(Code::Tab) if ctrl && !alt => {
+                self.focus_next_pane(if shift { -1 } else { 1 });
+                Task::none()
             }
             Physical::Code(Code::Enter) => {
                 if let Some(i) = self.drag.hovered_search_history() {
@@ -264,20 +414,225 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
-            Physical::Code(Code::KeyA) if modifiers.control() || modifiers.logo() => {
+            Physical::Code(Code::KeyN) if !ctrl && !alt => {
+                if self.track_list_search.is_some() {
+                    return self.handle_track_list_search_step(if shift { -1 } else { 1 });
+                }
+                self.next_track();
+                Task::none()
+            }
+            Physical::Code(Code::KeyP) if !ctrl && !alt => {
+                if self.track_list_search.is_some() {
+                    return self.handle_track_list_search_step(-1);
+                }
+                self.previous_track();
+                Task::none()
+            }
+            Physical::Code(Code::KeyQ) if !ctrl && !alt => Task::done(Message::ToggleQueue),
+            Physical::Code(Code::KeyR) if !ctrl && !alt => Task::done(Message::ToggleRepeat),
+            Physical::Code(Code::KeyT) if !ctrl && !alt => self.cycle_queue_tab(),
+            Physical::Code(Code::KeyM) if !ctrl && !alt => {
+                self.toggle_mute();
+                Task::none()
+            }
+            Physical::Code(Code::Minus) if !ctrl && !alt => {
+                self.adjust_volume(-0.05);
+                Task::none()
+            }
+            Physical::Code(Code::Equal) if !ctrl && !alt => {
+                self.adjust_volume(0.05);
+                Task::none()
+            }
+            Physical::Code(Code::Comma) if !ctrl && !alt => {
+                self.seek_by_seconds(if shift { -10.0 } else { -5.0 });
+                Task::none()
+            }
+            Physical::Code(Code::Period) if !ctrl && !alt => {
+                self.seek_by_seconds(if shift { 10.0 } else { 5.0 });
+                Task::none()
+            }
+            Physical::Code(Code::KeyA) if ctrl && !alt => {
                 self.handle_select_all();
                 Task::none()
             }
-            Physical::Code(Code::KeyC) if modifiers.control() || modifiers.logo() => {
+            Physical::Code(Code::KeyC) if ctrl && !alt => {
                 self.handle_copy_selected();
                 Task::none()
             }
-            Physical::Code(Code::KeyV) if modifiers.control() || modifiers.logo() => {
-                self.handle_paste_clipboard()
-            }
+            Physical::Code(Code::KeyV) if ctrl && !alt => self.handle_paste_clipboard(),
             _ => Task::none(),
         };
+        if !matches!(
+            key,
+            Physical::Code(Code::KeyG) if !ctrl && !alt && !shift
+        ) {
+            self.pending_vim_g = None;
+        }
         task
+    }
+
+    pub fn handle_playlist_jump_key(
+        &mut self,
+        key: iced::keyboard::key::Physical,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> Task<Message> {
+        use iced::keyboard::key::{Code, Physical};
+        if modifiers.control() || modifiers.logo() || modifiers.alt() {
+            return Task::none();
+        }
+        match key {
+            Physical::Code(Code::ArrowUp | Code::KeyK) => self.step_playlist_jump(-1),
+            Physical::Code(Code::ArrowDown | Code::KeyJ) => self.step_playlist_jump(1),
+            Physical::Code(Code::Home) => self.move_playlist_jump_to(true),
+            Physical::Code(Code::End) => self.move_playlist_jump_to(false),
+            Physical::Code(Code::Enter) => self.confirm_playlist_jump(modifiers.shift()),
+            _ => Task::none(),
+        }
+    }
+
+    fn move_playlist_jump_to(&mut self, first: bool) -> Task<Message> {
+        let filtered = self.playlist_jump_filtered();
+        if filtered.is_empty() {
+            return Task::none();
+        }
+        if let Some(Dialog::PlaylistJump(jump)) = &mut self.dialog {
+            jump.selected = if first { 0 } else { filtered.len() - 1 };
+        }
+        Task::none()
+    }
+
+    fn toggle_selection_on_focused(&mut self) -> Task<Message> {
+        if let Some(pos) = self.focused_hovered_track() {
+            self.toggle_selection(pos);
+        }
+        Task::none()
+    }
+
+    pub fn open_shortcuts(&mut self) {
+        self.dialog = Some(Dialog::Shortcuts);
+    }
+
+    pub fn switch_queue_tab(&mut self, tab: QueueTab) -> Task<Message> {
+        self.queue.queue_tab = tab;
+        self.drag.clear_hovered_track();
+        self.save_session();
+        self.capture_bounds_task()
+    }
+
+    pub fn cycle_queue_tab(&mut self) -> Task<Message> {
+        if !self.show_queue {
+            self.show_queue = true;
+        }
+        let next = match self.queue.queue_tab {
+            QueueTab::Queue => QueueTab::RecentlyPlayed,
+            QueueTab::RecentlyPlayed => QueueTab::Queue,
+        };
+        self.switch_queue_tab(next)
+    }
+
+    fn page_stride(&self, pane: PaneId, list: TrackListKind) -> usize {
+        let height = match list {
+            TrackListKind::Queue => self.bounds.queue.as_ref().map(|g| g.bounds.height),
+            TrackListKind::Active => self.bounds.track_geo(pane).map(|g| g.bounds.height),
+            TrackListKind::Recent => self.bounds.recent.as_ref().map(|g| g.bounds.height),
+        };
+        height
+            .map(|px| (px / crate::theme::ROW_HEIGHT) as usize)
+            .filter(|&n| n > 0)
+            .unwrap_or(10)
+    }
+
+    fn step_hovered_track_by(&mut self, dir: isize, steps: usize, wrap: bool) -> Task<Message> {
+        if self.track_list_search.is_some() {
+            return self.handle_track_list_search_step(dir);
+        }
+        let pane = self.focused_pane_id;
+        if self.pane(pane).show_search_history {
+            let mut task = Task::none();
+            for _ in 0..steps.max(1) {
+                task = task.chain(self.step_search_history_hover(dir));
+            }
+            return task;
+        }
+        let list = self.hovered_list();
+        let count = self.track_count_in(pane, list);
+        let first = list.first_index();
+        if count <= first {
+            return Task::none();
+        }
+        let cur = match self.focused_hovered_track() {
+            Some(pos) if pos.list == list => pos.index,
+            _ => self.drag.recall_focus(pane, list).clamp(first, count - 1),
+        };
+        let new_idx = if wrap {
+            let span = count - first;
+            (cur.cast_signed() - first.cast_signed() + dir * steps.max(1).cast_signed())
+                .rem_euclid(span.cast_signed()) as usize
+                + first
+        } else {
+            (cur.cast_signed() + dir * steps.max(1).cast_signed())
+                .clamp(first.cast_signed(), count.cast_signed() - 1) as usize
+        };
+        self.selection_anchor = None;
+        self.move_hovered(TrackPos::new(new_idx, list, pane))
+    }
+
+    fn move_hovered_to_edge(&mut self, first: bool) -> Task<Message> {
+        if let Some(fs) = self.track_list_search.as_ref() {
+            if fs.matches.is_empty() {
+                return Task::none();
+            }
+            let index = if first {
+                fs.matches[0]
+            } else {
+                *fs.matches.last().expect("checked above")
+            };
+            let (list, pane) = (fs.list, fs.pane);
+            return self.move_hovered(TrackPos::new(index, list, pane));
+        }
+        let pane = self.focused_pane_id;
+        if self.pane(pane).show_search_history {
+            let count = self.pane(pane).last_filtered_history.len();
+            if count == 0 {
+                return Task::none();
+            }
+            return self.move_search_history_hover_to(if first { 0 } else { count - 1 });
+        }
+        let list = self.hovered_list();
+        let count = self.track_count_in(pane, list);
+        let first_index = list.first_index();
+        if count <= first_index {
+            return Task::none();
+        }
+        let index = if first { first_index } else { count - 1 };
+        self.selection_anchor = None;
+        self.move_hovered(TrackPos::new(index, list, pane))
+    }
+
+    fn extend_hovered_selection(&mut self, dir: isize) -> Task<Message> {
+        let pane = self.focused_pane_id;
+        let list = self.hovered_list();
+        let count = self.track_count_in(pane, list);
+        let first = list.first_index();
+        if count <= first {
+            return Task::none();
+        }
+        let cur = match self.focused_hovered_track() {
+            Some(pos) if pos.list == list => pos.index,
+            _ => self.drag.recall_focus(pane, list).clamp(first, count - 1),
+        };
+        let anchor = match self.selection_anchor {
+            Some(a) if a.list == list && (!list.is_main() || a.pane == pane) => a,
+            _ => {
+                let a = TrackPos::new(cur, list, pane);
+                self.selection_anchor = Some(a);
+                a
+            }
+        };
+        let new_idx =
+            (cur.cast_signed() + dir).clamp(first.cast_signed(), count.cast_signed() - 1) as usize;
+        self.select_range_in(pane, list, anchor.index, new_idx);
+        self.move_hovered(TrackPos::new(new_idx, list, pane))
     }
 
     fn toggle_keyboard_list(&mut self) -> Task<Message> {
@@ -387,6 +742,11 @@ impl MusicPlayer {
             Some(i) => (i.cast_signed() + dir).rem_euclid(count.cast_signed()) as usize,
             None => 0,
         };
+        self.move_search_history_hover_to(new_idx)
+    }
+
+    fn move_search_history_hover_to(&mut self, new_idx: usize) -> Task<Message> {
+        let pane = self.focused_pane_id;
         self.drag.is_hover_controlled = true;
         self.drag.set_hovered_search_history(new_idx);
         let y = self
@@ -532,5 +892,152 @@ impl MusicPlayer {
             }
         };
         self.move_hovered(TrackPos::new(target, list, pane))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        data::config,
+        providers::{ProviderId, SearchScope},
+    };
+
+    fn track(id: &str) -> Track {
+        Track::from_provider(
+            ProviderId::YouTube,
+            id.into(),
+            format!("https://example.com/{id}"),
+            format!("Track {id}"),
+            "Artist",
+            10,
+            String::new(),
+            None,
+            None,
+        )
+    }
+
+    fn player() -> MusicPlayer {
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        p.reset_test_pane(vec![ViewData::new_search(
+            String::new(),
+            ProviderId::YouTube,
+            SearchScope::Songs,
+        )]);
+        p.view_data_mut()
+            .set_tracks(vec![track("1"), track("2"), track("3")]);
+        p
+    }
+
+    #[test]
+    fn vim_step_wraps_and_page_clamps() {
+        let mut p = player();
+        let pane = p.focused_pane_id;
+        let pos = |i| TrackPos::new(i, TrackListKind::Active, pane);
+        let _ = p.step_hovered_track_by(1, 1, true);
+        assert_eq!(p.drag.hovered_track(), Some(pos(1)));
+        let _ = p.step_hovered_track_by(-1, 1, true);
+        assert_eq!(p.drag.hovered_track(), Some(pos(0)));
+        let _ = p.step_hovered_track_by(-1, 1, true);
+        assert_eq!(p.drag.hovered_track(), Some(pos(2)));
+        let _ = p.step_hovered_track_by(1, 99, false);
+        assert_eq!(p.drag.hovered_track(), Some(pos(2)));
+        let _ = p.move_hovered_to_edge(true);
+        assert_eq!(p.drag.hovered_track(), Some(pos(0)));
+        let _ = p.move_hovered_to_edge(false);
+        assert_eq!(p.drag.hovered_track(), Some(pos(2)));
+    }
+
+    #[test]
+    fn shift_extend_selects_range_and_plain_move_clears_anchor() {
+        let mut p = player();
+        let pane = p.focused_pane_id;
+        let _ = p.extend_hovered_selection(1);
+        assert_eq!(p.selection_in(pane, TrackListKind::Active), &[0, 1]);
+        let _ = p.extend_hovered_selection(1);
+        assert_eq!(p.selection_in(pane, TrackListKind::Active), &[0, 1, 2]);
+        let _ = p.step_hovered_track_by(1, 1, true);
+        assert!(p.selection_anchor.is_none());
+        assert_eq!(
+            p.drag.hovered_track(),
+            Some(TrackPos::new(0, TrackListKind::Active, pane))
+        );
+    }
+
+    #[test]
+    fn t_cycles_queue_tab_and_opens_hidden_panel() {
+        use iced::keyboard::{
+            key::{Code, Physical},
+            Modifiers,
+        };
+        let mut p = player();
+        p.show_queue = true;
+        assert_eq!(p.queue.queue_tab, QueueTab::Queue);
+        let t = Physical::Code(Code::KeyT);
+        let _ = p.handle_key_press(t, Modifiers::empty());
+        assert_eq!(p.queue.queue_tab, QueueTab::RecentlyPlayed);
+        let _ = p.handle_key_press(t, Modifiers::empty());
+        assert_eq!(p.queue.queue_tab, QueueTab::Queue);
+
+        p.show_queue = false;
+        let _ = p.handle_key_press(t, Modifiers::empty());
+        assert!(p.show_queue);
+        assert_eq!(p.queue.queue_tab, QueueTab::RecentlyPlayed);
+    }
+
+    #[test]
+    fn question_and_f1_open_shortcuts_esc_closes() {
+        use iced::keyboard::{
+            key::{Code, Physical},
+            Modifiers,
+        };
+        let mut p = player();
+        let question = Physical::Code(Code::Slash);
+        let _ = p.handle_key_press(question, Modifiers::SHIFT);
+        assert!(matches!(p.dialog, Some(crate::app::Dialog::Shortcuts)));
+        let _ = p.handle_key_press(Physical::Code(Code::Escape), Modifiers::empty());
+        assert!(p.dialog.is_none());
+        let _ = p.handle_key_press(Physical::Code(Code::F1), Modifiers::empty());
+        assert!(matches!(p.dialog, Some(crate::app::Dialog::Shortcuts)));
+
+        assert!(!crate::app::shortcuts::SECTIONS.is_empty());
+        for lang in crate::i18n::Language::ALL {
+            let tr = lang.strings();
+            assert!(!tr.sc_title.is_empty(), "{lang:?}");
+            for section in crate::app::shortcuts::SECTIONS {
+                assert!(!(section.title)(tr).is_empty(), "{lang:?}");
+                assert!(!section.rows.is_empty(), "{lang:?}");
+                for row in section.rows {
+                    assert!(!(row.action)(tr).is_empty(), "{lang:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn double_g_jumps_to_first_row() {
+        use iced::keyboard::{
+            key::{Code, Physical},
+            Modifiers,
+        };
+        let mut p = player();
+        let pane = p.focused_pane_id;
+        let _ = p.move_hovered_to_edge(false);
+        assert_eq!(
+            p.drag.hovered_track(),
+            Some(TrackPos::new(2, TrackListKind::Active, pane))
+        );
+        let g = Physical::Code(Code::KeyG);
+        let _ = p.handle_key_press(g, Modifiers::empty());
+        assert!(p.pending_vim_g.is_some());
+        assert_eq!(
+            p.drag.hovered_track(),
+            Some(TrackPos::new(2, TrackListKind::Active, pane))
+        );
+        let _ = p.handle_key_press(g, Modifiers::empty());
+        assert_eq!(
+            p.drag.hovered_track(),
+            Some(TrackPos::new(0, TrackListKind::Active, pane))
+        );
     }
 }

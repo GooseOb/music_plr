@@ -589,8 +589,8 @@ impl MusicPlayer {
             }
             match &result {
                 Ok(lyrics) => {
-                    let cache = cache
-                        .get_or_insert_with(crate::data::lyrics_cache::LyricsCache::load);
+                    let cache =
+                        cache.get_or_insert_with(crate::data::lyrics_cache::LyricsCache::load);
                     cache.insert(track_id, lyrics);
                     let mode = crate::app::LyricsViewMode::for_lyrics(lyrics);
                     state.lyrics = crate::load_state::LoadState::Ready(lyrics.clone());

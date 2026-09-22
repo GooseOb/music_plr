@@ -102,6 +102,79 @@ impl MusicPlayer {
         Task::none()
     }
 
+    pub fn scope_name(&self, scope: crate::providers::SearchScope) -> &str {
+        match scope {
+            crate::providers::SearchScope::Songs => self.strings.scope_songs,
+            crate::providers::SearchScope::Videos => self.strings.scope_videos,
+            crate::providers::SearchScope::Artists => self.strings.scope_artists,
+            crate::providers::SearchScope::Albums => self.strings.scope_albums,
+            crate::providers::SearchScope::Playlists => self.strings.scope_playlists,
+        }
+    }
+
+    pub fn stage_search_provider(&mut self, pane: PaneId, provider: crate::providers::ProviderId) {
+        if provider == self.pane(pane).search_provider {
+            return;
+        }
+        if !provider.capabilities().search {
+            self.notify(format!(
+                "{}: {}",
+                provider.label(),
+                self.strings.deps_not_installed
+            ));
+            return;
+        }
+        self.pane_mut(pane).search_provider = provider;
+        if !provider
+            .supported_scopes()
+            .contains(&self.pane(pane).search_scope)
+        {
+            self.pane_mut(pane).search_scope = provider.supported_scopes()[0];
+        }
+        self.save_session();
+        self.notify(provider.label().to_string());
+    }
+
+    pub fn cycle_search_provider(&mut self, pane: PaneId, dir: isize) {
+        let list = crate::providers::ProviderId::searchable();
+        let cur = list
+            .iter()
+            .position(|&p| p == self.pane(pane).search_provider)
+            .unwrap_or(0)
+            .cast_signed();
+        let next = list[((cur + dir).rem_euclid(list.len().cast_signed())) as usize];
+        self.stage_search_provider(pane, next);
+    }
+
+    pub fn stage_search_scope(&mut self, pane: PaneId, scope: crate::providers::SearchScope) {
+        if scope == self.pane(pane).search_scope {
+            return;
+        }
+        if !self
+            .pane(pane)
+            .search_provider
+            .supported_scopes()
+            .contains(&scope)
+        {
+            return;
+        }
+        self.pane_mut(pane).search_scope = scope;
+        self.save_session();
+        self.notify(self.scope_name(scope).to_string());
+    }
+
+    pub fn cycle_search_scope(&mut self, pane: PaneId, dir: isize) {
+        let provider = self.pane(pane).search_provider;
+        let scopes = provider.supported_scopes();
+        let cur = scopes
+            .iter()
+            .position(|&s| s == self.pane(pane).search_scope)
+            .unwrap_or(0)
+            .cast_signed();
+        let next = scopes[((cur + dir).rem_euclid(scopes.len().cast_signed())) as usize];
+        self.stage_search_scope(pane, next);
+    }
+
     pub fn handle_search_provider_changed(
         &mut self,
         pane: PaneId,
@@ -357,5 +430,46 @@ impl MusicPlayer {
             self.library.add(item);
             true
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        data::config,
+        providers::{ProviderId, SearchScope},
+    };
+
+    fn player() -> MusicPlayer {
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        p.reset_test_pane(vec![ViewData::new_search(
+            String::new(),
+            ProviderId::YouTube,
+            SearchScope::Songs,
+        )]);
+        p
+    }
+
+    #[test]
+    fn provider_cycle_wraps_and_clamps_scope() {
+        let mut p = player();
+        let pane = p.focused_pane_id;
+        let start = p.pane(pane).search_provider;
+        for _ in 0..ProviderId::searchable().len() {
+            p.cycle_search_provider(pane, 1);
+        }
+        assert_eq!(p.pane(pane).search_provider, start);
+        assert!(p.notification.is_some());
+
+        p.pane_mut(pane).search_scope = SearchScope::Playlists;
+        p.stage_search_provider(pane, ProviderId::LastFm);
+        assert_eq!(p.pane(pane).search_provider, ProviderId::LastFm);
+        assert_eq!(p.pane(pane).search_scope, SearchScope::Songs);
+
+        p.cycle_search_scope(pane, 1);
+        assert_eq!(p.pane(pane).search_scope, SearchScope::Artists);
+        p.cycle_search_scope(pane, -1);
+        assert_eq!(p.pane(pane).search_scope, SearchScope::Songs);
     }
 }
