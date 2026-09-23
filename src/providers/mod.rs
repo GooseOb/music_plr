@@ -173,6 +173,28 @@ impl ProviderId {
         }
     }
 
+    /// Provider-namespaced cache key (`slug:id`) for a song id. Single source
+    /// of truth for every cache (stream index, downloads, lyrics,
+    /// normalization) so ids from different providers cannot collide.
+    pub fn cache_key(self, id: &str) -> String {
+        format!("{}:{id}", self.slug())
+    }
+
+    /// Inverse of the pre-slug `Debug`-prefixed key segment (e.g. `YouTube`,
+    /// `LastFm`); `None` for anything else (including current slugs). Used
+    /// only by one-time migrations of persisted keys to [`cache_key`](ProviderId::cache_key).
+    pub fn from_legacy_key(prefix: &str) -> Option<Self> {
+        match prefix {
+            "YouTube" => Some(ProviderId::YouTube),
+            "SoundCloud" => Some(ProviderId::SoundCloud),
+            "MusicBrainz" => Some(ProviderId::MusicBrainz),
+            "Bandcamp" => Some(ProviderId::Bandcamp),
+            "LastFm" => Some(ProviderId::LastFm),
+            "Local" => Some(ProviderId::Local),
+            _ => None,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             ProviderId::YouTube => "YouTube",

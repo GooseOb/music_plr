@@ -34,8 +34,9 @@ pub enum BackendResult {
         String,
         crate::lyrics::LyricsProvider,
     ),
-    /// One lazy translation finished loading for `track_id` from `provider`;
-    /// merged into the ready lyrics of waiting panes.
+    /// One lazy translation finished loading for the provider-namespaced
+    /// `slug:id` track key from `provider`; merged into the ready lyrics of
+    /// waiting panes.
     LyricsTranslationFetched(
         Result<crate::lyrics::TranslatedLyrics, String>,
         String,

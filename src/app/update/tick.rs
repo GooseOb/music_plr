@@ -107,9 +107,10 @@ impl MusicPlayer {
             );
         }
         self.pending_cache_id = None;
-        if self.pending_normalization_id.as_deref() == Some(pending.id.as_str()) {
+        let pending_key = pending.provider_id.cache_key(&pending.id);
+        if self.pending_normalization_id.as_deref() == Some(pending_key.as_str()) {
             let path = StreamCache::path_for(pending.provider_id, &pending.id);
-            self.request_normalization_analysis(&pending.id, path);
+            self.request_normalization_analysis(&pending_key, path);
             self.pending_normalization_id = None;
         }
     }

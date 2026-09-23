@@ -33,10 +33,6 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
-fn key(provider: ProviderId, id: &str) -> String {
-    format!("{}:{id}", provider.slug())
-}
-
 fn parse_key(key: &str) -> (ProviderId, String) {
     if let Some((p, id)) = key.split_once(':') {
         (
@@ -50,17 +46,11 @@ fn parse_key(key: &str) -> (ProviderId, String) {
 
 /// Pre-slug `Debug:id` index key (e.g. `YouTube:…`, `LastFm:…`) as a
 /// `(provider, id)` pair. Only used by the one-time [`migrate_index_keys`];
-/// new code exclusively writes `slug:id` keys parsed by [`parse_key`].
+/// new code exclusively writes [`cache_key`](ProviderId::cache_key) keys
+/// parsed by [`parse_key`].
 fn parse_legacy_key(key: &str) -> Option<(ProviderId, String)> {
     let (p, id) = key.split_once(':')?;
-    let provider = match p {
-        "YouTube" => ProviderId::YouTube,
-        "SoundCloud" => ProviderId::SoundCloud,
-        "MusicBrainz" => ProviderId::MusicBrainz,
-        "Local" => ProviderId::Local,
-        _ => return None,
-    };
-    Some((provider, id.to_string()))
+    Some((ProviderId::from_legacy_key(p)?, id.to_string()))
 }
 /// One-time rewrite of pre-slug index keys to the `slug:id` format so old
 /// entries stay reachable after the directory migration; on collision the
@@ -71,7 +61,7 @@ fn migrate_index_keys(entries: HashMap<String, CacheEntry>) -> (HashMap<String, 
     let mut migrated = false;
     for (old_key, entry) in entries {
         let (provider, id) = parse_legacy_key(&old_key).unwrap_or_else(|| parse_key(&old_key));
-        let new_key = key(provider, &id);
+        let new_key = provider.cache_key(&id);
         migrated |= new_key != old_key;
         if let Some(existing) = remapped.get_mut(&new_key) {
             if entry.last_accessed > existing.last_accessed {
@@ -165,11 +155,12 @@ impl StreamCache {
     }
 
     pub fn contains(&self, provider: ProviderId, id: &str) -> bool {
-        self.index.entries.contains_key(&key(provider, id)) && Self::path_for(provider, id).exists()
+        self.index.entries.contains_key(&provider.cache_key(id))
+            && Self::path_for(provider, id).exists()
     }
 
     pub fn remove(&mut self, provider: ProviderId, id: &str) -> bool {
-        let removed_entry = self.index.entries.remove(&key(provider, id));
+        let removed_entry = self.index.entries.remove(&provider.cache_key(id));
         let removed_file = std::fs::remove_file(Self::path_for(provider, id)).is_ok();
         let had_entry = if let Some(entry) = removed_entry {
             self.current_total = self.current_total.saturating_sub(entry.size_bytes);
@@ -198,11 +189,11 @@ impl StreamCache {
     /// index is loaded into memory at startup and updated as streams finish,
     /// so it's safe to call on every redraw.
     pub fn index_contains(&self, provider: ProviderId, id: &str) -> bool {
-        self.index.entries.contains_key(&key(provider, id))
+        self.index.entries.contains_key(&provider.cache_key(id))
     }
 
     pub fn insert(&mut self, provider: ProviderId, id: &str) -> bool {
-        let key = key(provider, id);
+        let key = provider.cache_key(id);
         let path = Self::path_for(provider, id);
         if !path.exists() {
             return false;
@@ -267,7 +258,7 @@ mod tests {
     #[test]
     fn keys_round_trip_per_provider() {
         for &provider in ProviderId::all() {
-            let (parsed, id) = parse_key(&key(provider, "abc123"));
+            let (parsed, id) = parse_key(&provider.cache_key("abc123"));
             assert_eq!(parsed, provider);
             assert_eq!(id, "abc123");
         }
@@ -275,19 +266,26 @@ mod tests {
 
     #[test]
     fn keys_keep_colons_in_id() {
-        let (provider, id) = parse_key(&key(ProviderId::Bandcamp, "1:2:a"));
+        let (provider, id) = parse_key(&ProviderId::Bandcamp.cache_key("1:2:a"));
         assert_eq!(provider, ProviderId::Bandcamp);
         assert_eq!(id, "1:2:a");
     }
 
     #[test]
     fn migration_rewrites_legacy_keys() {
-        for (legacy, provider) in [
-            ("YouTube", ProviderId::YouTube),
-            ("SoundCloud", ProviderId::SoundCloud),
-            ("MusicBrainz", ProviderId::MusicBrainz),
-            ("Local", ProviderId::Local),
-        ] {
+        for provider in ProviderId::all() {
+            let Some(legacy) = [
+                "YouTube",
+                "SoundCloud",
+                "MusicBrainz",
+                "Bandcamp",
+                "LastFm",
+                "Local",
+            ]
+            .into_iter()
+            .find(|p| ProviderId::from_legacy_key(p) == Some(*provider)) else {
+                continue;
+            };
             let (migrated, changed) = migrate_index_keys(HashMap::from([(
                 format!("{legacy}:x"),
                 CacheEntry {
@@ -297,7 +295,7 @@ mod tests {
             )]));
             assert_eq!(
                 migrated.keys().collect::<Vec<_>>(),
-                [key(provider, "x")].iter().collect::<Vec<_>>()
+                [provider.cache_key("x")].iter().collect::<Vec<_>>()
             );
             assert!(changed);
         }
@@ -310,7 +308,7 @@ mod tests {
             last_accessed: 1,
         };
         let (_, changed) =
-            migrate_index_keys(HashMap::from([(key(ProviderId::YouTube, "x"), entry)]));
+            migrate_index_keys(HashMap::from([(ProviderId::YouTube.cache_key("x"), entry)]));
         assert!(!changed);
     }
 
@@ -329,7 +327,7 @@ mod tests {
             ("youtube:x".to_string(), fresh),
         ]));
         assert_eq!(migrated.len(), 1);
-        assert_eq!(migrated[&key(ProviderId::YouTube, "x")].size_bytes, 20);
+        assert_eq!(migrated[&ProviderId::YouTube.cache_key("x")].size_bytes, 20);
     }
 
     #[test]

@@ -104,8 +104,8 @@ pub struct MusicPlayer {
     /// Per-track volume-normalization gains, computed in the background and
     /// kept in memory (not persisted) so subsequent plays are normalized.
     pub normalization_cache: std::collections::HashMap<String, f32>,
-    /// Track id whose normalization gain should be analyzed once its stream
-    /// cache finishes downloading.
+    /// Provider-namespaced `slug:id` track key whose normalization gain
+    /// should be analyzed once its stream cache finishes downloading.
     pub pending_normalization_id: Option<String>,
 
     pub clipboard: Vec<Track>,
@@ -198,7 +198,7 @@ impl MusicPlayer {
             volume: 0.8,
             progress: 0.0,
             duration: 0.0,
-            download_registry: DownloadRegistry::load(),
+            download_registry: DownloadRegistry::load_migrated(),
             notification: None,
             artist_error_dedup: None,
             track_loading: false,

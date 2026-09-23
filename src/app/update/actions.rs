@@ -316,7 +316,7 @@ impl MusicPlayer {
         let Some(track) = self.queue.current() else {
             return Task::none();
         };
-        let track_id = track.primary_id().to_string();
+        let track_id = track.cache_key();
         let tx = self.result_tx.clone();
         let no_lyrics = self.strings.no_lyrics_found;
         self.flush_note_draft(pane);
@@ -393,7 +393,7 @@ impl MusicPlayer {
         let Some(track) = self.queue.current() else {
             return;
         };
-        let track_id = track.primary_id().to_string();
+        let track_id = track.cache_key();
         self.flush_note_draft(pane);
         let Some(state) = &mut self.pane_mut(pane).lyrics else {
             return;
@@ -412,7 +412,7 @@ impl MusicPlayer {
         let Some(track) = self.queue.current() else {
             return;
         };
-        let track_id = track.primary_id().to_string();
+        let track_id = track.cache_key();
         let Some(entry) =
             crate::data::lyrics_cache::LyricsCache::load_migrated().get_custom(&track_id, &name)
         else {
@@ -436,7 +436,7 @@ impl MusicPlayer {
         let Some(track) = self.queue.current() else {
             return Task::none();
         };
-        let track_id = track.primary_id().to_string();
+        let track_id = track.cache_key();
         let cache = crate::data::lyrics_cache::LyricsCache::load_migrated();
         let Some(entry) = cache.get_custom(&track_id, &name) else {
             return Task::none();
@@ -587,7 +587,7 @@ impl MusicPlayer {
             self.sync_lyrics_editor(pane);
             return;
         };
-        let current_id = track.primary_id().to_string();
+        let current_id = track.cache_key();
         let artist = track.artist.clone();
         let title = track.title.clone();
         let album = track.album().map(|a| a.name.clone());

@@ -103,10 +103,35 @@ pub fn compute_normalization_gain(path: &Path) -> Option<f32> {
 
 pub fn load_gains() -> std::collections::HashMap<String, f32> {
     let path = crate::data::cache_path("normalization.json");
-    std::fs::read_to_string(path)
+    let mut gains: std::collections::HashMap<String, f32> = std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    let mut remapped = std::collections::HashMap::new();
+    let mut migrated = false;
+    for (old_key, gain) in gains.drain() {
+        let new_key = canonical_gain_key(&old_key);
+        migrated |= new_key != old_key;
+        remapped.entry(new_key).or_insert(gain);
+    }
+    if migrated {
+        save_gains(&remapped);
+        return remapped;
+    }
+    remapped
+}
+
+/// Rewrite a pre-slug `Debug:id` gain key (e.g. `YouTube:…`, `LastFm:…`) to
+/// the [`cache_key`](crate::providers::ProviderId::cache_key) format;
+/// already-prefixed and bare keys pass through untouched.
+fn canonical_gain_key(key: &str) -> String {
+    let Some((prefix, id)) = key.split_once(':') else {
+        return key.to_string();
+    };
+    match crate::providers::ProviderId::from_legacy_key(prefix) {
+        Some(provider) => provider.cache_key(id),
+        None => key.to_string(),
+    }
 }
 
 pub fn save_gains(gains: &std::collections::HashMap<String, f32>) {
@@ -121,5 +146,24 @@ pub fn save_gains(gains: &std::collections::HashMap<String, f32>) {
         if std::fs::write(&tmp, s).is_ok() {
             let _ = std::fs::rename(&tmp, &path);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gain_keys_rewrite_legacy_debug_prefixes() {
+        assert_eq!(canonical_gain_key("YouTube:x"), "youtube:x");
+        assert_eq!(canonical_gain_key("LastFm:x"), "lastfm:x");
+        assert_eq!(canonical_gain_key("SoundCloud:x"), "soundcloud:x");
+    }
+
+    #[test]
+    fn gain_keys_keep_slug_and_bare_keys() {
+        assert_eq!(canonical_gain_key("youtube:x"), "youtube:x");
+        assert_eq!(canonical_gain_key(" x "), " x ");
+        assert_eq!(canonical_gain_key("no-colon"), "no-colon");
     }
 }

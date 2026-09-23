@@ -167,10 +167,11 @@ impl Track {
     }
 
     /// A stable cache key namespacing the source provider with its id, used to
-    /// key the on-disk stream cache and download registry.
+    /// key the download registry, lyrics cache, and normalization gains. See
+    /// [`cache_key`](ProviderId::cache_key), which owns the `slug:id` format
+    /// shared with the stream cache index (`streams/cache_index.json`).
     pub fn cache_key(&self) -> String {
-        let id = self.primary_id();
-        format!("{:?}:{}", self.source, id)
+        self.source.cache_key(self.primary_id())
     }
 
     /// Build a `Track` owned by `provider`, carrying that provider's id/url in
@@ -476,6 +477,17 @@ mod tests {
             q.recently_played[49].provider_id(ProviderId::YouTube),
             Some("11")
         );
+    }
+
+    #[test]
+    fn cache_key_uses_slug_prefix() {
+        let track = make_track("abc123", "url");
+        assert_eq!(track.cache_key(), "youtube:abc123");
+        assert_eq!(
+            ProviderId::SoundCloud.cache_key("abc123"),
+            "soundcloud:abc123"
+        );
+        assert_eq!(ProviderId::LastFm.cache_key("x"), "lastfm:x");
     }
 
     #[test]

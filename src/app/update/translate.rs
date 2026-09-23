@@ -107,7 +107,7 @@ impl MusicPlayer {
         let track_id = self
             .queue
             .current()
-            .map(|t| t.primary_id().to_string())
+            .map(crate::types::Track::cache_key)
             .unwrap_or_default();
         let base_url = self.config.translation_base_url.clone();
         let api_key = self.config.translation_api_key.clone();
@@ -156,7 +156,7 @@ impl MusicPlayer {
         let current_id = self
             .queue
             .current()
-            .map(|t| t.primary_id().to_string())
+            .map(crate::types::Track::cache_key)
             .unwrap_or_default();
         if current_id != track_id {
             self.notify_error((self.strings.translation_failed)("track changed"));

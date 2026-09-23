@@ -16,6 +16,25 @@ impl JsonStore for DownloadRegistry {
 }
 
 impl DownloadRegistry {
+    /// Load the registry, rewriting pre-slug `Debug:id` keys (e.g.
+    /// `YouTube:…`, `LastFm:…`) to the `slug:id` format used by
+    /// [`Track::cache_key`] so old entries stay reachable.
+    pub fn load_migrated() -> Self {
+        let mut store = Self::load();
+        let mut remapped = std::collections::HashMap::new();
+        let mut migrated = false;
+        for (old_key, track) in store.tracks.drain() {
+            let new_key = track.cache_key();
+            migrated |= new_key != old_key;
+            remapped.entry(new_key).or_insert(track);
+        }
+        if migrated {
+            store.tracks = remapped;
+            store.save();
+        }
+        store
+    }
+
     pub fn register(&mut self, track: Track) {
         self.tracks.insert(track.cache_key(), track);
         self.save();

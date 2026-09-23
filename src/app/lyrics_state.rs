@@ -23,6 +23,7 @@ pub struct LyricsViewport {
 #[derive(Debug, Clone)]
 pub struct LyricsState {
     pub provider: LyricsProvider,
+    /// Provider-namespaced `slug:id` track key (see [`crate::types::Track::cache_key`]).
     pub track_id: Option<String>,
     pub lyrics: LoadState<Lyrics>,
     pub mode: LyricsViewMode,
