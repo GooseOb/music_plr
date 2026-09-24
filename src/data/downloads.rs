@@ -28,8 +28,8 @@ impl DownloadRegistry {
             migrated |= new_key != old_key;
             remapped.entry(new_key).or_insert(track);
         }
+        store.tracks = remapped;
         if migrated {
-            store.tracks = remapped;
             store.save();
         }
         store

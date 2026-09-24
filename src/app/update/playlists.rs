@@ -365,16 +365,16 @@ impl MusicPlayer {
             self.handle_remove_from_playlist_batch(self.focused_pane_id, &indices);
         } else if let ViewKind::Downloads = &self.view_data().kind {
             if let Some(tracks) = self.view_data_mut().tracks_mut() {
-                let removed_urls: Vec<String> = indices
+                let removed_keys: Vec<String> = indices
                     .iter()
-                    .filter_map(|&i| tracks.get(i).map(|t| t.primary_url().to_string()))
+                    .filter_map(|&i| tracks.get(i).map(crate::types::Track::cache_key))
                     .collect();
                 let removed = crate::util::remove_at(tracks, &indices);
                 let tr = self.strings;
                 let msg = (tr.removed_from)(removed, tr.downloads);
                 self.notify(msg);
-                for url in removed_urls {
-                    self.download_registry.remove(&url);
+                for key in removed_keys {
+                    self.download_registry.remove(&key);
                 }
             }
         }
