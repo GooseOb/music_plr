@@ -33,7 +33,8 @@ mod translate;
 
 mod updates;
 pub use updates::{
-    cleanup_stale_update, spawn_update_download, spawn_version_check, UpdateStatus, APP_VERSION,
+    cleanup_stale_update, spawn_update_download, spawn_version_check, UpdateStatus,
+    VersionCheckOutcome, APP_VERSION,
 };
 
 const DOUBLE_CLICK_MS: u128 = 300;

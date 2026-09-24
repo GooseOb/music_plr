@@ -509,23 +509,7 @@ impl MusicPlayer {
                     self.handle_import_paths(method, &paths)
                 }
             }
-            BackendResult::VersionChecked {
-                current,
-                latest,
-                release_url,
-                asset_url,
-                sha256,
-                package_managed,
-                error,
-            } => self.process_version_checked(
-                current,
-                latest,
-                release_url,
-                asset_url,
-                sha256,
-                package_managed,
-                error,
-            ),
+            BackendResult::VersionChecked(result) => self.process_version_checked(result),
             BackendResult::UpdateProgress(downloaded, total) => {
                 if let crate::app::update::UpdateStatus::Updating { progress } =
                     &mut self.update_status
@@ -859,50 +843,37 @@ impl MusicPlayer {
         }
     }
 
-    #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
     fn process_version_checked(
         &mut self,
-        current: String,
-        latest: Option<String>,
-        release_url: String,
-        asset_url: Option<String>,
-        sha256: Option<String>,
-        package_managed: bool,
-        error: Option<String>,
+        result: Result<crate::app::update::VersionCheckOutcome, String>,
     ) -> Task<Message> {
-        let _ = current;
-
-        if package_managed {
-            self.update_status = crate::app::update::UpdateStatus::PackageManaged;
-            self.notify_error(self.strings.package_managed.to_string());
-            return Task::none();
-        }
-
-        if let Some(err) = error {
-            self.update_status = crate::app::update::UpdateStatus::Error(err.clone());
-            self.notify_error(err);
-            return Task::none();
-        }
-
-        if let Some(latest) = latest {
-            if let (Some(url), Some(sha)) = (asset_url, sha256) {
+        match result {
+            Ok(crate::app::update::VersionCheckOutcome::PackageManaged) => {
+                self.update_status = crate::app::update::UpdateStatus::PackageManaged;
+                self.notify_error(self.strings.package_managed.to_string());
+            }
+            Ok(crate::app::update::VersionCheckOutcome::UpToDate) => {
+                self.update_status = crate::app::update::UpdateStatus::UpToDate;
+            }
+            Ok(crate::app::update::VersionCheckOutcome::Available {
+                version,
+                release_url,
+                asset_url,
+            }) => {
                 self.update_status = crate::app::update::UpdateStatus::Available {
-                    version: latest.clone(),
+                    version: version.clone(),
                     release_url,
-                    asset_url: url,
-                    sha256: sha,
+                    asset_url,
                 };
                 self.notify_for(
-                    (self.strings.update_available)(&latest),
+                    (self.strings.update_available)(&version),
                     std::time::Duration::from_secs(6),
                 );
-            } else {
-                self.update_status = crate::app::update::UpdateStatus::Error(
-                    "New version found but no matching binary for this platform".to_string(),
-                );
             }
-        } else {
-            self.update_status = crate::app::update::UpdateStatus::UpToDate;
+            Err(err) => {
+                self.update_status = crate::app::update::UpdateStatus::Error(err.clone());
+                self.notify_error(err);
+            }
         }
         Task::none()
     }
@@ -910,7 +881,9 @@ impl MusicPlayer {
     fn process_update_complete(&mut self, result: Result<String, String>) {
         match result {
             Ok(version) => {
-                self.update_status = crate::app::update::UpdateStatus::UpdateApplied;
+                self.update_status = crate::app::update::UpdateStatus::UpdateApplied {
+                    version: version.clone(),
+                };
                 self.notify((self.strings.update_applied)(&version));
                 std::thread::spawn(|| {
                     std::thread::sleep(std::time::Duration::from_secs(2));

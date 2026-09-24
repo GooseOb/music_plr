@@ -1,10 +1,13 @@
-//! Automatic version checking and self-update via the GitHub releases API.
+//! Automatic version checking and self-update.
 //!
-//! A background thread queries the latest release tag, compares it against the
-//! compiled-in [`APP_VERSION`], and — when a newer release exists and the binary
-//! was not installed via a package manager — downloads the matching platform
-//! asset, verifies its SHA-256, stages the replacement, and spawns a detached
-//! updater that swaps in the new binary once this process exits.
+//! A background thread queries the latest stable version on crates.io,
+//! compares it against the compiled-in [`APP_VERSION`], and — when a newer
+//! release exists and the binary was not installed via a package manager —
+//! downloads the matching platform asset from the GitHub release page
+//! (`.../releases/download/v{version}/{asset}`), verifies its SHA-256
+//! against the published `.sha256` sidecar, stages the replacement, and
+//! spawns a detached updater that swaps in the new binary once this process
+//! exits.
 
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -14,15 +17,18 @@ use std::{
     time::Duration,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::app::{message::BackendResult, MusicPlayer};
 
 /// Current app version (from `Cargo.toml` at compile time).
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// GitHub repository for release lookups.
+/// GitHub repository hosting the release binaries.
 const GITHUB_REPO: &str = "GooseOb/music_plr";
+
+/// Crate name on crates.io, the source of truth for the latest version.
+const CRATES_IO_NAME: &str = "goosemusic";
 
 /// Live status of the version-check / update pipeline, surfaced by the
 /// Settings `Updates` section and the update-toast logic.
@@ -40,17 +46,32 @@ pub enum UpdateStatus {
         version: String,
         release_url: String,
         asset_url: String,
-        sha256: String,
     },
     /// An update is being downloaded / applied.
     /// `progress` is `(downloaded, total)` in bytes.
     Updating { progress: (u64, u64) },
     /// The update was downloaded and staged; the app is about to restart.
-    UpdateApplied,
+    UpdateApplied { version: String },
     /// Check or download failed.
     Error(String),
     /// Installed via a package manager — can't self-update.
     PackageManaged,
+}
+
+/// Outcome of a background version check, delivered as
+/// [`BackendResult::VersionChecked`](crate::app::message::BackendResult).
+#[derive(Debug, Clone)]
+pub enum VersionCheckOutcome {
+    /// Installed via a package manager — can't self-update.
+    PackageManaged,
+    /// No newer stable version on crates.io.
+    UpToDate,
+    /// A newer release is available for download.
+    Available {
+        version: String,
+        release_url: String,
+        asset_url: String,
+    },
 }
 
 // ── package-manager detection ───────────────────────────────────────
@@ -71,94 +92,89 @@ pub fn can_self_update() -> bool {
     std::fs::write(&probe, []).is_ok() && std::fs::remove_file(&probe).is_ok()
 }
 
-// ── GitHub API structs ──────────────────────────────────────────────
+// ── crates.io version lookup ──────────────────────────────────────────
 
-#[derive(Serialize, Deserialize, Clone)]
-struct GitHubRelease {
-    tag_name: String,
-    html_url: String,
-    assets: Vec<GitHubAsset>,
+/// Minimal crates.io response shape: only the latest stable version.
+#[derive(Deserialize)]
+struct CratesIoResponse {
+    #[serde(rename = "crate")]
+    crate_info: CratesIoCrate,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct GitHubAsset {
-    name: String,
-    browser_download_url: String,
-    #[serde(default)]
-    digest: String,
+#[derive(Deserialize)]
+struct CratesIoCrate {
+    max_stable_version: String,
 }
 
-/// GitHub API error payload (`{"message": ...}`).
-#[derive(Deserialize, Default)]
-struct GitHubApiError {
-    #[serde(default)]
-    message: String,
+/// Release page URL for a bare version, e.g. `.../releases/tag/v1.2.3`.
+fn release_url(version: &str) -> String {
+    format!("https://github.com/{GITHUB_REPO}/releases/tag/v{version}")
 }
 
-/// Cached latest-release response: the `ETag` from the last `200` plus the
-/// payload it validated. Stored in the cache dir so conditional requests
-/// survive restarts — a `304 Not Modified` costs no rate-limit quota.
-#[derive(Serialize, Deserialize)]
-struct VersionCheckCache {
-    etag: String,
-    release: GitHubRelease,
+/// Predictable download URL for this platform's asset in release `v{version}`,
+/// served from the GitHub release page.
+fn constructed_asset_url(version: &str) -> String {
+    format!(
+        "https://github.com/{GITHUB_REPO}/releases/download/v{version}/{}",
+        asset_name()
+    )
 }
 
-fn version_cache_path() -> std::path::PathBuf {
-    crate::data::cache_path("version_check.json")
-}
-
-fn load_version_cache() -> Option<VersionCheckCache> {
-    let json = std::fs::read_to_string(version_cache_path()).ok()?;
-    serde_json::from_str(&json).ok()
-}
-
-fn save_version_cache(cache: &VersionCheckCache) {
-    if serde_json::to_string(cache).is_ok_and(|json| {
-        let path = version_cache_path();
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        std::fs::write(path, json).is_ok()
-    }) {}
-}
-
-/// Extract GitHub's `{"message"}` from an error response body, if present.
-fn github_error_message(resp: &mut ureq::http::Response<ureq::Body>) -> Option<String> {
-    let body = resp.body_mut().read_to_string().ok()?;
-    let err: GitHubApiError = serde_json::from_str(&body).ok()?;
-    (!err.message.is_empty()).then_some(err.message)
-}
-
-/// Error text for a `403`/`429`: names the rate limit (with reset time when
-/// the `x-ratelimit-reset` header is present) or surfaces a non-quota denial.
-fn rate_limit_error(resp: &mut ureq::http::Response<ureq::Body>) -> String {
-    let message = github_error_message(resp).unwrap_or_default();
-    if !message.to_ascii_lowercase().contains("rate limit") {
-        return if message.is_empty() {
-            "GitHub API denied the request (HTTP 403)".to_string()
-        } else {
-            format!("GitHub API denied the request: {message}")
-        };
+/// Query crates.io for the latest stable version.
+fn fetch_latest_version() -> Result<String, String> {
+    let url = format!("https://crates.io/api/v1/crates/{CRATES_IO_NAME}");
+    let mut resp = agent()
+        .get(&url)
+        .header(
+            "User-Agent",
+            &format!("goosemusic/{APP_VERSION} (https://github.com/{GITHUB_REPO})"),
+        )
+        .call()
+        .map_err(|e| format!("Version check request failed: {e}"))?;
+    let parsed: CratesIoResponse = resp
+        .body_mut()
+        .read_json()
+        .map_err(|e| format!("Failed to parse crates.io response: {e}"))?;
+    let version = parsed.crate_info.max_stable_version.trim().to_string();
+    if version.is_empty() {
+        return Err("crates.io returned an empty version".to_string());
     }
-    let reset_in = resp
-        .headers()
-        .get("x-ratelimit-reset")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.parse::<u64>().ok())
-        .map(|reset| {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_or(0, |d| d.as_secs());
-            reset.saturating_sub(now)
-        });
-    match reset_in {
-        Some(secs) if secs > 0 => format!(
-            "GitHub rate limit exceeded, resets in ~{} min; update check skipped",
-            secs / 60 + 1
-        ),
-        _ => "GitHub rate limit exceeded; update check skipped".to_string(),
+    Ok(version)
+}
+
+/// Parse a `sha256sum` sidecar body (`<hex>  <filename>` or bare hex) into the
+/// expected digest. Rejects anything that isn't 64 hex characters.
+fn parse_sha256_sidecar(body: &str) -> Result<String, String> {
+    let hex = body.split_whitespace().next().unwrap_or("").to_lowercase();
+    if hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        Ok(hex)
+    } else {
+        Err("Release checksum file is invalid".to_string())
     }
+}
+
+/// Fetch the `.sha256` sidecar published next to the release asset. A `404`
+/// means the release has no binary for this platform.
+fn fetch_expected_sha256(asset_url: &str) -> Result<String, String> {
+    let url = format!("{asset_url}.sha256");
+    let mut resp = agent()
+        .get(&url)
+        .header("User-Agent", &format!("goosemusic/{APP_VERSION}"))
+        .call()
+        .map_err(|e| match e {
+            ureq::Error::StatusCode(404) => {
+                format!(
+                    "No sha256 checksum file found for this platform ({})",
+                    asset_name()
+                )
+            }
+            _ => format!("Checksum download failed: {e}"),
+        })?;
+    let body = resp
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| format!("Checksum download failed: {e}"))?;
+    parse_sha256_sidecar(&body)
 }
 
 /// Release asset filename for the current compilation target, e.g.
@@ -223,141 +239,35 @@ fn agent() -> &'static ureq::Agent {
 
 // ── background operations ────────────────────────────────────────────
 
-struct UpdateInfo {
-    version: String,
-    release_url: String,
-    asset_url: String,
-    sha256: String,
-}
-
-/// Spawn a detached thread that queries the GitHub releases API for the latest
-/// tag, compares it against [`APP_VERSION`], and reports the outcome through
-/// `tx` as [`BackendResult::VersionChecked`].
+/// Spawn a detached thread that queries crates.io for the latest stable
+/// version, compares it against [`APP_VERSION`], and reports the outcome
+/// through `tx` as [`BackendResult::VersionChecked`]. The asset URL is
+/// constructed from the version and the current platform.
 pub fn spawn_version_check(tx: std::sync::mpsc::Sender<BackendResult>) {
     std::thread::spawn(move || {
-        let pkg_managed = !can_self_update();
-        if pkg_managed {
-            let _ = tx.send(BackendResult::VersionChecked {
-                current: APP_VERSION.to_string(),
-                latest: None,
-                release_url: String::new(),
-                asset_url: None,
-                sha256: None,
-                package_managed: true,
-                error: None,
-            });
+        if !can_self_update() {
+            let _ = tx.send(BackendResult::VersionChecked(Ok(
+                VersionCheckOutcome::PackageManaged,
+            )));
             return;
         }
 
-        let result: Result<Option<UpdateInfo>, String> = (|| {
-            let release = fetch_release()?;
-            let tag = release.tag_name.trim_start_matches('v');
+        let result: Result<VersionCheckOutcome, String> = (|| {
+            let latest = fetch_latest_version()?;
 
-            if !version_gt(tag, APP_VERSION) {
-                return Ok(None); // up to date
+            if !version_gt(&latest, APP_VERSION) {
+                return Ok(VersionCheckOutcome::UpToDate);
             }
 
-            let name = asset_name();
-            let asset = release
-                .assets
-                .iter()
-                .find(|a| a.name == name)
-                .ok_or_else(|| format!("No binary asset for this platform ({name})"))?;
-
-            let sha = asset.digest.trim_start_matches("sha256:").to_string();
-            if sha.is_empty() {
-                return Err("Release asset has no checksum".to_string());
-            }
-
-            Ok(Some(UpdateInfo {
-                version: tag.to_string(),
-                release_url: release.html_url,
-                asset_url: asset.browser_download_url.clone(),
-                sha256: sha,
-            }))
+            Ok(VersionCheckOutcome::Available {
+                release_url: release_url(&latest),
+                asset_url: constructed_asset_url(&latest),
+                version: latest,
+            })
         })();
 
-        let _ = tx.send(match result {
-            Ok(Some(info)) => BackendResult::VersionChecked {
-                current: APP_VERSION.to_string(),
-                latest: Some(info.version),
-                release_url: info.release_url,
-                asset_url: Some(info.asset_url),
-                sha256: Some(info.sha256),
-                package_managed: false,
-                error: None,
-            },
-            Ok(None) => BackendResult::VersionChecked {
-                current: APP_VERSION.to_string(),
-                latest: None,
-                release_url: String::new(),
-                asset_url: None,
-                sha256: None,
-                package_managed: false,
-                error: None,
-            },
-            Err(e) => BackendResult::VersionChecked {
-                current: APP_VERSION.to_string(),
-                latest: None,
-                release_url: String::new(),
-                asset_url: None,
-                sha256: None,
-                package_managed: false,
-                error: Some(e),
-            },
-        });
+        let _ = tx.send(BackendResult::VersionChecked(result));
     });
-}
-
-/// Fetch the latest release, sending the cached `ETag` when present: a `304`
-/// answers from the stored payload and costs no rate-limit quota, a `200`
-/// refreshes the cache, and quota denials surface as distinct errors.
-fn fetch_release() -> Result<GitHubRelease, String> {
-    let url = format!("https://api.github.com/repos/{GITHUB_REPO}/releases/latest");
-    let cached = load_version_cache();
-    let mut req = agent()
-        .get(&url)
-        .header("User-Agent", &format!("goosemusic/{APP_VERSION}"))
-        .header("Accept", "application/vnd.github.v3+json")
-        .config()
-        .http_status_as_error(false)
-        .build();
-    if let Some(c) = &cached {
-        req = req.header("If-None-Match", &c.etag);
-    }
-    let mut resp = req
-        .call()
-        .map_err(|e| format!("GitHub API request failed: {e}"))?;
-
-    match resp.status().as_u16() {
-        304 => cached
-            .map(|c| c.release)
-            .ok_or_else(|| "GitHub returned 304 with no cached release".to_string()),
-        200 => {
-            let etag = resp
-                .headers()
-                .get("etag")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or_default()
-                .to_string();
-            let release: GitHubRelease = resp
-                .body_mut()
-                .read_json()
-                .map_err(|e| format!("Failed to parse GitHub API response: {e}"))?;
-            if !etag.is_empty() {
-                save_version_cache(&VersionCheckCache {
-                    etag,
-                    release: release.clone(),
-                });
-            }
-            Ok(release)
-        }
-        403 | 429 => Err(rate_limit_error(&mut resp)),
-        code => Err(match github_error_message(&mut resp) {
-            Some(msg) => format!("GitHub API returned HTTP {code}: {msg}"),
-            None => format!("GitHub API returned HTTP {code}"),
-        }),
-    }
 }
 
 /// Spawn a detached thread that downloads the release asset, verifies it,
@@ -368,18 +278,16 @@ fn fetch_release() -> Result<GitHubRelease, String> {
 pub fn spawn_update_download(
     tx: std::sync::mpsc::Sender<BackendResult>,
     asset_url: String,
-    expected_sha256: String,
     version: String,
 ) {
     std::thread::spawn(move || {
-        let result: Result<String, String> =
-            download_and_staged_apply(&asset_url, &expected_sha256, {
-                let tx = tx.clone();
-                move |downloaded, total| {
-                    let _ = tx.send(BackendResult::UpdateProgress(downloaded, total));
-                }
-            })
-            .map(|()| version);
+        let result: Result<String, String> = download_and_staged_apply(&asset_url, {
+            let tx = tx.clone();
+            move |downloaded, total| {
+                let _ = tx.send(BackendResult::UpdateProgress(downloaded, total));
+            }
+        })
+        .map(|()| version);
         let _ = tx.send(BackendResult::UpdateComplete(result));
     });
 }
@@ -410,19 +318,26 @@ fn find_binary_in_dir(dir: &std::path::Path) -> Option<std::path::PathBuf> {
     None
 }
 
-/// Download → verify SHA-256 → extract → stage → spawn updater.
-/// On success the updater has been spawned and the app should exit.
+/// Fetch sidecar → download → verify SHA-256 → extract → stage → spawn
+/// updater. On success the updater has been spawned and the app should exit.
 fn download_and_staged_apply(
     url: &str,
-    expected_sha256: &str,
     progress: impl Fn(u64, u64) + Send + 'static,
 ) -> std::result::Result<(), String> {
+    // 0. Fetch the expected SHA-256 sidecar published next to the asset.
+    let expected_sha256 = fetch_expected_sha256(url)?;
+
     // 1. Download the archive.
     let resp = agent()
         .get(url)
         .header("User-Agent", &format!("goosemusic/{APP_VERSION}"))
         .call()
-        .map_err(|e| format!("Download request failed: {e}"))?;
+        .map_err(|e| match e {
+            ureq::Error::StatusCode(404) => {
+                format!("No binary asset for this platform ({})", asset_name())
+            }
+            _ => format!("Download request failed: {e}"),
+        })?;
 
     let total = resp
         .headers()
@@ -603,19 +518,70 @@ impl MusicPlayer {
     /// Download, verify, and stage the available update, then signal the app
     /// to restart.
     pub fn start_update(&mut self) {
-        let (asset_url, sha256, version) = match &self.update_status {
+        let (asset_url, version) = match &self.update_status {
             UpdateStatus::Available {
-                version,
-                asset_url,
-                sha256,
-                ..
-            } => (asset_url.clone(), sha256.clone(), version.clone()),
+                version, asset_url, ..
+            } => (asset_url.clone(), version.clone()),
             _ => return,
         };
         self.update_status = UpdateStatus::Updating { progress: (0, 0) };
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
-            crate::app::update::spawn_update_download(tx, asset_url, sha256, version);
+            crate::app::update::spawn_update_download(tx, asset_url, version);
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_gt_orders_bare_versions() {
+        assert!(version_gt("1.3.6", "1.3.5"));
+        assert!(version_gt("1.4.0", "1.3.9"));
+        assert!(!version_gt("1.3.5", "1.3.5"));
+        assert!(!version_gt("1.3.4", "1.3.5"));
+    }
+
+    #[test]
+    fn crates_response_parses_max_stable_version() {
+        let body = r#"{"crate": {"id": "goosemusic", "max_stable_version": "1.3.5"}}"#;
+        let parsed: CratesIoResponse = serde_json::from_str(body).unwrap();
+        assert_eq!(parsed.crate_info.max_stable_version, "1.3.5");
+    }
+
+    #[test]
+    fn constructed_urls_follow_release_layout() {
+        let asset_url = constructed_asset_url("1.3.6");
+        assert_eq!(
+            asset_url,
+            format!(
+                "https://github.com/GooseOb/music_plr/releases/download/v1.3.6/{}",
+                asset_name()
+            )
+        );
+        assert_eq!(
+            release_url("1.3.6"),
+            "https://github.com/GooseOb/music_plr/releases/tag/v1.3.6"
+        );
+    }
+
+    #[test]
+    fn sidecar_parses_sha256sum_format() {
+        let hex = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        assert_eq!(
+            parse_sha256_sidecar(&format!("{hex}  goosemusic-x.tar.gz\n")).unwrap(),
+            hex
+        );
+        assert_eq!(parse_sha256_sidecar(&format!("{hex}\n")).unwrap(), hex);
+        assert_eq!(parse_sha256_sidecar(&hex.to_uppercase()).unwrap(), hex);
+    }
+
+    #[test]
+    fn sidecar_rejects_garbage() {
+        assert!(parse_sha256_sidecar("").is_err());
+        assert!(parse_sha256_sidecar("not-a-checksum\n").is_err());
+        assert!(parse_sha256_sidecar("abc123  file.tar.gz\n").is_err());
     }
 }

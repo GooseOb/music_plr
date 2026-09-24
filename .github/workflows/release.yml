@@ -89,12 +89,17 @@ jobs:
           tar -czf goosemusic-x86_64-unknown-linux-gnu.tar.gz \
             -C target/x86_64-unknown-linux-gnu/release goosemusic \
             -C "$GITHUB_WORKSPACE" goosemusic.desktop icons/app-icon.svg
+          # Checksum sidecar verified by the self-updater:
+          # `{asset}.sha256` next to `{asset}` on the release.
+          sha256sum goosemusic-x86_64-unknown-linux-gnu.tar.gz > goosemusic-x86_64-unknown-linux-gnu.tar.gz.sha256
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: goosemusic-x86_64-unknown-linux-gnu
-          path: goosemusic-x86_64-unknown-linux-gnu.tar.gz
+          path: |
+            goosemusic-x86_64-unknown-linux-gnu.tar.gz
+            goosemusic-x86_64-unknown-linux-gnu.tar.gz.sha256
           if-no-files-found: error
 
   build-macos:
@@ -144,12 +149,17 @@ jobs:
           tar -czf goosemusic-${{ matrix.target }}.tar.gz \
             -C dist Goosemusic.app
           echo "ARCHIVE=goosemusic-${{ matrix.target }}.tar.gz" >> "$GITHUB_ENV"
+          # Checksum sidecar verified by the self-updater:
+          # `{asset}.sha256` next to `{asset}` on the release.
+          sha256sum "goosemusic-${{ matrix.target }}.tar.gz" > "goosemusic-${{ matrix.target }}.tar.gz.sha256"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: goosemusic-${{ matrix.target }}
-          path: ${{ env.ARCHIVE }}
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256
           if-no-files-found: error
 
   build-windows:
@@ -185,12 +195,18 @@ jobs:
         run: |
           Compress-Archive -Path target/x86_64-pc-windows-msvc/release/goosemusic.exe `
             -DestinationPath goosemusic-x86_64-pc-windows-msvc.zip
+          # Checksum sidecar verified by the self-updater:
+          # `{asset}.sha256` next to `{asset}` on the release.
+          $hash = (Get-FileHash goosemusic-x86_64-pc-windows-msvc.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  goosemusic-x86_64-pc-windows-msvc.zip" | Out-File -Encoding ascii -NoNewline goosemusic-x86_64-pc-windows-msvc.zip.sha256
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: goosemusic-x86_64-pc-windows-msvc
-          path: goosemusic-x86_64-pc-windows-msvc.zip
+          path: |
+            goosemusic-x86_64-pc-windows-msvc.zip
+            goosemusic-x86_64-pc-windows-msvc.zip.sha256
           if-no-files-found: error
 
   release:

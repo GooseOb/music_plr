@@ -198,10 +198,8 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             .spacing(theme::SPACING_SM)
             .into()
         }
-        crate::app::update::UpdateStatus::UpdateApplied => {
-            text((tr.update_applied)(crate::app::update::APP_VERSION))
-                .style(fg_accent())
-                .into()
+        crate::app::update::UpdateStatus::UpdateApplied { version } => {
+            text((tr.update_applied)(version)).style(fg_accent()).into()
         }
         crate::app::update::UpdateStatus::Error(e) => {
             text((tr.update_failed)(e)).style(fg_secondary()).into()

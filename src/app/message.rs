@@ -6,7 +6,7 @@ use super::{pane::PaneId, ViewData};
 use crate::{
     app::{
         interaction::{self, ContextMenuFocus, DefaultCtxAction, TrackListKind, TrackPos},
-        update::operation::CaptureBounds,
+        update::{operation::CaptureBounds, VersionCheckOutcome},
         CsvPreset, ImportCsvField, ImportMethod, ViewKind,
     },
     data::library,
@@ -95,15 +95,7 @@ pub enum BackendResult {
     /// The Edit Track "Find" action failed to resolve `provider`.
     EditTrackProviderError(ProviderId, String),
     /// A background version-check completed.
-    VersionChecked {
-        current: String,
-        latest: Option<String>,
-        release_url: String,
-        asset_url: Option<String>,
-        sha256: Option<String>,
-        package_managed: bool,
-        error: Option<String>,
-    },
+    VersionChecked(Result<VersionCheckOutcome, String>),
     /// Download progress for an in-flight self-update.
     UpdateProgress(u64, u64),
     /// The update download/extract/staged-apply finished.
