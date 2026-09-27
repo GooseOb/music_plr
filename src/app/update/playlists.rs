@@ -5,7 +5,7 @@ use std::{
 
 use iced::widget::operation;
 
-use super::{Message, MusicPlayer, Task, Track, ViewData, PREPEND};
+use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData, PREPEND};
 use crate::{
     app::{pane::PaneId, Dialog, ImportMethod, ImportPlaylistDialog, PlaylistJump, ViewKind},
     data::JsonStore,
@@ -266,7 +266,7 @@ impl MusicPlayer {
         pane: PaneId,
         playlist_idx: usize,
         indices: &[usize],
-        list: super::TrackListKind,
+        list: TrackListKind,
     ) {
         if playlist_idx >= self.playlists.playlists.len() {
             return;
@@ -274,7 +274,7 @@ impl MusicPlayer {
 
         let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&i| self.get_track_at(super::TrackPos::new(i, list, pane)))
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, list, pane)))
             .collect();
         let count = self
             .playlists
@@ -292,7 +292,7 @@ impl MusicPlayer {
         let removed = self.playlists.remove_tracks_at(p.index, indices);
         let msg = (self.strings.removed_n)(removed);
         self.notify(msg);
-        self.clear_selection_if_touched_in(pane, indices, super::TrackListKind::Active);
+        self.clear_selection_if_touched_in(pane, indices, TrackListKind::Active);
     }
 
     pub fn handle_reorder_tracks_selected(
@@ -322,12 +322,21 @@ impl MusicPlayer {
 
     pub fn handle_copy_selected(&mut self) {
         let pane = self.focused_pane_id;
+        let hovered = self.focused_hovered_track();
+        let list = hovered.map_or(TrackListKind::Active, |h| h.list);
         self.clipboard.clear();
-        let selection: Vec<usize> = self.view_data_mut().selection.clone();
-        for &i in &selection {
-            if let Some(track) =
-                self.get_track_at(super::TrackPos::new(i, super::TrackListKind::Active, pane))
-            {
+        let indices: Vec<usize> = {
+            let sel = self.selection_in(pane, list);
+            if !sel.is_empty() {
+                sel.to_vec()
+            } else if let Some(h) = hovered.filter(|h| h.list == list) {
+                vec![h.index]
+            } else {
+                return;
+            }
+        };
+        for &i in &indices {
+            if let Some(track) = self.get_track_at(TrackPos::new(i, list, pane)) {
                 self.clipboard.push(track);
             }
         }
@@ -337,21 +346,36 @@ impl MusicPlayer {
         if self.clipboard.is_empty() {
             return Task::none();
         }
-        let active = match &self.view_data().kind {
-            ViewKind::Playlist(p) => Some(p.index),
-            _ => None,
+        let pane = self.focused_pane_id;
+        let hovered = self.focused_hovered_track();
+        let list = hovered.map_or(TrackListKind::Active, |h| h.list);
+        let msg = match list {
+            TrackListKind::Queue => {
+                let insert_at = hovered
+                    .map_or(self.queue.tracks.len(), |h| h.index + 1)
+                    .min(self.queue.tracks.len());
+                let count = self.clipboard.len();
+                for (j, track) in self.clipboard.iter().cloned().enumerate() {
+                    self.queue.tracks.insert(insert_at + j, track);
+                }
+                self.save_session();
+                (self.strings.added_to)(count, self.strings.queue)
+            }
+            TrackListKind::Recent => return Task::none(),
+            TrackListKind::Active => {
+                let idx = match &self.view_data_in(pane).kind {
+                    ViewKind::Playlist(p) => p.index,
+                    _ => return Task::none(),
+                };
+                self.playlists
+                    .insert_tracks_at(idx, self.clipboard.iter(), PREPEND);
+                self.playlists.save();
+                let count = self.clipboard.len();
+                let name = self.playlists.playlists[idx].name.clone();
+                (self.strings.pasted_into)(count, &name)
+            }
         };
-        let Some(idx) = active else {
-            return Task::none();
-        };
-        self.playlists
-            .insert_tracks_at(idx, self.clipboard.iter(), PREPEND);
-        self.playlists.save();
-        let count = self.clipboard.len();
-        let name = self.playlists.playlists[idx].name.clone();
-        let msg = (self.strings.pasted_into)(count, &name);
         self.notify(msg);
-        self.clipboard.clear();
         self.capture_bounds_task()
     }
 
@@ -378,13 +402,13 @@ impl MusicPlayer {
                 }
             }
         }
-        self.clear_selection_for(super::TrackListKind::Active);
+        self.clear_selection_for(TrackListKind::Active);
     }
 
     pub fn handle_delete_in_hovered_list(&mut self) {
         let pane = self.focused_pane_id;
         let hovered = self.focused_hovered_track();
-        let list = hovered.map_or(super::TrackListKind::Active, |h| h.list);
+        let list = hovered.map_or(TrackListKind::Active, |h| h.list);
         let indices: Vec<usize> = {
             let sel = self.selection_in(pane, list);
             if !sel.is_empty() {
@@ -396,23 +420,20 @@ impl MusicPlayer {
             }
         };
         match list {
-            super::TrackListKind::Queue => {
+            TrackListKind::Queue => {
                 self.handle_remove_from_queue_batch(&indices);
             }
-            super::TrackListKind::Recent => {
+            TrackListKind::Recent => {
                 self.handle_remove_from_recent_batch(&indices);
             }
-            super::TrackListKind::Active => {
+            TrackListKind::Active => {
                 if !matches!(
                     self.view_data_in(pane).kind,
                     ViewKind::Playlist(_) | ViewKind::Downloads
                 ) {
                     return;
                 }
-                if self
-                    .selection_in(pane, super::TrackListKind::Active)
-                    .is_empty()
-                {
+                if self.selection_in(pane, TrackListKind::Active).is_empty() {
                     self.view_data_mut().selection = indices;
                 }
                 self.handle_delete_selected();
@@ -921,5 +942,92 @@ mod tests {
         assert!(p.selection(TrackListKind::Recent).is_empty());
         assert_eq!(p.selection(TrackListKind::Active), &[1]);
         assert_eq!(p.selection(TrackListKind::Queue), &[1]);
+    }
+
+    #[test]
+    fn copy_uses_hovered_queue_selection_not_active() {
+        let mut p = player_with_playlists(&["A"]);
+        p.playlists.playlists[0].tracks = vec![track("a1"), track("a2")];
+        p.view_data_mut().selection = vec![0];
+        p.queue.tracks = vec![track("0"), track("q1"), track("q2")];
+        p.queue_selected_indices = vec![2];
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(2, TrackListKind::Queue, pane));
+        };
+        p.handle_copy_selected();
+        assert_eq!(p.clipboard.len(), 1);
+        assert_eq!(p.clipboard[0].title, "Track q2");
+    }
+
+    #[test]
+    fn copy_falls_back_to_hovered_track_without_selection() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.tracks = vec![track("0"), track("q1")];
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(1, TrackListKind::Queue, pane));
+        };
+        p.handle_copy_selected();
+        assert_eq!(p.clipboard.len(), 1);
+        assert_eq!(p.clipboard[0].title, "Track q1");
+    }
+
+    #[test]
+    fn copy_from_recent() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.recently_played = vec![track("r1"), track("r2")].into();
+        p.recent_selected_indices = vec![1];
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(1, TrackListKind::Recent, pane));
+        };
+        p.handle_copy_selected();
+        assert_eq!(p.clipboard.len(), 1);
+        assert_eq!(p.clipboard[0].title, "Track r2");
+    }
+
+    #[test]
+    fn paste_into_hovered_queue() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.tracks = vec![track("0"), track("q1")];
+        p.clipboard = vec![track("n1"), track("n2")];
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(1, TrackListKind::Queue, pane));
+        };
+        let _ = p.handle_paste_clipboard();
+        let titles: Vec<_> = p.queue.tracks.iter().map(|t| t.title.clone()).collect();
+        assert_eq!(titles, vec!["Track 0", "Track q1", "Track n1", "Track n2"]);
+    }
+
+    #[test]
+    fn paste_into_recent_is_noop_and_keeps_clipboard() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.recently_played = vec![track("r1")].into();
+        p.clipboard = vec![track("n1")];
+        {
+            let pane = p.focused_pane_id;
+            hover(&mut p, TrackPos::new(0, TrackListKind::Recent, pane));
+        };
+        let _ = p.handle_paste_clipboard();
+        assert_eq!(p.queue.recently_played.len(), 1);
+    }
+
+    #[test]
+    fn paste_into_search_view_is_noop_and_keeps_clipboard() {
+        let mut p = player_with_playlists(&["A"]);
+        let pane = p.focused_pane_id;
+        p.pane_mut(pane).nav_history = vec![ViewData::new_search(
+            String::new(),
+            ProviderId::YouTube,
+            crate::providers::SearchScope::Songs,
+        )];
+        p.pane_mut(pane).nav_history_pos = 0;
+        p.view_data_mut().set_tracks(vec![track("1")]);
+        p.clipboard = vec![track("n1")];
+        hover(&mut p, TrackPos::new(0, TrackListKind::Active, pane));
+        let _ = p.handle_paste_clipboard();
+        assert!(p.playlists.playlists[0].tracks.is_empty());
     }
 }
