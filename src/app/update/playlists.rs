@@ -320,20 +320,24 @@ impl MusicPlayer {
         new_positions
     }
 
-    pub fn handle_copy_selected(&mut self) {
-        let pane = self.focused_pane_id;
+    fn resolve_selected_indices(&self, pane: PaneId) -> Option<(TrackListKind, Vec<usize>)> {
         let hovered = self.focused_hovered_track();
         let list = hovered.map_or(TrackListKind::Active, |h| h.list);
+        let sel = self.selection_in(pane, list);
+        if sel.is_empty() {
+            hovered
+                .filter(|h| h.list == list)
+                .map(|h| (list, vec![h.index]))
+        } else {
+            Some((list, sel.to_vec()))
+        }
+    }
+
+    pub fn handle_copy_selected(&mut self) {
+        let pane = self.focused_pane_id;
         self.clipboard.clear();
-        let indices: Vec<usize> = {
-            let sel = self.selection_in(pane, list);
-            if !sel.is_empty() {
-                sel.to_vec()
-            } else if let Some(h) = hovered.filter(|h| h.list == list) {
-                vec![h.index]
-            } else {
-                return;
-            }
+        let Some((list, indices)) = self.resolve_selected_indices(pane) else {
+            return;
         };
         for &i in &indices {
             if let Some(track) = self.get_track_at(TrackPos::new(i, list, pane)) {
@@ -355,9 +359,9 @@ impl MusicPlayer {
                     .map_or(self.queue.tracks.len(), |h| h.index + 1)
                     .min(self.queue.tracks.len());
                 let count = self.clipboard.len();
-                for (j, track) in self.clipboard.iter().cloned().enumerate() {
-                    self.queue.tracks.insert(insert_at + j, track);
-                }
+                self.queue
+                    .tracks
+                    .splice(insert_at..insert_at, self.clipboard.iter().cloned());
                 self.save_session();
                 (self.strings.added_to)(count, self.strings.queue)
             }
@@ -407,17 +411,8 @@ impl MusicPlayer {
 
     pub fn handle_delete_in_hovered_list(&mut self) {
         let pane = self.focused_pane_id;
-        let hovered = self.focused_hovered_track();
-        let list = hovered.map_or(TrackListKind::Active, |h| h.list);
-        let indices: Vec<usize> = {
-            let sel = self.selection_in(pane, list);
-            if !sel.is_empty() {
-                sel.to_vec()
-            } else if let Some(h) = hovered.filter(|h| h.list == list) {
-                vec![h.index]
-            } else {
-                return;
-            }
+        let Some((list, indices)) = self.resolve_selected_indices(pane) else {
+            return;
         };
         match list {
             TrackListKind::Queue => {

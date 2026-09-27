@@ -707,9 +707,8 @@ impl MusicPlayer {
         let TrackPos { index, list, pane } = pos;
         self.focused_pane_id = pane;
 
-        let sel = self.selection_in(pane, list);
-        let target_indices = if sel.contains(&index) {
-            sel.to_vec()
+        let target_indices = if self.is_selected_in(pane, list, index) {
+            self.selection_in(pane, list).to_vec()
         } else {
             vec![index]
         };

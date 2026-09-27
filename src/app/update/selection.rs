@@ -26,6 +26,12 @@ impl MusicPlayer {
         self.selection_in(self.focused_pane_id, list)
     }
 
+    /// Whether `index` is selected in `list`. Selection vecs are kept sorted
+    /// (see [`Self::toggle_selection`]), so this is a binary search.
+    pub fn is_selected_in(&self, pane: PaneId, list: TrackListKind, index: usize) -> bool {
+        self.selection_in(pane, list).binary_search(&index).is_ok()
+    }
+
     fn selection_mut_in(&mut self, pane: PaneId, list: TrackListKind) -> &mut Vec<usize> {
         match list {
             TrackListKind::Queue => &mut self.queue_selected_indices,
@@ -54,10 +60,13 @@ impl MusicPlayer {
 
     pub fn toggle_selection(&mut self, pos: TrackPos) {
         let sel = self.selection_mut_in(pos.pane, pos.list);
-        if let Some(at) = sel.iter().position(|&i| i == pos.index) {
-            sel.remove(at);
-        } else {
-            sel.push(pos.index);
+        match sel.binary_search(&pos.index) {
+            Ok(at) => {
+                sel.remove(at);
+            }
+            Err(at) => {
+                sel.insert(at, pos.index);
+            }
         }
     }
 
@@ -100,8 +109,7 @@ impl MusicPlayer {
         indices: &[usize],
         list: TrackListKind,
     ) {
-        let sel = self.selection_in(pane, list);
-        if indices.iter().any(|&i| sel.contains(&i)) {
+        if indices.iter().any(|&i| self.is_selected_in(pane, list, i)) {
             self.clear_selection_in(pane, list);
         }
     }

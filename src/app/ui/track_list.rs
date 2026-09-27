@@ -189,7 +189,7 @@ fn view_track_row_inner<'a>(
     show_plays: bool,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let is_selected = player.selection_in(pos.pane, pos.list).contains(&pos.index);
+    let is_selected = player.is_selected_in(pos.pane, pos.list, pos.index);
     let is_hovered = player.drag.hovered_track() == Some(pos);
     let is_dragging = player.is_dragging_track(pos);
     let is_current = player

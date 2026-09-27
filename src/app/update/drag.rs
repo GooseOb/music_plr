@@ -355,8 +355,10 @@ impl MusicPlayer {
     }
 
     pub fn is_dragging_track(&self, pos: TrackPos) -> bool {
+        // Sorted: cloned from the (sorted) selection, or a single index.
         self.dragged_indices(pos.pane, pos.list)
-            .contains(&pos.index)
+            .binary_search(&pos.index)
+            .is_ok()
     }
 
     fn copy_to_queue(
@@ -602,9 +604,8 @@ impl MusicPlayer {
                     self.handle_play_track(pos);
                     return;
                 }
-                let sel = self.selection_in(pos.pane, pos.list);
-                let indices = if !sel.is_empty() && sel.contains(&pos.index) {
-                    sel.to_vec()
+                let indices = if self.is_selected_in(pos.pane, pos.list, pos.index) {
+                    self.selection_in(pos.pane, pos.list).to_vec()
                 } else {
                     vec![pos.index]
                 };
