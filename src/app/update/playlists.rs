@@ -15,7 +15,7 @@ impl MusicPlayer {
     pub(crate) fn navigate_to_playlist(&mut self, index: usize) -> Task<Message> {
         let pane = self.focused_pane_id;
         self.pane_mut(pane).lyrics = None;
-        self.clear_selection();
+        self.clear_selection_in(pane, TrackListKind::Active);
         self.drag.cleanup();
         let playlist_name = self.playlists.playlists[index].name.clone();
         let task = self.push_new_view(pane, ViewData::new_playlist(index, playlist_name));
@@ -596,11 +596,13 @@ impl MusicPlayer {
     /// Resolve the playlist name: the user's override if set, else the source
     /// file/folder stem, else a generic fallback.
     fn import_playlist_name(dialog: &ImportPlaylistDialog, stem: Option<&str>) -> String {
-        if !dialog.playlist_name.trim().is_empty() {
-            return dialog.playlist_name.trim().to_string();
+        let playlist_name = dialog.playlist_name.trim();
+        if playlist_name.is_empty() {
+            stem.filter(|s| !s.is_empty()).unwrap_or("Imported")
+        } else {
+            playlist_name
         }
-        stem.filter(|s| !s.is_empty())
-            .map_or_else(|| "Imported".to_string(), std::string::ToString::to_string)
+        .to_string()
     }
 
     fn open_imported_playlist(&mut self, index: usize) -> Task<Message> {
@@ -609,7 +611,7 @@ impl MusicPlayer {
         }
         let pane = self.focused_pane_id;
         let name = self.playlists.playlists[index].name.clone();
-        self.clear_selection();
+        self.clear_selection_in(pane, TrackListKind::Active);
         self.drag.cleanup();
         let task = self.push_new_view(pane, ViewData::new_playlist(index, name));
         self.save_session();
