@@ -140,32 +140,29 @@ fn cached_script_path() -> std::path::PathBuf {
     .clone()
 }
 
-/// Run the embedded ytmusicapi script (written once per process) with
-/// `python3` in the given `mode`, and return its stdout.
+/// Run the embedded ytmusicapi script (written once per process) with the first
+/// candidate Python that has `ytmusicapi` (app venv, standalone, system).
 fn run_python(mode: &str, args: &[&str]) -> Result<String> {
     let script_path = cached_script_path();
 
-    let py = crate::deps::python_exe().ok_or_else(|| {
-        anyhow::anyhow!("Python 3 not found; install it to search YouTube Music.")
-    })?;
-    let output = run_python_with(&py, &script_path, mode, args)?;
-    if output.status.success() {
-        return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
+    let candidates = crate::deps::candidate_pythons();
+    if candidates.is_empty() {
+        anyhow::bail!("Python 3 not found; install it to search YouTube Music.");
     }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if is_import_error(&stderr) {
-        if let Some(sys_py) = crate::deps::system_python_exe() {
-            if sys_py != py {
-                let sys_output = run_python_with(&sys_py, &script_path, mode, args)?;
-                if sys_output.status.success() {
-                    return Ok(String::from_utf8_lossy(&sys_output.stdout).into_owned());
-                }
-                let sys_stderr = String::from_utf8_lossy(&sys_output.stderr);
-                anyhow::bail!("ytmusicapi {mode} failed: {sys_stderr}");
-            }
+    let mut last_stderr = String::new();
+    for py in &candidates {
+        let output = run_python_with(py, &script_path, mode, args)?;
+        if output.status.success() {
+            return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
         }
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        if is_import_error(&stderr) {
+            last_stderr = stderr;
+            continue;
+        }
+        anyhow::bail!("ytmusicapi {mode} failed: {stderr}");
     }
-    anyhow::bail!("ytmusicapi {mode} failed: {stderr}");
+    anyhow::bail!("ytmusicapi {mode} failed: {last_stderr}");
 }
 
 fn run_python_with(
