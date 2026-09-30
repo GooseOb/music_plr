@@ -180,29 +180,17 @@ impl AudioPlayer {
                                 duration
                             );
 
-                            // Start streaming right away on the remembered
-                            // winner (or yt-dlp defaults) without blocking
+                            // Start streaming right away on yt-dlp's defaults
+                            // (best quality for most videos) without blocking
                             // on a race; a client-dependent failure retries
-                            // below with a fresh race. On a cold cache the
-                            // race is warmed in the background (silently, no
-                            // toasts) so the next track starts on a winner.
-                            let winner = if crate::providers::ytdlp::is_youtube_url(&url) {
-                                crate::providers::ytdlp::cached_client()
-                            } else {
-                                None
-                            };
-                            if winner.is_none() && crate::providers::ytdlp::is_youtube_url(&url) {
-                                let warm_url = url.clone();
-                                std::thread::spawn(move || {
-                                    let _ = crate::providers::ytdlp::resolve_player_client(
-                                        &warm_url,
-                                        crate::providers::ytdlp::STREAM_FORMAT,
-                                        &|_| {},
-                                    );
-                                });
-                            }
+                            // below with the quality-aware race winner. Never
+                            // start on the remembered winner: it was the best
+                            // client for a *different* video and may only
+                            // offer a low-bitrate muxed MP4 here (e.g.
+                            // `android` serving format 18 while defaults
+                            // serve 140).
                             let Some((child, alive_flag, stderr_buf)) =
-                                spawn_stream_to_cache(&url, &cache_path, winner.as_deref())
+                                spawn_stream_to_cache(&url, &cache_path, None)
                             else {
                                 continue;
                             };

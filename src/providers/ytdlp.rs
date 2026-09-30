@@ -2,10 +2,7 @@
 
 use std::{
     process::Stdio,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex, OnceLock,
-    },
+    sync::{Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -45,39 +42,59 @@ pub(crate) fn is_youtube_url(url: &str) -> bool {
     lower.contains("youtube.com") || lower.contains("youtu.be") || lower.contains("music.youtube")
 }
 
-/// Race the [`PLAYER_CLIENTS`] probes in parallel and return the first client
-/// whose formats satisfy `format_selector` (e.g. [`STREAM_FORMAT`]).
-/// Outstanding probes are killed as soon as a winner arrives. Returns `None`
-/// when yt-dlp is missing, the URL is not a `YouTube` one, or no client
-/// succeeded — callers then fall back to yt-dlp's own defaults.
+/// Race the [`PLAYER_CLIENTS`] probes in parallel and return the client whose
+/// resolved format scores best (audio-only over muxed, `m4a` over the rest for
+/// [`STREAM_FORMAT`], then highest audio bitrate). A client that only serves a
+/// low-bitrate muxed MP4 (e.g. `android` serving format 18 while defaults serve
+/// 140) therefore loses to one with real audio-only formats. Waits for every
+/// probe up to the overall budget — first-to-answer must not win, since fast
+/// clients tend to be the muxed-only ones. Returns `None` when yt-dlp is
+/// missing, the URL is not a `YouTube` one, or no client succeeded — callers
+/// then fall back to yt-dlp's own defaults.
 pub(crate) fn pick_player_client(url: &str, format_selector: &str) -> Option<String> {
     if !is_youtube_url(url) {
         return None;
     }
     let yt_dlp = crate::deps::resolve_yt_dlp()?;
-    let done = Arc::new(AtomicBool::new(false));
-    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    let (tx, rx) = std::sync::mpsc::channel::<Option<(String, f64)>>();
     for &client in PLAYER_CLIENTS {
         let tx = tx.clone();
-        let done = done.clone();
         let path = yt_dlp.clone();
         let url = url.to_string();
         let format = format_selector.to_string();
         let client = client.to_string();
         std::thread::spawn(move || {
-            if done.load(Ordering::SeqCst) {
-                return;
+            let score = probe_client_quality(&path, &url, &format, &client);
+            if let Some(s) = score {
+                tracing::debug!("player client {client} resolves {format} with score {s}");
             }
-            if probe_client_has_format(&path, &url, &format, &client, &done) {
-                done.store(true, Ordering::SeqCst);
-                let _ = tx.send(client);
-            }
+            let _ = tx.send(score.map(|s| (client, s)));
         });
     }
     drop(tx);
-    let winner = rx.recv_timeout(PROBE_TIMEOUT + Duration::from_secs(5)).ok();
-    done.store(true, Ordering::SeqCst);
-    winner
+    let deadline = Instant::now() + PROBE_TIMEOUT + Duration::from_secs(5);
+    let mut best: Option<(String, f64)> = None;
+    let mut received = 0;
+    loop {
+        if received >= PLAYER_CLIENTS.len() {
+            break;
+        }
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        match rx.recv_timeout(remaining) {
+            Ok(Some((client, score))) => {
+                received += 1;
+                if best.as_ref().is_none_or(|(_, s)| score > *s) {
+                    best = Some((client, score));
+                }
+            }
+            Ok(None) => received += 1,
+            Err(_) => break,
+        }
+    }
+    best.map(|(client, _)| client)
 }
 
 /// The most recent race winner, tried first next time so repeat
@@ -126,12 +143,13 @@ pub(crate) fn is_client_failure(stderr: &str) -> bool {
 /// Resolve the player client for `url`, emitting [`ClientEvent`]s for toasts.
 ///
 /// Returns the remembered winner immediately (no yt-dlp call) when present
-/// and only runs the full [`pick_player_client`] race when there is no cache.
-/// The `bool` reports whether a race ran: callers start streaming/downloading
-/// right away and, if that attempt fails with [`is_client_failure`], forget
-/// the cache and call this again to race and retry. Returns `(None, false)`
-/// (silently, no events) for non-`YouTube` URLs or when yt-dlp is missing —
-/// callers then fall back to yt-dlp's defaults.
+/// and only runs the full quality-aware [`pick_player_client`] race when there
+/// is no cache. The `bool` reports whether a race ran: callers start
+/// streaming/downloading on yt-dlp's defaults right away and, if that attempt
+/// fails with [`is_client_failure`], forget the cache and call this again to
+/// race and retry. Returns `(None, false)` (silently, no events) for
+/// non-`YouTube` URLs or when yt-dlp is missing — callers then fall back to
+/// yt-dlp's defaults.
 pub(crate) fn resolve_player_client(
     url: &str,
     format_selector: &str,
@@ -158,16 +176,56 @@ pub(crate) fn resolve_player_client(
     (winner, true)
 }
 
-/// Check that `client` can resolve `format_selector` for `url` by asking
-/// yt-dlp to print the matched format without downloading. Killed early when
-/// `done` flips (another client already won) or `PROBE_TIMEOUT` elapses.
-fn probe_client_has_format(
+/// Score a resolved format for client comparison: audio-only beats muxed (a
+/// muxed 360p MP4 carries a low-bitrate soundtrack plus a video track we throw
+/// away), `m4a` beats other containers when streaming (symphonia decodes AAC,
+/// not Opus), and higher audio bitrate wins ties. Returns `NEG_INFINITY` for
+/// formats without audio so they never win.
+fn score_format(ext: &str, abr: Option<f64>, acodec: &str, vcodec: &str, prefer_m4a: bool) -> f64 {
+    if acodec.trim() == "none" {
+        return f64::NEG_INFINITY;
+    }
+    let mut score = abr.unwrap_or(0.0);
+    if vcodec.trim() == "none" {
+        score += 1000.0;
+    }
+    if prefer_m4a && ext.trim() == "m4a" {
+        score += 500.0;
+    }
+    score
+}
+
+/// Score yt-dlp's `--print` output (one value per line: `format_id`, `ext`,
+/// `abr`, `acodec`, `vcodec`) for the format `format_selector` resolves to.
+/// Returns `None` when the output is unparseable so the client is skipped.
+fn score_probe_output(out: &str, prefer_m4a: bool) -> Option<f64> {
+    let mut lines = out.lines();
+    let (_id, ext, abr, acodec, vcodec) = (
+        lines.next()?,
+        lines.next()?,
+        lines.next()?,
+        lines.next()?,
+        lines.next()?,
+    );
+    Some(score_format(
+        ext,
+        abr.parse().ok(),
+        acodec,
+        vcodec,
+        prefer_m4a,
+    ))
+}
+
+/// Resolve `format_selector` for `url` under `client` and score the matched
+/// format without downloading. Returns `None` when the client has no matching
+/// format or the probe times out (`PROBE_TIMEOUT`).
+fn probe_client_quality(
     yt_dlp: &std::path::Path,
     url: &str,
     format_selector: &str,
     client: &str,
-    done: &AtomicBool,
-) -> bool {
+) -> Option<f64> {
+    let prefer_m4a = format_selector.contains("[ext=m4a]");
     let extractor_arg = format!("youtube:player_client={client}");
     let cookie_args = crate::deps::cookie_args();
     let mut args = vec![
@@ -180,36 +238,49 @@ fn probe_client_has_format(
         format_selector,
         "--print",
         "format_id",
+        "--print",
+        "ext",
+        "--print",
+        "abr",
+        "--print",
+        "acodec",
+        "--print",
+        "vcodec",
     ];
     args.extend(cookie_args.iter().map(String::as_str));
     args.extend(["--extractor-args", extractor_arg.as_str(), url]);
     let Ok(mut child) = std::process::Command::new(yt_dlp)
         .args(&args)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
     else {
-        return false;
+        return None;
     };
     let started = Instant::now();
     loop {
-        if done.load(Ordering::SeqCst) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return false;
-        }
         match child.try_wait() {
-            Ok(Some(status)) => return status.success(),
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return None;
+                }
+                let mut out = String::new();
+                if let Some(stdout) = child.stdout.take() {
+                    use std::io::Read as _;
+                    let _ = std::io::BufReader::new(stdout).read_to_string(&mut out);
+                }
+                return score_probe_output(&out, prefer_m4a);
+            }
             Ok(None) => {
                 if started.elapsed() >= PROBE_TIMEOUT {
                     let _ = child.kill();
                     let _ = child.wait();
-                    return false;
+                    return None;
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
-            Err(_) => return false,
+            Err(_) => return None,
         }
     }
 }
@@ -295,6 +366,45 @@ mod tests {
             });
         assert!(winner.is_none() && !raced);
         assert!(events.borrow().is_empty());
+    }
+
+    #[test]
+    fn prefers_audio_only_over_muxed() {
+        let audio_only = score_format("m4a", Some(49.0), "mp4a.40.5", "none", true);
+        let muxed = score_format("mp4", None, "mp4a.40.2", "avc1.42001E", true);
+        assert!(audio_only > muxed);
+    }
+
+    #[test]
+    fn prefers_m4a_for_streaming_but_not_for_downloads() {
+        let m4a = score_format("m4a", Some(129.0), "mp4a.40.2", "none", true);
+        let opus = score_format("webm", Some(130.0), "opus", "none", true);
+        assert!(m4a > opus);
+        let m4a = score_format("m4a", Some(129.0), "mp4a.40.2", "none", false);
+        let opus = score_format("webm", Some(130.0), "opus", "none", false);
+        assert!(opus > m4a);
+    }
+
+    #[test]
+    fn prefers_higher_bitrate_within_same_class() {
+        let low = score_format("m4a", Some(49.0), "mp4a.40.5", "none", true);
+        let high = score_format("m4a", Some(129.0), "mp4a.40.2", "none", true);
+        assert!(high > low);
+    }
+
+    #[test]
+    fn rejects_video_only_formats() {
+        let score = score_format("mp4", Some(400.0), "none", "avc1.640020", true);
+        assert!(score.is_infinite() && score.is_sign_negative());
+    }
+
+    #[test]
+    fn scores_probe_output_lines() {
+        let out = "140\nm4a\n129.599\nmp4a.40.2\nnone\n";
+        let score = score_probe_output(out, true).expect("parseable probe output");
+        assert!(score > 1000.0);
+        assert!(score_probe_output("", true).is_none());
+        assert!(score_probe_output("140\nm4a\n", true).is_none());
     }
 
     #[test]

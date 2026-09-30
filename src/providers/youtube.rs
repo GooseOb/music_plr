@@ -604,21 +604,12 @@ pub fn download_audio(
     output_path: &str,
     emit: &dyn Fn(crate::providers::ClientEvent),
 ) -> Result<String> {
-    // Start right away on the remembered winner (or yt-dlp defaults);
-    // the race runs only if this attempt fails with a client failure.
-    let winner = if ytdlp::is_youtube_url(video_url) {
-        ytdlp::cached_client()
-    } else {
-        None
-    };
-    let extractor_arg = winner
-        .as_deref()
-        .map(|c| format!("youtube:player_client={c}"));
-    let extra_args: Vec<&str> = match &extractor_arg {
-        Some(arg) => vec!["--extractor-args", arg.as_str()],
-        None => Vec::new(),
-    };
-    match ytdlp::download_audio(video_url, output_path, &extra_args) {
+    // Start on yt-dlp's defaults (best quality for most videos); the
+    // quality-aware race runs only if this attempt fails with a client
+    // failure. Never start on the remembered winner: it was the best client
+    // for a *different* video and may only offer a low-bitrate muxed MP4 here
+    // while defaults serve high-bitrate audio.
+    match ytdlp::download_audio(video_url, output_path, &[]) {
         Ok(path) => Ok(path),
         Err(e) if ytdlp::is_youtube_url(video_url) && ytdlp::is_client_failure(&e.to_string()) => {
             ytdlp::forget_client();
