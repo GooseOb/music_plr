@@ -79,11 +79,54 @@ pub struct ArtistEntry {
     pub page: Box<crate::providers::ArtistPageState>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(from = "RadioDataCompat")]
+pub struct RadioData {
+    pub title: String,
+    #[serde(default)]
+    pub thumb_provider: ProviderId,
+    #[serde(default)]
+    pub thumb_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum RadioDataCompat {
+    Full(RadioFields),
+    Legacy(String),
+}
+
+#[derive(Debug, Deserialize)]
+struct RadioFields {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    thumb_provider: ProviderId,
+    #[serde(default)]
+    thumb_id: String,
+}
+
+impl From<RadioDataCompat> for RadioData {
+    fn from(data: RadioDataCompat) -> Self {
+        match data {
+            RadioDataCompat::Full(fields) => Self {
+                title: fields.title,
+                thumb_provider: fields.thumb_provider,
+                thumb_id: fields.thumb_id,
+            },
+            RadioDataCompat::Legacy(label) => Self {
+                title: label,
+                ..Default::default()
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ViewKind {
     Search(SearchData),
-    SongRadio(String),
-    ArtistRadio(String),
+    SongRadio(RadioData),
+    ArtistRadio(RadioData),
     Artist(ArtistEntry),
     Album(AlbumRef),
     PlaylistView(PlaylistRef),

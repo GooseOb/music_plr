@@ -283,8 +283,8 @@ fn action_label(
             },
             icons::DOWNLOAD_ICON,
         ),
-        CtxAction::SongRadio => (Cow::Borrowed(tr.ctx_song_radio), icons::RADIO_ICON),
-        CtxAction::ArtistRadio => (Cow::Borrowed(tr.ctx_artist_radio), icons::RADIO_ICON),
+        CtxAction::SongRadio => (Cow::Borrowed(tr.song_radio), icons::RADIO_ICON),
+        CtxAction::ArtistRadio => (Cow::Borrowed(tr.artist_radio), icons::RADIO_ICON),
         CtxAction::RemoveFromQueue => (
             if n > 1 {
                 Cow::Owned((tr.ctx_remove_from_queue_n)(n))

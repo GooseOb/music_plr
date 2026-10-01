@@ -32,4 +32,4 @@ pub use pane::{Pane, PaneData, SplitDir, SplitNode};
 pub use playlist_picker::{PendingAdd, PlaylistJump};
 pub use state::{MusicPlayer, PendingCache, Toast};
 pub use translate_dialog::TranslateDialog;
-pub use view_data::{ViewData, ViewKind};
+pub use view_data::{RadioData, ViewData, ViewKind};

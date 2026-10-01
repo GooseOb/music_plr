@@ -24,8 +24,11 @@ pub(super) fn view_main_content(
     } else {
         match &player.view_data_in(pane).kind {
             ViewKind::Search(s) => search::view_search(player, pane, s),
-            ViewKind::SongRadio(label) | ViewKind::ArtistRadio(label) => {
-                search::view_search_radio(player, pane, label)
+            ViewKind::SongRadio(data) => {
+                search::view_radio(player, pane, data, player.strings.song_radio)
+            }
+            ViewKind::ArtistRadio(data) => {
+                search::view_radio(player, pane, data, player.strings.artist_radio)
             }
             ViewKind::Artist(_) => artist::view_artist(player, pane),
             ViewKind::Album(r) => search::view_browse(
@@ -37,7 +40,7 @@ pub(super) fn view_main_content(
                 browse_meta(&r.badge, &r.date),
             ),
             ViewKind::PlaylistView(r) => {
-                search::view_browse(player, pane, r.provider, &r.name, &r.id, None)
+                search::view_browse(player, pane, r.provider, &r.name, &r.id, "".into())
             }
             ViewKind::Playlist(entry) => playlist::view_playlist(player, pane, entry),
             ViewKind::Downloads => playlist::view_downloads(player, pane),

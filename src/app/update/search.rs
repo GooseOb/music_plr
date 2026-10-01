@@ -1,6 +1,8 @@
 use super::{mpsc, thread, BackendResult, Message, MusicPlayer, Task, ViewData};
 use crate::{
-    app::{pane::PaneId, update::operation::CaptureSearchHistoryRows, ViewKind},
+    app::{
+        pane::PaneId, update::operation::CaptureSearchHistoryRows, view_data::RadioData, ViewKind,
+    },
     data::library::{LibraryItem, LibraryKind},
     load_state::LoadState,
     providers::ProviderId,
@@ -284,38 +286,40 @@ impl MusicPlayer {
         artist: bool,
     ) -> Task<Message> {
         if !provider.capabilities().radio {
-            let p = format!("{provider:?}");
-            self.notify((self.strings.provider_no_radio)(&p));
+            self.notify((self.strings.provider_no_radio)(provider.label()));
             return Task::none();
         }
+        let artist_id = artist.then(|| track.provider_artist_id(provider)).flatten();
+        let (thumb_provider, thumb_id) = match artist_id {
+            Some(id) => (provider, crate::app::ui::artist::header_thumb_key(id)),
+            None => (track.source, track.primary_id().to_string()),
+        };
         let name = if artist { &track.artist } else { &track.title };
-        let word = if artist {
-            self.strings.radio_word_artist
-        } else {
-            self.strings.radio_word_song
+        let data = RadioData {
+            title: name.clone(),
+            thumb_provider,
+            thumb_id,
         };
-        let label = (self.strings.radio_label)(word, name);
-        let kind = if artist {
-            ViewKind::ArtistRadio(label.clone())
+        let (kind, word, id) = if artist {
+            (
+                ViewKind::ArtistRadio(data),
+                self.strings.radio_word_artist,
+                track.provider_artist_id(provider),
+            )
         } else {
-            ViewKind::SongRadio(label.clone())
+            (
+                ViewKind::SongRadio(data),
+                self.strings.radio_word_song,
+                track.provider_id(provider),
+            )
         };
+        self.thumbnail_index
+            .ensure(track.source, track.primary_id(), track.thumbnail());
         let nav_task = self.push_new_view(pane, ViewData::new_radio(kind));
         let rid = self.request_ids.next();
         self.view_data_in_mut(pane).request_id = rid;
-        let word = if artist {
-            self.strings.radio_word_artist
-        } else {
-            self.strings.radio_word_song
-        };
         self.notify((self.strings.generating_radio_for)(word, name));
-        let id = if artist {
-            track.provider_artist_id(provider)
-        } else {
-            track.provider_id(provider)
-        }
-        .unwrap_or_default()
-        .to_string();
+        let id = id.unwrap_or_default().to_string();
         let name = name.clone();
         let seed = track.clone();
         let tx = self.result_tx.clone();
@@ -347,7 +351,7 @@ impl MusicPlayer {
                 };
                 radio_fn(provider, &id)
             },
-            move |tracks| BackendResult::RadioResults(rid, label, tracks),
+            move |tracks| BackendResult::RadioResults(rid, tracks),
             tx,
         );
         nav_task

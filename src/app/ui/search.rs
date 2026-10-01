@@ -270,13 +270,15 @@ fn card_row<'a>(
     .into()
 }
 
-/// "Badge · date" line for album views; `None` when both are empty.
-pub(super) fn browse_meta(badge: &str, date: &str) -> Option<String> {
+/// "Badge · date" line for album views; empty when both are empty.
+/// Borrows when only one side is present, allocating just for the joined
+/// pair.
+pub(super) fn browse_meta<'a>(badge: &'a str, date: &'a str) -> std::borrow::Cow<'a, str> {
     match (badge.trim(), date.trim()) {
-        ("", "") => None,
-        (badge, "") => Some(badge.to_string()),
-        ("", date) => Some(date.to_string()),
-        (badge, date) => Some(format!("{badge} \u{00b7} {date}")),
+        ("", "") => "".into(),
+        (badge, "") => badge.into(),
+        ("", date) => date.into(),
+        (badge, date) => format!("{badge} \u{00b7} {date}").into(),
     }
 }
 
@@ -285,33 +287,89 @@ pub(super) fn view_browse<'a>(
     pane: PaneId,
     provider: ProviderId,
     label: &'a str,
-    thumb_key: &str,
-    meta: Option<String>,
+    thumb_key: &'a str,
+    meta: std::borrow::Cow<'a, str>,
+) -> Element<'a, Message, AppTheme> {
+    let item = player
+        .current_library_item(pane)
+        .expect("view_browse should only be called for album/playlist views");
+
+    let saved = player.library.contains(item.kind, &item.id);
+    view_track_page(
+        player,
+        pane,
+        TrackPage {
+            thumbnail: player.thumbnail_index.get(provider, thumb_key),
+            title: label,
+            meta,
+            loading: player.strings.loading,
+        },
+        [toggle_bookmark_button(saved)
+            .on_press(Message::ToggleLibrarySave(item))
+            .into()],
+    )
+}
+
+pub(super) fn view_radio<'a>(
+    player: &'a MusicPlayer,
+    pane: PaneId,
+    data: &'a crate::app::RadioData,
+    meta: &'static str,
+) -> Element<'a, Message, AppTheme> {
+    view_track_page(
+        player,
+        pane,
+        TrackPage {
+            thumbnail: player
+                .thumbnail_index
+                .get(data.thumb_provider, &data.thumb_id),
+            title: &data.title,
+            meta: meta.into(),
+            loading: player.strings.generating_radio,
+        },
+        std::iter::empty(),
+    )
+}
+
+struct TrackPage<'a> {
+    thumbnail: Option<&'a std::path::PathBuf>,
+    title: &'a str,
+    meta: std::borrow::Cow<'a, str>,
+    loading: &'a str,
+}
+
+/// Shared artwork/title/meta header plus track list for album/playlist
+/// browse pages and radio pages. Callers prepend their own buttons via
+/// `leading_buttons` (the save-to-library bookmark for browse, none for
+/// radio); the save-as-playlist button is always appended while tracks
+/// are loaded.
+fn view_track_page<'a>(
+    player: &'a MusicPlayer,
+    pane: PaneId,
+    spec: TrackPage<'a>,
+    leading_buttons: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
     let content = &player.view_data_in(pane).content;
 
-    let image = thumbnail(
-        theme::PAGE_THUMBNAIL_SIZE,
-        player.thumbnail_index.get(provider, thumb_key),
-    );
     let header = Row::with_children([
-        image,
+        thumbnail(theme::PAGE_THUMBNAIL_SIZE, spec.thumbnail),
         Column::with_children([
-            text(label).size(theme::TEXT_SIZE_LG).into(),
-            text(meta.unwrap_or_default())
+            text(spec.title).size(theme::TEXT_SIZE_LG).into(),
+            text(spec.meta)
                 .size(theme::TEXT_SIZE_SM)
                 .style(fg_secondary())
                 .into(),
-            Row::with_children([
-                view_library_button(player, pane),
-                Button::new(text(player.strings.save_as_playlist))
-                    .padding([theme::SPACING_XS, theme::SPACING_SM])
-                    .on_press_maybe(
-                        matches!(content, LoadState::Ready(tracks) if !tracks.is_empty())
-                            .then_some(Message::SaveBrowseAsPlaylist(pane)),
-                    )
-                    .into(),
-            ])
+            Row::with_children(
+                leading_buttons.into_iter().chain([Button::new(text(
+                    player.strings.save_as_playlist,
+                ))
+                .padding([theme::SPACING_XS, theme::SPACING_SM])
+                .on_press_maybe(
+                    matches!(content, LoadState::Ready(tracks) if !tracks.is_empty())
+                        .then_some(Message::SaveBrowseAsPlaylist(pane)),
+                )
+                .into()]),
+            )
             .spacing(theme::SPACING_SM)
             .into(),
         ])
@@ -322,46 +380,11 @@ pub(super) fn view_browse<'a>(
     .spacing(theme::SPACING_MD)
     .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
-    let track_list = match super::shared_components::load_state_tracks(
-        content,
-        player.strings,
-        player.strings.loading,
-    ) {
-        Ok(tracks) => view_track_list(tracks, player, pane, TrackListKind::Active, 0),
-        Err(el) => el,
-    };
-
-    Column::with_children([header.into(), track_list]).into()
-}
-
-fn view_library_button(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> {
-    let item = player
-        .current_library_item(pane)
-        .expect("view_library_button should only be called when a library item is present");
-    let saved = player.library.contains(item.kind, &item.id);
-    toggle_bookmark_button(saved)
-        .on_press(Message::ToggleLibrarySave(item))
-        .into()
-}
-
-pub(super) fn view_search_radio<'a>(
-    player: &'a MusicPlayer,
-    pane: PaneId,
-    label: &'a str,
-) -> Element<'a, Message, AppTheme> {
-    let content = &player.view_data_in(pane).content;
-
-    let header = Container::new(text(label).width(Length::Fill).center())
-        .padding([theme::SPACING_SM, theme::SPACING_XL]);
-
-    let track_list = match super::shared_components::load_state_tracks(
-        content,
-        player.strings,
-        player.strings.generating_radio,
-    ) {
-        Ok(tracks) => view_track_list(tracks, player, pane, TrackListKind::Active, 0),
-        Err(el) => el,
-    };
+    let track_list =
+        match super::shared_components::load_state_tracks(content, player.strings, spec.loading) {
+            Ok(tracks) => view_track_list(tracks, player, pane, TrackListKind::Active, 0),
+            Err(el) => el,
+        };
 
     Column::with_children([header.into(), track_list]).into()
 }

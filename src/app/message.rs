@@ -20,7 +20,7 @@ use crate::{
 pub enum BackendResult {
     SearchResults(u64, Vec<Track>, crate::providers::SearchTab),
     SearchResultsAppend(u64, Vec<Track>),
-    RadioResults(u64, String, Vec<Track>),
+    RadioResults(u64, Vec<Track>),
     BrowseResults(u64, Vec<Track>, Option<crate::providers::AlbumMeta>),
     DownloadComplete(Track, String),
     DownloadError(String),

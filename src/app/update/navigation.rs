@@ -636,7 +636,10 @@ mod tests {
             None,
             None,
         );
-        let mut origin = ViewData::new_radio(ViewKind::SongRadio("Radio".into()));
+        let mut origin = ViewData::new_radio(ViewKind::SongRadio(crate::app::RadioData {
+            title: "Radio".into(),
+            ..Default::default()
+        }));
         origin.set_tracks(vec![track.clone()]);
         p.now_playing_from = Some(origin);
         p.queue = crate::types::PlayQueue::new();

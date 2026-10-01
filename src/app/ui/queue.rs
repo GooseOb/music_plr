@@ -99,7 +99,7 @@ pub fn now_playing_source_label<'a>(
 ) -> Option<&'a str> {
     match kind {
         ViewKind::Search(s) => (!s.query.is_empty()).then_some(s.query.as_str()),
-        ViewKind::SongRadio(label) | ViewKind::ArtistRadio(label) => Some(label),
+        ViewKind::SongRadio(data) | ViewKind::ArtistRadio(data) => Some(&data.title),
         ViewKind::Artist(e) => Some(&e.name),
         ViewKind::Album(r) => Some(&r.name),
         ViewKind::PlaylistView(r) => Some(&r.name),

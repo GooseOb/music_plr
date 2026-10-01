@@ -181,7 +181,10 @@ mod tests {
             panes: vec![PaneData {
                 id: 0,
                 nav_history: vec![ViewData {
-                    kind: ViewKind::ArtistRadio("Test Radio".into()),
+                    kind: ViewKind::ArtistRadio(crate::app::RadioData {
+                        title: "Test Radio".into(),
+                        ..Default::default()
+                    }),
                     content: crate::load_state::LoadState::Ready(Vec::new()),
                     selection: vec![2],
                     scroll: 42.0,
@@ -215,12 +218,24 @@ mod tests {
             restored.lyrics_provider,
             crate::lyrics::LyricsProvider::LrcLib
         );
-        if let ViewKind::ArtistRadio(label) = &restored.panes[0].nav_history[0].kind {
-            assert_eq!(label, "Test Radio");
+        if let ViewKind::ArtistRadio(data) = &restored.panes[0].nav_history[0].kind {
+            assert_eq!(data.title, "Test Radio");
             assert_eq!(restored.panes[0].nav_history[0].selection, vec![2]);
             assert!((restored.panes[0].nav_history[0].scroll - 42.0).abs() < f32::EPSILON);
         } else {
             panic!("expected Radio data");
         }
+    }
+
+    #[test]
+    fn legacy_string_radio_kind_migrates_title() {
+        let kind: ViewKind =
+            serde_json::from_value(serde_json::json!({"ArtistRadio": "Radio (artist): Old"}))
+                .unwrap();
+        let ViewKind::ArtistRadio(data) = kind else {
+            panic!("expected ArtistRadio");
+        };
+        assert_eq!(data.title, "Radio (artist): Old");
+        assert!(data.thumb_id.is_empty());
     }
 }

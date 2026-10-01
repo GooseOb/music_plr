@@ -230,8 +230,8 @@ fn cards<'a>(
         SectionContent::Albums(v) => v
             .iter()
             .map(|c| {
-                let subtitle: String =
-                    super::search::browse_meta(&c.badge, &c.date).unwrap_or_default();
+                let subtitle: std::borrow::Cow<'_, str> =
+                    super::search::browse_meta(&c.badge, &c.date);
                 h_card(
                     player,
                     provider,

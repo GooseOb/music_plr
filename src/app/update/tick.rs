@@ -405,13 +405,8 @@ impl MusicPlayer {
                 }
                 self.capture_bounds_task()
             }
-            BackendResult::RadioResults(rid, label, tracks) => {
+            BackendResult::RadioResults(rid, tracks) => {
                 if let Some((pane, idx)) = self.slot_for_request(rid) {
-                    let kind = match self.pane(pane).nav_history[idx].kind {
-                        ViewKind::ArtistRadio(_) => ViewKind::ArtistRadio(label),
-                        _ => ViewKind::SongRadio(label),
-                    };
-                    self.pane_mut(pane).nav_history[idx].kind = kind;
                     self.install_results(pane, idx, tracks);
                 }
                 self.capture_bounds_task()

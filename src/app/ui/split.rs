@@ -140,7 +140,7 @@ fn pane_title(player: &MusicPlayer, pane: PaneId) -> &str {
     match &player.view_data_in(pane).kind {
         ViewKind::Search(s) if s.query.is_empty() => player.strings.search,
         ViewKind::Search(s) => &s.query,
-        ViewKind::SongRadio(label) | ViewKind::ArtistRadio(label) => label,
+        ViewKind::SongRadio(data) | ViewKind::ArtistRadio(data) => &data.title,
         ViewKind::Artist(entry) => &entry.name,
         ViewKind::Album(r) => &r.name,
         ViewKind::PlaylistView(r) => &r.name,

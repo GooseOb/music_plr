@@ -59,6 +59,7 @@ impl MusicPlayer {
         let name = match &self.view_data_in(pane).kind {
             ViewKind::Album(r) => r.name.clone(),
             ViewKind::PlaylistView(r) => r.name.clone(),
+            ViewKind::SongRadio(data) | ViewKind::ArtistRadio(data) => data.title.clone(),
             _ => return Task::none(),
         };
         let tracks = self.view_data_in(pane).tracks().to_vec();
