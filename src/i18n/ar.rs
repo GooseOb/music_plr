@@ -70,6 +70,7 @@ pub const STRINGS: Strings = Strings {
 
     playlist_not_found: "لم يتم العثور على قائمة التشغيل",
     save_as_playlist: "حفظ كقائمة تشغيل",
+    liked_songs: "الأغاني المفضلة",
     add_local: "إضافة محلية",
     downloaded_tracks: "الأغاني التي تم تنزيلها",
     no_downloaded_tracks: "لا توجد أغانٍ تم تنزيلها",

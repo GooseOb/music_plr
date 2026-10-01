@@ -181,6 +181,8 @@ pub enum Message {
     Seek(f32),
 
     CreatePlaylist,
+    ToggleCurrentTrackLike,
+    ToggleTrackLike(TrackPos),
     SaveBrowseAsPlaylist(PaneId),
     OpenPlaylistJump,
     PlaylistJumpInput(String),
@@ -336,6 +338,7 @@ impl Message {
             Message::DragPress(interaction::Pressed::Track(pos))
             | Message::TrackRightClicked(pos)
             | Message::PlayTrackAt(pos)
+            | Message::ToggleTrackLike(pos)
             | Message::ContextMenuPlayTrack(pos)
             | Message::HoverStart(interaction::HoverTarget::Track(pos))
             | Message::HoverEnd(interaction::HoverTarget::Track(pos))
@@ -433,6 +436,7 @@ mod tests {
             Message::DragPress(Pressed::Track(pos)),
             Message::TrackRightClicked(pos),
             Message::PlayTrackAt(pos),
+            Message::ToggleTrackLike(pos),
             Message::ContextMenuPlayTrack(pos),
             Message::HoverStart(HoverTarget::Track(pos)),
             Message::HoverEnd(HoverTarget::Track(pos)),

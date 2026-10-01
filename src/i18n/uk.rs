@@ -70,6 +70,7 @@ pub const STRINGS: Strings = Strings {
 
     playlist_not_found: "Плейлист не знайдено",
     save_as_playlist: "Зберегти як плейлист",
+    liked_songs: "Улюблені треки",
     add_local: "Додати локальний",
     downloaded_tracks: "Завантажені треки",
     no_downloaded_tracks: "Немає завантажених треків",
@@ -173,7 +174,7 @@ pub const STRINGS: Strings = Strings {
     saved_title: |t| format!("«{t}» збережено до бібліотеки"),
     playlist_created: |n| format!("Плейлист «{n}» створено"),
     added_local: |n| format!("Додано: {} (оберіть плейлист для впорядкування)", uk_tracks(n)),
-    downloading_n: |n| format!("Завантаження {}…", uk_tracks(n)),
+    downloading_n: |n| format!("Завантаження {}…", uk_tracks_genitive(n)),
     resolving_on: |title, p| format!("Визначення «{title}» на {p}…"),
     resolving_player_client: "Підбір сумісного плеєр-клієнта…",
     resolved_player_client: |c| format!("Обрано плеєр-клієнт: {c}"),
@@ -314,6 +315,16 @@ fn uk_tracks(n: usize) -> String {
         format!("{n} трек")
     } else if (2..=4).contains(&m10) && !(12..=14).contains(&m100) {
         format!("{n} треки")
+    } else {
+        format!("{n} треків")
+    }
+}
+
+fn uk_tracks_genitive(n: usize) -> String {
+    let m10 = n % 10;
+    let m100 = n % 100;
+    if m10 == 1 && m100 != 11 {
+        format!("{n} треку")
     } else {
         format!("{n} треків")
     }

@@ -15,7 +15,10 @@ use crate::{
     app::{
         dependency_dialog::DepOpState,
         pane::PaneId,
-        ui::{spinner::spinner, styles::icon_playbar_button},
+        ui::{
+            spinner::spinner,
+            styles::{button_style_playbar, icon_playbar_button},
+        },
         Message,
     },
     i18n::Strings,
@@ -304,4 +307,12 @@ pub fn dep_install_status(
         });
     }
     None
+}
+
+pub fn like_button(liked: bool) -> Button<'static, Message, AppTheme> {
+    Button::new(
+        icons::icon(icons::HEART_ICON, theme::ICON_SIZE_MD).style(icon_playbar_button(liked)),
+    )
+    .padding(theme::SPACING_XS)
+    .style(button_style_playbar(liked))
 }

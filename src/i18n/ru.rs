@@ -70,6 +70,7 @@ pub const STRINGS: Strings = Strings {
 
     playlist_not_found: "Плейлист не найден",
     save_as_playlist: "Сохранить как плейлист",
+    liked_songs: "Понравившиеся",
     add_local: "Добавить локальный",
     downloaded_tracks: "Загруженные треки",
     no_downloaded_tracks: "Нет загруженных треков",
@@ -173,7 +174,7 @@ pub const STRINGS: Strings = Strings {
     saved_title: |t| format!("«{t}» сохранено в библиотеку"),
     playlist_created: |n| format!("Плейлист «{n}» создан"),
     added_local: |n| format!("Добавлено: {} (выберите плейлист для упорядочивания)", ru_tracks(n)),
-    downloading_n: |n| format!("Загрузка {}…", ru_tracks(n)),
+    downloading_n: |n| format!("Загрузка {}…", ru_gen_tracks(n)),
     resolving_on: |title, p| format!("Разрешение «{title}» на {p}…"),
     resolving_player_client: "Подбор совместимого плеер-клиента…",
     resolved_player_client: |c| format!("Выбран плеер-клиент: {c}"),
@@ -313,6 +314,16 @@ fn ru_tracks(n: usize) -> String {
     if m10 == 1 && m100 != 11 {
         format!("{n} трек")
     } else if (2..=4).contains(&m10) && !(12..=14).contains(&m100) {
+        format!("{n} трека")
+    } else {
+        format!("{n} треков")
+    }
+}
+
+fn ru_gen_tracks(n: usize) -> String {
+    let m10 = n % 10;
+    let m100 = n % 100;
+    if m10 == 1 && m100 != 11 {
         format!("{n} трека")
     } else {
         format!("{n} треков")

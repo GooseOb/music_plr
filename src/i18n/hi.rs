@@ -70,6 +70,7 @@ pub const STRINGS: Strings = Strings {
 
     playlist_not_found: "प्लेलिस्ट नहीं मिली",
     save_as_playlist: "प्लेलिस्ट के रूप में सहेजें",
+    liked_songs: "पसंदीदा गाने",
     add_local: "स्थानीय जोड़ें",
     downloaded_tracks: "डाउनलोड किए गए ट्रैक",
     no_downloaded_tracks: "कोई डाउनलोड किए गए ट्रैक नहीं",

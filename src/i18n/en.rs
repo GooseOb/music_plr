@@ -71,6 +71,7 @@ pub const STRINGS: Strings = Strings {
 
     playlist_not_found: "Playlist not found",
     save_as_playlist: "Save as playlist",
+    liked_songs: "Liked Songs",
     add_local: "Add local",
     downloaded_tracks: "Downloaded tracks",
     no_downloaded_tracks: "No downloaded tracks",

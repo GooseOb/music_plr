@@ -139,7 +139,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                 Space::new().into(),
                 track,
                 player,
-                player.focused_pane_id,
+                TrackPos::new(0, TrackListKind::Queue, player.focused_pane_id),
                 false,
             ))
             .height(theme::ROW_HEIGHT)

@@ -55,6 +55,54 @@ impl MusicPlayer {
         self.notify(msg);
     }
 
+    pub fn is_track_liked(&self, track: &Track) -> bool {
+        self.playlists.playlists.first().is_some_and(|playlist| {
+            playlist
+                .tracks
+                .iter()
+                .any(|t| t.source == track.source && t.primary_id() == track.primary_id())
+        })
+    }
+
+    pub fn is_current_track_liked(&self) -> bool {
+        self.queue
+            .current()
+            .is_some_and(|track| self.is_track_liked(track))
+    }
+
+    pub fn toggle_like_current_track(&mut self) {
+        if let Some(track) = self.queue.current().cloned() {
+            self.toggle_track_like(track);
+        }
+    }
+
+    pub fn toggle_track_like_at(&mut self, pos: TrackPos) {
+        if let Some(track) = self.get_track_at(pos) {
+            self.toggle_track_like(track);
+        }
+    }
+
+    pub fn toggle_track_like(&mut self, track: Track) {
+        let (format_message, count) = if self.playlists.playlists.is_empty() {
+            self.playlists
+                .create_with_tracks_at(self.strings.liked_songs, 0, vec![track]);
+            (self.strings.added_to, 1)
+        } else if let Some(pos) = self.playlists.playlists[0]
+            .tracks
+            .iter()
+            .position(|t| t.source == track.source && t.primary_id() == track.primary_id())
+        {
+            self.playlists.remove_tracks_at(0, &[pos]);
+            (self.strings.removed_from, 1)
+        } else {
+            let count = self
+                .playlists
+                .insert_tracks_at(0, std::iter::once(&track), PREPEND);
+            (self.strings.added_to, count)
+        };
+        self.notify(format_message(count, &self.playlists.playlists[0].name));
+    }
+
     pub fn save_browse_as_playlist(&mut self, pane: PaneId) -> Task<Message> {
         let name = match &self.view_data_in(pane).kind {
             ViewKind::Album(r) => r.name.clone(),
@@ -558,7 +606,7 @@ impl MusicPlayer {
         }
         let count = imported.playlists.len();
         for pl in imported.playlists {
-            let _ = self.playlists.create_with_tracks_at(
+            self.playlists.create_with_tracks_at(
                 &pl.name,
                 self.playlists.playlists.len(),
                 pl.tracks,
@@ -1060,6 +1108,42 @@ mod tests {
         };
         let _ = p.handle_paste_clipboard();
         assert_eq!(p.queue.recently_played.len(), 1);
+    }
+
+    #[test]
+    fn like_toggles_current_track_in_first_playlist() {
+        let mut p = player_with_playlists(&["A", "B"]);
+        p.queue.set_queue(vec![track("x")], 100);
+        assert!(!p.is_current_track_liked());
+        p.toggle_like_current_track();
+        assert!(p.is_current_track_liked());
+        assert_eq!(p.playlists.playlists[0].tracks.len(), 1);
+        assert_eq!(p.playlists.playlists[0].tracks[0].title, "Track x");
+        assert!(p.playlists.playlists[1].tracks.is_empty());
+        p.toggle_like_current_track();
+        assert!(!p.is_current_track_liked());
+        assert!(p.playlists.playlists[0].tracks.is_empty());
+        assert_eq!(p.playlists.playlists.len(), 2);
+    }
+
+    #[test]
+    fn like_without_playlists_creates_liked_songs() {
+        let mut p = player_with_playlists(&[]);
+        p.queue.set_queue(vec![track("x")], 100);
+        p.toggle_like_current_track();
+        assert_eq!(p.playlists.playlists.len(), 1);
+        assert_eq!(p.playlists.playlists[0].name, p.strings.liked_songs);
+        assert_eq!(p.playlists.playlists[0].tracks.len(), 1);
+        assert!(p.is_current_track_liked());
+    }
+
+    #[test]
+    fn like_without_current_track_is_noop() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.tracks.clear();
+        p.toggle_like_current_track();
+        assert!(!p.is_current_track_liked());
+        assert!(p.playlists.playlists[0].tracks.is_empty());
     }
 
     #[test]

@@ -38,6 +38,7 @@ impl crate::app::MusicPlayer {
                 self.window_size = size;
                 self.capture_bounds_task()
             }
+            #[allow(unused_variables)]
             Message::WindowOpened(id) => {
                 // On Windows the media-control server needs the window HWND,
                 // resolved here once the window actually exists.
@@ -48,7 +49,6 @@ impl crate::app::MusicPlayer {
                 }
                 #[cfg(not(target_os = "windows"))]
                 {
-                    let _ = id;
                     Task::none()
                 }
             }
@@ -302,6 +302,14 @@ impl crate::app::MusicPlayer {
             }
             Message::CreatePlaylist => {
                 self.handle_create_playlist();
+                Task::none()
+            }
+            Message::ToggleCurrentTrackLike => {
+                self.toggle_like_current_track();
+                Task::none()
+            }
+            Message::ToggleTrackLike(pos) => {
+                self.toggle_track_like_at(pos);
                 Task::none()
             }
             Message::SaveBrowseAsPlaylist(pane) => self.save_browse_as_playlist(pane),

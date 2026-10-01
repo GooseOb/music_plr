@@ -154,6 +154,7 @@ pub struct Strings {
 
     pub playlist_not_found: &'static str,
     pub save_as_playlist: &'static str,
+    pub liked_songs: &'static str,
     pub add_local: &'static str,
     pub downloaded_tracks: &'static str,
     pub no_downloaded_tracks: &'static str,

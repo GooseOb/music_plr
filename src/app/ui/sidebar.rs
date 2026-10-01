@@ -72,9 +72,14 @@ fn playlist_row<'a>(
         None
     };
 
+    let icon = if index == 0 {
+        icons::HEART_ICON
+    } else {
+        icons::MUSIC_ICON
+    };
     MouseArea::new(shared_row(
         [
-            icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_MD)
+            icons::icon(icon, theme::ICON_SIZE_MD)
                 .style(icon_tab(interacting))
                 .into(),
             text(name).style(fg_tab(interacting)).into(),

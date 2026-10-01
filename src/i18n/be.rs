@@ -70,6 +70,7 @@ pub const STRINGS: Strings = Strings {
 
     playlist_not_found: "Плэйліст ня знойдзены",
     save_as_playlist: "Захаваць як плэйліст",
+    liked_songs: "Улюбёныя трэкі",
     add_local: "Дадаць лякальны",
     downloaded_tracks: "Спампаваныя трэкі",
     no_downloaded_tracks: "Няма спампаваных трэкаў",
@@ -173,7 +174,7 @@ pub const STRINGS: Strings = Strings {
     saved_title: |t| format!("«{t}» захавана ў бібліятэку"),
     playlist_created: |n| format!("Плэйліст «{n}» створаны"),
     added_local: |n| format!("Дададзена: {} (выберыце плэйліст для ўпарадкаваньня)", be_tracks(n)),
-    downloading_n: |n| format!("Спампоўваньне {}…", be_tracks(n)),
+    downloading_n: |n| format!("Спампоўваньне {}…", be_gen_tracks(n)),
     resolving_on: |title, p| format!("Вызначэньне «{title}» на {p}…"),
     resolving_player_client: "Падбор сумяшчальнага плэер-кліента…",
     resolved_player_client: |c| format!("Абраны плэер-кліент: {c}"),
@@ -314,6 +315,16 @@ fn be_tracks(n: usize) -> String {
         format!("{n} трэк")
     } else if (2..=4).contains(&m10) && !(12..=14).contains(&m100) {
         format!("{n} трэкі")
+    } else {
+        format!("{n} трэкаў")
+    }
+}
+
+fn be_gen_tracks(n: usize) -> String {
+    let m10 = n % 10;
+    let m100 = n % 100;
+    if m10 == 1 && m100 != 11 {
+        format!("{n} трэку")
     } else {
         format!("{n} трэкаў")
     }

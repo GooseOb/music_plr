@@ -70,6 +70,7 @@ pub const STRINGS: Strings = Strings {
 
     playlist_not_found: "Lista de reproducción no encontrada",
     save_as_playlist: "Guardar como lista de reproducción",
+    liked_songs: "Tus me gusta",
     add_local: "Añadir local",
     downloaded_tracks: "Pistas descargadas",
     no_downloaded_tracks: "No hay pistas descargadas",

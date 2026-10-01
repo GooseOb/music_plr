@@ -70,6 +70,7 @@ pub const STRINGS: Strings = Strings {
 
     playlist_not_found: "プレイリストが見つかりません",
     save_as_playlist: "プレイリストとして保存",
+    liked_songs: "お気に入りの曲",
     add_local: "ローカルを追加",
     downloaded_tracks: "ダウンロードした曲",
     no_downloaded_tracks: "ダウンロードした曲はありません",

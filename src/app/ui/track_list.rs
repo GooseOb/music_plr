@@ -19,7 +19,7 @@ use crate::{
     app::{
         interaction::{row_id, HoverTarget, Pressed, TrackListKind, TrackPos},
         pane::PaneId,
-        ui::styles::fg_accent,
+        ui::{shared_components::like_button, styles::fg_accent},
         update::operation::ListGeometry,
     },
     icons,
@@ -219,7 +219,7 @@ fn view_track_row_inner<'a>(
 
     let leading = leading_control(pos, track, player);
 
-    let inner = track_row_layout_inner(leading, track, player, pos.pane, show_album, show_plays);
+    let inner = track_row_layout_inner(leading, track, player, pos, show_album, show_plays);
 
     let track_area = MouseArea::new(inner)
         .interaction(player.drag.clickable_cursor_interaction())
@@ -251,27 +251,28 @@ pub(super) fn track_row_layout<'a>(
     leading: Element<'a, Message, AppTheme>,
     track: &'a Track,
     player: &'a MusicPlayer,
-    pane: PaneId,
+    pos: TrackPos,
     show_album: bool,
 ) -> Row<'a, Message, AppTheme> {
-    track_row_layout_inner(leading, track, player, pane, show_album, false)
+    track_row_layout_inner(leading, track, player, pos, show_album, false)
 }
 
 fn track_row_layout_inner<'a>(
     leading: Element<'a, Message, AppTheme>,
     track: &'a Track,
     player: &'a MusicPlayer,
-    pane: PaneId,
+    pos: TrackPos,
     show_album: bool,
     show_plays: bool,
 ) -> Row<'a, Message, AppTheme> {
+    let pane = pos.pane;
     let thumb = player.thumbnail_index.get(track.source, track.primary_id());
     let is_downloaded = player.download_registry.contains(&track.cache_key());
     let is_cached = player
         .stream_cache
         .index_contains(track.source, track.primary_id());
 
-    let mut trailing_children = Vec::with_capacity(2);
+    let mut trailing_children = Vec::with_capacity(3);
 
     if show_album {
         if let Some(album) = track.album() {
@@ -320,6 +321,13 @@ fn track_row_layout_inner<'a>(
         Space::new().width(theme::ICON_SIZE_MD).into()
     });
 
+    let liked = player.is_track_liked(track);
+    trailing_children.push(
+        like_button(liked)
+            .on_press(Message::ToggleTrackLike(pos))
+            .into(),
+    );
+
     // Unknown durations (0) render blank rather than "--:--".
     let duration = track.duration();
     trailing_children.push(
@@ -332,7 +340,12 @@ fn track_row_layout_inner<'a>(
             .size(theme::TEXT_SIZE_SM)
             .style(fg_secondary()),
         )
-        .padding([0.0, theme::SPACING_2XL])
+        .padding(iced::Padding {
+            top: 0.0,
+            right: theme::SPACING_2XL,
+            bottom: 0.0,
+            left: theme::SPACING_SM,
+        })
         .into(),
     );
 
@@ -350,6 +363,7 @@ fn track_row_layout_inner<'a>(
         &track.title,
         artist_subtitle,
         Row::with_children(trailing_children)
+            .spacing(theme::SPACING_SM)
             .align_y(alignment::Vertical::Center)
             .into(),
     )

@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{slider, text, Button, Column, Container, Row},
+    widget::{slider, text, Button, Column, Container, Row, Space},
     Element, Length,
 };
 
@@ -11,7 +11,12 @@ use super::{
     },
     theme, Message, MusicPlayer,
 };
-use crate::{app::ui::styles::icon_playbar_button, icons, theme::AppTheme, util::format_duration};
+use crate::{
+    app::ui::{shared_components::like_button, styles::icon_playbar_button},
+    icons,
+    theme::AppTheme,
+    util::format_duration,
+};
 
 fn time_text(time: u32) -> Element<'static, Message, AppTheme> {
     text(format_duration(time))
@@ -109,6 +114,18 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     .width(theme::QUEUE_BTN_WIDTH)
     .height(theme::QUEUE_BTN_WIDTH);
 
+    let liked = player.is_current_track_liked();
+    let like_btn = track.map_or_else(
+        || Space::new().into(),
+        |_| {
+            like_button(liked)
+                .on_press(Message::ToggleCurrentTrackLike)
+                .width(theme::QUEUE_BTN_WIDTH)
+                .height(theme::QUEUE_BTN_WIDTH)
+                .into()
+        },
+    );
+
     let lyrics_open = player.focused_pane().lyrics.is_some();
     let lyrics_btn = Button::new(
         icons::icon(icons::LYRICS_ICON, theme::ICON_SIZE_MD)
@@ -129,6 +146,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
             Container::new(track_info)
                 .width(theme::PLAYBAR_TRACK_INFO_WIDTH)
                 .into(),
+            like_btn,
             Container::new(elapsed_text).into(),
             Container::new(controls_and_progress)
                 .width(Length::Fill)

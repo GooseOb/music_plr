@@ -576,7 +576,6 @@ mod tests {
             let _ = p.split_pane(pane, SplitDir::Horizontal);
         }
         assert_eq!(p.split_root.leaf_count(), crate::app::pane::MAX_PANES);
-        let only = p.focused_pane_id;
         while p.split_root.leaf_count() > 1 {
             let pane = p.focused_pane_id;
             let _ = p.close_pane(pane);
@@ -586,7 +585,6 @@ mod tests {
         let _ = p.close_pane(last);
         assert_eq!(p.split_root.leaf_count(), 1);
         assert!(p.panes.contains_key(&last));
-        let _ = only;
     }
 
     #[test]

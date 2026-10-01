@@ -16,6 +16,7 @@ pub const DOWNLOAD_ICON: &[u8] = include_bytes!("../icons/download.svg");
 pub const EDIT_ICON: &[u8] = include_bytes!("../icons/edit.svg");
 pub const FOLDER_ICON: &[u8] = include_bytes!("../icons/folder.svg");
 pub const FORWARD_ICON: &[u8] = include_bytes!("../icons/forward.svg");
+pub const HEART_ICON: &[u8] = include_bytes!("../icons/heart.svg");
 pub const LYRICS_ICON: &[u8] = include_bytes!("../icons/lyrics.svg");
 pub const MUSIC_ICON: &[u8] = include_bytes!("../icons/music.svg");
 pub const PAUSE_ICON: &[u8] = include_bytes!("../icons/pause.svg");

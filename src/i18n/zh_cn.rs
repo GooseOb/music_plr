@@ -70,6 +70,7 @@ pub const STRINGS: Strings = Strings {
 
     playlist_not_found: "未找到播放列表",
     save_as_playlist: "另存为播放列表",
+    liked_songs: "我喜欢的音乐",
     add_local: "添加本地",
     downloaded_tracks: "已下载的曲目",
     no_downloaded_tracks: "没有已下载的曲目",
