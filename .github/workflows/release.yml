@@ -2,7 +2,7 @@
 # GitHub release. Triggered by tag.yml (auto-tag) or manually.
 #
 # Platforms (one job each):
-#   - icons         – generates .ico + .icns once, uploads as artifact
+#   - icons         – generates .ico + .icns once (cached on app-icon.svg hash), uploads as artifact
 #   - build-linux   – Ubuntu, x86_64
 #   - build-macos   – macOS, aarch64 + x86_64 (matrix, same runner type)
 #   - build-windows – Windows, x86_64 MSVC
@@ -37,10 +37,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Restore cached icons
+        id: icon-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            windows/app.ico
+            macos/goosemusic.icns
+          key: icons-${{ hashFiles('icons/app-icon.svg', 'scripts/generate-icons.sh') }}
+
       - name: Install icon generation dependencies
+        if: steps.icon-cache.outputs.cache-hit != 'true'
         run: sudo apt-get update && sudo apt-get install -y imagemagick icnsutils
 
       - name: Generate icons
+        if: steps.icon-cache.outputs.cache-hit != 'true'
         run: bash scripts/generate-icons.sh
 
       - name: Upload icons
