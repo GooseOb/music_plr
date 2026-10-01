@@ -29,7 +29,7 @@ pub use interaction::{ContextMenuState, TrackListKind, TrackListSearch};
 pub use lyrics_state::{LyricsState, LyricsViewMode, LyricsViewport};
 pub use message::{BackendResult, EditTrackField, Message};
 pub use pane::{Pane, PaneData, SplitDir, SplitNode};
-pub use playlist_picker::{PlaylistJump, PlaylistPicker};
+pub use playlist_picker::{PendingAdd, PlaylistJump};
 pub use state::{MusicPlayer, PendingCache, Toast};
 pub use translate_dialog::TranslateDialog;
 pub use view_data::{ViewData, ViewKind};

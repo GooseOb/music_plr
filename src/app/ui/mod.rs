@@ -55,9 +55,6 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         Some(Dialog::Dependencies(dialog)) => {
             stack = stack.push(overlays::view_dependency_dialog(player, dialog));
         }
-        Some(Dialog::Picker(_)) => {
-            stack = stack.push(overlays::view_playlist_picker(player));
-        }
         Some(Dialog::PlaylistJump(jump)) => {
             stack = stack.push(overlays::view_playlist_jump(player, jump));
         }

@@ -211,12 +211,16 @@ impl MusicPlayer {
         if self.split_root.leaf_count() <= 1 {
             return Task::none();
         }
-        // A dialog anchored to the closing pane (context menu, add-to-playlist
-        // picker, track editor) must go with it; its position would otherwise
-        // resolve against a missing pane.
+        // A dialog anchored to the closing pane (context menu, playlist-jump
+        // add target, track editor) must go with it; its position would
+        // otherwise resolve against a missing pane.
         let dialog_pane = match &self.dialog {
             Some(crate::app::Dialog::ContextMenu(m)) => Some(m.pos.pane),
-            Some(crate::app::Dialog::Picker(p)) => Some(p.pane),
+            Some(crate::app::Dialog::PlaylistJump(j)) => j
+                .pending
+                .as_ref()
+                .filter(|p| p.list.is_main())
+                .map(|p| p.pane),
             Some(crate::app::Dialog::Edit(e)) => Some(e.pos.pane),
             Some(crate::app::Dialog::Translate(d)) => Some(d.pane),
             _ => None,

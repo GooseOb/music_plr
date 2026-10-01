@@ -14,9 +14,9 @@ use super::{
         dep_install_status, disabled_text_input_row, scope_tab_row, text_input_row, thumbnail,
     },
     styles::{
-        bg_overlay, bg_popup, bg_toast, button_style_danger, button_style_popup_item,
-        button_style_primary, context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted,
-        icon_fg_secondary, scroll_padding,
+        bg_overlay, bg_popup, bg_toast, button_style_danger, button_style_primary,
+        context_menu_item_style, fg_accent, fg_secondary, icon_fg_muted, icon_fg_secondary,
+        scroll_padding,
     },
     theme, Message, MusicPlayer,
 };
@@ -586,6 +586,13 @@ pub(super) fn view_playlist_jump<'a>(
         .map(|p| p.name.clone())
         .collect();
     let filtered = jump.filtered(&names);
+    let title: String = match &jump.pending {
+        Some(add) if add.indices.len() > 1 => {
+            (player.strings.ctx_add_to_playlist_n)(add.indices.len())
+        }
+        Some(_) => player.strings.ctx_add_to_playlist.to_string(),
+        None => player.strings.playlists.to_string(),
+    };
     let items = filtered.iter().enumerate().map(|(pos, &i)| {
         let pl = &player.playlists.playlists[i];
         let row = Row::with_children([
@@ -599,7 +606,8 @@ pub(super) fn view_playlist_jump<'a>(
         let highlighted = Container::new(
             MouseArea::new(padded)
                 .on_press(Message::PlaylistJumpOpen(i))
-                .on_double_click(Message::PlaylistJumpOpenPlay(i)),
+                .on_move(move |_| Message::PlaylistJumpHover(pos))
+                .interaction(iced::mouse::Interaction::Pointer),
         )
         .style(move |theme: &AppTheme| container::Style {
             background: if pos == jump.selected {
@@ -643,9 +651,7 @@ pub(super) fn view_playlist_jump<'a>(
 
     view_dialog(
         Column::with_children([
-            text(player.strings.playlists)
-                .size(theme::TEXT_SIZE_LG)
-                .into(),
+            text(title).size(theme::TEXT_SIZE_LG).into(),
             input.into(),
             list,
             cancel_btn.into(),
@@ -711,52 +717,6 @@ pub(super) fn view_shortcuts(player: &MusicPlayer) -> Element<'_, Message, AppTh
         .spacing(theme::SPACING_SM)
         .width(theme::DIALOG_WIDTH_LG)
         .height(player.window_size.height * 0.7)
-        .padding(theme::SPACING_MD)
-        .into(),
-        Message::CloseDialog,
-    )
-}
-
-pub(super) fn view_playlist_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let items = player
-        .playlists
-        .playlists
-        .iter()
-        .enumerate()
-        .map(|(i, pl)| {
-            Button::new(
-                Row::with_children([text(&pl.name).into()])
-                    .spacing(theme::SPACING_SM)
-                    .align_y(alignment::Vertical::Center)
-                    .width(Length::Fill),
-            )
-            .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .style(button_style_popup_item())
-            .on_press(Message::AddToPlaylist(i))
-            .into()
-        });
-
-    let cancel_btn = Button::new(
-        Container::new(text(player.strings.cancel).size(theme::TEXT_SIZE_SM))
-            .center_x(Length::Fill),
-    )
-    .padding(theme::SPACING_SM)
-    .on_press(Message::CloseDialog);
-
-    view_dialog(
-        Column::with_children([
-            text(player.strings.ctx_add_to_playlist)
-                .size(theme::TEXT_SIZE_LG)
-                .into(),
-            Column::with_children(items)
-                .spacing(theme::SPACING_XS)
-                .width(Length::Fill)
-                .into(),
-            cancel_btn.into(),
-        ])
-        .align_x(alignment::Horizontal::Center)
-        .spacing(theme::SPACING_SM)
-        .width(theme::DIALOG_WIDTH)
         .padding(theme::SPACING_MD)
         .into(),
         Message::CloseDialog,

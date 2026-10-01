@@ -7,7 +7,7 @@ use crate::{
         interaction::{TrackListKind, TrackPos},
         pane::PaneId,
         update::operation::CaptureContextMenu,
-        EditTrackState, LyricsViewMode, Message, PlaylistPicker, ViewKind,
+        EditTrackState, LyricsViewMode, Message, ViewKind,
     },
     data::JsonStore,
     load_state::LoadState,
@@ -46,18 +46,6 @@ impl MusicPlayer {
                 }
             }
         });
-    }
-
-    pub fn handle_toggle_picker(&mut self, pane: PaneId, indices: Vec<usize>, list: TrackListKind) {
-        if matches!(self.dialog, Some(Dialog::Picker(_))) {
-            self.dialog = None;
-        } else {
-            self.dialog = Some(Dialog::Picker(PlaylistPicker {
-                indices,
-                list,
-                pane,
-            }));
-        }
     }
 
     /// Toggle the lyrics overlay for the current track.

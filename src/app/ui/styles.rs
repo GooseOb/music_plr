@@ -275,14 +275,6 @@ pub fn button_style_scope(
     }
 }
 
-pub fn button_style_popup_item() -> impl Fn(&AppTheme, button::Status) -> button::Style + 'static {
-    button_style(
-        |p, hot| Some(if hot { p.bg_hover } else { p.bg_secondary }),
-        |p, _| p.fg,
-        theme::RADIUS_SM,
-    )
-}
-
 pub fn context_menu_item_style(active: bool) -> impl Fn(&AppTheme) -> container::Style + 'static {
     move |theme| container::Style {
         background: if active {

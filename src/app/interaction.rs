@@ -248,7 +248,7 @@ impl CtxAction {
             }
             CtxAction::Edit => Message::ContextMenuEditTrack,
             CtxAction::GoToArtist => Message::ContextMenuGoToArtist,
-            CtxAction::AddToPlaylist => Message::TogglePicker(menu.target_indices.clone()),
+            CtxAction::AddToPlaylist => Message::OpenPlaylistAdd(menu.target_indices.clone()),
             CtxAction::Download => Message::ContextMenuDefault(DefaultCtxAction::Download),
             CtxAction::SongRadio => Message::ContextMenuDefault(DefaultCtxAction::SongRadio),
             CtxAction::ArtistRadio => Message::ContextMenuDefault(DefaultCtxAction::ArtistRadio),

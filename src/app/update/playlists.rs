@@ -7,7 +7,10 @@ use iced::widget::operation;
 
 use super::{Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, ViewData, PREPEND};
 use crate::{
-    app::{pane::PaneId, Dialog, ImportMethod, ImportPlaylistDialog, PlaylistJump, ViewKind},
+    app::{
+        pane::PaneId, Dialog, ImportMethod, ImportPlaylistDialog, PendingAdd, PlaylistJump,
+        ViewKind,
+    },
     data::JsonStore,
 };
 
@@ -71,9 +74,20 @@ impl MusicPlayer {
         self.handle_select_playlist(next)
     }
 
-    pub fn open_playlist_jump(&mut self) -> Task<Message> {
-        self.dialog = Some(Dialog::PlaylistJump(PlaylistJump::default()));
+    fn create_playlist_jump(&mut self, value: PlaylistJump) -> Task<Message> {
+        self.dialog = Some(Dialog::PlaylistJump(value));
         operation::focus::<Message>(crate::app::ui::playlist_jump_input_id())
+    }
+
+    pub fn open_playlist_jump(&mut self) -> Task<Message> {
+        self.create_playlist_jump(PlaylistJump::default())
+    }
+
+    pub fn open_playlist_add(&mut self, pending: PendingAdd) -> Task<Message> {
+        self.create_playlist_jump(PlaylistJump {
+            pending: Some(pending),
+            ..Default::default()
+        })
     }
 
     pub(crate) fn playlist_jump_filtered(&self) -> Vec<usize> {
@@ -103,19 +117,34 @@ impl MusicPlayer {
     }
 
     pub fn confirm_playlist_jump(&mut self, play: bool) -> Task<Message> {
-        let filtered = self.playlist_jump_filtered();
-        let selected = match &self.dialog {
-            Some(Dialog::PlaylistJump(jump)) => jump.selected,
-            _ => return Task::none(),
-        };
-        let Some(&index) = filtered.get(selected) else {
+        let Some(Dialog::PlaylistJump(jump)) = &self.dialog else {
             return Task::none();
         };
+        let Some(&index) = self.playlist_jump_filtered().get(jump.selected) else {
+            return Task::none();
+        };
+        self.submit_playlist_jump(index, play)
+    }
+
+    pub fn submit_playlist_jump(&mut self, index: usize, play: bool) -> Task<Message> {
+        let Some(Dialog::PlaylistJump(jump)) = &mut self.dialog else {
+            return Task::none();
+        };
+        if let Some(add) = jump.pending.take() {
+            self.handle_add_to_playlist(add.pane, index, &add.indices, add.list);
+            return Task::none();
+        }
         self.dialog = None;
         if play {
             self.handle_open_and_play_playlist(index)
         } else {
             self.handle_select_playlist(index)
+        }
+    }
+
+    pub fn hover_playlist_jump(&mut self, pos: usize) {
+        if let Some(Dialog::PlaylistJump(jump)) = &mut self.dialog {
+            jump.selected = pos;
         }
     }
 
@@ -227,7 +256,7 @@ impl MusicPlayer {
                     crate::providers::ProviderId::Local,
                     crate::types::ProviderTrack {
                         id: filename.to_string(),
-                        url: path_str.clone(),
+                        url: path_str,
                         artist_id: None,
                         duration,
                         thumbnail: String::new(),
@@ -727,7 +756,7 @@ mod tests {
         );
         let jump = PlaylistJump {
             query: "bet".into(),
-            selected: 0,
+            ..Default::default()
         };
         assert_eq!(
             jump.filtered(&["Alpha".to_string(), "Beta".to_string()]),

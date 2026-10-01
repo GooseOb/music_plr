@@ -1,11 +1,12 @@
-//! Transient state for the "add to playlist" picker overlay: the tracks
-//! currently selected for adding and which track list they came from.
+//! Transient state for the playlist jumper overlay (`Ctrl+K`): fuzzy
+//! navigation to a playlist, or picking one to add tracks to when `pending`
+//! is set.
 
 use super::pane::PaneId;
 use crate::app::interaction::TrackListKind;
 
 #[derive(Debug, Clone)]
-pub struct PlaylistPicker {
+pub struct PendingAdd {
     pub indices: Vec<usize>,
     pub list: TrackListKind,
     /// Owning pane for `Active` positions; ignored for `Queue`/`Recent`.
@@ -16,6 +17,7 @@ pub struct PlaylistPicker {
 pub struct PlaylistJump {
     pub query: String,
     pub selected: usize,
+    pub pending: Option<PendingAdd>,
 }
 
 impl PlaylistJump {

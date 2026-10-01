@@ -16,6 +16,7 @@ use crate::{
         interaction::{DefaultCtxAction, TrackListKind},
         message::{BackendResult, EditTrackField, Message},
         update::operation::{CaptureContextMenu, CaptureSearchHistoryRows, ContextMenuGeometry},
+        PendingAdd,
     },
     deps::DepKind,
     providers::ProviderId,
@@ -315,14 +316,12 @@ impl crate::app::MusicPlayer {
                 let play = self.modifiers.shift();
                 self.confirm_playlist_jump(play)
             }
-            Message::PlaylistJumpOpen(index) => {
-                self.dialog = None;
-                self.handle_select_playlist(index)
+            Message::PlaylistJumpOpen(index) => self.submit_playlist_jump(index, false),
+            Message::PlaylistJumpHover(pos) => {
+                self.hover_playlist_jump(pos);
+                Task::none()
             }
-            Message::PlaylistJumpOpenPlay(index) => {
-                self.dialog = None;
-                self.handle_open_and_play_playlist(index)
-            }
+            Message::PlaylistJumpOpenPlay(index) => self.submit_playlist_jump(index, true),
             Message::NewPlaylistNameChanged(name) => {
                 self.playlist_create_name = name;
                 Task::none()
@@ -346,20 +345,16 @@ impl crate::app::MusicPlayer {
                 });
                 Task::none()
             }
-            Message::AddToPlaylist(playlist_idx) => {
-                if let Some(Dialog::Picker(picker)) = &self.dialog {
-                    let indices = picker.indices.clone();
-                    self.handle_add_to_playlist(picker.pane, playlist_idx, &indices, picker.list);
-                }
-                Task::none()
-            }
-            Message::TogglePicker(indices) => {
+            Message::OpenPlaylistAdd(indices) => {
                 let (pane, list) = match &self.dialog {
                     Some(Dialog::ContextMenu(m)) => (m.pos.pane, m.pos.list),
                     _ => (self.focused_pane_id, TrackListKind::Active),
                 };
-                self.handle_toggle_picker(pane, indices, list);
-                Task::none()
+                self.open_playlist_add(PendingAdd {
+                    indices,
+                    list,
+                    pane,
+                })
             }
             Message::CloseDialog => {
                 self.save_translate_prefs();

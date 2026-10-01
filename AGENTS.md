@@ -48,7 +48,7 @@ src/
 ├── app/lyrics_state.rs # LyricsState + LyricsViewMode (per-pane lyrics state)
 ├── app/dialog.rs       # Dialog (exclusive overlay) + accessors
 ├── app/edit_track.rs   # EditTrackState (track-editing popup working copy)
-├── app/playlist_picker.rs # PlaylistPicker (add-to-playlist) + PlaylistJump (Ctrl+K jumper state)
+├── app/playlist_picker.rs # PlaylistJump (Ctrl+K jumper; doubles as add-to-playlist when pending)
 ├── app/shortcuts.rs      # In-app cheatsheet table (?/F1, Dialog::Shortcuts; labels via Strings)
 ├── app/view_data.rs   # ViewData / ViewKind (per-view state)
 ├── app/message.rs     # Message + BackendResult (pane-scoped messages carry PaneId)
