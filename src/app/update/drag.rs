@@ -413,9 +413,8 @@ impl MusicPlayer {
             .collect();
         let inserted = self.playlists.insert_tracks_at(sp, tracks.iter(), clamped);
         self.save_session();
-        let name = self.playlists.playlists[sp].name.clone();
         if inserted > 0 {
-            let msg = (self.strings.added_to)(inserted, &name);
+            let msg = (self.strings.added_to)(inserted, &self.playlists.playlists[sp].name);
             self.notify(msg);
         }
     }

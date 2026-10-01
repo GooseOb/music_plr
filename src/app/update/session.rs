@@ -134,15 +134,16 @@ impl MusicPlayer {
                 self.notify((self.strings.resolved_player_client)(&client));
             }
             crate::providers::ClientEvent::Unavailable => {
-                self.notify_error(self.strings.player_client_unavailable.to_string());
+                self.notify_error(self.strings.player_client_unavailable);
             }
         }
     }
 
-    pub fn notify_error(&mut self, msg: String) {
-        warn!("Backend error: {}", msg);
+    pub fn notify_error(&mut self, message: impl Into<std::borrow::Cow<'static, str>>) {
+        let message = message.into();
+        warn!("Backend error: {message}");
         self.notification = Some(crate::app::Toast {
-            message: msg.into(),
+            message,
             until: std::time::Instant::now() + crate::app::update::tick::NOTIFICATION_DURATION,
             is_error: true,
         });

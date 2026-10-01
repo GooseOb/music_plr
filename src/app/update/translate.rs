@@ -24,7 +24,7 @@ impl MusicPlayer {
 
     pub fn open_translate_dialog(&mut self, pane: PaneId) -> Task<Message> {
         if self.translate_source_text(pane).is_none() {
-            self.notify_error(self.strings.no_lyrics_to_translate.to_string());
+            self.notify_error(self.strings.no_lyrics_to_translate);
             return Task::none();
         }
         let language = self.config.translation_language.clone();
@@ -86,17 +86,17 @@ impl MusicPlayer {
             _ => return Task::none(),
         };
         if language.is_empty() {
-            self.notify_error(self.strings.translation_language_empty.to_string());
+            self.notify_error(self.strings.translation_language_empty);
             return Task::none();
         }
         let Some(source) = self.translate_source_text(pane) else {
-            self.notify_error(self.strings.no_lyrics_to_translate.to_string());
+            self.notify_error(self.strings.no_lyrics_to_translate);
             return Task::none();
         };
         if self.config.translation_base_url.trim().is_empty()
             || self.config.translation_model.trim().is_empty()
         {
-            self.notify_error(self.strings.translation_not_configured.to_string());
+            self.notify_error(self.strings.translation_not_configured);
             return Task::none();
         }
         self.save_translate_prefs();

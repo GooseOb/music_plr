@@ -850,7 +850,7 @@ impl MusicPlayer {
         match result {
             Ok(crate::app::update::VersionCheckOutcome::PackageManaged) => {
                 self.update_status = crate::app::update::UpdateStatus::PackageManaged;
-                self.notify_error(self.strings.package_managed.to_string());
+                self.notify_error(self.strings.package_managed);
             }
             Ok(crate::app::update::VersionCheckOutcome::UpToDate) => {
                 self.update_status = crate::app::update::UpdateStatus::UpToDate;
@@ -860,15 +860,15 @@ impl MusicPlayer {
                 release_url,
                 asset_url,
             }) => {
-                self.update_status = crate::app::update::UpdateStatus::Available {
-                    version: version.clone(),
-                    release_url,
-                    asset_url,
-                };
                 self.notify_for(
                     (self.strings.update_available)(&version),
                     std::time::Duration::from_secs(6),
                 );
+                self.update_status = crate::app::update::UpdateStatus::Available {
+                    version,
+                    release_url,
+                    asset_url,
+                };
             }
             Err(err) => {
                 self.update_status = crate::app::update::UpdateStatus::Error(err.clone());
@@ -881,10 +881,8 @@ impl MusicPlayer {
     fn process_update_complete(&mut self, result: Result<String, String>) {
         match result {
             Ok(version) => {
-                self.update_status = crate::app::update::UpdateStatus::UpdateApplied {
-                    version: version.clone(),
-                };
                 self.notify((self.strings.update_applied)(&version));
+                self.update_status = crate::app::update::UpdateStatus::UpdateApplied { version };
                 std::thread::spawn(|| {
                     std::thread::sleep(std::time::Duration::from_secs(2));
                     std::process::exit(0);

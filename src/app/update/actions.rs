@@ -70,23 +70,22 @@ impl MusicPlayer {
     }
 
     fn sync_editor_content(state: &mut crate::app::LyricsState) {
+        let timed;
         let text = match state.displayed_lyrics() {
-            Some(lyrics) => {
-                if lyrics.has_timed() {
-                    lyrics
-                        .lines
-                        .iter()
-                        .map(|line| line.text.as_str())
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                } else {
-                    lyrics.plain.clone()
-                }
+            Some(lyrics) if lyrics.has_timed() => {
+                timed = lyrics
+                    .lines
+                    .iter()
+                    .map(|line| line.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                &timed
             }
-            None => String::new(),
+            Some(lyrics) => &lyrics.plain,
+            None => "",
         };
         if state.mode == LyricsViewMode::Selectable {
-            state.editor = iced::widget::text_editor::Content::with_text(&text);
+            state.editor = iced::widget::text_editor::Content::with_text(text);
         }
     }
 
@@ -139,13 +138,10 @@ impl MusicPlayer {
         }
         state.note_line = target;
         let text = match (state.displayed_lyrics(), target) {
-            (Some(lyrics), Some(idx)) => lyrics
-                .lines
-                .get(idx)
-                .map_or(String::new(), |line| line.description.clone()),
-            _ => String::new(),
+            (Some(lyrics), Some(idx)) => lyrics.lines.get(idx).map_or("", |line| &line.description),
+            _ => "",
         };
-        state.note_editor = iced::widget::text_editor::Content::with_text(&text);
+        state.note_editor = iced::widget::text_editor::Content::with_text(text);
     }
 
     pub(super) fn sync_note_editor(&mut self, pane: PaneId) {
@@ -453,14 +449,14 @@ impl MusicPlayer {
             .pane(pane)
             .lyrics
             .as_ref()
-            .map(|s| (s.edit_content.text(), s.edit_name.trim().to_string()))
+            .map(|s| (s.edit_content.text(), s.edit_name.trim()))
             .unwrap_or_default();
         if name.is_empty() {
-            self.notify_error(self.strings.lyrics_name_empty.to_string());
+            self.notify_error(self.strings.lyrics_name_empty);
             return Task::none();
         }
         let Some(lyrics) = crate::lyrics::Lyrics::from_custom_text(&text) else {
-            self.notify_error(self.strings.lyrics_empty.to_string());
+            self.notify_error(self.strings.lyrics_empty);
             return Task::none();
         };
         let Some(track_id) = self
@@ -475,14 +471,15 @@ impl MusicPlayer {
             .pane(pane)
             .lyrics
             .as_ref()
-            .and_then(|s| s.editing_custom_name.clone());
+            .and_then(|s| s.editing_custom_name.as_ref());
         let mut cache = crate::data::lyrics_cache::LyricsCache::load_migrated();
-        cache.insert_custom(&track_id, &name, &lyrics);
+        cache.insert_custom(&track_id, name, &lyrics);
         if let Some(old) = edited {
             if old != name {
-                cache.remove_custom(&track_id, &old);
+                cache.remove_custom(&track_id, old);
             }
         }
+        let name = name.to_string();
         let custom_names = cache.custom_names(&track_id);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
             let mode = LyricsViewMode::for_lyrics(&lyrics);
@@ -881,9 +878,7 @@ impl MusicPlayer {
                     edit.original.set_provider(provider, pt.clone());
                 }
             } else {
-                let title = edit.title.clone();
-                let msg = could_not_find_on(&title, provider.label());
-                let _ = edit;
+                let msg = could_not_find_on(&edit.title, provider.label());
                 self.notify_error(msg);
                 return;
             }
