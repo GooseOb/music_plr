@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_editor_hint: "Eine Zeile pro Textzeile. Für synchronisierten Text Zeilen mit [mm:ss.xx] beginnen, oder einfach lassen. Füge unter einer beliebigen Zeile eine `# note`-Zeile für eine Notiz hinzu, die unter dem Text angezeigt wird.",
 
     playlist_not_found: "Wiedergabeliste nicht gefunden",
+    save_as_playlist: "Als Wiedergabeliste speichern",
     add_local: "Lokal hinzufügen",
     downloaded_tracks: "Heruntergeladene Titel",
     no_downloaded_tracks: "Keine heruntergeladenen Titel",

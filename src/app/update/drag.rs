@@ -316,8 +316,8 @@ impl MusicPlayer {
             let count = self
                 .playlists
                 .insert_tracks_at(playlist_idx, tracks.iter(), PREPEND);
-            let name = self.playlists.playlists[playlist_idx].name.clone();
-            let msg = (self.strings.added_to)(count, &name);
+            let name = &self.playlists.playlists[playlist_idx].name;
+            let msg = (self.strings.added_to)(count, name);
             self.notify(msg);
             return;
         }

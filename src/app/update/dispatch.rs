@@ -304,6 +304,7 @@ impl crate::app::MusicPlayer {
                 self.handle_create_playlist();
                 Task::none()
             }
+            Message::SaveBrowseAsPlaylist(pane) => self.save_browse_as_playlist(pane),
             Message::OpenPlaylistJump => self.open_playlist_jump(),
             Message::PlaylistJumpInput(query) => {
                 if let Some(Dialog::PlaylistJump(jump)) = &mut self.dialog {

@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_editor_hint: "Один рядок на рядок тексту. Додайте [mm:ss.xx] на початку для синхронізації або залиште як є. Додайте рядок `# note` під будь-яким рядком, щоб показати нотатку під текстом.",
 
     playlist_not_found: "Плейлист не знайдено",
+    save_as_playlist: "Зберегти як плейлист",
     add_local: "Додати локальний",
     downloaded_tracks: "Завантажені треки",
     no_downloaded_tracks: "Немає завантажених треків",

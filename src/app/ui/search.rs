@@ -302,7 +302,18 @@ pub(super) fn view_browse<'a>(
                 .size(theme::TEXT_SIZE_SM)
                 .style(fg_secondary())
                 .into(),
-            view_library_button(player, pane),
+            Row::with_children([
+                view_library_button(player, pane),
+                Button::new(text(player.strings.save_as_playlist))
+                    .padding([theme::SPACING_XS, theme::SPACING_SM])
+                    .on_press_maybe(
+                        matches!(content, LoadState::Ready(tracks) if !tracks.is_empty())
+                            .then_some(Message::SaveBrowseAsPlaylist(pane)),
+                    )
+                    .into(),
+            ])
+            .spacing(theme::SPACING_SM)
+            .into(),
         ])
         .spacing(theme::SPACING_MD)
         .into(),

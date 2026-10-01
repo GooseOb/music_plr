@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_editor_hint: "Una línea por verso. Añade [mm:ss.xx] al inicio para letra sincronizada, o déjala simple. Añade una línea `# note` bajo cualquier verso para mostrar una nota debajo de la letra.",
 
     playlist_not_found: "Lista de reproducción no encontrada",
+    save_as_playlist: "Guardar como lista de reproducción",
     add_local: "Añadir local",
     downloaded_tracks: "Pistas descargadas",
     no_downloaded_tracks: "No hay pistas descargadas",

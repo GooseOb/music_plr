@@ -181,6 +181,7 @@ pub enum Message {
     Seek(f32),
 
     CreatePlaylist,
+    SaveBrowseAsPlaylist(PaneId),
     OpenPlaylistJump,
     PlaylistJumpInput(String),
     PlaylistJumpConfirm,
@@ -321,6 +322,7 @@ impl Message {
             | Message::DeleteCustomLyrics(pane)
             | Message::OpenTranslateDialog(pane)
             | Message::NavigateTo(pane, _)
+            | Message::SaveBrowseAsPlaylist(pane)
             | Message::NavigateBack(pane)
             | Message::NavigateForward(pane)
             | Message::SplitHorizontal(pane)
@@ -400,6 +402,7 @@ mod tests {
             Message::DeleteCustomLyrics(pane),
             Message::OpenTranslateDialog(pane),
             Message::NavigateTo(pane, ViewData::default()),
+            Message::SaveBrowseAsPlaylist(pane),
             Message::NavigateBack(pane),
             Message::NavigateForward(pane),
             Message::SplitHorizontal(pane),

@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_editor_hint: "प्रति पंक्ति एक बोल। सिंक किए गए बोलों के लिए [mm:ss.xx] जोड़ें, या सादा छोड़ दें। किसी भी पंक्ति के नीचे `# note` पंक्ति जोड़ें, टिप्पणी बोलों के नीचे दिखेगी।",
 
     playlist_not_found: "प्लेलिस्ट नहीं मिली",
+    save_as_playlist: "प्लेलिस्ट के रूप में सहेजें",
     add_local: "स्थानीय जोड़ें",
     downloaded_tracks: "डाउनलोड किए गए ट्रैक",
     no_downloaded_tracks: "कोई डाउनलोड किए गए ट्रैक नहीं",

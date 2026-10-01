@@ -23,9 +23,10 @@ impl JsonStore for PlaylistStore {
 
 impl PlaylistStore {
     pub fn create(&mut self, name: &str) {
-        if !name.trim().is_empty() && !self.playlists.iter().any(|p| p.name == name.trim()) {
+        let trimmed_name = name.trim();
+        if !trimmed_name.is_empty() && !self.playlists.iter().any(|p| p.name == trimmed_name) {
             self.playlists.push(Playlist {
-                name: name.trim().to_string(),
+                name: trimmed_name.to_string(),
                 tracks: Vec::new(),
             });
             self.save();
@@ -54,15 +55,15 @@ impl PlaylistStore {
     /// final index. Unlike [`Self::create`], this always creates (renaming on
     /// collision) so a dragged card reliably becomes a new playlist.
     pub fn create_at(&mut self, name: &str, pos: usize) -> usize {
+        self.create_with_tracks_at(name, pos, Vec::new())
+    }
+
+    /// Same unique-naming/positioning as [`Self::create_at`], but stores
+    /// `tracks` as-is (no dedup) with a single save.
+    pub fn create_with_tracks_at(&mut self, name: &str, pos: usize, tracks: Vec<Track>) -> usize {
         let name = self.unique_name(name);
         let pos = pos.min(self.playlists.len());
-        self.playlists.insert(
-            pos,
-            Playlist {
-                name: name.clone(),
-                tracks: Vec::new(),
-            },
-        );
+        self.playlists.insert(pos, Playlist { name, tracks });
         self.save();
         pos
     }
@@ -282,5 +283,23 @@ mod tests {
         let idx3 = store.create_at("Top", 1);
         assert_eq!(idx3, 1);
         assert_eq!(store.playlists[idx3].name, "Top");
+    }
+
+    #[test]
+    fn create_with_tracks_at_stores_tracks_with_unique_name() {
+        let mut store = PlaylistStore::default();
+        store.create("Mix");
+        let idx = store.create_with_tracks_at("Mix", 0, vec![mk("a"), mk("b")]);
+        assert_eq!(store.playlists.len(), 2);
+        assert_eq!(idx, 0);
+        assert_eq!(store.playlists[idx].name, "Mix (2)");
+        assert_eq!(
+            store.playlists[idx]
+                .tracks
+                .iter()
+                .map(|t| t.provider_id(ProviderId::YouTube).unwrap_or(""))
+                .collect::<Vec<_>>(),
+            vec!["a", "b"]
+        );
     }
 }

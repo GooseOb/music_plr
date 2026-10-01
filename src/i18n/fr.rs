@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_editor_hint: "Une ligne par parole. Préfixez avec [mm:ss.xx] pour des paroles synchronisées, ou laissez en clair. Ajoutez une ligne `# note` sous une parole pour afficher une note sous les paroles.",
 
     playlist_not_found: "Playlist introuvable",
+    save_as_playlist: "Enregistrer comme playlist",
     add_local: "Ajouter local",
     downloaded_tracks: "Pistes téléchargées",
     no_downloaded_tracks: "Aucune piste téléchargée",

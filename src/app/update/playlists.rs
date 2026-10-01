@@ -33,12 +33,13 @@ impl MusicPlayer {
             self.notify(self.strings.import_no_tracks);
             return (false, Task::none());
         }
-        let idx = self
-            .playlists
-            .create_at(name, self.playlists.playlists.len());
-        self.playlists.insert_tracks_at(idx, tracks.iter(), PREPEND);
-        let label = self.playlists.playlists[idx].name.clone();
-        self.notify((self.strings.import_imported_into)(tracks.len(), &label));
+        let idx = self.playlists.create_with_tracks_at(
+            name,
+            self.playlists.playlists.len(),
+            tracks.to_vec(),
+        );
+        let label = &self.playlists.playlists[idx].name;
+        self.notify((self.strings.import_imported_into)(tracks.len(), label));
         let task = self.open_imported_playlist(idx);
         (true, task)
     }
@@ -47,11 +48,30 @@ impl MusicPlayer {
         if self.playlist_create_name.trim().is_empty() {
             return;
         }
-        let name = self.playlist_create_name.trim().to_string();
-        self.playlists.create(&name);
+        let name = self.playlist_create_name.trim();
+        self.playlists.create(name);
+        let msg = (self.strings.playlist_created)(name);
         self.playlist_create_name.clear();
-        let msg = (self.strings.playlist_created)(&name);
         self.notify(msg);
+    }
+
+    pub fn save_browse_as_playlist(&mut self, pane: PaneId) -> Task<Message> {
+        let name = match &self.view_data_in(pane).kind {
+            ViewKind::Album(r) => r.name.clone(),
+            ViewKind::PlaylistView(r) => r.name.clone(),
+            _ => return Task::none(),
+        };
+        let tracks = self.view_data_in(pane).tracks().to_vec();
+        if tracks.is_empty() {
+            return Task::none();
+        }
+        let count = tracks.len();
+        let idx =
+            self.playlists
+                .create_with_tracks_at(&name, self.playlists.playlists.len(), tracks);
+        let label = &self.playlists.playlists[idx].name;
+        self.notify((self.strings.added_to)(count, label));
+        Task::none()
     }
 
     pub fn cycle_playlist(&mut self, dir: isize) -> Task<Message> {
@@ -309,8 +329,8 @@ impl MusicPlayer {
             .playlists
             .insert_tracks_at(playlist_idx, tracks.iter(), PREPEND);
         self.dialog = None;
-        let name = self.playlists.playlists[playlist_idx].name.clone();
-        let msg = (self.strings.added_to)(count, &name);
+        let name = &self.playlists.playlists[playlist_idx].name;
+        let msg = (self.strings.added_to)(count, name);
         self.notify(msg);
     }
 
@@ -537,10 +557,11 @@ impl MusicPlayer {
         }
         let count = imported.playlists.len();
         for pl in imported.playlists {
-            let idx = self
-                .playlists
-                .create_at(&pl.name, self.playlists.playlists.len());
-            self.playlists.playlists[idx].tracks = pl.tracks;
+            let _ = self.playlists.create_with_tracks_at(
+                &pl.name,
+                self.playlists.playlists.len(),
+                pl.tracks,
+            );
         }
         self.playlists.save();
         self.notify((self.strings.import_playlists_imported)(count));

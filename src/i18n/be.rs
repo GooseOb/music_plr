@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_editor_hint: "Адзін радок на радок тэксту. Дадайце [mm:ss.xx] напачатку для сынхранізацыі або пакіньце як ёсьць. Дадайце радок `# note` пад любым радком, каб паказаць нататку пад тэкстам.",
 
     playlist_not_found: "Плэйліст ня знойдзены",
+    save_as_playlist: "Захаваць як плэйліст",
     add_local: "Дадаць лякальны",
     downloaded_tracks: "Спампаваныя трэкі",
     no_downloaded_tracks: "Няма спампаваных трэкаў",

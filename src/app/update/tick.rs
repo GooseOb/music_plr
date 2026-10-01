@@ -417,7 +417,7 @@ impl MusicPlayer {
                 self.capture_bounds_task()
             }
             BackendResult::DownloadComplete(track, _provider) => {
-                self.process_download_complete(&track);
+                self.process_download_complete(track);
                 Task::none()
             }
             BackendResult::DownloadError(msg) => {
@@ -548,9 +548,8 @@ impl MusicPlayer {
         self.notify_error(msg);
     }
 
-    fn process_download_complete(&mut self, track: &crate::types::Track) {
+    fn process_download_complete(&mut self, track: crate::types::Track) {
         let path = track.local_path().unwrap_or_default();
-        self.download_registry.register(track.clone());
         let msg = (self.strings.download_complete)(&path);
         self.notify(msg);
         self.thumbnail_index
@@ -563,6 +562,7 @@ impl MusicPlayer {
                 }
             }
         }
+        self.download_registry.register(track);
     }
 
     /// A lyrics fetch finished: apply it to every pane waiting on lyrics
@@ -817,8 +817,7 @@ impl MusicPlayer {
                 }
             }
         } else {
-            let title = original.title.clone();
-            let msg = (self.strings.could_not_find_on)(&title, provider.label());
+            let msg = (self.strings.could_not_find_on)(&original.title, provider.label());
             self.notify_error(msg);
         }
     }

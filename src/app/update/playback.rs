@@ -154,8 +154,7 @@ impl MusicPlayer {
     /// Resolve a track's id on `provider` in the background. If `play` is true
     /// the resolved track is streamed; otherwise it is downloaded.
     fn resolve_provider(&mut self, provider: ProviderId, track: Track, pos: TrackPos, play: bool) {
-        let title = track.title.clone();
-        let msg = (self.strings.resolving_on)(&title, provider.label());
+        let msg = (self.strings.resolving_on)(&track.title, provider.label());
         self.notify(msg);
         let rid = self.slot_request_id(pos.pane);
         let tx = self.result_tx.clone();
@@ -171,7 +170,7 @@ impl MusicPlayer {
                     play,
                 },
                 Err(e) => crate::app::BackendResult::ProviderResolveError {
-                    title,
+                    title: track.title,
                     provider,
                     message: e.to_string(),
                 },

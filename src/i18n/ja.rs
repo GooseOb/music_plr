@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_editor_hint: "1行に1フレーズ。[mm:ss.xx]を先頭に付けると同期歌詞になります。任意の行の下に`# note`行を追加すると、歌詞の下にメモが表示されます。",
 
     playlist_not_found: "プレイリストが見つかりません",
+    save_as_playlist: "プレイリストとして保存",
     add_local: "ローカルを追加",
     downloaded_tracks: "ダウンロードした曲",
     no_downloaded_tracks: "ダウンロードした曲はありません",

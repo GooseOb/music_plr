@@ -1422,7 +1422,7 @@ mod tests {
         );
         // `serde_json` escapes `body_html` exactly like the page's `JSON.parse` payload.
         state.push_str(&serde_json::to_string(body_html).unwrap());
-        state.push_str(r#"}}}}"#);
+        state.push_str(r"}}}}");
         let escaped = state.replace('\\', "\\\\").replace('\'', "\\'");
         ["x __PRELOADED_STATE__ = JSON.parse('", &escaped, "'); y"].concat()
     }

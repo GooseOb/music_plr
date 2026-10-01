@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_editor_hint: "سطر واحد لكل بيت. أضف [mm:ss.xx] في البداية للكلمات المتزامنة، أو اتركها عادية. أضف سطر `# note` تحت أي سطر لعرض ملاحظة أسفل الكلمات.",
 
     playlist_not_found: "لم يتم العثور على قائمة التشغيل",
+    save_as_playlist: "حفظ كقائمة تشغيل",
     add_local: "إضافة محلية",
     downloaded_tracks: "الأغاني التي تم تنزيلها",
     no_downloaded_tracks: "لا توجد أغانٍ تم تنزيلها",

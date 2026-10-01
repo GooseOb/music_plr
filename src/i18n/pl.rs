@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_editor_hint: "Jedna linia na wers. Dodaj [mm:ss.xx] na początku dla synchronizacji lub zostaw zwykły tekst. Dodaj linię `# note` pod dowolnym wersem, aby pokazać notatkę pod tekstem.",
 
     playlist_not_found: "Nie znaleziono playlisty",
+    save_as_playlist: "Zapisz jako playlistę",
     add_local: "Dodaj lokalne",
     downloaded_tracks: "Pobrane utwory",
     no_downloaded_tracks: "Brak pobranych utworów",

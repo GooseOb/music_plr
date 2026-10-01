@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_editor_hint: "每行一句。在行首添加 [mm:ss.xx] 可作为同步歌词，否则为纯文本。在任意一句下方添加 `# note` 行，即可在歌词下方显示注释。",
 
     playlist_not_found: "未找到播放列表",
+    save_as_playlist: "另存为播放列表",
     add_local: "添加本地",
     downloaded_tracks: "已下载的曲目",
     no_downloaded_tracks: "没有已下载的曲目",
