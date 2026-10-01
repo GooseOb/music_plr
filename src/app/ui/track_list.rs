@@ -276,7 +276,7 @@ fn track_row_layout_inner<'a>(
     if show_album {
         if let Some(album) = track.album() {
             let album_button: Element<'a, Message, AppTheme> = Container::new(
-                Button::new(text(album.name.clone()).size(theme::TEXT_SIZE_SM))
+                Button::new(text(&album.name).size(theme::TEXT_SIZE_SM))
                     .style(button_style_album())
                     .on_press(Message::Browse(
                         pane,

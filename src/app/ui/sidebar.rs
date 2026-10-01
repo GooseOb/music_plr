@@ -115,7 +115,6 @@ fn library_row<'a>(
     let thumb = player.thumbnail_index.get(item.provider, &item.id);
     let thumb = thumbnail(theme::ICON_SIZE_LG + 4.0, thumb);
     let is_hovered = player.drag.is_hovered_library_card(item);
-    let hover_item = item.clone();
     let row = Row::with_children([thumb, text(&item.title).color(text_color).into()])
         .spacing(theme::SPACING_MD)
         .align_y(alignment::Vertical::Center)
@@ -143,12 +142,8 @@ fn library_row<'a>(
     )
     .interaction(player.drag.clickable_cursor_interaction())
     .on_press(Message::DragPress(Pressed::Card(item.clone(), None)))
-    .on_enter(Message::HoverStart(HoverTarget::LibraryCard(
-        hover_item.clone(),
-    )))
-    .on_exit(Message::HoverEnd(HoverTarget::LibraryCard(
-        hover_item.clone(),
-    )))
+    .on_enter(Message::HoverStart(HoverTarget::LibraryCard(item.clone())))
+    .on_exit(Message::HoverEnd(HoverTarget::LibraryCard(item.clone())))
     .into()
 }
 

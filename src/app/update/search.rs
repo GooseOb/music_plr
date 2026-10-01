@@ -285,8 +285,7 @@ impl MusicPlayer {
     ) -> Task<Message> {
         if !provider.capabilities().radio {
             let p = format!("{provider:?}");
-            let msg = (self.strings.provider_no_radio)(&p);
-            self.notify(msg);
+            self.notify((self.strings.provider_no_radio)(&p));
             return Task::none();
         }
         let name = if artist { &track.artist } else { &track.title };
@@ -309,9 +308,7 @@ impl MusicPlayer {
         } else {
             self.strings.radio_word_song
         };
-        let name = name.clone();
-        let msg = (self.strings.generating_radio_for)(word, &name);
-        self.notify(msg);
+        self.notify((self.strings.generating_radio_for)(word, name));
         let id = if artist {
             track.provider_artist_id(provider)
         } else {
@@ -350,7 +347,7 @@ impl MusicPlayer {
                 };
                 radio_fn(provider, &id)
             },
-            move |tracks| BackendResult::RadioResults(rid, label.clone(), tracks),
+            move |tracks| BackendResult::RadioResults(rid, label, tracks),
             tx,
         );
         nav_task

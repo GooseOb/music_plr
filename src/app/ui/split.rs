@@ -136,16 +136,16 @@ fn header_button(
     .on_press_maybe(can.then_some(on_press))
 }
 
-fn pane_title(player: &MusicPlayer, pane: PaneId) -> String {
+fn pane_title(player: &MusicPlayer, pane: PaneId) -> &str {
     match &player.view_data_in(pane).kind {
-        ViewKind::Search(s) if s.query.is_empty() => player.strings.search.to_string(),
-        ViewKind::Search(s) => s.query.clone(),
-        ViewKind::SongRadio(label) | ViewKind::ArtistRadio(label) => label.clone(),
-        ViewKind::Artist(entry) => entry.name.clone(),
-        ViewKind::Album(r) => r.name.clone(),
-        ViewKind::PlaylistView(r) => r.name.clone(),
-        ViewKind::Playlist(entry) => entry.name.clone(),
-        ViewKind::Downloads => player.strings.downloads.to_string(),
-        ViewKind::Settings => player.strings.settings.to_string(),
+        ViewKind::Search(s) if s.query.is_empty() => player.strings.search,
+        ViewKind::Search(s) => &s.query,
+        ViewKind::SongRadio(label) | ViewKind::ArtistRadio(label) => label,
+        ViewKind::Artist(entry) => &entry.name,
+        ViewKind::Album(r) => &r.name,
+        ViewKind::PlaylistView(r) => &r.name,
+        ViewKind::Playlist(entry) => &entry.name,
+        ViewKind::Downloads => player.strings.downloads,
+        ViewKind::Settings => player.strings.settings,
     }
 }

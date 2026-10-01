@@ -535,9 +535,8 @@ impl MusicPlayer {
                         self.library.move_item(from, to);
                     }
                 } else {
-                    let title = item.title.clone();
+                    let msg = (self.strings.saved_title)(&item.title);
                     self.library.insert(item, idx);
-                    let msg = (self.strings.saved_title)(&title);
                     self.notify(msg);
                 }
                 Task::none()
@@ -559,7 +558,6 @@ impl MusicPlayer {
             LibraryKind::Playlist => "playlist",
         };
         let id = item.id.clone();
-        let name_for_thread = name.clone();
         let tx = self.result_tx.clone();
         let provider = match &self.view_data().kind {
             ViewKind::Search(s) => s.provider,
@@ -570,7 +568,7 @@ impl MusicPlayer {
         Self::spawn_backend_thread(
             rid,
             move || crate::providers::browse(provider, &id, kind_str),
-            move |(tracks, _)| BackendResult::CardPlaylistReady(idx, name_for_thread, tracks),
+            move |(tracks, _)| BackendResult::CardPlaylistReady(idx, name, tracks),
             tx,
         );
 

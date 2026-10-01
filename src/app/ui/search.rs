@@ -90,7 +90,7 @@ pub(super) fn view_search_bar(
             .filter(|p| p.capabilities().search)
             .map(|&provider| {
                 (
-                    provider.label().to_string(),
+                    provider.label(),
                     pane_state.search_provider == provider,
                     Some(Message::SearchProviderChanged(pane, provider)),
                 )
@@ -251,12 +251,11 @@ fn card_row<'a>(
         player.drag.pressed,
         Some(PressedDrag { what: Pressed::Card(ref c, _), .. }) if c == item
     );
-    let hover_item = item.clone();
     let main = MouseArea::new(main)
         .interaction(player.drag.clickable_cursor_interaction())
         .on_press(Message::DragPress(Pressed::Card(item.clone(), Some(pane))))
-        .on_enter(Message::HoverStart(HoverTarget::Card(hover_item.clone())))
-        .on_exit(Message::HoverEnd(HoverTarget::Card(hover_item.clone())));
+        .on_enter(Message::HoverStart(HoverTarget::Card(item.clone())))
+        .on_exit(Message::HoverEnd(HoverTarget::Card(item.clone())));
     track_row(
         main,
         // TODO: make consistent

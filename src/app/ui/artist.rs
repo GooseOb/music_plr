@@ -96,7 +96,7 @@ fn header_provider_picker(
             .into(),
         scope_tab_row(ProviderId::header_providers().iter().map(|&p| {
             (
-                p.label().to_string(),
+                p.label(),
                 selected == Some(p),
                 Message::ArtistHeaderProviderChanged(pane, p),
             )

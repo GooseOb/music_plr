@@ -76,10 +76,10 @@ fn provider_row<'a>(
 
     let body: Element<'a, Message, AppTheme> = match pt {
         Some(pt) => {
-            let album = pt
+            let album: &str = pt
                 .album
                 .as_ref()
-                .map(|a| a.name.clone())
+                .map(|a| a.name.as_str())
                 .unwrap_or_default();
 
             Column::with_children([
@@ -87,7 +87,7 @@ fn provider_row<'a>(
                 disabled_text_input_row(player.strings.lbl_url, &pt.url),
                 disabled_text_input_row(
                     player.strings.lbl_artist_id,
-                    &pt.artist_id.clone().unwrap_or_default(),
+                    pt.artist_id.as_deref().unwrap_or_default(),
                 ),
                 disabled_text_input_row(player.strings.lbl_duration_secs, &pt.duration.to_string()),
                 Row::with_children([
@@ -99,7 +99,7 @@ fn provider_row<'a>(
                 ])
                 .spacing(theme::SPACING_SM)
                 .into(),
-                disabled_text_input_row(player.strings.lbl_album, &album),
+                disabled_text_input_row(player.strings.lbl_album, album),
             ])
             .spacing(theme::SPACING_XS)
             .into()

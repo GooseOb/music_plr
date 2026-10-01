@@ -23,7 +23,7 @@ use crate::{
 fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let row = scope_tab_row(ProviderId::defaultable().iter().map(|&provider| {
         (
-            provider.label().to_string(),
+            provider.label(),
             player.config.default_provider == provider,
             Message::SettingsChanged(SettingsChange::DefaultProvider(provider)),
         )
@@ -38,14 +38,14 @@ fn cookie_browser_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme
     let current = player.config.cookie_browser.as_deref();
     let mut items = Vec::with_capacity(crate::deps::COOKIE_BROWSERS.len() + 1);
     items.push((
-        player.strings.cookies_off.to_string(),
+        player.strings.cookies_off,
         current.is_none(),
         Message::SettingsChanged(SettingsChange::CookieBrowser(None)),
     ));
     for browser in crate::deps::COOKIE_BROWSERS {
         let browser = *browser;
         items.push((
-            browser.to_string(),
+            browser,
             current == Some(browser),
             Message::SettingsChanged(SettingsChange::CookieBrowser(Some(browser.to_string()))),
         ));
@@ -226,7 +226,7 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 fn language_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let row = scope_tab_row(Language::ALL.iter().map(|&language| {
         (
-            language.label().to_string(),
+            language.label(),
             player.config.language == language,
             Message::SettingsChanged(SettingsChange::Language(language)),
         )
@@ -240,7 +240,7 @@ fn language_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
 fn theme_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let row = scope_tab_row(theme::ThemeKind::ALL.iter().map(|&kind| {
         (
-            kind.label().to_string(),
+            kind.label(),
             player.config.theme_kind == kind,
             Message::SettingsChanged(SettingsChange::Theme(kind)),
         )
