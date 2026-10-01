@@ -155,7 +155,7 @@ impl MusicPlayer {
     /// missing ones. Called wherever a view becomes active (navigation,
     /// results installed) — the tick only drains, it never re-scans visibility.
     pub(crate) fn seed_view_thumbnails(&mut self, view: &ViewData) {
-        let tracks = view.tracks().to_vec();
+        let tracks = view.tracks();
         self.seed_tracks_thumbnails(&tracks);
         match &view.kind {
             // A local playlist backs its tracks from the store, not from

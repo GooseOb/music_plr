@@ -216,6 +216,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+
       - name: Download artifacts
         uses: actions/download-artifact@v8
         with:
@@ -229,6 +233,64 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: echo "value=$(gh api repos/$GITHUB_REPOSITORY/tags --jq '.[0].name')" >> "$GITHUB_OUTPUT"
 
+      - name: Build release body from CHANGELOG.md
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          import pathlib
+          import re
+          import textwrap
+
+          tag = os.environ.get("TAG", "")
+          version = tag[1:] if tag.startswith("v") else tag
+          changelog = ""
+          path = pathlib.Path("CHANGELOG.md")
+          if path.exists():
+              text = path.read_text()
+              m = re.search(
+                  rf"^## \[{re.escape(version)}\].*?\n(.*?)(?=^##\s|\Z)",
+                  text,
+                  re.M | re.S,
+              )
+              if m:
+                  changelog = m.group(1).strip()
+                  changelog = re.sub(
+                      r"(?m)^\[.+?\]:\s*https?://.*$", "", changelog
+                  ).strip()
+
+          if not changelog:
+              changelog = "_See the auto-generated notes below._"
+
+          footer = textwrap.dedent("""\
+          ## Quick install
+
+          ```sh
+          curl -fsSL https://raw.githubusercontent.com/GooseOb/music_plr/master/scripts/install.sh | bash
+          ```
+
+          Detects your platform and installs everything. See the [README](https://github.com/GooseOb/music_plr#installation) for manual install options.
+
+          ## Runtime prerequisites
+
+          `goosemusic` is a self-contained binary. On first launch it checks
+          for its external tools and can **download `yt-dlp` for you** — a
+          standalone binary needing no Python — just accept the prompt. Only
+          optional extras remain:
+
+          - **`yt-dlp`** — YouTube audio streaming & downloads (auto-downloaded if missing)
+          - **Python 3** + `ytmusicapi` — nicer YouTube Music search; without it the app
+            falls back to `yt-dlp` (these are *not* auto-installed)
+          - **D-Bus** session bus (Linux) — MPRIS media-key integration (OS-provided)
+
+          Nothing needs installing manually to play, stream, or download.
+          """)
+          body = f"## What's changed\n\n{changelog}\n\n{footer}"
+          pathlib.Path("BODY.md").write_text(body)
+          print(f"Tag {tag}: changelog chars={len(changelog)}")
+          EOF
+
       - name: Publish
         uses: softprops/action-gh-release@v3
         with:
@@ -236,28 +298,7 @@ jobs:
           files: dist/*
           generate_release_notes: true
           prerelease: ${{ inputs.prerelease == true }}
-          body: |
-            ## Quick install
-
-            ```sh
-            curl -fsSL https://raw.githubusercontent.com/GooseOb/music_plr/master/scripts/install.sh | bash
-            ```
-
-            Detects your platform and installs everything. See the [README](https://github.com/GooseOb/music_plr#installation) for manual install options.
-
-            ## Runtime prerequisites
-
-            `goosemusic` is a self-contained binary. On first launch it checks
-            for its external tools and can **download `yt-dlp` for you** — a
-            standalone binary needing no Python — just accept the prompt. Only
-            optional extras remain:
-
-            - **`yt-dlp`** — YouTube audio streaming & downloads (auto-downloaded if missing)
-            - **Python 3** + `ytmusicapi` — nicer YouTube Music search; without it the app
-              falls back to `yt-dlp` (these are *not* auto-installed)
-            - **D-Bus** session bus (Linux) — MPRIS media-key integration (OS-provided)
-
-            Nothing needs installing manually to play, stream, or download.
+          body_path: BODY.md
 
   publish-crates-io:
     name: Publish to crates.io
