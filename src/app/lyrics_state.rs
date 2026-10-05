@@ -1,6 +1,8 @@
 //! Lyrics overlay state: which track's lyrics are shown, the loaded lyrics,
 //! the active view mode, and the edit buffer.
 
+use std::sync::Arc;
+
 use crate::{
     load_state::LoadState,
     lyrics::{Lyrics, LyricsProvider},
@@ -25,7 +27,7 @@ pub struct LyricsState {
     pub provider: LyricsProvider,
     /// Provider-namespaced `slug:id` track key (see [`crate::types::Track::cache_key`]).
     pub track_id: Option<String>,
-    pub lyrics: LoadState<Lyrics>,
+    pub lyrics: LoadState<Arc<Lyrics>>,
     pub mode: LyricsViewMode,
     pub editor: iced::widget::text_editor::Content,
     pub scrolled_to: Option<usize>,
@@ -92,7 +94,7 @@ impl LyricsState {
                 return Some(&translation.lyrics);
             }
         }
-        Some(lyrics)
+        Some(lyrics.as_ref())
     }
 
     pub fn displayed_lyrics_mut(&mut self) -> Option<&mut Lyrics> {
@@ -100,6 +102,7 @@ impl LyricsState {
         let LoadState::Ready(lyrics) = &mut self.lyrics else {
             return None;
         };
+        let lyrics = Arc::make_mut(lyrics);
         match language {
             Some(language) => {
                 let pos = lyrics

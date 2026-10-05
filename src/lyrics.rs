@@ -416,17 +416,15 @@ fn fetch_genius(req: &LyricsRequest) -> Result<Option<Lyrics>> {
         Some(body) => body,
         None => return Ok(None),
     };
-    let songs: Vec<&GeniusSongHit> = search
+    let songs = search
         .response
         .sections
         .iter()
         .flat_map(|s| s.hits.iter())
         .filter_map(|h| h.result.as_ref())
-        .filter(|r| r.kind == "song")
-        .collect();
+        .filter(|r| r.kind == "song");
     let Some(hit) = songs
-        .iter()
-        .filter_map(|h| score_genius_hit(req, h).map(|score| (*h, score)))
+        .filter_map(|h| score_genius_hit(req, h).map(|score| (h, score)))
         .max_by_key(|(_, score)| *score)
         .map(|(hit, _)| hit)
     else {

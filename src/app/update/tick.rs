@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use souvlaki::MediaPlayback;
 use tracing::debug;
@@ -9,7 +9,8 @@ use super::{
 };
 use crate::{
     app::{interaction::TrackListKind, pane::PaneId, Dialog, ViewKind},
-    data::{cache::StreamCache, JsonStore},
+    data::{cache::StreamCache, playlists::PlaylistStore, thumbnails::ThumbnailIndex, JsonStore},
+    types::Track,
 };
 
 /// How long a toast notification stays visible before auto-dismissing.
@@ -142,11 +143,10 @@ impl MusicPlayer {
         }
     }
 
-    pub(crate) fn seed_tracks_thumbnails(&mut self, tracks: &[crate::types::Track]) {
+    pub(crate) fn seed_tracks_thumbnails(index: &mut ThumbnailIndex, tracks: &[Track]) {
         for track in tracks {
             if !track.thumbnail().is_empty() {
-                self.thumbnail_index
-                    .ensure(track.source, track.primary_id(), track.thumbnail());
+                index.ensure(track.source, track.primary_id(), track.thumbnail());
             }
         }
     }
@@ -154,23 +154,26 @@ impl MusicPlayer {
     /// Seed a view's thumbnail ids into the index so the next tick drains any
     /// missing ones. Called wherever a view becomes active (navigation,
     /// results installed) — the tick only drains, it never re-scans visibility.
-    pub(crate) fn seed_view_thumbnails(&mut self, view: &ViewData) {
+    pub(crate) fn seed_view_thumbnails(
+        index: &mut ThumbnailIndex,
+        playlists: &PlaylistStore,
+        view: &ViewData,
+    ) {
         let tracks = view.tracks();
-        self.seed_tracks_thumbnails(&tracks);
+        Self::seed_tracks_thumbnails(index, tracks);
         match &view.kind {
             // A local playlist backs its tracks from the store, not from
             // `ViewData`, so seed from the store or its artwork never drains.
             ViewKind::Playlist(entry) => {
-                if let Some(playlist) = self.playlists.playlists.get(entry.index) {
-                    let tracks = playlist.tracks.clone();
-                    self.seed_tracks_thumbnails(&tracks);
+                if let Some(playlist) = playlists.playlists.get(entry.index) {
+                    Self::seed_tracks_thumbnails(index, &playlist.tracks);
                 }
             }
             ViewKind::Album(r) => {
-                self.thumbnail_index.ensure(r.provider, &r.id, &r.thumbnail);
+                index.ensure(r.provider, &r.id, &r.thumbnail);
             }
             ViewKind::PlaylistView(r) => {
-                self.thumbnail_index.ensure(r.provider, &r.id, &r.thumbnail);
+                index.ensure(r.provider, &r.id, &r.thumbnail);
             }
             _ => {}
         }
@@ -180,11 +183,36 @@ impl MusicPlayer {
             | crate::providers::SearchTab::Playlists(cards) = &s.tab
             {
                 for card in cards {
-                    self.thumbnail_index
-                        .ensure(s.provider, &card.id, &card.thumbnail);
+                    index.ensure(s.provider, &card.id, &card.thumbnail);
                 }
             }
         }
+    }
+
+    pub(crate) fn seed_active_view_thumbnails(&mut self, pane: PaneId) {
+        let Self {
+            panes,
+            playlists,
+            thumbnail_index,
+            ..
+        } = self;
+        let Some(view) = panes.get(&pane).map(crate::app::Pane::view_data) else {
+            return;
+        };
+        Self::seed_view_thumbnails(thumbnail_index, playlists, view);
+    }
+
+    pub(crate) fn seed_slot_thumbnails(&mut self, pane: PaneId, idx: usize) {
+        let Self {
+            panes,
+            playlists,
+            thumbnail_index,
+            ..
+        } = self;
+        let Some(view) = panes.get(&pane).and_then(|p| p.nav_history.get(idx)) else {
+            return;
+        };
+        Self::seed_view_thumbnails(thumbnail_index, playlists, view);
     }
 
     fn update_thumbnails(&mut self) {
@@ -270,7 +298,7 @@ impl MusicPlayer {
 
     pub(crate) fn finalize_view(&mut self, pane: PaneId, idx: usize) {
         self.save_session();
-        self.seed_view_thumbnails(&self.pane(pane).nav_history[idx].clone());
+        self.seed_slot_thumbnails(pane, idx);
     }
 
     fn process_search_results(
@@ -399,7 +427,7 @@ impl MusicPlayer {
                 // they appear as soon as we insert them.
                 if idx < self.playlists.playlists.len() {
                     let count = self.playlists.insert_tracks_at(idx, tracks.iter(), PREPEND);
-                    self.seed_tracks_thumbnails(&tracks);
+                    Self::seed_tracks_thumbnails(&mut self.thumbnail_index, &tracks);
                     let msg = (self.strings.added_to)(count, &name);
                     self.notify(msg);
                 }
@@ -475,7 +503,7 @@ impl MusicPlayer {
                 Task::none()
             }
             BackendResult::LyricsFetched(result, track_id, provider) => {
-                self.process_lyrics_fetched(&result, &track_id, provider)
+                self.process_lyrics_fetched(result, &track_id, provider)
             }
             BackendResult::LyricsTranslationFetched(result, track_id, provider) => {
                 self.process_lyrics_translation_fetched(&result, &track_id, provider)
@@ -565,13 +593,17 @@ impl MusicPlayer {
     /// showing another provider keeps its own state and fetch.
     fn process_lyrics_fetched(
         &mut self,
-        result: &Result<crate::lyrics::Lyrics, String>,
+        result: Result<crate::lyrics::Lyrics, String>,
         track_id: &str,
         provider: crate::lyrics::LyricsProvider,
     ) -> Task<Message> {
         if track_id.is_empty() {
             return Task::none();
         }
+        let shared = match result {
+            Ok(lyrics) => Ok(Arc::new(lyrics)),
+            Err(e) => Err(e),
+        };
         let mut tasks = Vec::new();
         let panes: Vec<PaneId> = self.pane_ids();
         let mut cache = None;
@@ -588,13 +620,13 @@ impl MusicPlayer {
             let Some(state) = self.pane_mut(pane).lyrics.as_mut() else {
                 continue;
             };
-            match &result {
+            match &shared {
                 Ok(lyrics) => {
                     let cache = cache
                         .get_or_insert_with(crate::data::lyrics_cache::LyricsCache::load_migrated);
                     cache.insert(track_id, lyrics);
                     let mode = crate::app::LyricsViewMode::for_lyrics(lyrics);
-                    state.lyrics = crate::load_state::LoadState::Ready(lyrics.clone());
+                    state.lyrics = crate::load_state::LoadState::Ready(Arc::clone(lyrics));
                     state.mode = mode;
                     state.scrolled_to = None;
                     state.viewport = None;
@@ -675,6 +707,7 @@ impl MusicPlayer {
                         let crate::load_state::LoadState::Ready(lyrics) = &mut state.lyrics else {
                             continue;
                         };
+                        let lyrics = Arc::make_mut(lyrics);
                         if let Some(slot) = lyrics
                             .translations
                             .iter_mut()

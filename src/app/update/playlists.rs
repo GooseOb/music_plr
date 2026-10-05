@@ -22,8 +22,7 @@ impl MusicPlayer {
         self.drag.cleanup();
         let playlist_name = self.playlists.playlists[index].name.clone();
         let task = self.push_new_view(pane, ViewData::new_playlist(index, playlist_name));
-        let view = self.view_data_in(pane).clone();
-        self.seed_view_thumbnails(&view);
+        self.seed_active_view_thumbnails(pane);
         self.save_session();
         task
     }

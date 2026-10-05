@@ -98,8 +98,7 @@ impl MusicPlayer {
         self.sync_search_provider(pane);
         self.sync_downloads_view(pane);
 
-        let view = self.view_data_in(pane).clone();
-        self.seed_view_thumbnails(&view);
+        self.seed_active_view_thumbnails(pane);
         self.save_session();
         nav_task
     }

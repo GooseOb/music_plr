@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use iced::{widget::operation, Point, Task};
 
 use super::{BackendResult, MusicPlayer, Track};
@@ -429,7 +431,7 @@ impl MusicPlayer {
         self.flush_note_draft(pane);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
             let mode = LyricsViewMode::for_lyrics(&entry);
-            state.lyrics = crate::load_state::LoadState::Ready(entry);
+            state.lyrics = crate::load_state::LoadState::Ready(Arc::new(entry));
             state.mode = mode;
             state.track_id = Some(track_id);
             state.selected_custom = Some(name);
@@ -483,7 +485,7 @@ impl MusicPlayer {
         let custom_names = cache.custom_names(&track_id);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
             let mode = LyricsViewMode::for_lyrics(&lyrics);
-            state.lyrics = crate::load_state::LoadState::Ready(lyrics);
+            state.lyrics = crate::load_state::LoadState::Ready(Arc::new(lyrics));
             state.mode = mode;
             state.track_id = Some(track_id);
             state.selected_custom = Some(name);
@@ -605,7 +607,7 @@ impl MusicPlayer {
         if let Some(name) = state.selected_custom.clone() {
             if let Some(custom) = cache.get_custom(&current_id, &name) {
                 let mode = LyricsViewMode::for_lyrics(&custom);
-                state.lyrics = crate::load_state::LoadState::Ready(custom);
+                state.lyrics = crate::load_state::LoadState::Ready(Arc::new(custom));
                 state.track_id = Some(current_id.clone());
                 state.mode = mode;
                 state.scrolled_to = None;
@@ -621,7 +623,7 @@ impl MusicPlayer {
         let cached = cache.get_for(&current_id, provider);
         if let Some(cached_lyrics) = cached {
             let mode = LyricsViewMode::for_lyrics(&cached_lyrics);
-            state.lyrics = crate::load_state::LoadState::Ready(cached_lyrics);
+            state.lyrics = crate::load_state::LoadState::Ready(Arc::new(cached_lyrics));
             state.track_id = Some(current_id.clone());
             state.mode = mode;
             state.scrolled_to = None;

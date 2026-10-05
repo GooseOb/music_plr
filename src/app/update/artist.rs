@@ -272,8 +272,7 @@ impl MusicPlayer {
                 self.artist_error_dedup = None;
             }
             self.finalize_view(pane, idx);
-            let view = self.pane(pane).nav_history[idx].clone();
-            self.seed_artist_thumbnails(&view);
+            self.seed_slot_artist_thumbnails(pane, idx);
         }
     }
 
@@ -330,8 +329,7 @@ impl MusicPlayer {
         if cache_hit {
             // The newly selected provider's picture may never have been
             // seeded before (only the previous owner's was), so queue it.
-            let view = self.view_data_in(pane).clone();
-            self.seed_artist_thumbnails(&view);
+            self.seed_active_artist_thumbnails(pane);
             return;
         }
         let rid = self.slot_request_id(pane);
@@ -340,7 +338,10 @@ impl MusicPlayer {
 
     /// Seed thumbnail downloads for the artist header and all card rows of
     /// the given artist-page view.
-    pub(crate) fn seed_artist_thumbnails(&mut self, view: &ViewData) {
+    pub(crate) fn seed_artist_thumbnails(
+        index: &mut crate::data::thumbnails::ThumbnailIndex,
+        view: &ViewData,
+    ) {
         let ViewKind::Artist(entry) = &view.kind else {
             return;
         };
@@ -349,13 +350,37 @@ impl MusicPlayer {
             let provider = page.header_provider.unwrap_or_default();
             let key = crate::app::ui::artist::header_thumb_key(id);
             if !header.image.is_empty() {
-                self.thumbnail_index.ensure(provider, &key, &header.image);
+                index.ensure(provider, &key, &header.image);
             }
         }
         for (provider, id, thumbnail) in page.card_thumbs() {
             if !thumbnail.is_empty() {
-                self.thumbnail_index.ensure(provider, id, thumbnail);
+                index.ensure(provider, id, thumbnail);
             }
         }
+    }
+
+    pub(crate) fn seed_active_artist_thumbnails(&mut self, pane: PaneId) {
+        let Self {
+            panes,
+            thumbnail_index,
+            ..
+        } = self;
+        let Some(view) = panes.get(&pane).map(crate::app::Pane::view_data) else {
+            return;
+        };
+        Self::seed_artist_thumbnails(thumbnail_index, view);
+    }
+
+    pub(crate) fn seed_slot_artist_thumbnails(&mut self, pane: PaneId, idx: usize) {
+        let Self {
+            panes,
+            thumbnail_index,
+            ..
+        } = self;
+        let Some(view) = panes.get(&pane).and_then(|p| p.nav_history.get(idx)) else {
+            return;
+        };
+        Self::seed_artist_thumbnails(thumbnail_index, view);
     }
 }

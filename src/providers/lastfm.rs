@@ -261,18 +261,18 @@ fn enrich_parallel(
     })
 }
 
-fn collect(path: &[&str], value: &serde_json::Value) -> Vec<serde_json::Value> {
+fn collect<'a>(path: &'a [&'a str], value: &'a serde_json::Value) -> &'a [serde_json::Value] {
     let mut node = value;
     for key in path {
         match node.get(key) {
             Some(next) => node = next,
-            None => return Vec::new(),
+            None => return &[],
         }
     }
     match node {
-        serde_json::Value::Array(items) => items.clone(),
-        single if single.is_object() => vec![single.clone()],
-        _ => Vec::new(),
+        serde_json::Value::Array(items) => items.as_slice(),
+        single if single.is_object() => std::slice::from_ref(single),
+        _ => &[],
     }
 }
 
