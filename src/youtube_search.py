@@ -286,6 +286,12 @@ def browse(browse_id, limit=50, kind=None):
                 break
     except Exception:
         pass
+    if not out:
+        try:
+            fallback = _user_channel_fallback(browse_id)
+            out = fallback.get("popular", [])[:limit]
+        except Exception:
+            pass
     return out
 
 
@@ -334,11 +340,105 @@ def _playlists_shelf_fallback(browse_id):
     return out
 
 
+def _runs_text(d):
+    return "".join(r.get("text", "") for r in (d or {}).get("runs", []))
+
+
+def _track_from_two_row_item(item, browse_id, channel_name):
+    vid = (item.get("navigationEndpoint") or {}).get("watchEndpoint", {}).get("videoId", "") or ""
+    if not vid:
+        return None
+    title = _runs_text((item.get("title") or {}))
+    sub_runs = (item.get("subtitle") or {}).get("runs", []) or []
+    artist = sub_runs[0].get("text", "") if sub_runs else channel_name
+    views = ""
+    for r in sub_runs:
+        txt = r.get("text", "") or ""
+        if "view" in txt.lower():
+            views = txt
+            break
+    thumbs = (
+        (item.get("thumbnailRenderer") or {})
+        .get("musicThumbnailRenderer", {})
+        .get("thumbnail", {})
+        .get("thumbnails", [])
+    )
+    return _make_track(
+        vid, title, artist or channel_name,
+        duration=0, thumbnail=thumbs[-1].get("url", "") if thumbs else "",
+        artist_id=browse_id, views=views,
+    )
+
+
+def _user_channel_tracks_from_resp(resp, browse_id, channel_name):
+    stack = [resp]
+    out = []
+    seen = set()
+    while stack:
+        cur = stack.pop()
+        if isinstance(cur, dict):
+            item = cur.get("musicTwoRowItemRenderer")
+            if item:
+                vid = (item.get("navigationEndpoint") or {}).get("watchEndpoint", {}).get("videoId", "") or ""
+                if vid and vid not in seen:
+                    t = _track_from_two_row_item(item, browse_id, channel_name)
+                    if t:
+                        seen.add(vid)
+                        out.append(t)
+                continue
+            stack.extend(cur.values())
+        elif isinstance(cur, list):
+            stack.extend(cur)
+    return out
+
+
+def _user_channel_fallback(browse_id):
+    resp = _yt()._send_request("browse", {"browseId": browse_id})
+    header_renderer = (resp.get("header") or {}).get("musicVisualHeaderRenderer") or {}
+    channel_name = _runs_text(header_renderer.get("title", {}))
+    micro = (resp.get("microformat") or {}).get("microformatDataRenderer", {}) or {}
+    if not channel_name:
+        channel_name = micro.get("title") or ""
+    fg = (
+        (header_renderer.get("foregroundThumbnail") or {})
+        .get("musicThumbnailRenderer", {})
+        .get("thumbnail", {})
+        .get("thumbnails", [])
+    )
+    image = fg[-1].get("url", "") if fg else ""
+    if not image:
+        thumbs = (micro.get("thumbnail") or {}).get("thumbnails", []) or []
+        image = thumbs[-1].get("url", "") if thumbs else ""
+    stats = []
+    sub_btn = (header_renderer.get("subscriptionButton") or {}).get("subscribeButtonRenderer", {}) or {}
+    subs = _runs_text(sub_btn.get("subscriberCountText", {}))
+    if subs:
+        stats.append(["YouTube Subscribers", subs])
+    popular = _user_channel_tracks_from_resp(resp, browse_id, channel_name)
+    return {
+        "header": {"image": image, "stats": stats, "description": ""},
+        "popular": popular,
+        "albums": [],
+        "playlists": [],
+        "related": [],
+    }
+
+
 def artist_page(browse_id):
     """Return the full artist page: header stats, popular tracks and the
     albums/singles/playlists/related-artists shelves."""
     yt = _yt()
-    a = yt.get_artist(browse_id)
+    try:
+        a = yt.get_artist(browse_id)
+    except Exception:
+        fallback = None
+        try:
+            fallback = _user_channel_fallback(browse_id)
+        except Exception:
+            fallback = None
+        if fallback and (fallback.get("popular") or fallback.get("header", {}).get("image")):
+            return fallback
+        raise
 
     def thumb(e):
         return (e.get("thumbnails") or [{}])[-1].get("url", "")
