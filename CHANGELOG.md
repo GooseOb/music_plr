@@ -8,6 +8,13 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+## [1.3.10] - 2026-10-06
+
+### Fixed
+
+- "Go to artist" on a regular youtube channel now opens the artist page with channel data instead of showing errors.
+- "Most popular songs" on YouTube artist pages now shows play counts and durations instead of hiding them.
+
 ## [1.3.9] - 2026-10-01
 
 ### Added

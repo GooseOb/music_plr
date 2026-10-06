@@ -170,8 +170,6 @@ fn enrich_songs_with_album_art(tracks: Vec<Track>) -> Vec<Track> {
         artists
             .iter()
             .map(|artist| s.spawn(move || artist_art(artist)))
-            .collect::<Vec<_>>()
-            .into_iter()
             .map(|h| h.join().ok().flatten())
             .collect()
     });
@@ -600,9 +598,9 @@ pub fn resolve_artist_id(name: &str) -> Result<Option<String>> {
     let found = get("artist.search", &[("artist", name), ("limit", "1")])
         .map(|v| {
             collect(&["results", "artistmatches", "artist"], &v)
-                .into_iter()
+                .iter()
                 .next()
-                .map(|a| str_field(&a, "name"))
+                .map(|a| str_field(a, "name"))
         })
         .unwrap_or_default()
         .filter(|n| !n.is_empty());
@@ -617,9 +615,9 @@ pub fn resolve_id(track: &Track) -> Result<Option<Track>> {
     )
     .map(|v| {
         collect(&["results", "trackmatches", "track"], &v)
-            .into_iter()
+            .iter()
             .next()
-            .map(|t| track_from_search(&t))
+            .map(track_from_search)
     })
     .unwrap_or_default();
     Ok(match found {

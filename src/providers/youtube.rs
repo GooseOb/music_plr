@@ -1,13 +1,9 @@
-use std::{
-    io::Write,
-    process::{Command, Stdio},
-    time::{Duration, Instant},
-};
+use std::{process::Command, time::Duration};
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use super::{run_command_with_timeout, ytdlp};
+use super::{run_command_with_stdin_and_timeout, run_command_with_timeout, ytdlp};
 use crate::{
     providers::{
         ArtistAlbumCard, ArtistHeader, CardData, ProviderId, RelatedArtistCard, SearchScope,
@@ -253,9 +249,10 @@ pub fn fetch_artist_page(
     let stdout = run_python("artist_page", &[id])?;
     let mut raw: YtArtistPageRaw =
         serde_json::from_str(&stdout).context("Failed to parse ytmusicapi artist_page output")?;
-    // The songs shelf carries no durations or view counts; those arrive
-    // later via [`enrich_track_metadata`] (a batched yt-dlp pass) so the
-    // page can render without waiting for it.
+    // The songs shelf carries neither durations nor (parsed) view counts;
+    // the python helper backfills both (plays from the raw shelf, durations
+    // from the shelf's backing playlist). [`enrich_track_metadata`] stays as
+    // a yt-dlp fallback for anything still missing.
     if !K::Popular.wanted(kinds) {
         raw.popular.clear();
     }
@@ -441,12 +438,30 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
     Ok((videos, valid_ids))
 }
 
+/// Whether any track still lacks duration or play-count data, i.e. the
+/// yt-dlp [`enrich_track_metadata`] pass would have work to do. The python
+/// helper now backfills both for artist shelves, so a fully populated page
+/// skips the slow subprocess entirely.
+pub fn needs_enrichment(tracks: &[crate::types::Track]) -> bool {
+    tracks.iter().any(|t| {
+        t.providers
+            .get(&ProviderId::YouTube)
+            .is_some_and(|pt| pt.duration == 0 || pt.play_count == 0)
+    })
+}
+
 /// Fill missing duration/view-count data on YouTube-sourced tracks with one
 /// batched yt-dlp metadata pass. Used as a second phase after the artist
-/// page renders, so popular rows don't wait on yt-dlp.
+/// page renders, so popular rows don't wait on yt-dlp. Only tracks that are
+/// actually missing data are queried.
 pub fn enrich_track_metadata(tracks: &mut [crate::types::Track]) {
     let ids: Vec<String> = tracks
         .iter()
+        .filter(|t| {
+            t.providers
+                .get(&ProviderId::YouTube)
+                .is_some_and(|pt| pt.duration == 0 || pt.play_count == 0)
+        })
         .filter_map(|t| t.provider_id(ProviderId::YouTube).map(str::to_string))
         .collect();
     if ids.is_empty() {
@@ -464,8 +479,8 @@ pub fn enrich_track_metadata(tracks: &mut [crate::types::Track]) {
             if pt.duration == 0 {
                 pt.duration = item.duration;
             }
-            // The songs shelf never carries counts; the yt-dlp pass's
-            // exact view_count is the authoritative fallback.
+            // The yt-dlp pass's exact view_count is the fallback for rows
+            // the shelf couldn't supply counts for.
             if pt.play_count == 0 {
                 pt.play_count = item.view_count.unwrap_or(0);
             }
@@ -494,47 +509,25 @@ fn fetch_batch_metadata(
         "--no-warnings",
     ];
     batch_args.extend(cookie_args.iter().map(String::as_str));
-    let Ok(mut child) = Command::new(path)
-        .args(&batch_args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
+    let mut cmd = Command::new(path);
+    cmd.args(&batch_args);
+    // `--batch-file -` reads the URLs from stdin, one per line.
+    let mut stdin = Vec::new();
+    for id in valid_ids {
+        stdin.extend_from_slice(format!("https://youtube.com/watch?v={id}\n").as_bytes());
+    }
+    let Ok(output) =
+        run_command_with_stdin_and_timeout(&mut cmd, Some(stdin), Duration::from_mins(1))
     else {
         return results;
     };
-
-    if let Some(ref mut stdin) = child.stdin {
-        for id in valid_ids {
-            let _ = writeln!(stdin, "https://youtube.com/watch?v={id}");
-        }
-    }
-    drop(child.stdin.take());
-
-    let deadline = Instant::now() + Duration::from_mins(1);
-    loop {
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) => {
-                if Instant::now() >= deadline {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return results;
-                }
-                std::thread::sleep(Duration::from_millis(50));
+    if output.status.success() {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            if line.trim().is_empty() {
+                continue;
             }
-            Err(_) => return results,
-        }
-    }
-    if let Ok(output) = child.wait_with_output() {
-        if output.status.success() {
-            for line in String::from_utf8_lossy(&output.stdout).lines() {
-                if line.trim().is_empty() {
-                    continue;
-                }
-                if let Ok(item) = serde_json::from_str::<YTDLPSearchResult>(line) {
-                    results.insert(item.id.clone(), item);
-                }
+            if let Ok(item) = serde_json::from_str::<YTDLPSearchResult>(line) {
+                results.insert(item.id.clone(), item);
             }
         }
     }
@@ -649,6 +642,34 @@ fn is_video_id(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn needs_enrichment_only_when_data_missing() {
+        use crate::types::Track;
+        fn track(id: &str, duration: u32, plays: u64) -> Track {
+            Track::from_provider_with_count(
+                ProviderId::YouTube,
+                id.into(),
+                "url".into(),
+                "t",
+                "a",
+                duration,
+                "thumb",
+                None,
+                None,
+                plays,
+            )
+        }
+        assert!(!needs_enrichment(&[]));
+        assert!(!needs_enrichment(&[track("a", 259, 100)]));
+        assert!(!needs_enrichment(&[
+            track("a", 259, 100),
+            track("b", 300, 50)
+        ]));
+        assert!(needs_enrichment(&[track("a", 0, 100)]));
+        assert!(needs_enrichment(&[track("a", 259, 0)]));
+        assert!(needs_enrichment(&[track("a", 259, 100), track("b", 0, 0)]));
+    }
 
     #[test]
     fn deserializes_view_count_shapes() {

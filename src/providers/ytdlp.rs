@@ -1,14 +1,13 @@
 //! Shared `yt-dlp` invocation helpers used by the provider backends.
 
 use std::{
-    process::Stdio,
     sync::{Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
 
-use super::{run_command_with_timeout, ClientEvent};
+use super::{run_command_with_stdin_and_timeout, run_command_with_timeout, ClientEvent};
 
 /// yt-dlp audio downloads transcode to MP3 in real time and can legitimately
 /// run for minutes, so they get a much larger budget than metadata calls.
@@ -249,40 +248,15 @@ fn probe_client_quality(
     ];
     args.extend(cookie_args.iter().map(String::as_str));
     args.extend(["--extractor-args", extractor_arg.as_str(), url]);
-    let Ok(mut child) = std::process::Command::new(yt_dlp)
-        .args(&args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-    else {
+    let mut cmd = std::process::Command::new(yt_dlp);
+    cmd.args(&args);
+    let Ok(output) = run_command_with_stdin_and_timeout(&mut cmd, None, PROBE_TIMEOUT) else {
         return None;
     };
-    let started = Instant::now();
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                if !status.success() {
-                    return None;
-                }
-                let mut out = String::new();
-                if let Some(stdout) = child.stdout.take() {
-                    use std::io::Read as _;
-                    let _ = std::io::BufReader::new(stdout).read_to_string(&mut out);
-                }
-                return score_probe_output(&out, prefer_m4a);
-            }
-            Ok(None) => {
-                if started.elapsed() >= PROBE_TIMEOUT {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return None;
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
-            Err(_) => return None,
-        }
+    if !output.status.success() {
+        return None;
     }
+    score_probe_output(&String::from_utf8_lossy(&output.stdout), prefer_m4a)
 }
 
 /// Download `url` as an MP3 via `yt-dlp --extract-audio` into `output_path`,

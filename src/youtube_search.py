@@ -284,6 +284,11 @@ def browse(browse_id, limit=50, kind=None):
             )
             if len(out) >= limit:
                 break
+        # The parsed shelf drops the play-count column and carries no
+        # durations; backfill both so rows can show counters and lengths.
+        songs_bid = (artist.get("songs") or {}).get("browseId") or ""
+        out = _backfill_shelf_plays(out, browse_id)
+        out = _backfill_shelf_durations(out, songs_bid)[:limit]
     except Exception:
         pass
     if not out:
@@ -392,6 +397,100 @@ def _user_channel_tracks_from_resp(resp, browse_id, channel_name):
     return out
 
 
+def _artist_shelf_plays(browse_id):
+    """Map videoId -> play-count text ("1.7B plays") from the artist's Top
+    songs shelf, read straight from the raw browse response.
+
+    `get_artist`'s song parser drops this column (it only keeps views for
+    album track lists), so without this the popular tracks carry no counts
+    and the UI hides them. Never raises: any failure yields an empty map
+    and the caller falls back to the yt-dlp enrichment pass."""
+    try:
+        resp = _yt()._send_request("browse", {"browseId": browse_id})
+    except Exception:
+        return {}
+    try:
+        stack = [resp]
+        while stack:
+            cur = stack.pop()
+            if isinstance(cur, dict):
+                if "musicShelfRenderer" in cur:
+                    out = {}
+                    for c in cur["musicShelfRenderer"].get("contents", []):
+                        item = c.get("musicResponsiveListItemRenderer") or {}
+                        flex = item.get("flexColumns", [])
+                        if len(flex) < 3:
+                            continue
+                        vid = ""
+                        try:
+                            runs = flex[0]["musicResponsiveListItemFlexColumnRenderer"]["text"]["runs"]
+                            vid = ((runs[0].get("navigationEndpoint") or {}).get("watchEndpoint") or {}).get("videoId", "") or ""
+                        except Exception:
+                            pass
+                        if not vid:
+                            try:
+                                vid = item["overlay"]["musicItemThumbnailOverlayRenderer"]["content"]["musicPlayButtonRenderer"]["playNavigationEndpoint"]["watchEndpoint"]["videoId"]
+                            except Exception:
+                                continue
+                        try:
+                            plays = "".join(
+                                r.get("text", "")
+                                for r in flex[2]["musicResponsiveListItemFlexColumnRenderer"]["text"].get("runs", [])
+                            )
+                        except Exception:
+                            plays = ""
+                        if vid and plays:
+                            out[vid] = plays
+                    return out
+                stack.extend(cur.values())
+            elif isinstance(cur, list):
+                stack.extend(cur)
+    except Exception:
+        pass
+    return {}
+
+
+def _backfill_shelf_plays(tracks, browse_id):
+    """Fill missing `views` on shelf-built tracks from the raw Top songs
+    shelf. Skips the extra request when the tracks already carry counts."""
+    if not tracks or any(t.get("views") for t in tracks):
+        return tracks
+    plays = _artist_shelf_plays(browse_id)
+    if plays:
+        for t in tracks:
+            if not t.get("views"):
+                v = plays.get(t["id"])
+                if v:
+                    t["views"] = v
+    return tracks
+
+
+def _backfill_shelf_durations(tracks, songs_bid):
+    """Fill missing `duration` on shelf-built tracks from the shelf's backing
+    playlist (`songs.browseId`), which carries durations the shelf itself
+    lacks. Matched by videoId so shelf order is preserved. Never raises:
+    on failure the slow yt-dlp enrichment pass remains the fallback."""
+    if not tracks or not songs_bid or not any(not t.get("duration") for t in tracks):
+        return tracks
+    try:
+        playlist = _yt().get_playlist(songs_bid, limit=max(len(tracks), 10))
+    except Exception:
+        return tracks
+    try:
+        durs = {}
+        for e in playlist.get("tracks", []):
+            vid = e.get("videoId") or ""
+            if vid:
+                durs[vid] = e.get("duration_seconds") or e.get("duration") or 0
+        if durs:
+            for t in tracks:
+                if not t.get("duration") and t["id"] in durs:
+                    t["duration"] = durs[t["id"]]
+    except Exception:
+        pass
+    return tracks
+
+
 def _user_channel_fallback(browse_id):
     resp = _yt()._send_request("browse", {"browseId": browse_id})
     header_renderer = (resp.get("header") or {}).get("musicVisualHeaderRenderer") or {}
@@ -476,6 +575,13 @@ def artist_page(browse_id):
             views=e.get("views") or "",
         )
         popular.append(t)
+    # The parsed shelf drops the play-count column ("1.7B plays" lives in
+    # the raw flex columns) and carries no durations; backfill both so the
+    # rows can show counters and lengths without waiting on yt-dlp.
+    popular = _backfill_shelf_plays(popular, browse_id)
+    popular = _backfill_shelf_durations(
+        popular, (a.get("songs") or {}).get("browseId") or ""
+    )
 
     albums = []
     for badge in (None, "Single"):

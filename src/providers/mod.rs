@@ -21,7 +21,7 @@ pub(crate) mod ytdlp;
 
 use std::{
     collections::HashMap,
-    io::Read,
+    io::{Read, Write},
     process::{Command, Output, Stdio},
     thread,
     time::{Duration, Instant},
@@ -32,32 +32,54 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::Track;
 
-/// Run a short-lived child process to completion, killing it when it exceeds
-/// `timeout`. stdout/stderr are drained on helper threads so a chatty child
-/// can't deadlock on a full pipe while we poll `try_wait`.
-pub(crate) fn run_command_with_timeout(cmd: &mut Command, timeout: Duration) -> Result<Output> {
-    fn drain(mut pipe: Option<impl Read>) -> Vec<u8> {
-        pipe.take()
-            .map(|mut p| {
-                let mut buf = Vec::new();
-                let _ = p.read_to_end(&mut buf);
-                buf
-            })
-            .unwrap_or_default()
-    }
+/// Drain a child pipe to completion, returning what was read. Run it on a
+/// helper thread while polling `try_wait` so a chatty child can't deadlock
+/// on a full pipe (see [`run_command_with_timeout`]).
+pub(crate) fn drain_pipe(pipe: Option<impl Read>) -> Vec<u8> {
+    pipe.map(|mut p| {
+        let mut buf = Vec::new();
+        let _ = p.read_to_end(&mut buf);
+        buf
+    })
+    .unwrap_or_default()
+}
 
+/// Run a child process to completion, killing it when it exceeds `timeout`.
+/// `stdin_input`, when present, is fed to the child's stdin on its own
+/// thread. stdout/stderr are drained on helper threads so a chatty child
+/// can't deadlock on a full pipe while we poll `try_wait`.
+pub(crate) fn run_command_with_stdin_and_timeout(
+    cmd: &mut Command,
+    stdin_input: Option<Vec<u8>>,
+    timeout: Duration,
+) -> Result<Output> {
     let program = cmd.get_program().to_string_lossy().into_owned();
     let mut child = cmd
-        .stdin(Stdio::null())
+        .stdin(if stdin_input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .with_context(|| format!("Failed to run {program}"))?;
 
+    // Feed stdin on its own thread; the payload is small (a URL list), so
+    // this never blocks, and a child that exits early just breaks the pipe.
+    let stdin_handle = stdin_input.map(|input| {
+        let stdin = child.stdin.take();
+        thread::spawn(move || {
+            if let Some(mut stdin) = stdin {
+                let _ = stdin.write_all(&input);
+            }
+        })
+    });
+
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
-    let stdout_handle = thread::spawn(move || drain(stdout));
-    let stderr_handle = thread::spawn(move || drain(stderr));
+    let stdout_handle = thread::spawn(move || drain_pipe(stdout));
+    let stderr_handle = thread::spawn(move || drain_pipe(stderr));
 
     let started = Instant::now();
     let status = loop {
@@ -80,11 +102,21 @@ pub(crate) fn run_command_with_timeout(cmd: &mut Command, timeout: Duration) -> 
 
     let stdout = stdout_handle.join().unwrap_or_default();
     let stderr = stderr_handle.join().unwrap_or_default();
+    if let Some(handle) = stdin_handle {
+        let _ = handle.join();
+    }
     Ok(Output {
         status,
         stdout,
         stderr,
     })
+}
+
+/// Run a short-lived child process with no stdin to completion, killing it
+/// when it exceeds `timeout`. Thin wrapper over
+/// [`run_command_with_stdin_and_timeout`].
+pub(crate) fn run_command_with_timeout(cmd: &mut Command, timeout: Duration) -> Result<Output> {
+    run_command_with_stdin_and_timeout(cmd, None, timeout)
 }
 
 /// Shared HTTP agent for keyless JSON providers (Last.fm, Bandcamp).
@@ -513,10 +545,10 @@ pub fn spawn_artist_kinds_fetch(
             soundcloud::fetch_artist_kinds(&id, kinds, &tx);
         } else {
             // One-shot providers: a single request answers every kind; split
-            // it into per-kind payloads and send them all at once. YouTube's
-            // popular tracks lack durations/view counts; a yt-dlp enrichment
-            // pass runs AFTER the fan-out (it takes seconds) and resends
-            // Popular so the page never waits on it.
+            // it into per-kind payloads and send them all at once. When
+            // YouTube's popular tracks still lack durations/view counts, a
+            // yt-dlp enrichment pass runs AFTER the fan-out (it takes
+            // seconds) and resends Popular so the page never waits on it.
             let result = match provider {
                 ProviderId::YouTube => youtube::fetch_artist_page(&id, kinds),
                 ProviderId::MusicBrainz => musicbrainz::fetch_artist_page(&id, kinds),
@@ -535,7 +567,9 @@ pub fn spawn_artist_kinds_fetch(
             }
             if provider == ProviderId::YouTube {
                 if let Ok(page) = &result {
-                    if ArtistDataKind::Popular.wanted(kinds) {
+                    if ArtistDataKind::Popular.wanted(kinds)
+                        && youtube::needs_enrichment(&page.popular)
+                    {
                         let mut page = page.clone();
                         youtube::enrich_track_metadata(&mut page.popular);
                         let _ = tx.send(ArtistKindResult(
