@@ -355,10 +355,11 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::OpenPlaylistAdd(indices) => {
-                let (pane, list) = match &self.dialog {
-                    Some(Dialog::ContextMenu(m)) => (m.pos.pane, m.pos.list),
-                    _ => (self.focused_pane_id, TrackListKind::Active),
+                let list = match &self.dialog {
+                    Some(Dialog::ContextMenu(m)) => m.pos.list,
+                    _ => TrackListKind::Active,
                 };
+                let pane = self.context_menu_pane();
                 self.open_playlist_add(PendingAdd {
                     indices,
                     list,

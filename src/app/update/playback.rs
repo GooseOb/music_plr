@@ -147,7 +147,11 @@ impl MusicPlayer {
         };
         self.bounds.context_menu = None;
         let list = menu.pos.list;
-        let pane = menu.pos.pane;
+        let pane = if list.is_main() {
+            menu.pos.pane
+        } else {
+            self.focused_pane_id
+        };
         let indices = menu.target_indices;
         let mut to_download: Vec<Track> = Vec::new();
         for &idx in &indices {
@@ -174,7 +178,11 @@ impl MusicPlayer {
     fn resolve_provider(&mut self, provider: ProviderId, track: Track, pos: TrackPos, play: bool) {
         let msg = (self.strings.resolving_on)(&track.title, provider.label());
         self.notify(msg);
-        let rid = self.slot_request_id(pos.pane);
+        let rid = if pos.list.is_main() && self.panes.contains_key(&pos.pane) {
+            self.slot_request_id(pos.pane)
+        } else {
+            0
+        };
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
             let resolved = crate::providers::resolve_id(provider, &track);

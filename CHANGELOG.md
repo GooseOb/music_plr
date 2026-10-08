@@ -14,6 +14,10 @@ auto-generated compare link below it.
 
 - Trashbin for tracks to be autoskipped: Separate tab in navigation with trashed tracklist and items in context menu to add/remove tracks from the trashbin.
 
+### Fixed
+
+- Right-clicking a track in the Queue or Recently Played panel no longer crashes the app.
+
 ## [1.3.10] - 2026-10-06
 
 ### Fixed

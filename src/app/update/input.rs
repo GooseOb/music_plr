@@ -5,7 +5,7 @@ use crate::{
     app::{
         interaction::{ContextMenuFocus, HoverTarget},
         pane::PaneId,
-        Dialog, TrackListSearch,
+        ContextMenuState, Dialog, TrackListSearch,
     },
     types::QueueTab,
 };
@@ -16,17 +16,19 @@ impl MusicPlayer {
     /// wrap at the edges; Left/Right switch between the menu and its submenu.
     pub fn handle_context_menu_key(&mut self, key: iced::keyboard::key::Physical) -> Task<Message> {
         use iced::keyboard::key::{Code, Physical};
-        if !matches!(self.dialog, Some(Dialog::ContextMenu(_))) {
+        // TODO: pass into other functions instead of re-extracting there
+        let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
             return Task::none();
-        }
+        };
         match key {
-            Physical::Code(Code::ArrowUp) => self.step_context_menu_focus(-1),
-            Physical::Code(Code::ArrowDown) => self.step_context_menu_focus(1),
+            Physical::Code(Code::ArrowUp) => {
+                self.set_context_menu_hovered(self.step_context_menu_focus(menu, -1))
+            }
+            Physical::Code(Code::ArrowDown) => {
+                self.set_context_menu_hovered(self.step_context_menu_focus(menu, 1))
+            }
             Physical::Code(Code::ArrowLeft | Code::ArrowRight) => self.context_menu_horizontal(),
             Physical::Code(Code::Enter) => {
-                let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
-                    unreachable!("checked above")
-                };
                 let message = match menu.hovered {
                     Some(ContextMenuFocus::Item(i)) => menu
                         .actions(&self.stream_cache)
@@ -47,42 +49,44 @@ impl MusicPlayer {
         }
     }
 
-    fn step_context_menu_focus(&mut self, dir: isize) -> Task<Message> {
-        // Move within whichever pane focus is currently in; an unfocused menu
-        // starts in the main list.
-        let focus = {
-            let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
-                return Task::none();
-            };
-            let (kind, count, current) = match menu.hovered {
-                Some(ContextMenuFocus::Sub(kind, i)) => (
-                    Some(kind),
-                    menu.submenu_providers(kind, &self.stream_cache).len(),
-                    Some(i),
-                ),
-                other => {
-                    let i = match other {
-                        Some(ContextMenuFocus::Item(i)) => Some(i),
-                        _ => None,
-                    };
-                    (None, menu.actions(&self.stream_cache).len(), i)
-                }
-            };
-            if count == 0 {
-                return Task::none();
-            }
-            let next = current.map_or(if dir < 0 { count - 1 } else { 0 }, |i| {
-                (i.cast_signed() + dir).rem_euclid(count.cast_signed()) as usize
-            });
-            match kind {
-                Some(kind) => ContextMenuFocus::Sub(kind, next),
-                None => ContextMenuFocus::Item(next),
-            }
-        };
-        if let Some(Dialog::ContextMenu(m)) = &mut self.dialog {
-            m.hovered = Some(focus);
+    fn set_context_menu_hovered(&mut self, hovered: Option<ContextMenuFocus>) -> Task<Message> {
+        if let Some(Dialog::ContextMenu(menu)) = &mut self.dialog {
+            menu.hovered = hovered;
         }
         Task::none()
+    }
+
+    fn step_context_menu_focus(
+        &self,
+        menu: &ContextMenuState,
+        dir: isize,
+    ) -> Option<ContextMenuFocus> {
+        // Move within whichever pane focus is currently in; an unfocused menu
+        // starts in the main list.
+        let (kind, count, current) = match menu.hovered {
+            Some(ContextMenuFocus::Sub(kind, i)) => (
+                Some(kind),
+                menu.submenu_providers(kind, &self.stream_cache).len(),
+                Some(i),
+            ),
+            other => {
+                let i = match other {
+                    Some(ContextMenuFocus::Item(i)) => Some(i),
+                    _ => None,
+                };
+                (None, menu.actions(&self.stream_cache).len(), i)
+            }
+        };
+        if count == 0 {
+            return None;
+        }
+        let next = current.map_or(if dir < 0 { count - 1 } else { 0 }, |i| {
+            (i.cast_signed() + dir).rem_euclid(count.cast_signed()) as usize
+        });
+        Some(match kind {
+            Some(kind) => ContextMenuFocus::Sub(kind, next),
+            None => ContextMenuFocus::Item(next),
+        })
     }
 
     fn context_menu_horizontal(&mut self) -> Task<Message> {

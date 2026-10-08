@@ -214,7 +214,7 @@ impl MusicPlayer {
         // add target, track editor) must go with it; its position would
         // otherwise resolve against a missing pane.
         let dialog_pane = match &self.dialog {
-            Some(crate::app::Dialog::ContextMenu(m)) => Some(m.pos.pane),
+            Some(crate::app::Dialog::ContextMenu(m)) if m.pos.list.is_main() => Some(m.pos.pane),
             Some(crate::app::Dialog::PlaylistJump(j)) => j
                 .pending
                 .as_ref()

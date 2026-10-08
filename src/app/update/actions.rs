@@ -692,7 +692,15 @@ impl MusicPlayer {
             return Task::none();
         };
         let TrackPos { index, list, pane } = pos;
-        self.focused_pane_id = pane;
+        let pane = if list.is_main() {
+            if !self.panes.contains_key(&pane) {
+                return Task::none();
+            }
+            self.focused_pane_id = pane;
+            pane
+        } else {
+            self.focused_pane_id
+        };
 
         let target_indices = if self.is_selected_in(pane, list, index) {
             self.selection_in(pane, list).to_vec()
@@ -756,7 +764,14 @@ impl MusicPlayer {
             self.dialog = dialog;
             return Task::none();
         };
-        let pane = menu.pos.pane;
+        let pane = if menu.pos.list.is_main() {
+            menu.pos.pane
+        } else {
+            self.focused_pane_id
+        };
+        if !self.panes.contains_key(&pane) {
+            return Task::none();
+        }
         self.open_artist(
             pane,
             menu.track.provider_artist_id(provider),
@@ -772,7 +787,14 @@ impl MusicPlayer {
             self.dialog = dialog;
             return Task::none();
         };
-        let pane = menu.pos.pane;
+        let pane = if menu.pos.list.is_main() {
+            menu.pos.pane
+        } else {
+            self.focused_pane_id
+        };
+        if !self.panes.contains_key(&pane) {
+            return Task::none();
+        }
         self.start_radio_provider(pane, provider, &menu.track, false)
     }
 
@@ -783,7 +805,14 @@ impl MusicPlayer {
             self.dialog = dialog;
             return Task::none();
         };
-        let pane = menu.pos.pane;
+        let pane = if menu.pos.list.is_main() {
+            menu.pos.pane
+        } else {
+            self.focused_pane_id
+        };
+        if !self.panes.contains_key(&pane) {
+            return Task::none();
+        }
         self.start_radio_provider(pane, provider, &menu.track, true)
     }
 
@@ -818,10 +847,12 @@ impl MusicPlayer {
     }
 
     /// The pane a context-menu action targets: the open menu's source pane,
-    /// or the focused pane when the menu is already gone.
+    /// or the focused pane when the menu is already gone. Queue/Recent rows
+    /// live in the global panel and carry no pane, so they resolve to the
+    /// focused pane.
     pub fn context_menu_pane(&self) -> PaneId {
         match &self.dialog {
-            Some(Dialog::ContextMenu(m)) => m.pos.pane,
+            Some(Dialog::ContextMenu(m)) if m.pos.list.is_main() => m.pos.pane,
             _ => self.focused_pane_id,
         }
     }
