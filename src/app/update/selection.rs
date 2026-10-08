@@ -48,8 +48,13 @@ impl MusicPlayer {
                 .playlists
                 .get(entry.index)
                 .map_or(&[], |p| &p.tracks),
+            ViewKind::Trashbin => &self.trashbin.tracks,
             _ => vd.tracks(),
         }
+    }
+
+    pub fn is_trashed(&self, track: &Track) -> bool {
+        self.trashbin.contains(track)
     }
 
     pub fn select_range_in(&mut self, pane: PaneId, list: TrackListKind, from: usize, to: usize) {

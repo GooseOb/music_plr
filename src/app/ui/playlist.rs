@@ -67,6 +67,20 @@ pub(super) fn view_playlist<'a>(
     Column::with_children([header, track_list]).into()
 }
 
+pub(super) fn view_trashbin(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> {
+    if player.trashbin.tracks.is_empty() {
+        empty_state(player.strings.no_tracks_found)
+    } else {
+        view_track_list(
+            &player.trashbin.tracks,
+            player,
+            pane,
+            TrackListKind::Active,
+            0,
+        )
+    }
+}
+
 pub(super) fn view_downloads(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> {
     let header = Row::with_children([
         icons::icon(icons::DOWNLOAD_ICON, theme::ICON_SIZE_MD)

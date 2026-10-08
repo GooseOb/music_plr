@@ -219,6 +219,8 @@ pub enum CtxAction {
     RemoveFromQueue,
     RemoveFromPlaylist,
     RemoveFromRecent,
+    AddToTrashbin,
+    RemoveFromTrashbin,
 }
 
 impl CtxAction {
@@ -235,7 +237,9 @@ impl CtxAction {
             | CtxAction::AddToPlaylist
             | CtxAction::RemoveFromQueue
             | CtxAction::RemoveFromPlaylist
-            | CtxAction::RemoveFromRecent => None,
+            | CtxAction::RemoveFromRecent
+            | CtxAction::AddToTrashbin
+            | CtxAction::RemoveFromTrashbin => None,
         }
     }
 
@@ -257,6 +261,12 @@ impl CtxAction {
             | CtxAction::RemoveFromPlaylist
             | CtxAction::RemoveFromRecent => {
                 Message::ContextMenuRemoveFromList(menu.pos.list, menu.target_indices.clone())
+            }
+            CtxAction::AddToTrashbin => {
+                Message::ContextMenuAddToTrashbin(menu.pos.list, menu.target_indices.clone())
+            }
+            CtxAction::RemoveFromTrashbin => {
+                Message::ContextMenuRemoveFromTrashbin(menu.pos.list, menu.target_indices.clone())
             }
         }
     }
@@ -280,6 +290,7 @@ pub struct ContextMenuState {
     /// every re-measure recomputes the flip relative to this.
     pub cursor: (f32, f32),
     pub in_playlist: bool,
+    pub is_trashed: bool,
     pub track: Track,
     pub target_indices: Vec<usize>,
     pub hovered: Option<ContextMenuFocus>,
@@ -307,13 +318,25 @@ impl ContextMenuState {
     }
 
     /// The visible entries of the main menu, in order. The view renders one
-    /// row per entry; keyboard navigation indexes into this list.
+    /// row per entry; keyboard navigation indexes into this list. Trashed
+    /// tracks cannot be played, so `Play` is hidden for them; trashed tracks
+    /// offer removal from the trashbin instead of adding.
     pub fn actions(&self, cache: &StreamCache) -> Vec<CtxAction> {
-        let mut v = vec![CtxAction::Play, CtxAction::AddToQueue, CtxAction::Edit];
+        let mut v = Vec::with_capacity(11);
+        if !self.is_trashed {
+            v.push(CtxAction::Play);
+        }
+        v.push(CtxAction::AddToQueue);
+        v.push(CtxAction::Edit);
         if !self.track.artist.is_empty() {
             v.push(CtxAction::GoToArtist);
         }
         v.push(CtxAction::AddToPlaylist);
+        if self.is_trashed {
+            v.push(CtxAction::RemoveFromTrashbin);
+        } else {
+            v.push(CtxAction::AddToTrashbin);
+        }
         v.push(CtxAction::Download);
         if SubmenuKind::SongRadio.available(&self.track) {
             v.push(CtxAction::SongRadio);

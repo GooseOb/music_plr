@@ -596,19 +596,25 @@ impl crate::app::MusicPlayer {
                 }
             }
             Message::ContextMenuAddToQueue(list, indices) => {
-                let pane = match &self.dialog {
-                    Some(Dialog::ContextMenu(m)) => m.pos.pane,
-                    _ => self.focused_pane_id,
-                };
+                let pane = self.context_menu_pane();
                 self.close_context_menu();
                 self.handle_add_to_queue(pane, list, &indices);
                 Task::none()
             }
+            Message::ContextMenuAddToTrashbin(list, indices) => {
+                let pane = self.context_menu_pane();
+                self.close_context_menu();
+                self.handle_add_to_trashbin(pane, list, &indices);
+                Task::none()
+            }
+            Message::ContextMenuRemoveFromTrashbin(list, indices) => {
+                let pane = self.context_menu_pane();
+                self.close_context_menu();
+                self.handle_remove_from_trashbin(pane, list, &indices);
+                Task::none()
+            }
             Message::ContextMenuRemoveFromList(list, indices) => {
-                let pane = match &self.dialog {
-                    Some(Dialog::ContextMenu(m)) => m.pos.pane,
-                    _ => self.focused_pane_id,
-                };
+                let pane = self.context_menu_pane();
                 self.close_context_menu();
                 match list {
                     TrackListKind::Queue => self.handle_remove_from_queue_batch(&indices),

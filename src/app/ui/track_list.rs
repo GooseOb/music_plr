@@ -156,7 +156,7 @@ pub(super) fn leading_control<'a>(
             .padding(theme::SPACING_2XS)
             .on_press(Message::TogglePlayPause)
             .into()
-    } else if is_hovered {
+    } else if is_hovered && !player.is_trashed(track) {
         Button::new(icons::icon(icons::PLAY_ICON, theme::ICON_SIZE_LG).style(icon_primary()))
             .padding(theme::SPACING_2XS)
             .style(button_style_primary())
@@ -307,6 +307,14 @@ fn track_row_layout_inner<'a>(
                     .into(),
             );
         }
+    }
+
+    if player.is_trashed(track) {
+        trailing_children.push(
+            icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_MD)
+                .style(icon_accent())
+                .into(),
+        );
     }
 
     trailing_children.push(if is_downloaded {

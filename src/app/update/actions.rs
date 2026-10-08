@@ -707,6 +707,7 @@ impl MusicPlayer {
                 position: (point.x, point.y),
                 cursor: (point.x, point.y),
                 in_playlist: matches!(self.view_data_in(pane).kind, ViewKind::Playlist(_)),
+                is_trashed: self.is_trashed(&track),
                 track,
                 hovered: None,
             },
@@ -814,6 +815,15 @@ impl MusicPlayer {
     pub fn close_context_menu(&mut self) {
         self.dialog = None;
         self.bounds.context_menu = None;
+    }
+
+    /// The pane a context-menu action targets: the open menu's source pane,
+    /// or the focused pane when the menu is already gone.
+    pub fn context_menu_pane(&self) -> PaneId {
+        match &self.dialog {
+            Some(Dialog::ContextMenu(m)) => m.pos.pane,
+            _ => self.focused_pane_id,
+        }
     }
 
     /// Open the track-editing popup for the track at `pos`, seeding the

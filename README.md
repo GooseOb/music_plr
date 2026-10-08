@@ -15,6 +15,7 @@ A YouTube/SoundCloud/Bandcamp search music player with local playback, downloads
 - **Artist pages** — Header with stats plus Most popular, Albums, Playlists, and Fans-also-like sections, each with its own provider picker.
 - **Radio** — Song radio and artist radio from search results.
 - **Queue** — Queue panel with Up Next and Recently Played tabs.
+- **Trashbin** — Trash tracks from the context menu; trashed tracks are skipped at track-change time, marked with an icon, and listed in the sidebar Trashbin view.
 - **Split panes** — Split the main view.
 - **Drag & drop** — Drag tracks between views, into the queue, onto playlists (reorder or turn a card into a local playlist), and into the
   Library.
@@ -61,24 +62,9 @@ Extract the `.app.tar.gz` and drag `Goosemusic.app` to your Applications folder.
 
 ## Supported languages
 
-| Language                       | Code    |
-| ------------------------------ | ------- |
-| English                        | `en`    |
-| Polski (Polish)                | `pl`    |
-| Español (Spanish)              | `es`    |
-| Português (Brasil)             | `pt_br` |
-| 简体中文 (Chinese, Simplified) | `zh_cn` |
-| العربية (Arabic)               | `ar`    |
-| Беларуская (Belarusian)        | `be`    |
-| Français (French)              | `fr`    |
-| Deutsch (German)               | `de`    |
-| 日本語 (Japanese)              | `ja`    |
-| Русский (Russian)              | `ru`    |
-| हिन्दी (Hindi)                 | `hi`    |
-| Українська (Ukrainian)         | `uk`    |
+English (`en`), Polski (`pl`), Español (`es`), Português (Brasil) (`pt_br`), 简体中文 (`zh_cn`), العربية (`ar`), Беларуская (`be`), Français (`fr`), Deutsch (`de`), 日本語 (`ja`), Русский (`ru`), हिन्दी (`hi`), Українська (`uk`).
 
-Pick a language from the in-app **Settings** view. To add one, copy `src/i18n/en.rs` to a new module, translate the strings, and append one entry
-to the `languages!` macro in `src/i18n/mod.rs` — the `Language` enum and picker are generated from that list.
+Pick a language from the in-app **Settings** view. To add one, copy `src/i18n/en.rs` to a new module, translate the strings, and append one entry to the `languages!` macro in `src/i18n/mod.rs` — the `Language` enum and picker are generated from that list.
 
 ## Install & run
 
@@ -101,7 +87,7 @@ cargo run
 | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | <kbd>Space</kbd>                                                                                         | Toggle play/pause                                                                                   |
 | <kbd>Esc</kbd>                                                                                           | Close in-list search → close search history → clear selection → return to Search                    |
-| <kbd>Delete</kbd>                                                                                        | Delete selected tracks (playlist view only)                                                         |
+| <kbd>Delete</kbd>                                                                                        | Delete selected tracks (playlist/Downloads/Trashbin views)                                          |
 | <kbd>←</kbd>/<kbd>→</kbd> or <kbd>h</kbd>/<kbd>l</kbd>                                                   | Move focus between queue panel and track list                                                       |
 | <kbd>↑</kbd>/<kbd>↓</kbd> or <kbd>k</kbd>/<kbd>j</kbd>                                                   | Move through the focused list (auto-scrolls, wraps)                                                 |
 | <kbd>gg</kbd> / <kbd>G</kbd>, <kbd>Home</kbd>/<kbd>End</kbd>                                             | First / last row                                                                                    |
@@ -139,7 +125,7 @@ Config lives at `~/.config/goosemusic/config.json` and is also editable live fro
 | `volume_normalization`       | Consistent loudness across tracks                         | `false`              |
 | `cookie_browser`             | Browser yt-dlp reads cookies from (age-restricted videos) | `none`               |
 
-Persistent data goes to `~/.local/share/goosemusic` (playlists, library, downloads, search history); regenerable caches (session, streamed audio,
+Persistent data goes to `~/.local/share/goosemusic` (playlists, library, downloads, trashbin, search history); regenerable caches (session, streamed audio,
 thumbnails, lyrics) go to `~/.cache/goosemusic`.
 
 ## Technical notes

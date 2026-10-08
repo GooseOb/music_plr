@@ -12,9 +12,15 @@ use crate::{
 impl MusicPlayer {
     pub fn handle_play_track(&mut self, pos: TrackPos) {
         let TrackPos { index, list, pane } = pos;
+        let track = self.get_track_at(pos);
+        if let Some(track) = &track {
+            if self.is_trashed(track) {
+                return;
+            }
+        }
         match list {
             TrackListKind::Recent => {
-                if let Some(track) = self.get_track_at(pos) {
+                if let Some(track) = track {
                     self.set_queue(vec![track]);
                 }
             }
@@ -46,14 +52,13 @@ impl MusicPlayer {
                 }
             }
             TrackListKind::Active => {
-                // Avoid holding a `view_data_mut` borrow across the playlist
-                // store access by deciding the target first.
-                let target = match &self.view_data_in(pane).kind {
-                    ViewKind::Playlist(entry) => Some(entry.index),
-                    _ => None,
-                };
-                match target {
-                    Some(sp) => {
+                let view = self.view_data_in_mut(pane);
+                if let Some(t) = view.tracks_mut().and_then(|ts| ts.get_mut(index)) {
+                    *t = track.clone();
+                }
+                match &view.kind {
+                    ViewKind::Playlist(entry) => {
+                        let sp = entry.index;
                         if let Some(pl) = self.playlists.playlists.get_mut(sp) {
                             if let Some(t) = pl.tracks.get_mut(index) {
                                 *t = track;
@@ -61,36 +66,46 @@ impl MusicPlayer {
                         }
                         self.playlists.save();
                     }
-                    None => {
-                        if let Some(t) = self
-                            .view_data_in_mut(pane)
-                            .tracks_mut()
-                            .and_then(|ts| ts.get_mut(index))
-                        {
+                    ViewKind::Trashbin => {
+                        if let Some(t) = self.trashbin.tracks.get_mut(index) {
                             *t = track;
                         }
+                        self.trashbin.save();
                     }
+                    _ => {}
                 }
             }
             TrackListKind::Recent => {}
         }
     }
 
-    /// Play `tracks[0]` (preferring its own source when streamable, else the
-    /// default provider), replace the queue with `tracks`, and persist the
-    /// session. An empty `tracks` clears the queue without playing.
+    /// Play the first non-trashed track (preferring its own source when
+    /// streamable, else the default provider), replace the queue with
+    /// `tracks`, and persist the session. An empty `tracks` clears the queue
+    /// without playing. Trashed tracks stay in the queue and are skipped when
+    /// playback reaches them.
     pub fn set_queue(&mut self, tracks: Vec<Track>) {
-        if !tracks.is_empty() {
-            let first = &tracks[0];
+        self.queue
+            .set_queue(tracks, self.config.max_recently_played);
+        self.skip_trashed_and_play_current();
+    }
+
+    /// Advance past trashed tracks at the queue front without recording them
+    /// as played, then start the new current track if any. The single choke
+    /// point for (re)starting playback on a queue that may begin with
+    /// trashed tracks.
+    fn skip_trashed_and_play_current(&mut self) {
+        while self.queue.current().is_some_and(|t| self.is_trashed(t)) {
+            self.queue.advance();
+        }
+        if let Some(first) = self.queue.current().cloned() {
             let preferred = if first.best_stream_provider(first.source).is_some() {
                 first.source
             } else {
                 self.config.default_provider
             };
-            self.play_track_internal(first, preferred);
+            self.play_track_internal(&first, preferred);
         }
-        self.queue
-            .set_queue(tracks, self.config.max_recently_played);
         self.save_session();
         self.media_controls_dirty = true;
     }
@@ -104,6 +119,9 @@ impl MusicPlayer {
         let Some(track) = self.get_track_at(pos) else {
             return;
         };
+        if self.is_trashed(&track) {
+            return;
+        }
         if track.has_provider(provider) {
             let mut t = track;
             t.source = provider;
@@ -372,6 +390,8 @@ impl MusicPlayer {
         if let Some(track) = self.queue.current().cloned() {
             if self.is_playing {
                 self.audio.pause();
+            } else if self.is_trashed(&track) {
+                self.skip_trashed_and_play_current();
             } else if self.audio.has_output() {
                 self.audio.resume();
             } else {
@@ -388,6 +408,10 @@ impl MusicPlayer {
             self.queue.advance();
         }
 
+        while self.queue.current().is_some_and(|t| self.is_trashed(t)) {
+            self.queue.advance();
+        }
+
         if let Some(t) = self.queue.current() {
             self.track_loading = true;
             let t = t.clone();
@@ -398,15 +422,17 @@ impl MusicPlayer {
     }
 
     pub fn previous_track(&mut self) {
-        if self.queue.restore_previous() {
-            self.track_loading = true;
-            if let Some(t) = self.queue.current() {
-                let t = t.clone();
-                self.play_track_internal(&t, t.source);
-            }
-            self.save_session();
-            self.media_controls_dirty = true;
+        let Some(prev_pos) = self.queue.previous_pos_filtered(|t| !self.is_trashed(t)) else {
+            return;
+        };
+        self.queue.restore_previous(prev_pos);
+        self.track_loading = true;
+        if let Some(t) = self.queue.current() {
+            let t = t.clone();
+            self.play_track_internal(&t, t.source);
         }
+        self.save_session();
+        self.media_controls_dirty = true;
     }
 
     pub fn set_volume(&mut self, vol: f32) {

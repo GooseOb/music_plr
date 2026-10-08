@@ -132,6 +132,7 @@ pub enum ViewKind {
     PlaylistView(PlaylistRef),
     Playlist(PlaylistEntry),
     Downloads,
+    Trashbin,
     Settings,
 }
 
@@ -239,6 +240,7 @@ impl ViewData {
                 a.id == b.id && a.provider == b.provider
             }
             (ViewKind::Downloads, ViewKind::Downloads)
+            | (ViewKind::Trashbin, ViewKind::Trashbin)
             | (ViewKind::Settings, ViewKind::Settings) => true,
             _ => false,
         }
@@ -288,6 +290,15 @@ impl ViewData {
         Self {
             kind: ViewKind::Downloads,
             content: LoadState::Ready(tracks),
+            ..Default::default()
+        }
+    }
+
+    /// Create a `Trashbin` view. Tracks are read live from the trash store,
+    /// so no content snapshot is needed.
+    pub fn new_trashbin() -> Self {
+        Self {
+            kind: ViewKind::Trashbin,
             ..Default::default()
         }
     }

@@ -5,11 +5,12 @@ use tracing::debug;
 
 use super::{
     error, media_controls, mpsc, spawn_thumbnail_download, BackendResult, MediaControlEvent,
-    MediaUpdate, Message, MusicPlayer, Task, ViewData, PREPEND,
+    MediaUpdate, Message, MusicPlayer, Task, PREPEND,
 };
 use crate::{
     app::{interaction::TrackListKind, pane::PaneId, Dialog, ViewKind},
-    data::{cache::StreamCache, playlists::PlaylistStore, thumbnails::ThumbnailIndex, JsonStore},
+    data::{cache::StreamCache, thumbnails::ThumbnailIndex, JsonStore},
+    providers::SearchTab,
     types::Track,
 };
 
@@ -151,23 +152,25 @@ impl MusicPlayer {
         }
     }
 
-    /// Seed a view's thumbnail ids into the index so the next tick drains any
-    /// missing ones. Called wherever a view becomes active (navigation,
-    /// results installed) — the tick only drains, it never re-scans visibility.
-    pub(crate) fn seed_view_thumbnails(
-        index: &mut ThumbnailIndex,
-        playlists: &PlaylistStore,
-        view: &ViewData,
-    ) {
-        let tracks = view.tracks();
-        Self::seed_tracks_thumbnails(index, tracks);
+    /// Seed a nav-history slot's thumbnail ids into the index so the next
+    /// tick drains any missing ones. Called wherever a view becomes active
+    /// (navigation, results installed) — the tick only drains, it never
+    /// re-scans visibility. Store-backed views (`Playlist`, `Trashbin`) seed
+    /// from their store, since their tracks don't live in `ViewData`.
+    pub(crate) fn seed_view_thumbnails(&mut self, pane: PaneId, idx: usize) {
+        let index = &mut self.thumbnail_index;
+        let Some(view) = self.panes.get(&pane).and_then(|p| p.nav_history.get(idx)) else {
+            return;
+        };
+        Self::seed_tracks_thumbnails(index, view.tracks());
         match &view.kind {
-            // A local playlist backs its tracks from the store, not from
-            // `ViewData`, so seed from the store or its artwork never drains.
             ViewKind::Playlist(entry) => {
-                if let Some(playlist) = playlists.playlists.get(entry.index) {
+                if let Some(playlist) = self.playlists.playlists.get(entry.index) {
                     Self::seed_tracks_thumbnails(index, &playlist.tracks);
                 }
+            }
+            ViewKind::Trashbin => {
+                Self::seed_tracks_thumbnails(index, &self.trashbin.tracks);
             }
             ViewKind::Album(r) => {
                 index.ensure(r.provider, &r.id, &r.thumbnail);
@@ -175,44 +178,25 @@ impl MusicPlayer {
             ViewKind::PlaylistView(r) => {
                 index.ensure(r.provider, &r.id, &r.thumbnail);
             }
-            _ => {}
-        }
-        if let ViewKind::Search(s) = &view.kind {
-            if let crate::providers::SearchTab::Artists(cards)
-            | crate::providers::SearchTab::Albums(cards)
-            | crate::providers::SearchTab::Playlists(cards) = &s.tab
-            {
-                for card in cards {
-                    index.ensure(s.provider, &card.id, &card.thumbnail);
+            ViewKind::Search(s) => {
+                if let SearchTab::Artists(cards)
+                | SearchTab::Albums(cards)
+                | SearchTab::Playlists(cards) = &s.tab
+                {
+                    for card in cards {
+                        index.ensure(s.provider, &card.id, &card.thumbnail);
+                    }
                 }
             }
+            _ => {}
         }
     }
 
     pub(crate) fn seed_active_view_thumbnails(&mut self, pane: PaneId) {
-        let Self {
-            panes,
-            playlists,
-            thumbnail_index,
-            ..
-        } = self;
-        let Some(view) = panes.get(&pane).map(crate::app::Pane::view_data) else {
+        let Some(pos) = self.panes.get(&pane).map(|p| p.nav_history_pos) else {
             return;
         };
-        Self::seed_view_thumbnails(thumbnail_index, playlists, view);
-    }
-
-    pub(crate) fn seed_slot_thumbnails(&mut self, pane: PaneId, idx: usize) {
-        let Self {
-            panes,
-            playlists,
-            thumbnail_index,
-            ..
-        } = self;
-        let Some(view) = panes.get(&pane).and_then(|p| p.nav_history.get(idx)) else {
-            return;
-        };
-        Self::seed_view_thumbnails(thumbnail_index, playlists, view);
+        self.seed_view_thumbnails(pane, pos);
     }
 
     fn update_thumbnails(&mut self) {
@@ -298,14 +282,14 @@ impl MusicPlayer {
 
     pub(crate) fn finalize_view(&mut self, pane: PaneId, idx: usize) {
         self.save_session();
-        self.seed_slot_thumbnails(pane, idx);
+        self.seed_view_thumbnails(pane, idx);
     }
 
     fn process_search_results(
         &mut self,
         rid: u64,
         tracks: Vec<crate::types::Track>,
-        tab: crate::providers::SearchTab,
+        tab: SearchTab,
     ) {
         // Apply to the slot that requested this search.
         if let Some((pane, idx)) = self.slot_for_request(rid) {
@@ -756,6 +740,7 @@ impl MusicPlayer {
                 .playlists
                 .get(entry.index)
                 .map_or(&[], |p| &p.tracks),
+            Some(ViewKind::Trashbin) => &self.trashbin.tracks,
             _ => self
                 .pane(pane)
                 .nav_history
@@ -771,27 +756,29 @@ impl MusicPlayer {
         track_idx: usize,
         track: crate::types::Track,
     ) {
-        let target = match self
-            .pane(pane)
-            .nav_history
-            .get(history_idx)
-            .map(|v| &v.kind)
-        {
-            Some(ViewKind::Playlist(entry)) => Some(entry.index),
-            _ => None,
+        let Some(slot) = self.pane_mut(pane).nav_history.get_mut(history_idx) else {
+            return;
         };
-        if let Some(sp) = target {
-            if let Some(pl) = self.playlists.playlists.get_mut(sp) {
-                if let Some(t) = pl.tracks.get_mut(track_idx) {
-                    *t = track.clone();
-                }
-            }
-            self.playlists.save();
+        if let Some(t) = slot.tracks_mut().and_then(|ts| ts.get_mut(track_idx)) {
+            *t = track.clone();
         }
-        if let Some(slot) = self.pane_mut(pane).nav_history.get_mut(history_idx) {
-            if let Some(t) = slot.tracks_mut().and_then(|ts| ts.get_mut(track_idx)) {
-                *t = track;
+        match &slot.kind {
+            ViewKind::Playlist(entry) => {
+                let sp = entry.index;
+                if let Some(pl) = self.playlists.playlists.get_mut(sp) {
+                    if let Some(t) = pl.tracks.get_mut(track_idx) {
+                        *t = track;
+                    }
+                }
+                self.playlists.save();
             }
+            ViewKind::Trashbin => {
+                if let Some(t) = self.trashbin.tracks.get_mut(track_idx) {
+                    *t = track;
+                }
+                self.trashbin.save();
+            }
+            _ => {}
         }
     }
 

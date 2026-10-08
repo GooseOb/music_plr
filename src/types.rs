@@ -292,14 +292,17 @@ impl PlayQueue {
         }
     }
 
-    /// Restore the most recently played track to the front of the queue
-    /// (becomes the new current track).
-    pub fn restore_previous(&mut self) -> bool {
-        if let Some(track) = self.recently_played.pop_front() {
+    pub fn previous_pos_filtered(&self, filter: impl Fn(&Track) -> bool) -> Option<usize> {
+        self.recently_played.iter().position(filter)
+    }
+
+    /// Restore the track at `pos` in `recently_played` to the front of the
+    /// queue (becomes the new current track), dropping everything before it.
+    /// `pos` comes from [`Self::get_previous_pos_filtered`]; anything out of
+    /// bounds is a no-op rather than a panic.
+    pub fn restore_previous(&mut self, pos: usize) {
+        if let Some(track) = self.recently_played.drain(..=pos).next_back() {
             self.tracks.insert(0, track);
-            true
-        } else {
-            false
         }
     }
 
@@ -380,7 +383,7 @@ mod tests {
 
         let t1 = make_track("1", "url1");
         q.record_played(&t1, 50);
-        assert!(q.restore_previous());
+        q.restore_previous(0);
         assert_eq!(
             q.current().map(|t| t.provider_id(ProviderId::YouTube)),
             Some(Some("1"))
@@ -406,7 +409,30 @@ mod tests {
         let mut q = PlayQueue::new();
         assert!(q.current().is_none());
         assert!(!q.advance());
-        assert!(!q.restore_previous());
+        q.restore_previous(99);
+        assert!(q.current().is_none());
+    }
+
+    #[test]
+    fn restore_previous_drains_through_pos() {
+        let mut q = PlayQueue::new();
+        q.tracks = vec![make_track("9", "url9")];
+        for id in ["1", "2", "3"] {
+            q.record_played(&make_track(id, &format!("url{id}")), 50);
+        }
+        // Most-recent-first: [3, 2, 1]. Restoring index 1 drops "3" and
+        // brings back "2", leaving "1" in history.
+        q.restore_previous(1);
+        assert_eq!(
+            q.current().map(|t| t.provider_id(ProviderId::YouTube)),
+            Some(Some("2"))
+        );
+        let recent: Vec<_> = q
+            .recently_played
+            .iter()
+            .map(|t| t.provider_id(ProviderId::YouTube).unwrap_or(""))
+            .collect();
+        assert_eq!(recent, vec!["1"]);
     }
 
     #[test]

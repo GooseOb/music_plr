@@ -21,6 +21,7 @@ pub mod playlists;
 pub mod search_history;
 pub mod session;
 pub mod thumbnails;
+pub mod trashbin;
 
 /// The app's platform directories. Falls back to the current directory when
 /// the OS can't provide them (e.g. a stripped-down container).

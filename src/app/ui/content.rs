@@ -44,6 +44,7 @@ pub(super) fn view_main_content(
             }
             ViewKind::Playlist(entry) => playlist::view_playlist(player, pane, entry),
             ViewKind::Downloads => playlist::view_downloads(player, pane),
+            ViewKind::Trashbin => playlist::view_trashbin(player, pane),
             ViewKind::Settings => settings::view_settings(player),
         }
     };

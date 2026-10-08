@@ -234,6 +234,12 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             Some(player.download_registry.len()),
         ),
         sidebar_nav_item(
+            player.strings.trashbin,
+            ViewData::new_trashbin(),
+            player,
+            Some(player.trashbin.len()),
+        ),
+        sidebar_nav_item(
             player.strings.settings,
             ViewData::new_settings(),
             player,
@@ -411,6 +417,7 @@ fn sidebar_nav_item<'a>(
     let icon_name: &[u8] = match target.kind {
         ViewKind::Search { .. } => icons::SEARCH_ICON,
         ViewKind::Downloads => icons::DOWNLOAD_ICON,
+        ViewKind::Trashbin => icons::DELETE_ICON,
         ViewKind::Settings => icons::SETTINGS_ICON,
         _ => icons::MUSIC_ICON,
     };

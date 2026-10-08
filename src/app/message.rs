@@ -267,6 +267,8 @@ pub enum Message {
     ContextMenuClearCache,
     ContextMenuClearCacheProvider(ProviderId),
     ContextMenuAddToQueue(TrackListKind, Vec<usize>),
+    ContextMenuAddToTrashbin(TrackListKind, Vec<usize>),
+    ContextMenuRemoveFromTrashbin(TrackListKind, Vec<usize>),
     ContextMenuRemoveFromList(TrackListKind, Vec<usize>),
     ContextMenuEditTrack,
     EditTrackField(EditTrackField, String),

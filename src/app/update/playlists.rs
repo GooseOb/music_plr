@@ -392,6 +392,39 @@ impl MusicPlayer {
         self.clear_selection_if_touched_in(pane, indices, TrackListKind::Active);
     }
 
+    pub fn handle_add_to_trashbin(&mut self, pane: PaneId, list: TrackListKind, indices: &[usize]) {
+        let tracks: Vec<Track> = indices
+            .iter()
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, list, pane)))
+            .collect();
+        if tracks.is_empty() {
+            return;
+        }
+        let count = self.trashbin.add_tracks(tracks.iter());
+        let msg = (self.strings.added_to)(count, self.strings.trashbin);
+        self.notify(msg);
+        self.clear_selection_if_touched_in(pane, indices, list);
+    }
+
+    /// Un-trash the target tracks by identity, so it works from any view
+    /// showing them — not just the trashbin view.
+    pub fn handle_remove_from_trashbin(
+        &mut self,
+        pane: PaneId,
+        list: TrackListKind,
+        indices: &[usize],
+    ) {
+        let keys: std::collections::HashSet<String> = indices
+            .iter()
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, list, pane)))
+            .map(|t| t.cache_key())
+            .collect();
+        let removed = self.trashbin.remove_keys(&keys);
+        let msg = (self.strings.removed_from)(removed, self.strings.trashbin);
+        self.notify(msg);
+        self.clear_selection_if_touched_in(pane, indices, list);
+    }
+
     pub fn handle_reorder_tracks_selected(
         &mut self,
         pane: PaneId,
@@ -488,6 +521,8 @@ impl MusicPlayer {
 
         if matches!(self.view_data_mut().kind, ViewKind::Playlist(_)) {
             self.handle_remove_from_playlist_batch(self.focused_pane_id, &indices);
+        } else if matches!(self.view_data().kind, ViewKind::Trashbin) {
+            self.handle_remove_from_trashbin(self.focused_pane_id, TrackListKind::Active, &indices);
         } else if let ViewKind::Downloads = &self.view_data().kind {
             if let Some(tracks) = self.view_data_mut().tracks_mut() {
                 let removed_keys: Vec<String> = indices
@@ -521,7 +556,7 @@ impl MusicPlayer {
             TrackListKind::Active => {
                 if !matches!(
                     self.view_data_in(pane).kind,
-                    ViewKind::Playlist(_) | ViewKind::Downloads
+                    ViewKind::Playlist(_) | ViewKind::Downloads | ViewKind::Trashbin
                 ) {
                     return;
                 }
@@ -755,6 +790,50 @@ mod tests {
 
     fn hover(p: &mut MusicPlayer, pos: TrackPos) {
         p.drag.set_hovered(HoverTarget::Track(pos));
+    }
+
+    /// Search-incapable tracks never spawn a streamer in `play_track_internal`,
+    /// keeping the test hermetic (same trick as the playlist-jump play test).
+    fn unstreamable(id: &str) -> Track {
+        Track::from_provider(
+            ProviderId::MusicBrainz,
+            id.into(),
+            format!("https://example.com/{id}"),
+            format!("Track {id}"),
+            "Artist",
+            10,
+            String::new(),
+            None,
+            None,
+        )
+    }
+
+    #[test]
+    fn previous_track_skips_trashed_recent() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.tracks = vec![unstreamable("c")];
+        p.trashbin.add_tracks([unstreamable("t")].iter());
+        p.queue.recently_played = vec![unstreamable("t"), unstreamable("a")].into();
+        p.previous_track();
+        assert_eq!(
+            p.queue.current().map(|t| t.title.clone()),
+            Some("Track a".to_string())
+        );
+        assert!(p.queue.recently_played.is_empty());
+    }
+
+    #[test]
+    fn previous_track_is_noop_when_all_recent_trashed() {
+        let mut p = player_with_playlists(&["A"]);
+        p.queue.tracks = vec![unstreamable("c")];
+        p.trashbin.add_tracks([unstreamable("t")].iter());
+        p.queue.recently_played = vec![unstreamable("t")].into();
+        p.previous_track();
+        assert_eq!(
+            p.queue.current().map(|t| t.title.clone()),
+            Some("Track c".to_string())
+        );
+        assert_eq!(p.queue.recently_played.len(), 1);
     }
 
     #[test]

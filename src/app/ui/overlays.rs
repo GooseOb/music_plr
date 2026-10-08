@@ -309,6 +309,22 @@ fn action_label(
             },
             icons::DELETE_ICON,
         ),
+        CtxAction::AddToTrashbin => (
+            if n > 1 {
+                Cow::Owned((tr.ctx_add_to_trashbin_n)(n))
+            } else {
+                Cow::Borrowed(tr.ctx_add_to_trashbin)
+            },
+            icons::DELETE_ICON,
+        ),
+        CtxAction::RemoveFromTrashbin => (
+            if n > 1 {
+                Cow::Owned((tr.ctx_remove_from_trashbin_n)(n))
+            } else {
+                Cow::Borrowed(tr.ctx_remove_from_trashbin)
+            },
+            icons::DELETE_ICON,
+        ),
         CtxAction::ClearCache => (Cow::Borrowed(tr.ctx_clear_cache), icons::CACHE_ICON),
     }
 }

@@ -90,6 +90,7 @@ pub struct MusicPlayer {
 
     pub thumbnail_index: ThumbnailIndex,
     pub playlists: PlaylistStore,
+    pub trashbin: crate::data::trashbin::TrashStore,
     pub playlist_create_name: String,
     /// Exclusive overlay dialog. Only one can be visible at a time; the view
     /// renders it on top of the main layout.
@@ -203,6 +204,7 @@ impl MusicPlayer {
             artist_error_dedup: None,
             track_loading: false,
             playlists: PlaylistStore::load(),
+            trashbin: crate::data::trashbin::TrashStore::load(),
             playlist_create_name: String::new(),
             show_queue: false,
             repeat: false,

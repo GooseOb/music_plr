@@ -146,6 +146,7 @@ fn pane_title(player: &MusicPlayer, pane: PaneId) -> &str {
         ViewKind::PlaylistView(r) => &r.name,
         ViewKind::Playlist(entry) => &entry.name,
         ViewKind::Downloads => player.strings.downloads,
+        ViewKind::Trashbin => player.strings.trashbin,
         ViewKind::Settings => player.strings.settings,
     }
 }

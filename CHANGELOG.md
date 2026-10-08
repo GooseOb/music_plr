@@ -8,6 +8,12 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+## [1.3.11] - 2026-10-08
+
+### Added
+
+- Trashbin for tracks to be autoskipped: Separate tab in navigation with trashed tracklist and items in context menu to add/remove tracks from the trashbin.
+
 ## [1.3.10] - 2026-10-06
 
 ### Fixed
