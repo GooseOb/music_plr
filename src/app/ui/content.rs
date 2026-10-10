@@ -13,9 +13,7 @@ pub(super) fn view_main_content(
     pane: PaneId,
 ) -> Element<'_, Message, AppTheme> {
     let track_list_search = match &player.track_list_search {
-        Some(fs) if fs.list == crate::app::TrackListKind::Active && fs.pane == pane => {
-            track_list_search::view_track_list_search(player, fs)
-        }
+        Some(fs) if fs.pane == pane => track_list_search::view_track_list_search(player, fs),
         _ => Space::new().into(),
     };
 

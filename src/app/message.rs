@@ -2,10 +2,13 @@
 
 use iced::{Point, Rectangle};
 
-use super::{pane::PaneId, ViewData};
+use super::{
+    pane::{is_main_pane, PaneId},
+    ViewData,
+};
 use crate::{
     app::{
-        interaction::{self, ContextMenuFocus, DefaultCtxAction, TrackListKind, TrackPos},
+        interaction::{self, ContextMenuFocus, DefaultCtxAction, TrackPos},
         update::{operation::CaptureBounds, VersionCheckOutcome},
         CsvPreset, ImportCsvField, ImportMethod, ViewKind,
     },
@@ -135,7 +138,6 @@ pub enum Message {
     },
     ListScrolled {
         pane: PaneId,
-        list: TrackListKind,
         translation_y: f32,
     },
     LyricsScrolled {
@@ -266,10 +268,10 @@ pub enum Message {
     ContextMenuArtistRadioProvider(ProviderId),
     ContextMenuClearCache,
     ContextMenuClearCacheProvider(ProviderId),
-    ContextMenuAddToQueue(TrackListKind, Vec<usize>),
-    ContextMenuAddToTrashbin(TrackListKind, Vec<usize>),
-    ContextMenuRemoveFromTrashbin(TrackListKind, Vec<usize>),
-    ContextMenuRemoveFromList(TrackListKind, Vec<usize>),
+    ContextMenuAddToQueue(PaneId, Vec<usize>),
+    ContextMenuAddToTrashbin(PaneId, Vec<usize>),
+    ContextMenuRemoveFromTrashbin(PaneId, Vec<usize>),
+    ContextMenuRemoveFromList(PaneId, Vec<usize>),
     ContextMenuEditTrack,
     EditTrackField(EditTrackField, String),
     EditTrackSelectProvider(ProviderId),
@@ -296,7 +298,7 @@ impl Message {
     /// processed). `Queue`/`Recent` positions live in the global panel and
     /// carry no pane.
     pub fn pane(&self) -> Option<PaneId> {
-        let active_pane = |pos: &TrackPos| pos.list.is_main().then_some(pos.pane);
+        let active_pane = |pos: &TrackPos| is_main_pane(pos.pane).then_some(pos.pane);
         match self {
             Message::SearchInputChanged(pane, _)
             | Message::SearchExecute(pane)
@@ -334,9 +336,9 @@ impl Message {
             | Message::ClosePane(pane)
             | Message::FocusPane(pane)
             | Message::OpenArtist { pane, .. }
-            | Message::ListScrolled { pane, .. }
             | Message::SearchHistoryBoundsCaptured(pane, _)
             | Message::LyricsScrolled { pane, .. } => Some(*pane),
+            Message::ListScrolled { pane, .. } => (is_main_pane(*pane)).then_some(*pane),
             Message::DragPress(interaction::Pressed::Track(pos))
             | Message::TrackRightClicked(pos)
             | Message::PlayTrackAt(pos)
@@ -363,7 +365,10 @@ pub enum EditTrackField {
 mod tests {
     use super::*;
     use crate::{
-        app::interaction::{HoverTarget, Pressed},
+        app::{
+            interaction::{HoverTarget, Pressed},
+            pane::{QUEUE_PANE_ID, RECENT_PANE_ID},
+        },
         providers::{ArtistSectionKind, SearchScope},
     };
 
@@ -373,7 +378,7 @@ mod tests {
     #[test]
     fn pane_scoped_messages_report_their_pane() {
         let pane = 7;
-        let pos = TrackPos::new(0, TrackListKind::Active, pane);
+        let pos = TrackPos::new(0, pane);
         let editor = || iced::widget::text_editor::Action::SelectAll;
         let messages = vec![
             Message::SearchInputChanged(pane, String::new()),
@@ -422,7 +427,6 @@ mod tests {
             },
             Message::ListScrolled {
                 pane,
-                list: TrackListKind::Active,
                 translation_y: 0.0,
             },
             Message::LyricsScrolled {
@@ -449,13 +453,21 @@ mod tests {
             assert_eq!(msg.pane(), Some(pane), "{msg:?}");
         }
 
-        // `Queue`/`Recent` rows live in the global panel and carry no pane.
+        // Queue/recent rows live in the global panel and carry no real pane.
         assert_eq!(
-            Message::PlayTrackAt(TrackPos::new(0, TrackListKind::Queue, pane)).pane(),
+            Message::PlayTrackAt(TrackPos::new(0, QUEUE_PANE_ID)).pane(),
             None
         );
         assert_eq!(
-            Message::PlayTrackAt(TrackPos::new(0, TrackListKind::Recent, pane)).pane(),
+            Message::PlayTrackAt(TrackPos::new(0, RECENT_PANE_ID)).pane(),
+            None
+        );
+        assert_eq!(
+            Message::ListScrolled {
+                pane: QUEUE_PANE_ID,
+                translation_y: 0.0
+            }
+            .pane(),
             None
         );
         assert_eq!(Message::Tick.pane(), None);

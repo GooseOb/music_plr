@@ -13,8 +13,9 @@ use crate::{
     app::{
         dialog::Dialog,
         import::{ImportCsvField, ImportPlaylistDialog},
-        interaction::{DefaultCtxAction, TrackListKind},
+        interaction::DefaultCtxAction,
         message::{BackendResult, EditTrackField, Message},
+        pane::{QUEUE_PANE_ID, RECENT_PANE_ID},
         update::operation::{CaptureContextMenu, CaptureSearchHistoryRows, ContextMenuGeometry},
         PendingAdd,
     },
@@ -78,13 +79,12 @@ impl crate::app::MusicPlayer {
             }
             Message::ListScrolled {
                 pane,
-                list,
                 translation_y,
             } => {
-                let geo = match list {
-                    TrackListKind::Queue => self.bounds.queue.as_mut(),
-                    TrackListKind::Active => self.bounds.tracks.get_mut(&pane),
-                    TrackListKind::Recent => self.bounds.recent.as_mut(),
+                let geo = match pane {
+                    QUEUE_PANE_ID => self.bounds.queue.as_mut(),
+                    RECENT_PANE_ID => self.bounds.recent.as_mut(),
+                    _ => self.bounds.tracks.get_mut(&pane),
                 };
                 if let Some(g) = geo {
                     g.translation_y = translation_y;
@@ -355,16 +355,11 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::OpenPlaylistAdd(indices) => {
-                let list = match &self.dialog {
-                    Some(Dialog::ContextMenu(m)) => m.pos.list,
-                    _ => TrackListKind::Active,
+                let pane = match &self.dialog {
+                    Some(Dialog::ContextMenu(m)) => m.pos.pane,
+                    _ => self.focused_pane_id,
                 };
-                let pane = self.context_menu_pane();
-                self.open_playlist_add(PendingAdd {
-                    indices,
-                    list,
-                    pane,
-                })
+                self.open_playlist_add(PendingAdd { indices, pane })
             }
             Message::CloseDialog => {
                 self.save_translate_prefs();
@@ -596,31 +591,27 @@ impl crate::app::MusicPlayer {
                     }
                 }
             }
-            Message::ContextMenuAddToQueue(list, indices) => {
-                let pane = self.context_menu_pane();
+            Message::ContextMenuAddToQueue(source, indices) => {
                 self.close_context_menu();
-                self.handle_add_to_queue(pane, list, &indices);
+                self.handle_add_to_queue(source, &indices);
                 Task::none()
             }
-            Message::ContextMenuAddToTrashbin(list, indices) => {
-                let pane = self.context_menu_pane();
+            Message::ContextMenuAddToTrashbin(source, indices) => {
                 self.close_context_menu();
-                self.handle_add_to_trashbin(pane, list, &indices);
+                self.handle_add_to_trashbin(source, &indices);
                 Task::none()
             }
-            Message::ContextMenuRemoveFromTrashbin(list, indices) => {
-                let pane = self.context_menu_pane();
+            Message::ContextMenuRemoveFromTrashbin(source, indices) => {
                 self.close_context_menu();
-                self.handle_remove_from_trashbin(pane, list, &indices);
+                self.handle_remove_from_trashbin(source, &indices);
                 Task::none()
             }
-            Message::ContextMenuRemoveFromList(list, indices) => {
-                let pane = self.context_menu_pane();
+            Message::ContextMenuRemoveFromList(source, indices) => {
                 self.close_context_menu();
-                match list {
-                    TrackListKind::Queue => self.handle_remove_from_queue_batch(&indices),
-                    TrackListKind::Recent => self.handle_remove_from_recent_batch(&indices),
-                    TrackListKind::Active => self.handle_remove_from_playlist_batch(pane, &indices),
+                match source {
+                    QUEUE_PANE_ID => self.handle_remove_from_queue_batch(&indices),
+                    RECENT_PANE_ID => self.handle_remove_from_recent_batch(&indices),
+                    _ => self.handle_remove_from_playlist_batch(source, &indices),
                 }
                 Task::none()
             }

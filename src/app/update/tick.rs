@@ -8,7 +8,10 @@ use super::{
     MediaUpdate, Message, MusicPlayer, Task, PREPEND,
 };
 use crate::{
-    app::{interaction::TrackListKind, pane::PaneId, Dialog, ViewKind},
+    app::{
+        pane::{is_main_pane, PaneId},
+        Dialog, ViewKind,
+    },
     data::{cache::StreamCache, thumbnails::ThumbnailIndex, JsonStore},
     providers::SearchTab,
     types::Track,
@@ -802,7 +805,7 @@ impl MusicPlayer {
             self.thumbnail_index
                 .ensure(provider, original.primary_id(), original.thumbnail());
 
-            let slot = if pos.list == TrackListKind::Active {
+            let slot = if is_main_pane(pos.pane) {
                 self.slot_for_request(rid)
             } else {
                 None
@@ -822,7 +825,7 @@ impl MusicPlayer {
                     self.spawn_download_thread_for(provider, original);
                 }
             } else {
-                if pos.list != TrackListKind::Active {
+                if !is_main_pane(pos.pane) {
                     self.set_track_at(pos, original.clone());
                 }
                 if play {

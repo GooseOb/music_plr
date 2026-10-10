@@ -15,7 +15,7 @@ use crate::{
     app::{
         pane::PaneId,
         view_data::{AlbumRef, PlaylistRef},
-        TrackListKind, ViewKind,
+        ViewKind,
     },
     load_state::LoadState,
     providers::{ArtistSection, ArtistSectionKind, ProviderId, SectionContent},
@@ -337,7 +337,7 @@ fn section_body<'a>(
                 if tracks.is_empty() {
                     empty_state(player.strings.nothing_here)
                 } else {
-                    view_track_list(tracks.as_slice(), player, pane, TrackListKind::Active, 0)
+                    view_track_list(tracks.as_slice(), player, pane, 0)
                 }
             }
             LoadState::Failed(e) => {

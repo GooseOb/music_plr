@@ -14,7 +14,8 @@ use super::{
 };
 use crate::{
     app::{
-        interaction::{TrackListKind, TrackPos},
+        interaction::TrackPos,
+        pane::{is_main_pane, QUEUE_PANE_ID, RECENT_PANE_ID},
         ui::styles::{fg_accent, icon_tab},
         ViewKind,
     },
@@ -35,7 +36,7 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
         .style(bg_secondary());
 
     let track_list_search = match &player.track_list_search {
-        Some(fs) if matches!(fs.list, TrackListKind::Queue | TrackListKind::Recent) => {
+        Some(fs) if !is_main_pane(fs.pane) => {
             super::track_list_search::view_track_list_search(player, fs)
         }
         _ => Space::new().into(),
@@ -139,7 +140,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                 Space::new().into(),
                 track,
                 player,
-                TrackPos::new(0, TrackListKind::Queue, player.focused_pane_id),
+                TrackPos::new(0, QUEUE_PANE_ID),
                 false,
             ))
             .height(theme::ROW_HEIGHT)
@@ -172,13 +173,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .padding(theme::SPACING_MD)
         .into()
     } else {
-        view_track_list(
-            upcoming,
-            player,
-            player.focused_pane_id,
-            TrackListKind::Queue,
-            offset,
-        )
+        view_track_list(upcoming, player, QUEUE_PANE_ID, offset)
     };
 
     Column::with_children([
@@ -208,18 +203,7 @@ fn view_recently_played_tab(player: &MusicPlayer) -> Element<'_, Message, AppThe
         return empty_state(player.strings.no_recently_played_tracks);
     }
 
-    virtual_scrollable(
-        tracks.len(),
-        player.focused_pane_id,
-        TrackListKind::Recent,
-        player,
-        |i| {
-            view_track_row(
-                &tracks[i],
-                TrackPos::new(i, TrackListKind::Recent, player.focused_pane_id),
-                player,
-                false,
-            )
-        },
-    )
+    virtual_scrollable(tracks.len(), RECENT_PANE_ID, player, |i| {
+        view_track_row(&tracks[i], TrackPos::new(i, RECENT_PANE_ID), player, false)
+    })
 }

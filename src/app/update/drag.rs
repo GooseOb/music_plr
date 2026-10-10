@@ -1,9 +1,10 @@
 use iced::widget::Id;
 
 use super::{
+    is_main_pane,
     operation::{ContainingList, ListGeometry},
-    BackendResult, Message, MusicPlayer, Task, Track, TrackListKind, TrackPos, DOUBLE_CLICK_MS,
-    PREPEND,
+    pane_first_index, BackendResult, Message, MusicPlayer, Task, Track, TrackPos, DOUBLE_CLICK_MS,
+    PREPEND, QUEUE_PANE_ID, RECENT_PANE_ID,
 };
 use crate::{
     app::{
@@ -66,9 +67,6 @@ impl MusicPlayer {
         } else {
             match pressed {
                 Pressed::Track(pos) => {
-                    if pos.list.is_main() {
-                        self.focused_pane_id = pos.pane;
-                    }
                     self.toggle_selection(pos);
                 }
                 Pressed::Card(item, pane) => {
@@ -118,17 +116,17 @@ impl MusicPlayer {
             return Task::none();
         };
 
-        let Some((list, pane)) = target.track_target(self.focused_pane_id) else {
+        let Some(pane) = target.track_target() else {
             return Task::none();
         };
-        if list == TrackListKind::Recent {
+        if pane == RECENT_PANE_ID {
             return Task::none();
         }
-        let count = self.track_count_in(pane, list);
-        let scrollable_id = match list {
-            TrackListKind::Queue => QUEUE_LIST_ID,
-            TrackListKind::Active => track_list_id(pane),
-            TrackListKind::Recent => return Task::none(),
+        let count = self.track_count_in(pane);
+        let scrollable_id = if pane == QUEUE_PANE_ID {
+            QUEUE_LIST_ID
+        } else {
+            track_list_id(pane)
         };
         let content_height = count as f32 * crate::theme::ROW_HEIGHT;
         self.handle_drag_autoscroll(geo.bounds, geo.translation_y, content_height, scrollable_id)
@@ -170,27 +168,26 @@ impl MusicPlayer {
             let idx = nearest_row_index(&geo.rows, cursor_y).filter(|&idx| idx < count)?;
             return Some(DropTarget::PlaylistAdd(idx));
         }
-        let (list, pane) = list.track_target(self.focused_pane_id)?;
+        let pane = list.track_target()?;
         // Only local playlists and queue can be dropped onto
-        if list == TrackListKind::Active
-            && !matches!(&self.view_data_in(pane).kind, ViewKind::Playlist(_))
-        {
+        if is_main_pane(pane) && !matches!(&self.view_data_in(pane).kind, ViewKind::Playlist(_)) {
             return None;
         }
-        let drop_idx = self.compute_drop_idx(pane, list);
-        Some(DropTarget::Track(TrackPos::new(drop_idx, list, pane)))
+        let drop_idx = self.compute_drop_idx(pane);
+        Some(DropTarget::Track(TrackPos::new(drop_idx, pane)))
     }
 
-    fn compute_drop_idx(&self, pane: PaneId, list: TrackListKind) -> usize {
-        let geo = match list {
-            TrackListKind::Queue | TrackListKind::Recent => self.bounds.queue.as_ref(),
-            TrackListKind::Active => self.bounds.track_geo(pane),
+    fn compute_drop_idx(&self, pane: PaneId) -> usize {
+        let geo = if pane == QUEUE_PANE_ID || pane == RECENT_PANE_ID {
+            self.bounds.queue.as_ref()
+        } else {
+            self.bounds.track_geo(pane)
         };
         let Some(geo) = geo else {
-            return list.first_index();
+            return pane_first_index(pane);
         };
-        let first = list.first_index();
-        let count = self.track_count_in(pane, list);
+        let first = pane_first_index(pane);
+        let count = self.track_count_in(pane);
         // Cursor position in the scrollable's content space (y = 0 at the top
         // of the first row).
         let cursor_y = (self.drag.cursor_pos.y - geo.bounds.y) + geo.translation_y;
@@ -256,12 +253,15 @@ impl MusicPlayer {
             Some(DropTarget::Library(i)) => (self.bounds.library.as_ref()?, i),
             Some(DropTarget::PlaylistReorder { to, .. }) => (self.bounds.sidebar.as_ref()?, to),
             Some(DropTarget::Track(pos)) => {
-                let geo = match pos.list {
-                    TrackListKind::Queue => self.bounds.queue.as_ref()?,
-                    TrackListKind::Active => self.bounds.track_geo(pos.pane)?,
-                    TrackListKind::Recent => return None,
+                if pos.pane == RECENT_PANE_ID {
+                    return None;
+                }
+                let geo = if pos.pane == QUEUE_PANE_ID {
+                    self.bounds.queue.as_ref()?
+                } else {
+                    self.bounds.track_geo(pos.pane)?
                 };
-                (geo, pos.index.saturating_sub(pos.list.first_index()))
+                (geo, pos.index.saturating_sub(pane_first_index(pos.pane)))
             }
             // A track dropped on the playlist list highlights the target row
             // (handled in the sidebar view) rather than drawing an insertion
@@ -301,9 +301,8 @@ impl MusicPlayer {
     }
 
     pub fn handle_track_drop(&mut self, pos: TrackPos) {
-        let source = pos.list;
-        let source_pane = pos.pane;
-        let indices = self.dragged_indices(source_pane, source).to_vec();
+        let source = pos.pane;
+        let indices = self.dragged_indices(source).to_vec();
 
         // Dropped on the playlist sidebar: add to that playlist (prepend). The
         // target was resolved during the drag into `drop_target` and is shown
@@ -311,7 +310,7 @@ impl MusicPlayer {
         if let Some(DropTarget::PlaylistAdd(playlist_idx)) = self.drag.drop_target {
             let tracks: Vec<Track> = indices
                 .iter()
-                .filter_map(|&i| self.get_track_at(TrackPos::new(i, source, source_pane)))
+                .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
                 .collect();
             let count = self
                 .playlists
@@ -328,50 +327,36 @@ impl MusicPlayer {
         let drop_idx = drop.index;
 
         // Determine if this is a cross-list copy or a same-list reorder.
-        // A drop is a reorder only when source and target are the same list
-        // in the same pane; cross-pane Active drops copy instead.
-        if drop.list == source && (drop.list != TrackListKind::Active || drop.pane == source_pane) {
-            self.handle_same_list_reorder(drop.pane, drop_idx, &indices, source);
-        } else {
-            match drop.list {
-                TrackListKind::Queue => self.copy_to_queue(source_pane, source, &indices, drop_idx),
-                TrackListKind::Active => {
-                    self.copy_from_queue(drop.pane, source_pane, source, &indices, drop_idx);
-                }
-                TrackListKind::Recent => {}
-            }
+        // A drop is a reorder only when source and target are the same list;
+        // main-pane ids are unique per list, so pane equality decides it.
+        if drop.pane == source {
+            self.handle_same_list_reorder(drop.pane, drop_idx, &indices);
+        } else if drop.pane == QUEUE_PANE_ID {
+            self.copy_to_queue(source, &indices, drop_idx);
+        } else if is_main_pane(drop.pane) {
+            self.copy_from_queue(drop.pane, source, &indices, drop_idx);
         }
     }
 
-    pub fn dragged_indices(&self, pane: PaneId, list: TrackListKind) -> &[usize] {
+    pub fn dragged_indices(&self, pane: PaneId) -> &[usize] {
         match &self.drag.dragged {
-            Some((drag_pane, drag_list, indices))
-                if *drag_list == list && (list != TrackListKind::Active || *drag_pane == pane) =>
-            {
-                indices
-            }
+            Some((drag_pane, indices)) if *drag_pane == pane => indices,
             _ => &[],
         }
     }
 
     pub fn is_dragging_track(&self, pos: TrackPos) -> bool {
         // Sorted: cloned from the (sorted) selection, or a single index.
-        self.dragged_indices(pos.pane, pos.list)
+        self.dragged_indices(pos.pane)
             .binary_search(&pos.index)
             .is_ok()
     }
 
-    fn copy_to_queue(
-        &mut self,
-        source_pane: PaneId,
-        source: TrackListKind,
-        indices: &[usize],
-        drop_idx: usize,
-    ) {
+    fn copy_to_queue(&mut self, source: PaneId, indices: &[usize], drop_idx: usize) {
         let clamped = drop_idx.min(self.queue.tracks.len());
         let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&i| self.get_track_at(TrackPos::new(i, source, source_pane)))
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
             .collect();
         let inserted = tracks.len();
         for (j, track) in tracks.into_iter().enumerate() {
@@ -387,8 +372,7 @@ impl MusicPlayer {
     fn copy_from_queue(
         &mut self,
         target_pane: PaneId,
-        source_pane: PaneId,
-        source: TrackListKind,
+        source: PaneId,
         indices: &[usize],
         drop_idx: usize,
     ) {
@@ -409,7 +393,7 @@ impl MusicPlayer {
         let clamped = drop_idx.min(self.playlists.playlists[sp].tracks.len());
         let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&i| self.get_track_at(TrackPos::new(i, source, source_pane)))
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
             .collect();
         let inserted = self.playlists.insert_tracks_at(sp, tracks.iter(), clamped);
         self.save_session();
@@ -422,31 +406,19 @@ impl MusicPlayer {
     /// Handle reordering within the same list. The selection is always
     /// remapped to reflect the new positions of all selected tracks — both
     /// the moved ones and any that merely shifted.
-    fn handle_same_list_reorder(
-        &mut self,
-        pane: PaneId,
-        drop_idx: usize,
-        indices: &[usize],
-        source: TrackListKind,
-    ) {
-        if drop_idx > self.track_count_in(pane, source) {
+    fn handle_same_list_reorder(&mut self, pane: PaneId, drop_idx: usize, indices: &[usize]) {
+        if drop_idx > self.track_count_in(pane) {
             return;
         }
 
-        match source {
-            TrackListKind::Queue => {
-                let selection = self.queue_selected_indices.clone();
-                self.queue_selected_indices =
-                    self.handle_reorder_queue(drop_idx, indices, &selection);
-                self.save_session();
-            }
-            TrackListKind::Active => {
-                let selection = self.view_data_in_mut(pane).selection.clone();
-                let positions =
-                    self.handle_reorder_tracks_selected(pane, drop_idx, indices, &selection);
-                self.view_data_in_mut(pane).selection = positions;
-            }
-            TrackListKind::Recent => {}
+        if pane == QUEUE_PANE_ID {
+            let sel = self.queue_selected_indices.clone();
+            self.queue_selected_indices = self.handle_reorder_queue(drop_idx, indices, &sel);
+            self.save_session();
+        } else if is_main_pane(pane) {
+            let sel = self.view_data_in_mut(pane).selection.clone();
+            let positions = self.handle_reorder_tracks_selected(pane, drop_idx, indices, &sel);
+            self.view_data_in_mut(pane).selection = positions;
         }
     }
 
@@ -586,7 +558,7 @@ impl MusicPlayer {
     pub fn handle_drag_press(&mut self, pressed: Pressed) {
         match pressed {
             Pressed::Track(pos) => {
-                if pos.list.is_main() {
+                if is_main_pane(pos.pane) {
                     self.focused_pane_id = pos.pane;
                 }
                 let now = std::time::Instant::now();
@@ -601,12 +573,13 @@ impl MusicPlayer {
                     self.handle_play_track(pos);
                     return;
                 }
-                let indices = if self.is_selected_in(pos.pane, pos.list, pos.index) {
-                    self.selection_in(pos.pane, pos.list).to_vec()
+                let sel = self.selection_in(pos.pane);
+                let indices = if sel.binary_search(&pos.index).is_ok() {
+                    sel.to_vec()
                 } else {
                     vec![pos.index]
                 };
-                self.drag.dragged = Some((pos.pane, pos.list, indices));
+                self.drag.dragged = Some((pos.pane, indices));
                 self.drag.pressed = Some(PressedDrag {
                     what: Pressed::Track(pos),
                     origin: self.drag.cursor_pos,

@@ -19,7 +19,7 @@ use super::{
 };
 use crate::{
     app::{
-        interaction::{HoverTarget, Pressed, PressedDrag, TrackListKind},
+        interaction::{HoverTarget, Pressed, PressedDrag},
         pane::PaneId,
         ui::{overlays::pos_absolute, shared_components::scope_tab_row_h_scroll},
         view_data::SearchData,
@@ -157,13 +157,7 @@ fn view_search_track_tab<'a>(
     if results.is_empty() {
         children.push(empty_state(player.strings.no_tracks_found));
     } else {
-        children.push(view_track_list(
-            results,
-            player,
-            pane,
-            TrackListKind::Active,
-            0,
-        ));
+        children.push(view_track_list(results, player, pane, 0));
 
         if !search.exhausted {
             let btn = Button::new(text(if search.append_in_flight {
@@ -382,7 +376,7 @@ fn view_track_page<'a>(
 
     let track_list =
         match super::shared_components::load_state_tracks(content, player.strings, spec.loading) {
-            Ok(tracks) => view_track_list(tracks, player, pane, TrackListKind::Active, 0),
+            Ok(tracks) => view_track_list(tracks, player, pane, 0),
             Err(el) => el,
         };
 

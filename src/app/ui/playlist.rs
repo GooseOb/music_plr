@@ -9,10 +9,7 @@ use super::{
     theme, view_track_list, Message, MusicPlayer,
 };
 use crate::{
-    app::{
-        interaction::TrackListKind, pane::PaneId, ui::shared_components::empty_state,
-        view_data::PlaylistEntry,
-    },
+    app::{pane::PaneId, ui::shared_components::empty_state, view_data::PlaylistEntry},
     icons,
     load_state::LoadState,
     theme::AppTheme,
@@ -62,7 +59,7 @@ pub(super) fn view_playlist<'a>(
     .padding([theme::SPACING_MD, theme::SPACING_XL])
     .into();
 
-    let track_list = view_track_list(&pl.tracks, player, pane, TrackListKind::Active, 0);
+    let track_list = view_track_list(&pl.tracks, player, pane, 0);
 
     Column::with_children([header, track_list]).into()
 }
@@ -71,13 +68,7 @@ pub(super) fn view_trashbin(player: &MusicPlayer, pane: PaneId) -> Element<'_, M
     if player.trashbin.tracks.is_empty() {
         empty_state(player.strings.no_tracks_found)
     } else {
-        view_track_list(
-            &player.trashbin.tracks,
-            player,
-            pane,
-            TrackListKind::Active,
-            0,
-        )
+        view_track_list(&player.trashbin.tracks, player, pane, 0)
     }
 }
 
@@ -96,7 +87,7 @@ pub(super) fn view_downloads(player: &MusicPlayer, pane: PaneId) -> Element<'_, 
 
     let track_list = match &player.view_data_in(pane).content {
         LoadState::Ready(tracks) if !tracks.is_empty() => {
-            view_track_list(tracks.as_slice(), player, pane, TrackListKind::Active, 0)
+            view_track_list(tracks.as_slice(), player, pane, 0)
         }
         _ => empty_state(player.strings.no_downloaded_tracks),
     };

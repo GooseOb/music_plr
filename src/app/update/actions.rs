@@ -6,8 +6,8 @@ use super::{BackendResult, MusicPlayer, Track};
 use crate::{
     app::{
         dialog::Dialog,
-        interaction::{TrackListKind, TrackPos},
-        pane::PaneId,
+        interaction::TrackPos,
+        pane::{is_main_pane, PaneId},
         update::operation::CaptureContextMenu,
         EditTrackState, LyricsViewMode, Message, ViewKind,
     },
@@ -691,19 +691,13 @@ impl MusicPlayer {
         let Some(track) = self.get_track_at(pos) else {
             return Task::none();
         };
-        let TrackPos { index, list, pane } = pos;
-        let pane = if list.is_main() {
-            if !self.panes.contains_key(&pane) {
-                return Task::none();
-            }
-            self.focused_pane_id = pane;
-            pane
-        } else {
-            self.focused_pane_id
-        };
+        let TrackPos { index, pane } = pos;
+        let in_playlist =
+            is_main_pane(pane) && matches!(self.view_data_in(pane).kind, ViewKind::Playlist(_));
 
-        let target_indices = if self.is_selected_in(pane, list, index) {
-            self.selection_in(pane, list).to_vec()
+        let sel = self.selection_in(pane);
+        let target_indices = if sel.binary_search(&index).is_ok() {
+            sel.to_vec()
         } else {
             vec![index]
         };
@@ -714,7 +708,7 @@ impl MusicPlayer {
                 target_indices,
                 position: (point.x, point.y),
                 cursor: (point.x, point.y),
-                in_playlist: matches!(self.view_data_in(pane).kind, ViewKind::Playlist(_)),
+                in_playlist,
                 is_trashed: self.is_trashed(&track),
                 track,
                 hovered: None,
@@ -724,14 +718,14 @@ impl MusicPlayer {
     }
 
     fn track_center_point(&self, pos: TrackPos) -> Option<Point> {
-        let TrackPos { index, list, pane } = pos;
-        let geo = match list {
-            TrackListKind::Queue => self.bounds.queue.as_ref(),
-            TrackListKind::Active => self.bounds.track_geo(pane),
-            TrackListKind::Recent => self.bounds.recent.as_ref(),
+        let TrackPos { index, pane } = pos;
+        let geo = match pane {
+            super::QUEUE_PANE_ID => self.bounds.queue.as_ref(),
+            super::RECENT_PANE_ID => self.bounds.recent.as_ref(),
+            _ => self.bounds.track_geo(pane),
         }?;
         let scroll = geo.translation_y;
-        let visual_index = index - list.first_index().min(index);
+        let visual_index = index - super::pane_first_index(pane).min(index);
         Some(if let Some(row) = geo.rows.get(visual_index) {
             Point::new(row.x + row.width / 2.0, row.y - scroll + row.height / 2.0)
         } else {
@@ -764,7 +758,7 @@ impl MusicPlayer {
             self.dialog = dialog;
             return Task::none();
         };
-        let pane = if menu.pos.list.is_main() {
+        let pane = if is_main_pane(menu.pos.pane) {
             menu.pos.pane
         } else {
             self.focused_pane_id
@@ -787,7 +781,7 @@ impl MusicPlayer {
             self.dialog = dialog;
             return Task::none();
         };
-        let pane = if menu.pos.list.is_main() {
+        let pane = if is_main_pane(menu.pos.pane) {
             menu.pos.pane
         } else {
             self.focused_pane_id
@@ -805,7 +799,7 @@ impl MusicPlayer {
             self.dialog = dialog;
             return Task::none();
         };
-        let pane = if menu.pos.list.is_main() {
+        let pane = if is_main_pane(menu.pos.pane) {
             menu.pos.pane
         } else {
             self.focused_pane_id
@@ -844,17 +838,6 @@ impl MusicPlayer {
     pub fn close_context_menu(&mut self) {
         self.dialog = None;
         self.bounds.context_menu = None;
-    }
-
-    /// The pane a context-menu action targets: the open menu's source pane,
-    /// or the focused pane when the menu is already gone. Queue/Recent rows
-    /// live in the global panel and carry no pane, so they resolve to the
-    /// focused pane.
-    pub fn context_menu_pane(&self) -> PaneId {
-        match &self.dialog {
-            Some(Dialog::ContextMenu(m)) if m.pos.list.is_main() => m.pos.pane,
-            _ => self.focused_pane_id,
-        }
     }
 
     /// Open the track-editing popup for the track at `pos`, seeding the

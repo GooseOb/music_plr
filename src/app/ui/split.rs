@@ -60,10 +60,13 @@ fn view_pane(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppThem
     let body = Column::with_children(children)
         .width(Length::Fill)
         .height(Length::Fill);
-    let content: Element<'_, Message, AppTheme> = MouseArea::new(body)
-        .on_press(Message::FocusPane(pane))
-        .on_enter(Message::FocusPane(pane))
-        .into();
+    let mut content = MouseArea::new(body);
+    if player.focused_pane_id != pane {
+        content = content.on_press(Message::FocusPane(pane));
+        if !player.drag.is_hover_controlled {
+            content = content.on_move(move |_| Message::FocusPane(pane));
+        }
+    }
     // The Stack and its overlay are always rendered (even unfocused and
     // single-pane) so the widget tree keeps a stable shape across focus
     // changes — iced reconciles widget state positionally by type, and
@@ -73,7 +76,7 @@ fn view_pane(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppThem
     // beneath, and a zero-width border draws nothing.
     let ring_width = if focused { 2.0 } else { 0.0 };
     Stack::with_children([
-        content,
+        content.into(),
         Container::new(Space::new().width(Length::Fill).height(Length::Fill))
             .width(Length::Fill)
             .height(Length::Fill)

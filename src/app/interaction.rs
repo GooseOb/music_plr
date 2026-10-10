@@ -2,40 +2,11 @@
 
 use iced::{widget::Id, Point};
 
-use super::pane::PaneId;
+use super::pane::{is_main_pane, PaneId, QUEUE_PANE_ID, RECENT_PANE_ID};
 use crate::{
     data::{cache::StreamCache, library::LibraryItem},
-    types::{QueueTab, Track},
+    types::Track,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TrackListKind {
-    Queue,
-    Active,
-    Recent,
-}
-
-impl TrackListKind {
-    pub const fn first_index(self) -> usize {
-        match self {
-            TrackListKind::Queue => 1,
-            _ => 0,
-        }
-    }
-
-    /// Slot into `DragState::last_focus` for this list.
-    pub const fn slot(self) -> usize {
-        match self {
-            TrackListKind::Queue => 0,
-            TrackListKind::Active => 1,
-            TrackListKind::Recent => 2,
-        }
-    }
-
-    pub const fn is_main(self) -> bool {
-        matches!(self, TrackListKind::Active)
-    }
-}
 
 /// Stable `Id` for a track-list row `Container`, used to capture its measured
 /// geometry via the bounds `Operation`. The tag distinguishes lists so ids
@@ -43,55 +14,33 @@ impl TrackListKind {
 /// panes showing a track list never share an id. Cards (artists/albums/
 /// playlists) are not track-list rows and intentionally carry no
 /// geometry-capturing id.
-pub fn row_id(list: TrackListKind, index: usize, pane: PaneId) -> Id {
-    let tag = match list {
-        TrackListKind::Queue => "queue",
-        TrackListKind::Active => "active",
-        TrackListKind::Recent => "recent",
+pub fn row_id(pane: PaneId, index: usize) -> Id {
+    let tag = match pane {
+        QUEUE_PANE_ID => "queue",
+        RECENT_PANE_ID => "recent",
+        _ => "active",
     };
     Id::from(format!("row:{tag}:{pane}:{index}"))
-}
-
-impl From<QueueTab> for TrackListKind {
-    fn from(tab: QueueTab) -> Self {
-        match tab {
-            QueueTab::Queue => TrackListKind::Queue,
-            QueueTab::RecentlyPlayed => TrackListKind::Recent,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TrackPos {
     pub index: usize,
-    pub list: TrackListKind,
-    /// Owning pane for `Active` positions; ignored for `Queue`/`Recent`,
-    /// which live in the global queue panel.
+    /// Owning pane for main-list positions; [`QUEUE_PANE_ID`] or
+    /// [`RECENT_PANE_ID`] for the global queue panel lists.
     pub pane: PaneId,
 }
 
 impl TrackPos {
-    /// `pane` is only meaningful for the main (`Active`) list; `Queue` and
-    /// `Recent` live in the global panel, so their pane is normalized to `0`
-    /// and ignored by equality-sensitive uses (e.g. double-click detection).
-    pub const fn new(index: usize, list: TrackListKind, pane: PaneId) -> Self {
-        if list.is_main() {
-            Self { index, list, pane }
-        } else {
-            Self {
-                index,
-                list,
-                pane: 0,
-            }
-        }
+    pub const fn new(index: usize, pane: PaneId) -> Self {
+        Self { index, pane }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct TrackListSearch {
-    pub list: TrackListKind,
-    /// Owning pane for `Active` searches; ignored for `Queue`/`Recent`,
-    /// which live in the global queue panel.
+    /// Searched list: a main pane id, or [`QUEUE_PANE_ID`] /
+    /// [`RECENT_PANE_ID`] for the global panel lists.
     pub pane: PaneId,
     pub query: String,
     pub matches: Vec<usize>,
@@ -248,7 +197,7 @@ impl CtxAction {
         match self {
             CtxAction::Play => Message::ContextMenuPlayTrack(menu.pos),
             CtxAction::AddToQueue => {
-                Message::ContextMenuAddToQueue(menu.pos.list, menu.target_indices.clone())
+                Message::ContextMenuAddToQueue(menu.pos.pane, menu.target_indices.clone())
             }
             CtxAction::Edit => Message::ContextMenuEditTrack,
             CtxAction::GoToArtist => Message::ContextMenuGoToArtist,
@@ -260,13 +209,13 @@ impl CtxAction {
             CtxAction::RemoveFromQueue
             | CtxAction::RemoveFromPlaylist
             | CtxAction::RemoveFromRecent => {
-                Message::ContextMenuRemoveFromList(menu.pos.list, menu.target_indices.clone())
+                Message::ContextMenuRemoveFromList(menu.pos.pane, menu.target_indices.clone())
             }
             CtxAction::AddToTrashbin => {
-                Message::ContextMenuAddToTrashbin(menu.pos.list, menu.target_indices.clone())
+                Message::ContextMenuAddToTrashbin(menu.pos.pane, menu.target_indices.clone())
             }
             CtxAction::RemoveFromTrashbin => {
-                Message::ContextMenuRemoveFromTrashbin(menu.pos.list, menu.target_indices.clone())
+                Message::ContextMenuRemoveFromTrashbin(menu.pos.pane, menu.target_indices.clone())
             }
         }
     }
@@ -345,9 +294,9 @@ impl ContextMenuState {
         if !self.cached_providers(cache).is_empty() {
             v.push(CtxAction::ClearCache);
         }
-        if self.pos.list == TrackListKind::Queue {
+        if self.pos.pane == QUEUE_PANE_ID {
             v.push(CtxAction::RemoveFromQueue);
-        } else if self.pos.list == TrackListKind::Recent {
+        } else if self.pos.pane == RECENT_PANE_ID {
             v.push(CtxAction::RemoveFromRecent);
         } else if self.in_playlist {
             v.push(CtxAction::RemoveFromPlaylist);
@@ -465,13 +414,14 @@ pub struct DragState {
     pub drop_target: Option<DropTarget>,
     /// Track indices carried by the current drag, resolved at press time:
     /// the whole selection if the pressed track is selected, else just it.
-    /// The owning pane and list are stored alongside because `pressed` is
+    /// The owning pane (a main pane id, or [`QUEUE_PANE_ID`] /
+    /// [`RECENT_PANE_ID`]) is stored alongside because `pressed` is
     /// taken before the drop handler runs.
-    pub dragged: Option<(PaneId, TrackListKind, Vec<usize>)>,
+    pub dragged: Option<(PaneId, Vec<usize>)>,
     pub is_hover_controlled: bool,
     pub hovered: Option<HoverTarget>,
     /// Last focused row per list, so returning to a list restores focus.
-    /// Queue/Recent live in the global panel; the main (`Active`) list is
+    /// The queue/recent slots are global; the main-list slot is
     /// remembered per pane instead (see `pane_focus`).
     pub last_focus: [usize; 3],
     /// Last focused row of each pane's main track list.
@@ -503,22 +453,22 @@ impl DragState {
     /// focused row (per pane for the main list).
     pub fn set_hovered(&mut self, target: HoverTarget) {
         if let HoverTarget::Track(pos) = &target {
-            if pos.list.is_main() {
+            if is_main_pane(pos.pane) {
                 self.pane_focus.insert(pos.pane, pos.index);
             } else {
-                self.last_focus[pos.list.slot()] = pos.index;
+                self.last_focus[super::pane::pane_slot(pos.pane)] = pos.index;
             }
         }
         self.hovered = Some(target);
     }
 
-    /// The last focused row index of `list` in `pane`, if still
-    /// meaningful-ish. Queue/Recent ignore the pane.
-    pub fn recall_focus(&self, pane: PaneId, list: TrackListKind) -> usize {
-        if list.is_main() {
+    /// The last focused row index of the list addressed by `pane` (a main
+    /// pane id, or [`QUEUE_PANE_ID`] / [`RECENT_PANE_ID`)).
+    pub fn recall_focus(&self, pane: PaneId) -> usize {
+        if is_main_pane(pane) {
             self.pane_focus.get(&pane).copied().unwrap_or(0)
         } else {
-            self.last_focus[list.slot()]
+            self.last_focus[super::pane::pane_slot(pane)]
         }
     }
 
@@ -599,7 +549,7 @@ impl DragState {
 
 #[cfg(test)]
 mod tests {
-    use super::TrackListKind::{Active, Queue, Recent};
+    use super::super::pane::{pane_first_index, QUEUE_PANE_ID, RECENT_PANE_ID};
     use crate::app::ui::{track_list_id, QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID};
 
     #[test]
@@ -613,27 +563,26 @@ mod tests {
 
     #[test]
     fn only_queue_offsets_its_first_row() {
-        assert_eq!(Queue.first_index(), 1);
-        assert_eq!(Active.first_index(), 0);
-        assert_eq!(Recent.first_index(), 0);
+        assert_eq!(pane_first_index(QUEUE_PANE_ID), 1);
+        assert_eq!(pane_first_index(7), 0);
+        assert_eq!(pane_first_index(RECENT_PANE_ID), 0);
     }
 
     #[test]
     fn main_list_focus_is_remembered_per_pane() {
         use super::{DragState, HoverTarget, TrackPos};
         let mut drag = DragState::default();
-        drag.set_hovered(HoverTarget::Track(TrackPos::new(7, Active, 0)));
-        drag.set_hovered(HoverTarget::Track(TrackPos::new(2, Active, 1)));
-        assert_eq!(drag.recall_focus(0, Active), 7);
-        assert_eq!(drag.recall_focus(1, Active), 2);
-        assert_eq!(drag.recall_focus(9, Active), 0);
+        drag.set_hovered(HoverTarget::Track(TrackPos::new(7, 0)));
+        drag.set_hovered(HoverTarget::Track(TrackPos::new(2, 1)));
+        assert_eq!(drag.recall_focus(0), 7);
+        assert_eq!(drag.recall_focus(1), 2);
+        assert_eq!(drag.recall_focus(9), 0);
 
-        drag.set_hovered(HoverTarget::Track(TrackPos::new(3, Queue, 0)));
-        assert_eq!(drag.recall_focus(0, Queue), 3);
-        assert_eq!(drag.recall_focus(1, Queue), 3);
+        drag.set_hovered(HoverTarget::Track(TrackPos::new(3, QUEUE_PANE_ID)));
+        assert_eq!(drag.recall_focus(QUEUE_PANE_ID), 3);
 
         drag.forget_pane(0);
-        assert_eq!(drag.recall_focus(0, Active), 0);
-        assert_eq!(drag.recall_focus(1, Active), 2);
+        assert_eq!(drag.recall_focus(0), 0);
+        assert_eq!(drag.recall_focus(1), 2);
     }
 }

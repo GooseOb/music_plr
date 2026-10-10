@@ -51,7 +51,7 @@ src/
 ├── app/shortcuts.rs      # In-app cheatsheet table (?/F1, Dialog::Shortcuts; labels via Strings)
 ├── app/view_data.rs   # ViewData / ViewKind (per-view state)
 ├── app/message.rs     # Message + BackendResult (pane-scoped messages carry PaneId)
-├── app/interaction.rs # TrackListKind, TrackPos (+pane), DragState, ContextMenuState
+├── app/interaction.rs # TrackPos (+pane), DragState, ContextMenuState
 ├── app/import.rs     # ImportPlaylistDialog + filename-pattern matching/conflict engine
 ├── app/translate_dialog.rs # TranslateDialog (AI-translate popup: language + prompt + in-flight flag)
 ├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, split, track_list)
@@ -86,8 +86,8 @@ src/
   `lyrics: Option<LyricsState>`. Splitting forks the pane (lyrics included; dropdowns reset);
   `SplitNode` is an equally-weighted `Leaf`/`Row`/`Column` tree (max 4 panes, `SplitDir::Horizontal` =
   side-by-side); `focused_pane_id` receives sidebar clicks, pane hover, and keyboard nav.
-- **`TrackListKind`** (`app/interaction.rs`): `Queue` / `Active` / `Recent` — the single carrier for "which track list?" across messages, `DragState`, selection, and scroll targeting. Helpers: `first_index()` (1 for Queue, whose now-playing row renders outside the scrollable). Pass this instead of a bool. Scrollable/input/scroll widget ids are per-pane (`track_list_id(pane)` etc. in `ui/`), so scroll ops can't hit the wrong pane.
-- **`TrackPos`** (`app/interaction.rs`): `{ index, list, pane }` — an index is only meaningful against its list, so they travel together (`pane` matters for `Active`; `Queue`/`Recent` normalize to `0` and ignore it). Carried by `TrackPressed`/`TrackRightClicked`/`PlayTrackAt`/`ContextMenuPlayTrack`, `DragState`'s `pressed` (`Pressed::Track`), `last_click`, and the `get_track_at`/`toggle_selection` accessors. Pass this instead of a loose `(usize, TrackListKind)` pair.
+- **Virtual panes** (`app/pane.rs`): `QUEUE_PANE_ID` / `RECENT_PANE_ID` (`u64::MAX` / `MAX-1`, never in `panes`) address the global queue/recent lists, so every list is just a `PaneId` — no separate list tag. Helpers: `pane_first_index()` (1 for queue, whose now-playing row renders outside the scrollable), `pane_slot()`, `is_main_pane()`. Scroll widget ids fold through `track_list_id(pane)` (virtual panes map to the global queue/recent scrollables), so scroll ops can't hit the wrong pane.
+- **`TrackPos`** (`app/interaction.rs`): `{ index, pane }` — an index is only meaningful against its list, so they travel together (`pane` is a main pane id or a virtual queue/recent id; navigation messages for virtual rows resolve `focused_pane_id`). Carried by `TrackPressed`/`TrackRightClicked`/`PlayTrackAt`/`ContextMenuPlayTrack`, `DragState`'s `pressed` (`Pressed::Track`), `last_click`, and the `get_track_at`/`toggle_selection` accessors. Pass this instead of a loose `(usize, PaneId)` pair.
 - **`ContextMenuState`**: `pos: TrackPos` + selection-aware `target_indices`. Ops apply to all
   selected if the right-clicked track is selected, else just it; "Play"/radio target only it.
   `Recent` tracks come from `recently_played` (queue/playlist items suppressed). Right-click focuses the source pane.
@@ -95,7 +95,7 @@ src/
   keyboard focus), `dragged` (indices resolved at press time). `drop_target`: `Track`/`Playlist`/`Library`
   (insertion line), `PlaylistAdd`, `PlaylistReorder`. Same-pane reorders; cross-list/pane copies move all
   selected; accessors `hovered_track()`/`set_hovered*`, cleaned via `cleanup()`.
-- **Selection / list access** (`app/update/selection.rs`): `selection_in`, `toggle_selection`, `clear_selection`, `view_tracks_in`, `get_track_at`, `track_count_in` — keyed by pane + `TrackListKind` (unscoped shims target the focused pane).
+- **Selection / list access** (`app/update/selection.rs`): `selection_in`, `toggle_selection`, `clear_selection`, `view_tracks_in`, `get_track_at`, `track_count_in` — keyed by pane alone (virtual ids hit the global queue/recent stores).
 - **`BackendResult`** (mpsc): `SearchResults`, `SearchResultsAppend`, `RadioResults`, `DownloadComplete(Track,String)`, `DownloadError`, `SearchError(u64, String)` (the rid routes to the requesting pane's slot), `ThumbnailDownloaded(provider, id)` (marks that entry downloaded), `LyricsFetched(Result<Lyrics, String>, String, LyricsProvider)` (applies to lyrics panes waiting on that track+provider; tick refetches per pane on track change), `NormalizationComputed(String, f32)` (caches a per-track gain in memory; read on subsequent plays), `CardPlaylistReady(usize, String, Vec<Track>)` (a dragged card became a playlist; fills the playlist at the given index with the browsed tracks), `TranslationDone/Error` (AI translation opens in the custom-lyrics editor under the target language). 250ms tick drains → `process_result`.
 - **Media controls**: souvlaki thread → souvlaki's `MediaControlEvent` → `process_media_event` (tick); `MediaUpdate` flows main → thread.
 

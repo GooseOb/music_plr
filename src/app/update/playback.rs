@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use tracing::debug;
 
-use super::{MusicPlayer, Track, TrackListKind, TrackPos};
+use super::{is_main_pane, MusicPlayer, Track, TrackPos, QUEUE_PANE_ID, RECENT_PANE_ID};
 use crate::{
     app::{pane::PaneId, Dialog, ViewKind},
     data::{cache::StreamCache, JsonStore},
@@ -11,24 +11,24 @@ use crate::{
 
 impl MusicPlayer {
     pub fn handle_play_track(&mut self, pos: TrackPos) {
-        let TrackPos { index, list, pane } = pos;
+        let TrackPos { index, pane } = pos;
         let track = self.get_track_at(pos);
         if let Some(track) = &track {
             if self.is_trashed(track) {
                 return;
             }
         }
-        match list {
-            TrackListKind::Recent => {
+        match pane {
+            RECENT_PANE_ID => {
                 if let Some(track) = track {
                     self.set_queue(vec![track]);
                 }
             }
-            TrackListKind::Queue => {
+            QUEUE_PANE_ID => {
                 let queue = self.queue.tracks.get(index..).unwrap_or(&[]);
                 self.set_queue(queue.to_vec());
             }
-            TrackListKind::Active => {
+            _ => {
                 let queue = self.view_tracks_in(pane).get(index..).unwrap_or(&[]);
                 self.set_queue(queue.to_vec());
                 self.record_now_playing_origin();
@@ -44,38 +44,34 @@ impl MusicPlayer {
     /// Persist `track` back into the list it came from (`pos`), so a resolved
     /// provider id survives and the source view/queue reflects it.
     pub(super) fn set_track_at(&mut self, pos: TrackPos, track: Track) {
-        let TrackPos { index, list, pane } = pos;
-        match list {
-            TrackListKind::Queue => {
-                if let Some(t) = self.queue.tracks.get_mut(index) {
-                    *t = track;
-                }
+        let TrackPos { index, pane } = pos;
+        if pane == QUEUE_PANE_ID {
+            if let Some(t) = self.queue.tracks.get_mut(index) {
+                *t = track;
             }
-            TrackListKind::Active => {
-                let view = self.view_data_in_mut(pane);
-                if let Some(t) = view.tracks_mut().and_then(|ts| ts.get_mut(index)) {
-                    *t = track.clone();
-                }
-                match &view.kind {
-                    ViewKind::Playlist(entry) => {
-                        let sp = entry.index;
-                        if let Some(pl) = self.playlists.playlists.get_mut(sp) {
-                            if let Some(t) = pl.tracks.get_mut(index) {
-                                *t = track;
-                            }
-                        }
-                        self.playlists.save();
-                    }
-                    ViewKind::Trashbin => {
-                        if let Some(t) = self.trashbin.tracks.get_mut(index) {
+        } else if is_main_pane(pane) {
+            let view = self.view_data_in_mut(pane);
+            if let Some(t) = view.tracks_mut().and_then(|ts| ts.get_mut(index)) {
+                *t = track.clone();
+            }
+            match &view.kind {
+                ViewKind::Playlist(entry) => {
+                    let sp = entry.index;
+                    if let Some(pl) = self.playlists.playlists.get_mut(sp) {
+                        if let Some(t) = pl.tracks.get_mut(index) {
                             *t = track;
                         }
-                        self.trashbin.save();
                     }
-                    _ => {}
+                    self.playlists.save();
                 }
+                ViewKind::Trashbin => {
+                    if let Some(t) = self.trashbin.tracks.get_mut(index) {
+                        *t = track;
+                    }
+                    self.trashbin.save();
+                }
+                _ => {}
             }
-            TrackListKind::Recent => {}
         }
     }
 
@@ -146,20 +142,15 @@ impl MusicPlayer {
             return;
         };
         self.bounds.context_menu = None;
-        let list = menu.pos.list;
-        let pane = if list.is_main() {
-            menu.pos.pane
-        } else {
-            self.focused_pane_id
-        };
+        let pane = menu.pos.pane;
         let indices = menu.target_indices;
         let mut to_download: Vec<Track> = Vec::new();
         for &idx in &indices {
-            if let Some(track) = self.get_track_at(TrackPos::new(idx, list, pane)) {
+            if let Some(track) = self.get_track_at(TrackPos::new(idx, pane)) {
                 if track.can_download_from(provider) {
                     to_download.push(track);
                 } else {
-                    let pos = TrackPos::new(idx, list, pane);
+                    let pos = TrackPos::new(idx, pane);
                     self.resolve_provider(provider, track, pos, false);
                 }
             }
@@ -178,7 +169,7 @@ impl MusicPlayer {
     fn resolve_provider(&mut self, provider: ProviderId, track: Track, pos: TrackPos, play: bool) {
         let msg = (self.strings.resolving_on)(&track.title, provider.label());
         self.notify(msg);
-        let rid = if pos.list.is_main() && self.panes.contains_key(&pos.pane) {
+        let rid = if is_main_pane(pos.pane) && self.panes.contains_key(&pos.pane) {
             self.slot_request_id(pos.pane)
         } else {
             0
@@ -357,10 +348,10 @@ impl MusicPlayer {
         new_positions
     }
 
-    pub fn handle_add_to_queue(&mut self, pane: PaneId, list: TrackListKind, indices: &[usize]) {
+    pub fn handle_add_to_queue(&mut self, pane: PaneId, indices: &[usize]) {
         let tracks: Vec<Track> = indices
             .iter()
-            .filter_map(|&i| self.get_track_at(TrackPos::new(i, list, pane)))
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, pane)))
             .collect();
         if tracks.is_empty() {
             return;
@@ -372,7 +363,7 @@ impl MusicPlayer {
         self.save_session();
         let tr = self.strings;
         self.notify((tr.added_to)(inserted, tr.queue));
-        self.clear_selection_if_touched_in(pane, indices, list);
+        self.clear_selection_if_touched_in(pane, indices);
     }
 
     pub fn handle_remove_from_queue_batch(&mut self, indices: &[usize]) {
@@ -382,7 +373,7 @@ impl MusicPlayer {
         let tr = self.strings;
         let msg = (tr.removed_from)(removed, tr.queue);
         self.notify(msg);
-        self.clear_selection_if_touched(indices, TrackListKind::Queue);
+        self.clear_selection_if_touched_in(QUEUE_PANE_ID, indices);
     }
 
     pub fn handle_remove_from_recent_batch(&mut self, indices: &[usize]) {
@@ -391,7 +382,7 @@ impl MusicPlayer {
         let tr = self.strings;
         let msg = (tr.removed_from)(removed, tr.recently_played);
         self.notify(msg);
-        self.clear_selection_if_touched(indices, TrackListKind::Recent);
+        self.clear_selection_if_touched_in(RECENT_PANE_ID, indices);
     }
 
     pub fn toggle_play_pause(&mut self) {

@@ -1,6 +1,6 @@
-use super::{Message, MusicPlayer, Task, ViewData};
+use super::{is_main_pane, pane_first_index, Message, MusicPlayer, Task, ViewData};
 use crate::app::{
-    interaction::{TrackListKind, TrackPos},
+    interaction::TrackPos,
     pane::{PaneId, SplitDir, MAX_PANES},
     ui::track_list_id,
     ViewKind,
@@ -146,7 +146,7 @@ impl MusicPlayer {
         let Some(index) = index else {
             return nav_task;
         };
-        nav_task.chain(self.move_hovered(TrackPos::new(index, TrackListKind::Active, pane)))
+        nav_task.chain(self.move_hovered(TrackPos::new(index, pane)))
     }
 
     pub(super) fn slot_for_request(&self, rid: u64) -> Option<(PaneId, usize)> {
@@ -189,7 +189,7 @@ impl MusicPlayer {
         // and drops the scrollables' offsets — capture the new geometry first,
         // then restore both panes' positions in order.
         let capture: Task<Message> = self.capture_bounds_task();
-        capture
+        let task = capture
             .chain(iced::widget::operation::scroll_to::<Message>(
                 track_list_id(pane),
                 iced::widget::operation::AbsoluteOffset {
@@ -203,7 +203,21 @@ impl MusicPlayer {
                     x: 0.0,
                     y: scroll_y,
                 },
-            ))
+            ));
+        // A keyboard-driven hover is an artifact of the pre-split layout, so
+        // carry it to the fork's first row; a mouse-driven hover tells the
+        // truth about the cursor position and is left alone (focus follows
+        // the mouse on its next move).
+        if !self.drag.is_hover_controlled {
+            return task;
+        }
+        let first = pane_first_index(new_id);
+        if self.track_count_in(new_id) > first {
+            task.chain(self.move_hovered(TrackPos::new(first, new_id)))
+        } else {
+            self.drag.clear_hovered_track();
+            task
+        }
     }
 
     pub fn close_pane(&mut self, pane: PaneId) -> Task<Message> {
@@ -214,11 +228,13 @@ impl MusicPlayer {
         // add target, track editor) must go with it; its position would
         // otherwise resolve against a missing pane.
         let dialog_pane = match &self.dialog {
-            Some(crate::app::Dialog::ContextMenu(m)) if m.pos.list.is_main() => Some(m.pos.pane),
+            Some(crate::app::Dialog::ContextMenu(m)) if is_main_pane(m.pos.pane) => {
+                Some(m.pos.pane)
+            }
             Some(crate::app::Dialog::PlaylistJump(j)) => j
                 .pending
                 .as_ref()
-                .filter(|p| p.list.is_main())
+                .filter(|p| is_main_pane(p.pane))
                 .map(|p| p.pane),
             Some(crate::app::Dialog::Edit(e)) => Some(e.pos.pane),
             Some(crate::app::Dialog::Translate(d)) => Some(d.pane),
@@ -230,7 +246,7 @@ impl MusicPlayer {
         if self
             .drag
             .hovered_track()
-            .is_some_and(|pos| pos.list.is_main() && pos.pane == pane)
+            .is_some_and(|pos| is_main_pane(pos.pane) && pos.pane == pane)
         {
             self.drag.hovered = None;
         }
@@ -271,25 +287,26 @@ impl MusicPlayer {
         ))
     }
 
-    pub fn focus_pane(&mut self, pane: PaneId) {
-        if self.focused_pane_id == pane {
-            return;
-        }
-        if self.panes.contains_key(&pane) {
+    pub fn focus_pane(&mut self, pane: PaneId) -> bool {
+        let needs_focus = self.focused_pane_id != pane && self.panes.contains_key(&pane);
+        if needs_focus {
             self.focused_pane_id = pane;
             self.save_session();
         }
+        needs_focus
     }
 
-    pub fn focus_pane_at(&mut self, index: usize) {
+    pub fn focus_pane_at(&mut self, index: usize) -> Task<Message> {
         let mut leaves = Vec::new();
         self.split_root.leaves(&mut leaves);
         if let Some(&id) = leaves.get(index) {
-            self.focus_pane(id);
+            self.focus_pane_and_recall(id)
+        } else {
+            Task::none()
         }
     }
 
-    pub fn focus_next_pane(&mut self, dir: isize) {
+    pub fn focus_next_pane(&mut self, dir: isize) -> Task<Message> {
         let mut leaves = Vec::new();
         self.split_root.leaves(&mut leaves);
         let cur = leaves
@@ -298,18 +315,38 @@ impl MusicPlayer {
             .unwrap_or(0)
             .cast_signed();
         let next = leaves[((cur + dir).rem_euclid(leaves.len().max(1).cast_signed())) as usize];
-        self.focus_pane(next);
+        self.focus_pane_and_recall(next)
     }
 
     /// Move keyboard focus to the pane adjacent to the focused one in `dir`,
     /// wrapping to the far edge past the last pane (like track navigation
     /// wraps at list ends).
-    pub fn focus_neighbor(&mut self, dir: crate::app::pane::PaneDir) {
+    pub fn focus_neighbor(&mut self, dir: crate::app::pane::PaneDir) -> Task<Message> {
         let next = self
             .split_root
             .neighbor(self.focused_pane_id, dir)
             .unwrap_or_else(|| self.split_root.wrap_edge(self.focused_pane_id, dir));
-        self.focus_pane(next);
+        self.focus_pane_and_recall(next)
+    }
+
+    /// Focus `pane` and move the keyboard cursor (hover) to its recalled row,
+    /// scrolling it into view. Keyboard-driven focus moves go through here so
+    /// focus and hover can't drift apart; mouse-driven `focus_pane` leaves
+    /// the hover alone because the cursor already owns it.
+    fn focus_pane_and_recall(&mut self, pane: PaneId) -> Task<Message> {
+        if !self.focus_pane(pane) {
+            return Task::none();
+        }
+        let pane = self.focused_pane_id;
+        let first = pane_first_index(pane);
+        let count = self.track_count_in(pane);
+        if count > first {
+            let index = self.drag.recall_focus(pane).clamp(first, count - 1);
+            self.move_hovered(TrackPos::new(index, pane))
+        } else {
+            self.drag.clear_hovered_track();
+            Task::none()
+        }
     }
 }
 
@@ -532,20 +569,115 @@ mod tests {
         let pane = p.focused_pane_id;
         let _ = p.split_pane(pane, SplitDir::Horizontal);
         let fork = p.focused_pane_id;
-        p.focus_neighbor(PaneDir::Right);
+        let _ = p.focus_neighbor(PaneDir::Right);
         assert_eq!(p.focused_pane_id, pane);
-        p.focus_neighbor(PaneDir::Left);
+        let _ = p.focus_neighbor(PaneDir::Left);
         assert_eq!(p.focused_pane_id, fork);
-        p.focus_neighbor(PaneDir::Left);
+        let _ = p.focus_neighbor(PaneDir::Left);
         assert_eq!(p.focused_pane_id, pane);
 
         // Stack the left pane: vertical wraps hold the column.
         let _ = p.split_pane(pane, SplitDir::Vertical);
         let bottom = p.focused_pane_id;
-        p.focus_neighbor(PaneDir::Down);
+        let _ = p.focus_neighbor(PaneDir::Down);
         assert_eq!(p.focused_pane_id, pane);
-        p.focus_neighbor(PaneDir::Up);
+        let _ = p.focus_neighbor(PaneDir::Up);
         assert_eq!(p.focused_pane_id, bottom);
+    }
+
+    #[test]
+    fn keyboard_focus_move_carries_hover() {
+        use crate::{app::interaction::HoverTarget, types::Track};
+        fn track(id: &str) -> Track {
+            Track::from_provider(
+                ProviderId::YouTube,
+                id.into(),
+                format!("https://example.com/{id}"),
+                format!("Track {id}"),
+                "Artist",
+                10,
+                String::new(),
+                None,
+                None,
+            )
+        }
+        let mut p = player();
+        let pane = p.focused_pane_id;
+        let _ = p.split_pane(pane, SplitDir::Horizontal);
+        let fork = p.focused_pane_id;
+        for id in [pane, fork] {
+            let _ = p.handle_navigate_to(
+                id,
+                ViewData::new_search(String::new(), ProviderId::YouTube, SearchScope::Songs),
+            );
+            p.view_data_in_mut(id)
+                .set_tracks(vec![track("1"), track("2"), track("3")]);
+        }
+        // Hover a row in the unfocused pane: keyboard actions see nothing.
+        p.drag
+            .set_hovered(HoverTarget::Track(TrackPos::new(2, pane)));
+        assert_eq!(p.focused_pane_id, fork);
+        assert_eq!(p.focused_hovered_track(), None);
+
+        // Ctrl+Arrow back reunites focus and hover on the recalled row.
+        let _ = p.focus_neighbor(crate::app::pane::PaneDir::Right);
+        assert_eq!(p.focused_pane_id, pane);
+        assert_eq!(p.drag.hovered_track(), Some(TrackPos::new(2, pane)));
+        assert_eq!(p.focused_hovered_track(), Some(TrackPos::new(2, pane)));
+
+        // Moving onto an empty pane clears the hover instead of leaving it
+        // stale in the old pane.
+        p.view_data_in_mut(fork).set_tracks(Vec::new());
+        let _ = p.focus_neighbor(crate::app::pane::PaneDir::Left);
+        assert_eq!(p.focused_pane_id, fork);
+        assert_eq!(p.drag.hovered_track(), None);
+    }
+
+    #[test]
+    fn split_carries_controlled_hover_to_fork() {
+        use crate::{
+            app::{interaction::HoverTarget, pane::SplitDir},
+            types::Track,
+        };
+        fn track(id: &str) -> Track {
+            Track::from_provider(
+                ProviderId::YouTube,
+                id.into(),
+                format!("https://example.com/{id}"),
+                format!("Track {id}"),
+                "Artist",
+                10,
+                String::new(),
+                None,
+                None,
+            )
+        }
+        let mut p = player();
+        let pane = p.focused_pane_id;
+        let _ = p.handle_navigate_to(
+            pane,
+            ViewData::new_search(String::new(), ProviderId::YouTube, SearchScope::Songs),
+        );
+        p.view_data_in_mut(pane)
+            .set_tracks(vec![track("1"), track("2"), track("3")]);
+
+        // Keyboard-owned hover follows focus into the fork's first row.
+        p.drag.is_hover_controlled = true;
+        p.drag
+            .set_hovered(HoverTarget::Track(TrackPos::new(2, pane)));
+        let _ = p.split_pane(pane, SplitDir::Horizontal);
+        let fork = p.focused_pane_id;
+        assert_ne!(fork, pane);
+        assert_eq!(p.drag.hovered_track(), Some(TrackPos::new(0, fork)));
+        assert_eq!(p.focused_hovered_track(), Some(TrackPos::new(0, fork)));
+
+        // Mouse-owned hover tells the truth about the cursor: left alone.
+        // (Re-split from the fork so the source hover is foreign to it.)
+        p.drag.is_hover_controlled = false;
+        p.drag
+            .set_hovered(HoverTarget::Track(TrackPos::new(1, pane)));
+        let _ = p.split_pane(fork, SplitDir::Horizontal);
+        assert_eq!(p.drag.hovered_track(), Some(TrackPos::new(1, pane)));
     }
 
     #[test]
@@ -555,15 +687,15 @@ mod tests {
         let _ = p.split_pane(pane, SplitDir::Horizontal);
         let fork = p.focused_pane_id;
         assert_ne!(pane, fork);
-        p.focus_next_pane(1);
+        let _ = p.focus_next_pane(1);
         assert_eq!(p.focused_pane_id, pane);
-        p.focus_next_pane(-1);
+        let _ = p.focus_next_pane(-1);
         assert_eq!(p.focused_pane_id, fork);
-        p.focus_pane_at(0);
+        let _ = p.focus_pane_at(0);
         assert_eq!(p.focused_pane_id, pane);
-        p.focus_pane_at(1);
+        let _ = p.focus_pane_at(1);
         assert_eq!(p.focused_pane_id, fork);
-        p.focus_pane_at(9);
+        let _ = p.focus_pane_at(9);
         assert_eq!(p.focused_pane_id, fork);
     }
 
@@ -649,7 +781,7 @@ mod tests {
         assert!(matches!(p.view_data().kind, ViewKind::SongRadio(_)));
         assert_eq!(
             p.drag.hovered_track(),
-            Some(TrackPos::new(0, TrackListKind::Active, p.focused_pane_id))
+            Some(TrackPos::new(0, p.focused_pane_id))
         );
     }
 }

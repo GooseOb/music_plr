@@ -5,7 +5,11 @@ use iced::{
 };
 
 pub fn track_list_id(pane: PaneId) -> Id {
-    Id::from(format!("track_list:{pane}"))
+    match pane {
+        crate::app::pane::QUEUE_PANE_ID => crate::app::ui::QUEUE_LIST_ID,
+        crate::app::pane::RECENT_PANE_ID => crate::app::ui::QUEUE_RECENT_LIST_ID,
+        _ => Id::from(format!("track_list:{pane}")),
+    }
 }
 
 use super::{
@@ -17,8 +21,8 @@ use super::{
 };
 use crate::{
     app::{
-        interaction::{row_id, HoverTarget, Pressed, TrackListKind, TrackPos},
-        pane::PaneId,
+        interaction::{row_id, HoverTarget, Pressed, TrackPos},
+        pane::{is_main_pane, PaneId},
         ui::{shared_components::like_button, styles::fg_accent},
         update::operation::ListGeometry,
     },
@@ -31,19 +35,18 @@ pub(super) fn view_track_list<'a>(
     tracks: &'a [Track],
     player: &'a MusicPlayer,
     pane: PaneId,
-    list: TrackListKind,
     index_offset: usize,
 ) -> Element<'a, Message, AppTheme> {
     if tracks.is_empty() {
         return empty_state(player.strings.no_tracks_found);
     }
 
-    let show_album = list == TrackListKind::Active
+    let show_album = is_main_pane(pane)
         && !matches!(
             player.view_data_in(pane).kind,
             crate::app::ViewKind::Album(_)
         );
-    let show_plays = list == TrackListKind::Active
+    let show_plays = is_main_pane(pane)
         && matches!(
             player.view_data_in(pane).kind,
             crate::app::ViewKind::Search(_)
@@ -54,10 +57,10 @@ pub(super) fn view_track_list<'a>(
                 | crate::app::ViewKind::PlaylistView(_)
         );
 
-    virtual_scrollable(tracks.len(), pane, list, player, |i| {
+    virtual_scrollable(tracks.len(), pane, player, |i| {
         view_track_row_inner(
             &tracks[i],
-            TrackPos::new(i + index_offset, list, pane),
+            TrackPos::new(i + index_offset, pane),
             player,
             show_album,
             show_plays,
@@ -68,17 +71,16 @@ pub(super) fn view_track_list<'a>(
 pub(super) fn virtual_scrollable<'a, F>(
     count: usize,
     pane: PaneId,
-    list: TrackListKind,
     player: &'a MusicPlayer,
     render_row: F,
 ) -> Element<'a, Message, AppTheme>
 where
     F: Fn(usize) -> Element<'a, Message, AppTheme>,
 {
-    let geo = match list {
-        TrackListKind::Queue => player.bounds.queue.as_ref(),
-        TrackListKind::Active => player.bounds.track_geo(pane),
-        TrackListKind::Recent => player.bounds.recent.as_ref(),
+    let geo = match pane {
+        crate::app::pane::QUEUE_PANE_ID => player.bounds.queue.as_ref(),
+        crate::app::pane::RECENT_PANE_ID => player.bounds.recent.as_ref(),
+        _ => player.bounds.track_geo(pane),
     };
     let children: Vec<Element<'a, Message, AppTheme>> = match geo {
         Some(ListGeometry {
@@ -120,17 +122,12 @@ where
         }
     };
 
-    let id = match list {
-        TrackListKind::Queue => crate::app::ui::QUEUE_LIST_ID,
-        TrackListKind::Active => track_list_id(pane),
-        TrackListKind::Recent => crate::app::ui::QUEUE_RECENT_LIST_ID,
-    };
+    let id = track_list_id(pane);
     scrollable(Column::with_children(children))
         .id(id)
         .height(Length::Fill)
         .on_scroll(move |vp| Message::ListScrolled {
             pane,
-            list,
             translation_y: vp.absolute_offset().y,
         })
         .into()
@@ -189,7 +186,7 @@ fn view_track_row_inner<'a>(
     show_plays: bool,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let is_selected = player.is_selected_in(pos.pane, pos.list, pos.index);
+    let is_selected = player.is_selected_in(pos.pane, pos.index);
     let is_hovered = player.drag.hovered_track() == Some(pos);
     let is_dragging = player.is_dragging_track(pos);
     let is_current = player
@@ -237,7 +234,7 @@ fn view_track_row_inner<'a>(
     track_row(
         track_area,
         row_bg,
-        Some(row_id(pos.list, pos.index, pos.pane)),
+        Some(row_id(pos.pane, pos.index)),
         border,
     )
     .into()
@@ -257,6 +254,7 @@ pub(super) fn track_row_layout<'a>(
     track_row_layout_inner(leading, track, player, pos, show_album, false)
 }
 
+#[allow(clippy::too_many_lines)]
 fn track_row_layout_inner<'a>(
     leading: Element<'a, Message, AppTheme>,
     track: &'a Track,
@@ -265,7 +263,11 @@ fn track_row_layout_inner<'a>(
     show_album: bool,
     show_plays: bool,
 ) -> Row<'a, Message, AppTheme> {
-    let pane = pos.pane;
+    let pane = if is_main_pane(pos.pane) {
+        pos.pane
+    } else {
+        player.focused_pane_id
+    };
     let thumb = player.thumbnail_index.get(track.source, track.primary_id());
     let is_downloaded = player.download_registry.contains(&track.cache_key());
     let is_cached = player

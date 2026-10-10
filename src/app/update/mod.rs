@@ -5,8 +5,9 @@ use tracing::{error, warn};
 
 use crate::{
     app::{
-        interaction::{TrackListKind, TrackPos},
+        interaction::TrackPos,
         message::{BackendResult, Message},
+        pane::{is_main_pane, pane_first_index, QUEUE_PANE_ID, RECENT_PANE_ID},
         view_data::ViewData,
         MusicPlayer,
     },

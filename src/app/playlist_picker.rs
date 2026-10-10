@@ -3,13 +3,12 @@
 //! is set.
 
 use super::pane::PaneId;
-use crate::app::interaction::TrackListKind;
 
 #[derive(Debug, Clone)]
 pub struct PendingAdd {
     pub indices: Vec<usize>,
-    pub list: TrackListKind,
-    /// Owning pane for `Active` positions; ignored for `Queue`/`Recent`.
+    /// Source list: a main pane id, or [`super::pane::QUEUE_PANE_ID`] /
+    /// [`super::pane::RECENT_PANE_ID`] for the global panel lists.
     pub pane: PaneId,
 }
 

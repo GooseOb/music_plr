@@ -1,11 +1,54 @@
 use serde::{Deserialize, Serialize};
 
 use super::{lyrics_state::LyricsState, view_data::ViewData};
-use crate::providers::{ProviderId, SearchScope};
+use crate::{
+    providers::{ProviderId, SearchScope},
+    types::QueueTab,
+};
 
 pub type PaneId = u64;
 
 pub const MAX_PANES: usize = 4;
+
+/// The global queue list, addressed as a pane so track positions need no
+/// separate list tag. Never inserted into `panes` (which holds only real
+/// split panes); `next_pane_id` counts up from 1 and never reaches here.
+pub const QUEUE_PANE_ID: PaneId = PaneId::MAX;
+/// The global recently-played list, addressed as a pane. Same rules as
+/// [`QUEUE_PANE_ID`].
+pub const RECENT_PANE_ID: PaneId = PaneId::MAX - 1;
+
+pub const fn is_main_pane(id: PaneId) -> bool {
+    id != QUEUE_PANE_ID && id != RECENT_PANE_ID
+}
+
+/// First scrollable row of a list: the queue's now-playing track renders in
+/// its own header outside the scrollable, so its rows start at 1.
+pub const fn pane_first_index(pane: PaneId) -> usize {
+    if pane == QUEUE_PANE_ID {
+        1
+    } else {
+        0
+    }
+}
+
+/// Slot into `DragState::last_focus` for a list.
+pub const fn pane_slot(pane: PaneId) -> usize {
+    match pane {
+        QUEUE_PANE_ID => 0,
+        RECENT_PANE_ID => 2,
+        _ => 1,
+    }
+}
+
+impl From<QueueTab> for PaneId {
+    fn from(tab: QueueTab) -> Self {
+        match tab {
+            QueueTab::Queue => QUEUE_PANE_ID,
+            QueueTab::RecentlyPlayed => RECENT_PANE_ID,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct Pane {

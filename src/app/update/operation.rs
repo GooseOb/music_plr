@@ -35,8 +35,7 @@ use iced_core::widget::operation::{Operation, Outcome, Scrollable};
 
 use crate::{
     app::{
-        interaction::TrackListKind,
-        pane::PaneId,
+        pane::{PaneId, QUEUE_PANE_ID, RECENT_PANE_ID},
         ui::{
             search_history_list_id, search_input_id, track_list_id, QUEUE_LIST_ID,
             QUEUE_RECENT_LIST_ID,
@@ -68,14 +67,14 @@ pub enum ContainingList {
 }
 
 impl ContainingList {
-    /// The track list and owning pane for track-containing lists. `focused`
-    /// fills in the pane for the global `Queue`/`Recent` panel, whose rows
-    /// carry no pane. `None` for sidebar/library hits.
-    pub fn track_target(self, focused: PaneId) -> Option<(TrackListKind, PaneId)> {
+    /// The list for track-containing lists: the virtual queue/recent pane
+    /// for the global panel, or the owning pane for main lists. `None` for
+    /// sidebar/library hits.
+    pub fn track_target(self) -> Option<PaneId> {
         match self {
-            ContainingList::Queue => Some((TrackListKind::Queue, focused)),
-            ContainingList::Track(pane) => Some((TrackListKind::Active, pane)),
-            ContainingList::Recent => Some((TrackListKind::Recent, focused)),
+            ContainingList::Queue => Some(QUEUE_PANE_ID),
+            ContainingList::Track(pane) => Some(pane),
+            ContainingList::Recent => Some(RECENT_PANE_ID),
             ContainingList::Sidebar | ContainingList::Library => None,
         }
     }
