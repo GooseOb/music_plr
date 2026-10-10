@@ -412,12 +412,10 @@ impl MusicPlayer {
         }
 
         if pane == QUEUE_PANE_ID {
-            let sel = self.queue_selected_indices.clone();
-            self.queue_selected_indices = self.handle_reorder_queue(drop_idx, indices, &sel);
+            self.queue_selected_indices = self.handle_reorder_queue(drop_idx, indices);
             self.save_session();
         } else if is_main_pane(pane) {
-            let sel = self.view_data_in_mut(pane).selection.clone();
-            let positions = self.handle_reorder_tracks_selected(pane, drop_idx, indices, &sel);
+            let positions = self.handle_reorder_tracks_selected(pane, drop_idx, indices);
             self.view_data_in_mut(pane).selection = positions;
         }
     }
@@ -465,7 +463,7 @@ impl MusicPlayer {
         if from >= self.playlists.playlists.len() || to > self.playlists.playlists.len() {
             return;
         }
-        crate::util::reorder_tracks(&mut self.playlists.playlists, to, &[from], &[]);
+        crate::util::move_items(&mut self.playlists.playlists, to, &[from]);
         self.playlists.save();
 
         // Keep the active Playlist view pointed at the same playlist. After

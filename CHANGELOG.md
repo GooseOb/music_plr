@@ -8,11 +8,11 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
-## [Unreleased]
+## [1.3.12] - 2026-10-10
 
 ### Fixed
 
-- Clicking artist in queue panel track rows now redirects to the artist page.
+- Clicking artist on track rows in queue panel now redirects to the artist page.
 
 ## [1.3.11] - 2026-10-08
 

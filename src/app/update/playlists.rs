@@ -421,22 +421,18 @@ impl MusicPlayer {
         pane: PaneId,
         drop_idx: usize,
         indices: &[usize],
-        selection: &[usize],
     ) -> Vec<usize> {
         let sp = match &self.view_data_in(pane).kind {
             ViewKind::Playlist(p) => p.index,
             _ => return Vec::new(),
         };
-        let new_positions = if sp < self.playlists.playlists.len() {
-            crate::util::reorder_tracks(
-                &mut self.playlists.playlists[sp].tracks,
-                drop_idx,
-                indices,
-                selection,
-            )
-        } else {
-            Vec::new()
-        };
+        let selection = std::mem::take(&mut self.view_data_in_mut(pane).selection);
+        let new_positions = crate::util::reorder_tracks(
+            &mut self.playlists.playlists[sp].tracks,
+            drop_idx,
+            indices,
+            selection,
+        );
         self.playlists.save();
         new_positions
     }

@@ -336,12 +336,8 @@ impl MusicPlayer {
         });
     }
 
-    pub fn handle_reorder_queue(
-        &mut self,
-        drop_idx: usize,
-        indices: &[usize],
-        selection: &[usize],
-    ) -> Vec<usize> {
+    pub fn handle_reorder_queue(&mut self, drop_idx: usize, indices: &[usize]) -> Vec<usize> {
+        let selection = std::mem::take(&mut self.queue_selected_indices);
         let new_positions =
             crate::util::reorder_tracks(&mut self.queue.tracks, drop_idx, indices, selection);
         self.save_session();
