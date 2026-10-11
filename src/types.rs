@@ -298,9 +298,9 @@ impl PlayQueue {
 
     /// Restore the track at `pos` in `recently_played` to the front of the
     /// queue (becomes the new current track), dropping everything before it.
-    /// `pos` comes from [`Self::get_previous_pos_filtered`]; anything out of
-    /// bounds is a no-op rather than a panic.
+    /// `pos` comes from [`Self::previous_pos_filtered`] and must be in bounds.
     pub fn restore_previous(&mut self, pos: usize) {
+        debug_assert!(pos < self.recently_played.len());
         if let Some(track) = self.recently_played.drain(..=pos).next_back() {
             self.tracks.insert(0, track);
         }
@@ -409,7 +409,6 @@ mod tests {
         let mut q = PlayQueue::new();
         assert!(q.current().is_none());
         assert!(!q.advance());
-        q.restore_previous(99);
         assert!(q.current().is_none());
     }
 
