@@ -8,6 +8,12 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+## [Unreleased]
+
+## Fixed
+
+Plain lyrics are now displayed correctly when synced lyrics are not available.
+
 ## [1.3.12] - 2026-10-10
 
 ### Fixed

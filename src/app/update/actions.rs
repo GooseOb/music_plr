@@ -72,6 +72,7 @@ impl MusicPlayer {
     }
 
     fn sync_editor_content(state: &mut crate::app::LyricsState) {
+        state.sync_plain_lines();
         let timed;
         let text = match state.displayed_lyrics() {
             Some(lyrics) if lyrics.has_timed() => {

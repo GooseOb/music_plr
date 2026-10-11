@@ -28,6 +28,9 @@ pub struct LyricsState {
     /// Provider-namespaced `slug:id` track key (see [`crate::types::Track::cache_key`]).
     pub track_id: Option<String>,
     pub lyrics: LoadState<Arc<Lyrics>>,
+    /// `displayed_lyrics().plain` split into rows. Refreshed in update code
+    /// via [`Self::sync_plain_lines`], never in `view` (which runs every tick).
+    pub plain_lines: Vec<String>,
     pub mode: LyricsViewMode,
     pub editor: iced::widget::text_editor::Content,
     pub scrolled_to: Option<usize>,
@@ -61,6 +64,7 @@ impl LyricsState {
             provider,
             track_id: None,
             lyrics: LoadState::Loading,
+            plain_lines: Vec::new(),
             mode: LyricsViewMode::Selectable,
             editor: iced::widget::text_editor::Content::default(),
             scrolled_to: None,
@@ -121,6 +125,15 @@ impl LyricsState {
     pub fn reset_translation_state(&mut self) {
         self.selected_translation = None;
         self.loading_translation = None;
+    }
+
+    pub fn sync_plain_lines(&mut self) {
+        match self.displayed_lyrics() {
+            Some(lyrics) => {
+                self.plain_lines = lyrics.plain.lines().map(str::to_string).collect();
+            }
+            None => self.plain_lines.clear(),
+        }
     }
 
     pub fn mode_available(&self, mode: LyricsViewMode) -> bool {

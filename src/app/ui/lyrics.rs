@@ -50,7 +50,7 @@ pub(super) fn view_lyrics<'a>(
                 Some(lyrics) if lyrics.has_timed() && mode == LyricsViewMode::Synced => {
                     view_synced(pane, lyrics, scrolled)
                 }
-                Some(lyrics) => view_plain_notes(pane, lyrics, picked),
+                Some(_) => view_plain_notes(pane, &lyrics_state.plain_lines, picked),
                 // `displayed` is always `Some` once lyrics are ready.
                 None => empty_state(""),
             },
@@ -340,16 +340,12 @@ fn view_select_editor(
 
 fn view_plain_notes(
     pane: PaneId,
-    lyrics: &crate::lyrics::Lyrics,
+    lines: &[String],
     picked: Option<usize>,
 ) -> Element<'_, Message, AppTheme> {
-    let rows = lyrics.lines.iter().enumerate().map(|(i, line)| {
-        let centered = Container::new(
-            text(&line.text)
-                .size(theme::TEXT_SIZE_LG)
-                .style(fg_secondary()),
-        )
-        .center(Length::Fill);
+    let rows = lines.iter().enumerate().map(|(i, line)| {
+        let centered = Container::new(text(line).size(theme::TEXT_SIZE_LG).style(fg_secondary()))
+            .center(Length::Fill);
 
         Button::new(centered)
             .padding([theme::SPACING_SM, theme::SPACING_LG])
