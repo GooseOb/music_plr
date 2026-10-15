@@ -5,6 +5,7 @@ use iced::{
 };
 
 use super::{
+    progress_bar::ProgressBar,
     shared_components::{play_pause_button, subtitle_artist, thumbnail},
     styles::{
         bg_tertiary, button_style_playbar, fg_secondary, icon_fg, icon_fg_muted, icon_fg_secondary,
@@ -58,7 +59,7 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     let track_info =
         Column::with_children([text(title).into(), artist_el]).spacing(theme::SPACING_XXS);
 
-    let elapsed_text = time_text((player.progress * player.duration) as u32);
+    let elapsed_text = time_text((player.playback_progress() * player.duration) as u32);
     let total_text = time_text(player.duration as u32);
 
     let controls = Container::new(
@@ -83,12 +84,16 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     )
     .center_x(Length::Fill);
 
-    let progress = slider(0.0..=1.0, player.progress, Message::Seek)
-        .width(Length::Fill)
-        .step(0.01f32);
+    let progress: Element<'_, Message, AppTheme> = ProgressBar::new(
+        player.progress,
+        player.progress_at,
+        player.duration,
+        player.is_playing,
+    )
+    .into();
 
     let controls_and_progress =
-        Column::with_children([controls.into(), progress.into()]).spacing(theme::SPACING_XS);
+        Column::with_children([controls.into(), progress]).spacing(theme::SPACING_XS);
 
     let volume_slider = slider(0.0..=1.0, player.volume, Message::SetVolume)
         .width(theme::VOLUME_SLIDER_WIDTH)

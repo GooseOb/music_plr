@@ -191,7 +191,7 @@ impl MusicPlayer {
         if !lyrics.has_timed() {
             return None;
         }
-        let position = self.progress * self.duration;
+        let position = self.playback_progress() * self.duration;
         Some((lyrics.active_index(position)?, lyrics.timed_count()))
     }
 

@@ -131,7 +131,7 @@ thumbnails, lyrics) go to `~/.cache/goosemusic`.
 ## Technical notes
 
 **State** — All state lives in one `MusicPlayer`; `view()` is a pure function of `&MusicPlayer`. Background work (search, download, thumbnails)
-returns via an mpsc channel drained by a 250ms tick. Stores implement a `JsonStore` trait and degrade to defaults on failure.
+returns via an mpsc channel drained by a 1Hz tick (none when idle). Stores implement a `JsonStore` trait and degrade to defaults on failure.
 
 **Audio** — A dedicated output thread runs the rodio sink. yt-dlp streams AAC-in-M4A into a still-growing cache file; a custom
 `SymphoniaStreamingSource` over a non-seekable `GrowingMediaSource` decodes sequentially so playback starts within a few KB.

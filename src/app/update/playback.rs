@@ -197,6 +197,8 @@ impl MusicPlayer {
 
     pub fn play_track_internal(&mut self, track: &Track, preferred: ProviderId) {
         self.track_loading = true;
+        self.progress = 0.0;
+        self.progress_at = std::time::Instant::now();
         // The active track changed: drop any cached lyrics so the overlay
         // re-fetches for the new track when reopened.
         self.clear_lyrics_for_track_change();
@@ -248,7 +250,9 @@ impl MusicPlayer {
                         analysis_path = Some(path);
                     }
                     if analysis_path.is_none() {
-                        // Truly nothing playable: explain why.
+                        // Truly nothing playable: explain why and drop the
+                        // spinner — nothing downstream will clear it.
+                        self.track_loading = false;
                         if track.providers.keys().any(|p| p.uses_ytdlp()) {
                             self.notify(self.strings.deps_play_requires_yt_dlp);
                         } else {
@@ -306,7 +310,9 @@ impl MusicPlayer {
             if streaming {
                 self.pending_normalization_id = Some(track.cache_key());
             } else if let Some(path) = analysis_path {
-                self.request_normalization_analysis(&track.cache_key(), path);
+                let key = track.cache_key();
+                self.pending_normalization_id = Some(key.clone());
+                self.request_normalization_analysis(&key, path);
             }
         }
     }
@@ -384,10 +390,15 @@ impl MusicPlayer {
     pub fn toggle_play_pause(&mut self) {
         if let Some(track) = self.queue.current().cloned() {
             if self.is_playing {
+                self.progress = self.playback_progress();
+                self.is_playing = false;
                 self.audio.pause();
+                self.track_loading = false;
             } else if self.is_trashed(&track) {
                 self.skip_trashed_and_play_current();
             } else if self.audio.has_output() {
+                self.progress_at = std::time::Instant::now();
+                self.is_playing = true;
                 self.audio.resume();
             } else {
                 self.play_track_internal(&track, track.source);
@@ -458,16 +469,29 @@ impl MusicPlayer {
         if self.duration <= 0.0 {
             return;
         }
-        let pos = self.progress * self.duration + delta;
+        let pos = self.playback_progress() * self.duration + delta;
         self.seek(pos / self.duration);
     }
 
     pub fn seek(&mut self, frac: f32) {
         let frac = frac.clamp(0.0, 1.0);
         self.progress = frac;
+        self.progress_at = std::time::Instant::now();
         self.audio
             .seek(std::time::Duration::from_secs_f32(frac * self.duration));
         self.media_controls_dirty = true;
+    }
+
+    /// Live playback position as a fraction: the anchor advanced by the wall
+    /// clock while playing. The progress bar draws from this without polling;
+    /// slow ticks re-anchor it against the audio thread to correct drift.
+    pub fn playback_progress(&self) -> f32 {
+        if self.is_playing && self.duration > 0.0 {
+            (self.progress + self.progress_at.elapsed().as_secs_f32() / self.duration)
+                .clamp(0.0, 1.0)
+        } else {
+            self.progress.clamp(0.0, 1.0)
+        }
     }
 
     /// Seek to an absolute playback position in seconds (used by clicking a
@@ -478,5 +502,34 @@ impl MusicPlayer {
         }
         let frac = (secs / self.duration).clamp(0.0, 1.0);
         self.seek(frac);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::config;
+
+    fn player() -> MusicPlayer {
+        MusicPlayer::new_with(config::Config::default())
+    }
+
+    #[test]
+    fn unplayable_track_does_not_stick_loading() {
+        let mut p = player();
+        p.play_track_internal(&Track::default(), ProviderId::YouTube);
+        assert!(!p.track_loading);
+    }
+
+    #[test]
+    fn progress_interpolates_from_the_anchor_while_playing() {
+        let mut p = player();
+        p.duration = 100.0;
+        p.progress = 0.5;
+        p.progress_at = std::time::Instant::now();
+        p.is_playing = true;
+        assert!((p.playback_progress() - 0.5).abs() < 0.02);
+        p.is_playing = false;
+        assert_eq!(p.playback_progress(), 0.5);
     }
 }

@@ -57,12 +57,17 @@ impl crate::app::MusicPlayer {
                 self.init_media_controls(hwnd.map(|h| h as *mut std::ffi::c_void));
                 Task::none()
             }
+            Message::MediaEvent(event) => {
+                self.process_media_event(&event);
+                Task::none()
+            }
             Message::WindowClose => {
                 self.flush_session();
                 Task::none()
             }
             Message::CursorMoved(pos) => self.handle_cursor_moved(pos),
             Message::LeftButtonReleased => self.handle_left_release(),
+            Message::SearchInputClicked(pane) => self.handle_search_input_clicked(pane),
             Message::ListBoundsCaptured(bounds) => {
                 for (pane, geo) in &bounds.tracks {
                     if let Some(p) = self.panes.get_mut(pane) {
@@ -106,11 +111,7 @@ impl crate::app::MusicPlayer {
                 }
                 Task::none()
             }
-            Message::KeyPressed { key, modifiers } => self.handle_key_press(key, modifiers),
-            Message::ModifiersChanged(modifiers) => {
-                self.modifiers = modifiers;
-                Task::none()
-            }
+            Message::Shortcut(shortcut) => self.apply_shortcut(shortcut),
             Message::LyricsEditorAction(pane, action) => {
                 if let Some(state) = &mut self.pane_mut(pane).lyrics {
                     if !matches!(action, iced::widget::text_editor::Action::Edit(_)) {
@@ -264,15 +265,11 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::HoverStart(target) => {
-                if !self.drag.is_hover_controlled && self.drag.hovered.as_ref() != Some(&target) {
-                    self.drag.set_hovered(target);
-                }
+                self.drag.hover_started(target);
                 Task::none()
             }
             Message::HoverEnd(target) => {
-                if !self.drag.is_hover_controlled && self.drag.hovered.as_ref() == Some(&target) {
-                    self.drag.hovered = None;
-                }
+                self.drag.hover_ended(&target);
                 Task::none()
             }
             Message::TrackRightClicked(pos) => self.show_context_menu_at(pos, self.drag.cursor_pos),
@@ -321,10 +318,6 @@ impl crate::app::MusicPlayer {
                 }
                 Task::none()
             }
-            Message::PlaylistJumpConfirm => {
-                let play = self.modifiers.shift();
-                self.confirm_playlist_jump(play)
-            }
             Message::PlaylistJumpOpen(index) => self.submit_playlist_jump(index, false),
             Message::PlaylistJumpHover(pos) => {
                 self.hover_playlist_jump(pos);
@@ -347,10 +340,10 @@ impl crate::app::MusicPlayer {
                             "Audio",
                             &["mp3", "flac", "wav", "ogg", "m4a", "aac", "opus", "wma"],
                         )
-                        .pick_files();
-                    if let Some(files) = files.filter(|f| !f.is_empty()) {
-                        let _ = tx.send(BackendResult::LocalFilesPicked(files));
-                    }
+                        .pick_files()
+                        .filter(|f| !f.is_empty())
+                        .unwrap_or_default();
+                    let _ = tx.send(BackendResult::LocalFilesPicked(files));
                 });
                 Task::none()
             }
@@ -770,13 +763,49 @@ impl crate::app::MusicPlayer {
         });
     }
 
-    #[allow(clippy::unused_self)]
     pub fn subscription(&self) -> Subscription<Message> {
-        let timer = iced::time::every(Duration::from_millis(250)).map(|_| Message::Tick);
+        Subscription::batch([
+            self.tick_subscription(),
+            Self::slow_event_subscription(),
+            self.drag_subscription(),
+            self.key_subscription(),
+            Self::media_hwnd_subscription(),
+        ])
+    }
 
-        let events = iced::event::listen_with(Self::event_to_message);
+    /// The progress bar animates from the wall clock at draw time, so 1Hz
+    /// suffices for everything the tick does: time texts, drift correction,
+    /// and end-of-track detection (auto-advance can lag up to a second).
+    #[allow(clippy::unused_self)]
+    fn tick_subscription(&self) -> Subscription<Message> {
+        iced::time::every(Duration::from_secs(1)).map(|_| Message::Tick)
+    }
 
-        Subscription::batch([timer, events, Self::media_hwnd_subscription()])
+    /// Discrete events only: mouse release and window. Keyboard lives in
+    /// [`Self::key_subscription`], gated by open dialog.
+    fn slow_event_subscription() -> Subscription<Message> {
+        iced::event::listen_with(Self::slow_event_to_message)
+    }
+
+    /// Key chords decoded to [`Shortcut`](crate::app::Shortcut) at the event
+    /// level. The context menu and the playlist jumper swallow everything but
+    /// their own keys, exactly like the old handler's early returns did — so
+    /// they get their own matchers and the main table stays off.
+    fn key_subscription(&self) -> Subscription<Message> {
+        use crate::app::shortcut;
+        match &self.dialog {
+            Some(Dialog::ContextMenu(_)) => iced::event::listen_with(shortcut::match_menu),
+            Some(Dialog::PlaylistJump(_)) => iced::event::listen_with(shortcut::match_jump),
+            _ => iced::event::listen_with(shortcut::match_main),
+        }
+    }
+
+    fn drag_subscription(&self) -> Subscription<Message> {
+        if self.drag.pressed.is_some() {
+            iced::event::listen_with(Self::drag_event_to_message)
+        } else {
+            Subscription::none()
+        }
     }
 
     /// Emits `Message::WindowOpened` once the application window is created, so
@@ -796,32 +825,35 @@ impl crate::app::MusicPlayer {
     // `iced::event::listen_with` hands the event over by value, so the
     // by-value parameter is mandated by the API.
     #[allow(clippy::needless_pass_by_value)]
-    fn event_to_message(
+    fn slow_event_to_message(
         event: iced::Event,
-        status: iced::event::Status,
+        _status: iced::event::Status,
+        _window: iced::window::Id,
+    ) -> Option<Message> {
+        match event {
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
+                Some(Message::LeftButtonReleased)
+            }
+            iced::Event::Window(iced::window::Event::CloseRequested) => Some(Message::WindowClose),
+            iced::Event::Window(iced::window::Event::Resized(size)) => {
+                Some(Message::WindowResized(size))
+            }
+            _ => None,
+        }
+    }
+
+    // Cursor tracking runs only while a press is down (see
+    // `drag_subscription`). Every message out of here means drag work, so the
+    // handler applies it without re-checking whether tracking is wanted.
+    #[allow(clippy::needless_pass_by_value)]
+    fn drag_event_to_message(
+        event: iced::Event,
+        _status: iced::event::Status,
         _window: iced::window::Id,
     ) -> Option<Message> {
         match event {
             iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
                 Some(Message::CursorMoved(position))
-            }
-            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
-                Some(Message::LeftButtonReleased)
-            }
-            iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                physical_key,
-                modifiers,
-                ..
-            }) if status == iced::event::Status::Ignored => Some(Message::KeyPressed {
-                key: physical_key,
-                modifiers,
-            }),
-            iced::Event::Keyboard(iced::keyboard::Event::ModifiersChanged(modifiers)) => {
-                Some(Message::ModifiersChanged(modifiers))
-            }
-            iced::Event::Window(iced::window::Event::CloseRequested) => Some(Message::WindowClose),
-            iced::Event::Window(iced::window::Event::Resized(size)) => {
-                Some(Message::WindowResized(size))
             }
             _ => None,
         }

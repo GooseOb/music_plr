@@ -21,22 +21,22 @@ use crate::{
 
 impl MusicPlayer {
     pub fn handle_left_release(&mut self) -> Task<Message> {
-        let cursor = self.drag.cursor_pos;
-        let input_pane = self
-            .bounds
-            .search_inputs
-            .iter()
-            .find(|(_, r)| r.contains(cursor))
-            .map(|(pane, _)| *pane);
-        if let Some(pane) = input_pane {
-            self.focused_pane_id = pane;
-            self.drag.stop();
-            for other in self.pane_ids() {
-                if other != pane && self.pane(other).show_search_history {
-                    self.pane_mut(other).show_search_history = false;
+        // Clicks on a search input arrive as `SearchInputClicked` straight
+        // from the widget, so this path never needs the cursor: a press-less
+        // release only dismisses open search histories.
+        if self.drag.pressed.is_none() {
+            if self.suppress_history_close {
+                self.suppress_history_close = false;
+            } else {
+                for pane in self.pane_ids() {
+                    if self.pane(pane).show_search_history {
+                        self.pane_mut(pane).show_search_history = false;
+                    }
                 }
             }
-            return self.activate_search_input(pane);
+            self.drag.clear_hovered_search_history();
+            self.drag.stop();
+            return Task::none();
         }
         for pane in self.pane_ids() {
             if self.pane(pane).show_search_history {
@@ -551,9 +551,11 @@ impl MusicPlayer {
     /// Arm a press for dragging. A track row also supports double-click (play
     /// + select); a card (artist/album/playlist) opens on a plain click.
     ///
-    /// The drag threshold is promoted in `CursorMoved`, so this only records
-    /// the press origin.
+    /// The press-time cursor is stale (cursor tracking runs only while
+    /// pressed), so the origin recorded here is re-anchored by the first
+    /// `CursorMoved`; the threshold is promoted there, this only arms.
     pub fn handle_drag_press(&mut self, pressed: Pressed) {
+        self.drag.claim_mouse();
         match pressed {
             Pressed::Track(pos) => {
                 if is_main_pane(pos.pane) {
@@ -598,6 +600,7 @@ impl MusicPlayer {
             }
         }
         self.drag.drag_active = false;
+        self.drag.origin_fresh = false;
     }
 }
 

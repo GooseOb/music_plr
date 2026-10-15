@@ -15,7 +15,7 @@ impl MusicPlayer {
 
     /// Persist the session, but at most once per `SESSION_FLUSH_MIN_INTERVAL`
     /// so that the frequent `save_session()` callers (volume, seek, drag,
-    /// navigation) don't rewrite `session.json` on every 250ms tick.
+    /// navigation) don't rewrite `session.json` on every tick.
     pub fn flush_session(&mut self) {
         if !self.session_dirty {
             return;

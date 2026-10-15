@@ -56,15 +56,21 @@ pub(super) fn view_search_bar(
     pane: PaneId,
 ) -> Element<'_, Message, AppTheme> {
     let pane_state = player.pane(pane);
-    let input = text_input(
-        (player.strings.search_placeholder)(pane_state.search_provider).as_str(),
-        &pane_state.search_query,
+    // Release-only wrapper: press passes through to the input untouched
+    // (native focus + cursor placement), release reports the click so the
+    // pane can be focused without cursor hit-testing.
+    let input = MouseArea::new(
+        text_input(
+            (player.strings.search_placeholder)(pane_state.search_provider).as_str(),
+            &pane_state.search_query,
+        )
+        .on_input(move |q| Message::SearchInputChanged(pane, q))
+        .on_submit(Message::SearchExecute(pane))
+        .padding([theme::SPACING_SM, theme::SPACING_MD])
+        .id(search_input_id(pane))
+        .width(Length::Fill),
     )
-    .on_input(move |q| Message::SearchInputChanged(pane, q))
-    .on_submit(Message::SearchExecute(pane))
-    .padding([theme::SPACING_SM, theme::SPACING_MD])
-    .id(search_input_id(pane))
-    .width(Length::Fill)
+    .on_release(Message::SearchInputClicked(pane))
     .into();
 
     let search_btn =

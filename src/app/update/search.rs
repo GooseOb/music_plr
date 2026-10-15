@@ -275,6 +275,23 @@ impl MusicPlayer {
         CaptureSearchHistoryRows::new(pane).into()
     }
 
+    /// A search input was clicked (reported by the input's own wrapper, so no
+    /// cursor hit-testing is needed). Mirrors the old release hit-test: focus
+    /// the pane, close other histories, open this one. Sets
+    /// `suppress_history_close` so the press-less release from the same click
+    /// doesn't dismiss what was just opened.
+    pub fn handle_search_input_clicked(&mut self, pane: PaneId) -> Task<Message> {
+        self.focused_pane_id = pane;
+        self.drag.stop();
+        for other in self.pane_ids() {
+            if other != pane && self.pane(other).show_search_history {
+                self.pane_mut(other).show_search_history = false;
+            }
+        }
+        self.suppress_history_close = true;
+        self.activate_search_input(pane)
+    }
+
     /// Start a song or artist radio seeded by `provider`. When the track
     /// carries no id for the provider, one is resolved by search inside the
     /// spawned thread before querying the radio.

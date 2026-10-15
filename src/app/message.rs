@@ -4,6 +4,7 @@ use iced::{Point, Rectangle};
 
 use super::{
     pane::{is_main_pane, PaneId},
+    shortcut::Shortcut,
     ViewData,
 };
 use crate::{
@@ -15,6 +16,7 @@ use crate::{
     data::library,
     deps::DepKind,
     lyrics::Lyrics,
+    media_controls::MediaControlEvent,
     providers::ProviderId,
     types::{QueueTab, Track},
 };
@@ -128,6 +130,9 @@ pub enum Message {
     WindowOpened(iced::window::Id),
     /// The OS window handle (HWND on Windows) resolved for media controls.
     MediaHwnd(Option<u64>),
+    /// An OS media-control event (media keys, MPRIS/SMTC), bridged from the
+    /// controls thread as it arrives — no tick polling involved.
+    MediaEvent(MediaControlEvent),
     CursorMoved(Point),
     LeftButtonReleased,
     ListBoundsCaptured(Box<CaptureBounds>),
@@ -146,13 +151,10 @@ pub enum Message {
         viewport_h: f32,
         content_h: f32,
     },
-    KeyPressed {
-        key: iced::keyboard::key::Physical,
-        modifiers: iced::keyboard::Modifiers,
-    },
-    ModifiersChanged(iced::keyboard::Modifiers),
+    Shortcut(Shortcut),
 
     SearchInputChanged(PaneId, String),
+    SearchInputClicked(PaneId),
     SearchExecute(PaneId),
     SearchScopeChanged(PaneId, crate::providers::SearchScope),
     SearchProviderChanged(PaneId, ProviderId),
@@ -188,7 +190,6 @@ pub enum Message {
     SaveBrowseAsPlaylist(PaneId),
     OpenPlaylistJump,
     PlaylistJumpInput(String),
-    PlaylistJumpConfirm,
     PlaylistJumpOpen(usize),
     PlaylistJumpHover(usize),
     PlaylistJumpOpenPlay(usize),
@@ -301,6 +302,7 @@ impl Message {
         let active_pane = |pos: &TrackPos| is_main_pane(pos.pane).then_some(pos.pane);
         match self {
             Message::SearchInputChanged(pane, _)
+            | Message::SearchInputClicked(pane)
             | Message::SearchExecute(pane)
             | Message::SearchScopeChanged(pane, _)
             | Message::SearchProviderChanged(pane, _)
@@ -382,6 +384,7 @@ mod tests {
         let editor = || iced::widget::text_editor::Action::SelectAll;
         let messages = vec![
             Message::SearchInputChanged(pane, String::new()),
+            Message::SearchInputClicked(pane),
             Message::SearchExecute(pane),
             Message::SearchScopeChanged(pane, SearchScope::Songs),
             Message::SearchProviderChanged(pane, ProviderId::YouTube),

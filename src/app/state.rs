@@ -7,7 +7,7 @@
 
 use std::{sync::mpsc, time::Instant};
 
-use iced::Task;
+use iced::{futures::SinkExt, Task};
 
 use crate::{
     app::{
@@ -78,7 +78,11 @@ pub struct MusicPlayer {
 
     pub is_playing: bool,
     pub volume: f32,
+    /// Playback anchor: fraction at `progress_at`. The live position is
+    /// `playback_progress()` (anchor + wall clock while playing), drawn by
+    /// the progress bar straight from the clock — no polling needed.
     pub progress: f32,
+    pub progress_at: Instant,
     pub duration: f32,
     pub track_loading: bool,
 
@@ -110,7 +114,6 @@ pub struct MusicPlayer {
     pub pending_normalization_id: Option<String>,
 
     pub clipboard: Vec<Track>,
-    pub modifiers: iced::keyboard::Modifiers,
     pub last_click: Option<(TrackPos, std::time::Instant)>,
     pub selection_anchor: Option<TrackPos>,
     pub pending_vim_g: Option<Instant>,
@@ -129,6 +132,11 @@ pub struct MusicPlayer {
     pub last_session_flush: Instant,
 
     pub drag: DragState,
+    /// Set by `SearchInputClicked` so the press-less `LeftButtonReleased`
+    /// from the same click doesn't immediately dismiss the history the click
+    /// just opened (widget and subscription messages share no ordering
+    /// guarantee). Consumed once by the next release.
+    pub suppress_history_close: bool,
 
     /// Live status of dependency install/delete operations triggered from the
     /// Settings view (and mirrored from the startup dialog), keyed by dep.
@@ -163,7 +171,39 @@ impl Default for MusicPlayer {
 
 impl MusicPlayer {
     pub fn new() -> (Self, Task<Message>) {
-        (Self::default(), CaptureBounds::with_panes(vec![0]).into())
+        let mut player = Self::default();
+        let boot = Task::batch([
+            CaptureBounds::with_panes(vec![0]).into(),
+            player.take_media_bridge(),
+        ]);
+        (player, boot)
+    }
+
+    /// Move the media-event receiver into a never-ending bridge task that
+    /// emits each OS media-control event as a message the moment it arrives.
+    /// Push, not poll: media keys stay live with no tick keeping them warm. A
+    /// disconnected dummy is left behind to keep the field type non-optional.
+    fn take_media_bridge(&mut self) -> Task<Message> {
+        let (_, dummy_rx) = mpsc::channel();
+        let rx = std::mem::replace(&mut self.media_event_rx, dummy_rx);
+        Task::stream(iced::stream::channel::<Message>(
+            16,
+            |mut sender: iced::futures::channel::mpsc::Sender<Message>| async move {
+                loop {
+                    match rx.try_recv() {
+                        Ok(event) => {
+                            if sender.send(Message::MediaEvent(event)).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(mpsc::TryRecvError::Empty) => {
+                            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                        }
+                        Err(mpsc::TryRecvError::Disconnected) => break,
+                    }
+                }
+            },
+        ))
     }
 
     pub(crate) fn new_with(config: Config) -> Self {
@@ -198,6 +238,7 @@ impl MusicPlayer {
             is_playing: false,
             volume: 0.8,
             progress: 0.0,
+            progress_at: Instant::now(),
             duration: 0.0,
             download_registry: DownloadRegistry::load_migrated(),
             notification: None,
@@ -227,6 +268,7 @@ impl MusicPlayer {
                 .checked_sub(std::time::Duration::from_secs(10))
                 .unwrap_or_else(Instant::now),
             drag: DragState::default(),
+            suppress_history_close: false,
             queue_selected_indices: Vec::new(),
             recent_selected_indices: Vec::new(),
             translation_models: None,
@@ -237,7 +279,6 @@ impl MusicPlayer {
             bounds: CaptureBounds::default(),
             window_size: iced::Size::default(),
             clipboard: Vec::new(),
-            modifiers: iced::keyboard::Modifiers::empty(),
             last_click: None,
             selection_anchor: None,
             pending_vim_g: None,

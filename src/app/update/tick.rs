@@ -41,10 +41,6 @@ impl MusicPlayer {
             task = task.chain(self.process_result(result));
         }
 
-        while let Ok(event) = self.media_event_rx.try_recv() {
-            self.process_media_event(&event);
-        }
-
         self.expire_notification();
         // Reconcile currently visible thumbnails: queue any missing ones for
         // download and flush the queue to a background thread.
@@ -79,6 +75,8 @@ impl MusicPlayer {
 
     fn drain_audio_events(&mut self) {
         if let Some(err) = self.audio.take_error() {
+            // A failed load never reports playing, so drop the spinner here.
+            self.track_loading = false;
             self.notify_error(err);
         }
         if let Some(event) = self.audio.take_client_event() {
@@ -92,6 +90,7 @@ impl MusicPlayer {
         }
         self.is_playing = s.is_playing;
         self.progress = s.progress;
+        self.progress_at = std::time::Instant::now();
         self.duration = s.duration;
         if self.track_loading && s.is_playing {
             self.track_loading = false;
@@ -116,7 +115,6 @@ impl MusicPlayer {
         if self.pending_normalization_id.as_deref() == Some(pending_key.as_str()) {
             let path = StreamCache::path_for(pending.provider_id, &pending.id);
             self.request_normalization_analysis(&pending_key, path);
-            self.pending_normalization_id = None;
         }
     }
 
@@ -215,6 +213,7 @@ impl MusicPlayer {
             E::Next => self.next_track(),
             E::Previous => self.previous_track(),
             E::Stop => {
+                self.track_loading = false;
                 if self.is_playing {
                     self.toggle_play_pause();
                 }
@@ -225,10 +224,13 @@ impl MusicPlayer {
                 }
             }
             E::Pause => {
-                if self.is_playing {
-                    self.audio.pause();
-                    self.media_controls_dirty = true;
-                }
+                // Pausing abandons any in-flight load along with playback.
+                // Freezing the anchor first keeps the bar exact.
+                self.progress = self.playback_progress();
+                self.is_playing = false;
+                self.track_loading = false;
+                self.audio.pause();
+                self.media_controls_dirty = true;
             }
             E::SetVolume(vol) => self.set_volume(*vol as f32),
             E::SeekBy(direction, delta) => {
@@ -238,7 +240,7 @@ impl MusicPlayer {
                     SeekDirection::Backward => -delta_us,
                 };
                 let delta_frac = delta_us as f32 / 1_000_000.0 / self.duration.max(0.001);
-                let new_frac = (self.progress + delta_frac).clamp(0.0, 1.0);
+                let new_frac = (self.playback_progress() + delta_frac).clamp(0.0, 1.0);
                 self.seek(new_frac);
             }
             E::Seek(_) | E::SetPosition(_) | E::OpenUri(_) | E::Raise | E::Quit => {}
@@ -479,6 +481,9 @@ impl MusicPlayer {
                 Task::none()
             }
             BackendResult::NormalizationComputed(id, gain) => {
+                if self.pending_normalization_id.as_deref() == Some(id.as_str()) {
+                    self.pending_normalization_id = None;
+                }
                 self.normalization_cache.insert(id, gain);
                 crate::audio::save_gains(&self.normalization_cache);
                 Task::none()
@@ -541,6 +546,7 @@ impl MusicPlayer {
     fn process_search_error(&mut self, rid: u64, msg: String) {
         if let Some((pane, idx)) = self.slot_for_request(rid) {
             let slot = &mut self.pane_mut(pane).nav_history[idx];
+            slot.request_id = 0;
             if matches!(
                 slot.kind,
                 ViewKind::Search(_)
@@ -910,5 +916,19 @@ impl MusicPlayer {
                 self.notify_error(e);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::config;
+
+    #[test]
+    fn pause_drops_an_abandoned_load() {
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        p.track_loading = true;
+        p.process_media_event(&souvlaki::MediaControlEvent::Pause);
+        assert!(!p.track_loading);
     }
 }

@@ -13,6 +13,7 @@ pub fn track_list_id(pane: PaneId) -> Id {
 }
 
 use super::{
+    right_click::RightClickArea,
     shared_components::{
         empty_state, inner_row_layout, play_pause_button, subtitle_artist, thumbnail, track_row,
     },
@@ -218,12 +219,14 @@ fn view_track_row_inner<'a>(
 
     let inner = track_row_layout_inner(leading, track, player, pos, show_album, show_plays);
 
-    let track_area = MouseArea::new(inner)
-        .interaction(player.drag.clickable_cursor_interaction())
-        .on_press(Message::DragPress(Pressed::Track(pos)))
-        .on_right_press(Message::TrackRightClicked(pos))
-        .on_enter(Message::HoverStart(HoverTarget::Track(pos)))
-        .on_exit(Message::HoverEnd(HoverTarget::Track(pos)));
+    let track_area = RightClickArea::new(
+        MouseArea::new(inner)
+            .interaction(player.drag.clickable_cursor_interaction())
+            .on_press(Message::DragPress(Pressed::Track(pos)))
+            .on_enter(Message::HoverStart(HoverTarget::Track(pos)))
+            .on_exit(Message::HoverEnd(HoverTarget::Track(pos))),
+        pos,
+    );
 
     let border = if is_match || is_dragging {
         Some(if is_interacting { p.accent } else { p.fg_muted })

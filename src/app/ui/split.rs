@@ -64,7 +64,7 @@ fn view_pane(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppThem
     if player.focused_pane_id != pane {
         content = content.on_press(Message::FocusPane(pane));
         if !player.drag.is_hover_controlled {
-            content = content.on_move(move |_| Message::FocusPane(pane));
+            content = content.on_enter(Message::FocusPane(pane));
         }
     }
     // The Stack and its overlay are always rendered (even unfocused and

@@ -89,6 +89,9 @@ pub struct CaptureBounds {
     pub recent: Option<ListGeometry>,
     /// Captured separately by [`CaptureSearchHistoryRows`] (see that struct).
     pub search_history: HashMap<PaneId, ListGeometry>,
+    /// Search-bar input rects, anchoring the per-pane history dropdown
+    /// overlay (`ui::view` reads these; clicks report their pane via
+    /// `SearchInputClicked`, so no cursor hit-testing is involved).
     pub search_inputs: HashMap<PaneId, Rectangle>,
     /// Captured by [`CaptureContextMenu`] when the context menu opens.
     pub context_menu: Option<ContextMenuGeometry>,

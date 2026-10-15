@@ -206,8 +206,8 @@ impl MusicPlayer {
             ));
         // A keyboard-driven hover is an artifact of the pre-split layout, so
         // carry it to the fork's first row; a mouse-driven hover tells the
-        // truth about the cursor position and is left alone (focus follows
-        // the mouse on its next move).
+        // truth about the cursor position and is left alone (the hover
+        // widgets re-assert it on the next enter).
         if !self.drag.is_hover_controlled {
             return task;
         }

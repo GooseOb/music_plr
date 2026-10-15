@@ -622,7 +622,7 @@ pub(super) fn view_playlist_jump<'a>(
         let highlighted = Container::new(
             MouseArea::new(padded)
                 .on_press(Message::PlaylistJumpOpen(i))
-                .on_move(move |_| Message::PlaylistJumpHover(pos))
+                .on_enter(Message::PlaylistJumpHover(pos))
                 .interaction(iced::mouse::Interaction::Pointer),
         )
         .style(move |theme: &AppTheme| container::Style {
@@ -653,7 +653,6 @@ pub(super) fn view_playlist_jump<'a>(
 
     let input = text_input(player.strings.find_in_list, &jump.query)
         .on_input(Message::PlaylistJumpInput)
-        .on_submit(Message::PlaylistJumpConfirm)
         .padding(theme::SPACING_SM)
         .id(playlist_jump_input_id())
         .width(Length::Fill);

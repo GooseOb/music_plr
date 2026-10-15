@@ -1,5 +1,7 @@
 //! Mouse, drag, and context-menu interaction state.
 
+use std::time::{Duration, Instant};
+
 use iced::{widget::Id, Point};
 
 use super::pane::{is_main_pane, PaneId, QUEUE_PANE_ID, RECENT_PANE_ID};
@@ -405,11 +407,23 @@ pub struct PressedDrag {
     pub origin: Point,
 }
 
+/// How long widget hover reports are ignored after keyboard navigation took
+/// over the hover. Iced re-evaluates `MouseArea` hover whenever row bounds
+/// change, so the scroll that follows keyboard navigation emits enter/exit
+/// reports for the stationary cursor; the grace window lets those echoes die
+/// out while genuine later mouse movement still reclaims the hover.
+pub const KEYBOARD_HOVER_GRACE: Duration = Duration::from_millis(300);
+
 /// Mouse and drag interaction state
 #[derive(Debug, Clone, Default)]
 pub struct DragState {
     pub cursor_pos: Point,
     pub pressed: Option<PressedDrag>,
+    /// Whether `pressed.origin` was captured from a tracked cursor position.
+    /// Presses arrive via widget messages that carry no position, so the
+    /// first `CursorMoved` after a press re-anchors the origin instead of
+    /// measuring the drag threshold against a stale cursor.
+    pub origin_fresh: bool,
     pub drag_active: bool,
     pub drop_target: Option<DropTarget>,
     /// Track indices carried by the current drag, resolved at press time:
@@ -420,6 +434,9 @@ pub struct DragState {
     pub dragged: Option<(PaneId, Vec<usize>)>,
     pub is_hover_controlled: bool,
     pub hovered: Option<HoverTarget>,
+    /// Until when widget hover reports are ignored while keyboard navigation
+    /// owns the hover (see [`KEYBOARD_HOVER_GRACE`]).
+    pub hover_guard_until: Option<Instant>,
     /// Last focused row per list, so returning to a list restores focus.
     /// The queue/recent slots are global; the main-list slot is
     /// remembered per pane instead (see `pane_focus`).
@@ -432,6 +449,7 @@ impl DragState {
     pub fn stop(&mut self) {
         self.drag_active = false;
         self.pressed = None;
+        self.origin_fresh = true;
         self.drop_target = None;
         self.dragged = None;
     }
@@ -460,6 +478,44 @@ impl DragState {
             }
         }
         self.hovered = Some(target);
+    }
+
+    pub fn claim_keyboard_hover(&mut self) {
+        self.is_hover_controlled = true;
+        self.hover_guard_until = Some(Instant::now() + KEYBOARD_HOVER_GRACE);
+    }
+
+    pub fn claim_mouse(&mut self) {
+        self.is_hover_controlled = false;
+        self.hover_guard_until = None;
+    }
+
+    fn mouse_hover_allowed(&self) -> bool {
+        if !self.is_hover_controlled {
+            return true;
+        }
+        self.hover_guard_until
+            .is_none_or(|until| Instant::now() >= until)
+    }
+
+    pub fn hover_started(&mut self, target: HoverTarget) {
+        if !self.mouse_hover_allowed() {
+            return;
+        }
+        self.claim_mouse();
+        if self.hovered.as_ref() != Some(&target) {
+            self.set_hovered(target);
+        }
+    }
+
+    pub fn hover_ended(&mut self, target: &HoverTarget) {
+        if !self.mouse_hover_allowed() {
+            return;
+        }
+        self.claim_mouse();
+        if self.hovered.as_ref() == Some(target) {
+            self.hovered = None;
+        }
     }
 
     /// The last focused row index of the list addressed by `pane` (a main
@@ -584,5 +640,37 @@ mod tests {
         drag.forget_pane(0);
         assert_eq!(drag.recall_focus(0), 0);
         assert_eq!(drag.recall_focus(1), 2);
+    }
+
+    #[test]
+    fn keyboard_hover_ignores_scroll_echoes_but_yields_to_mouse() {
+        use std::time::{Duration, Instant};
+
+        use super::{DragState, HoverTarget, TrackPos};
+        let mut drag = DragState::default();
+        let keyboard = HoverTarget::Track(TrackPos::new(2, 0));
+        let echo = HoverTarget::Track(TrackPos::new(5, 0));
+        drag.claim_keyboard_hover();
+        drag.set_hovered(keyboard.clone());
+        drag.hover_started(echo.clone());
+        assert_eq!(drag.hovered, Some(keyboard.clone()));
+        assert!(drag.is_hover_controlled);
+        drag.hover_ended(&keyboard);
+        assert_eq!(drag.hovered, Some(keyboard.clone()));
+
+        drag.claim_mouse();
+        drag.hover_started(echo.clone());
+        assert_eq!(drag.hovered, Some(echo.clone()));
+        assert!(!drag.is_hover_controlled);
+
+        drag.claim_keyboard_hover();
+        drag.hover_guard_until = Some(
+            Instant::now()
+                .checked_sub(Duration::from_millis(1))
+                .unwrap(),
+        );
+        drag.hover_started(echo.clone());
+        assert_eq!(drag.hovered, Some(echo));
+        assert!(!drag.is_hover_controlled);
     }
 }

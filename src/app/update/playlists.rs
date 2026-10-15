@@ -570,10 +570,9 @@ impl MusicPlayer {
                     .map(|p| vec![p]),
                 ImportMethod::FileList => rfd::FileDialog::new().pick_folder().map(|p| vec![p]),
             };
-            if let Some(paths) = paths.filter(|p| !p.is_empty()) {
-                let _ = tx
-                    .send(crate::app::message::BackendResult::ImportPathsPicked { method, paths });
-            }
+            let paths = paths.filter(|p| !p.is_empty()).unwrap_or_default();
+            let _ =
+                tx.send(crate::app::message::BackendResult::ImportPathsPicked { method, paths });
         });
     }
 
@@ -843,7 +842,6 @@ mod tests {
 
     #[test]
     fn jump_confirm_plays_only_with_shift_held() {
-        use iced::keyboard::Modifiers;
         let mut p = player_with_playlists(&["A"]);
         // `new_with` restores the real on-disk session queue; drop it so the
         // test starts from an empty queue.
@@ -863,7 +861,9 @@ mod tests {
         )];
 
         let _ = p.open_playlist_jump();
-        let _ = p.update(Message::PlaylistJumpConfirm);
+        let _ = p.update(Message::Shortcut(crate::app::Shortcut::JumpConfirm {
+            play: false,
+        }));
         assert!(matches!(
             &p.view_data().kind,
             ViewKind::Playlist(e) if e.index == 0
@@ -871,8 +871,9 @@ mod tests {
         assert!(p.queue.tracks.is_empty());
 
         let _ = p.open_playlist_jump();
-        let _ = p.update(Message::ModifiersChanged(Modifiers::SHIFT));
-        let _ = p.update(Message::PlaylistJumpConfirm);
+        let _ = p.update(Message::Shortcut(crate::app::Shortcut::JumpConfirm {
+            play: true,
+        }));
         assert_eq!(p.queue.tracks.len(), 1);
         assert_eq!(p.queue.tracks[0].title, "Track x");
     }
