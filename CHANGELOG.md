@@ -8,6 +8,13 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+## [1.3.14] - 2026-10-15
+
+## Changed
+
+- Playback progress bar is now more smooth.
+- Reduced amount of rerenders, potentially reducing CPU usage.
+
 ## [1.3.13] - 2026-10-11
 
 ## Fixed
