@@ -272,7 +272,9 @@ impl crate::app::MusicPlayer {
                 self.drag.hover_ended(&target);
                 Task::none()
             }
-            Message::TrackRightClicked(pos) => self.show_context_menu_at(pos, self.drag.cursor_pos),
+            Message::TrackRightClicked(pos, point) => {
+                self.show_context_menu_at(pos, self.window_point(pos.pane, point))
+            }
             Message::PlayTrackAt(pos) => {
                 self.handle_play_track(pos);
                 Task::none()

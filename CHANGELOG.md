@@ -8,6 +8,12 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+# [1.3.15] - 2026-10-16
+
+## Fixed
+
+Context menu position in scrolled lists is now correct.
+
 ## [1.3.14] - 2026-10-15
 
 ## Changed

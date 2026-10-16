@@ -718,6 +718,20 @@ impl MusicPlayer {
         CaptureContextMenu::default().into()
     }
 
+    /// Convert a cursor point reported inside a track list to absolute window
+    /// coordinates. The scrollable shifts the cursor it hands to its content
+    /// by the scroll offset, so the reported point sits that far below the
+    /// window position; lists scroll vertically only, so only `y` shifts.
+    pub(super) fn window_point(&self, pane: PaneId, point: Point) -> Point {
+        let scroll = match pane {
+            super::QUEUE_PANE_ID => self.bounds.queue.as_ref(),
+            super::RECENT_PANE_ID => self.bounds.recent.as_ref(),
+            _ => self.bounds.track_geo(pane),
+        }
+        .map_or(0.0, |geo| geo.translation_y);
+        Point::new(point.x, point.y - scroll)
+    }
+
     fn track_center_point(&self, pos: TrackPos) -> Option<Point> {
         let TrackPos { index, pane } = pos;
         let geo = match pane {
@@ -929,5 +943,32 @@ impl MusicPlayer {
         self.set_track_at(edit.pos, track);
         self.playlists.save();
         self.save_session();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        app::{pane::QUEUE_PANE_ID, update::operation::ListGeometry},
+        data::config,
+    };
+
+    #[test]
+    fn right_click_anchor_subtracts_list_scroll() {
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        let pane = p.focused_pane_id;
+        p.bounds.tracks.insert(
+            pane,
+            ListGeometry {
+                translation_y: 200.0,
+                ..ListGeometry::default()
+            },
+        );
+        let anchored = p.window_point(pane, Point::new(300.0, 500.0));
+        assert_eq!((anchored.x, anchored.y), (300.0, 300.0));
+
+        let unmeasured = p.window_point(QUEUE_PANE_ID, Point::new(10.0, 20.0));
+        assert_eq!((unmeasured.x, unmeasured.y), (10.0, 20.0));
     }
 }

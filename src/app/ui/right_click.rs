@@ -13,7 +13,13 @@ use crate::app::interaction::TrackPos;
 /// Reports right-clicks with the cursor position. `MouseArea::on_right_press`
 /// carries no position and the global cursor subscription runs only while
 /// dragging, so a wrapper that observes the press in place is the only quiet
-/// way to anchor the context menu at the cursor.
+/// way to anchor the context menu at the cursor. The point travels with the
+/// event instead of the shared cursor channel, so a right-click can never be
+/// mistaken for drag movement.
+///
+/// The point is in the list's content space: a scrollable hands its content a
+/// cursor shifted by the scroll offset. The handler converts it to window
+/// coordinates with the list's captured scroll offset before anchoring.
 ///
 /// Transparent pass-through like `Container`: tag/state/children/diff are the
 /// content's own, so widget state and tree shape are unchanged. Right presses
@@ -94,8 +100,7 @@ impl Widget<Message, crate::theme::AppTheme, iced::Renderer> for RightClickArea<
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
         ) {
             if let Some(point) = cursor.position_over(layout.bounds()) {
-                shell.publish(Message::CursorMoved(point));
-                shell.publish(Message::TrackRightClicked(self.pos));
+                shell.publish(Message::TrackRightClicked(self.pos, point));
             }
         }
 

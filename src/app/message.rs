@@ -176,7 +176,7 @@ pub enum Message {
     ToggleLibrarySave(library::LibraryItem),
     ToggleLibraryExpanded,
 
-    TrackRightClicked(TrackPos),
+    TrackRightClicked(TrackPos, Point),
     PlayTrackAt(TrackPos),
     TogglePlayPause,
     NextTrack,
@@ -342,7 +342,7 @@ impl Message {
             | Message::LyricsScrolled { pane, .. } => Some(*pane),
             Message::ListScrolled { pane, .. } => (is_main_pane(*pane)).then_some(*pane),
             Message::DragPress(interaction::Pressed::Track(pos))
-            | Message::TrackRightClicked(pos)
+            | Message::TrackRightClicked(pos, _)
             | Message::PlayTrackAt(pos)
             | Message::ToggleTrackLike(pos)
             | Message::ContextMenuPlayTrack(pos)
@@ -443,7 +443,7 @@ mod tests {
                 crate::app::update::operation::ListGeometry::default(),
             ),
             Message::DragPress(Pressed::Track(pos)),
-            Message::TrackRightClicked(pos),
+            Message::TrackRightClicked(pos, Point::ORIGIN),
             Message::PlayTrackAt(pos),
             Message::ToggleTrackLike(pos),
             Message::ContextMenuPlayTrack(pos),
