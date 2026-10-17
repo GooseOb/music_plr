@@ -57,9 +57,7 @@ fn view_pane(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppThem
     }
     children.push(view_main_content(player, pane));
 
-    let body = Column::with_children(children)
-        .width(Length::Fill)
-        .height(Length::Fill);
+    let body = Column::with_children(children);
     let mut content = MouseArea::new(body);
     if player.focused_pane_id != pane {
         content = content.on_press(Message::FocusPane(pane));
@@ -77,7 +75,7 @@ fn view_pane(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppThem
     let ring_width = if focused { 2.0 } else { 0.0 };
     Stack::with_children([
         content.into(),
-        Container::new(Space::new().width(Length::Fill).height(Length::Fill))
+        Container::new(Space::new())
             .width(Length::Fill)
             .height(Length::Fill)
             .style(move |theme: &AppTheme| iced::widget::container::Style {
@@ -90,8 +88,6 @@ fn view_pane(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppThem
             })
             .into(),
     ])
-    .width(Length::Fill)
-    .height(Length::Fill)
     .into()
 }
 

@@ -1,7 +1,7 @@
 use iced::{
     alignment,
     widget::{rule, text, Button, Column, Container, Id, Row, Space},
-    Element, Length,
+    Element, Length, Padding,
 };
 
 use super::{
@@ -52,6 +52,12 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
         track_list_search,
         view,
     ]))
+    .padding(Padding {
+        top: theme::SPACING_SM,
+        right: 0.0,
+        bottom: 0.0,
+        left: 0.0,
+    })
     .width(queue_width)
     .style(bg_secondary())
     .into()
@@ -190,7 +196,6 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         up_next_header.into(),
         up_next,
     ])
-    .spacing(0)
     .width(Length::Fill)
     .height(Length::Fill)
     .into()

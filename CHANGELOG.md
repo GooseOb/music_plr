@@ -8,6 +8,12 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+# [Unreleased]
+
+## Changed
+
+- Adjusted position of navigation buttons and queue panel tab buttons to be aligned with search bar.
+
 # [1.3.15] - 2026-10-16
 
 ## Fixed

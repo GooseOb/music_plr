@@ -359,16 +359,12 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .padding([theme::SPACING_XS, theme::SPACING_SM])
         .on_press(Message::OpenImportPlaylist),
     )
-    .padding([theme::SPACING_XS, theme::SPACING_XS])
+    .padding(theme::SPACING_XS)
     .into();
 
     let stack = Stack::with_children([
         Container::new(icons::icon(icons::LOGO_ICON, 200.0).style(icon_accent_dimmed()))
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .align_x(alignment::Horizontal::Center)
-            .align_y(alignment::Vertical::Center)
-            .padding(theme::SPACING_MD)
+            .center(Length::Fill)
             .into(),
         Column::with_children([
             nav_buttons.into(),
@@ -386,10 +382,9 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             widget::rule::horizontal(1).into(),
             library_header,
             library_section,
-            widget::rule::horizontal(1).into(),
         ])
         .spacing(theme::SPACING_XS)
-        .padding([theme::SPACING_SM, theme::SPACING_XS])
+        .padding([0.0, theme::SPACING_XS])
         .into(),
     ]);
 
