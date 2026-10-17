@@ -174,6 +174,7 @@ pub struct Strings {
     pub ctx_add_to_trashbin: &'static str,
     pub ctx_remove_from_trashbin: &'static str,
     pub ctx_clear_cache: &'static str,
+    pub ctx_open_in_browser: &'static str,
     pub trashbin: &'static str,
     pub sub_play_via: &'static str,
     pub sub_download_from: &'static str,
@@ -281,6 +282,7 @@ pub struct Strings {
     pub ctx_remove_from_recent_n: fn(usize) -> String,
     pub ctx_add_to_trashbin_n: fn(usize) -> String,
     pub ctx_remove_from_trashbin_n: fn(usize) -> String,
+    pub ctx_open_in_browser_failed: fn(&str) -> String,
 
     pub import_playlist: &'static str,
     pub import_method_native: &'static str,

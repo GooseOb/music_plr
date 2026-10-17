@@ -90,6 +90,7 @@ pub const STRINGS: Strings = Strings {
     ctx_add_to_trashbin: "Dodaj do kosza",
     ctx_remove_from_trashbin: "Usuń z kosza",
     ctx_clear_cache: "Wyczyść pamięć podręczną",
+    ctx_open_in_browser: "Otwórz w przeglądarce",
     trashbin: "Kosz",
     sub_play_via: "Odtwórz przez",
     sub_download_from: "Pobierz z",
@@ -206,6 +207,7 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_recent_n: |n| format!("Usuń {} z ostatnio odtwarzanych", pl_tracks(n)),
     ctx_add_to_trashbin_n: |n| format!("Dodaj {} do kosza", pl_tracks(n)),
     ctx_remove_from_trashbin_n: |n| format!("Usuń {} z kosza", pl_tracks(n)),
+    ctx_open_in_browser_failed: |e| format!("Nie udało się otworzyć przeglądarki: {e}"),
 
     import_playlist: "Importuj playlistę",
     import_method_native: "Natywna",

@@ -10,6 +10,10 @@ auto-generated compare link below it.
 
 # [Unreleased]
 
+## Added
+
+- "Open in browser" context menu item for tracks.
+
 ## Changed
 
 - Adjusted position of navigation buttons and queue panel tab buttons to be aligned with search bar.

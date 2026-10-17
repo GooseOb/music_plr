@@ -620,6 +620,10 @@ impl crate::app::MusicPlayer {
                 self.open_edit_track(pos);
                 Task::none()
             }
+            Message::ContextMenuOpenInBrowser => {
+                self.handle_context_menu_open_in_browser();
+                Task::none()
+            }
             Message::EditTrackField(field, value) => {
                 if let Some(Dialog::Edit(edit)) = &mut self.dialog {
                     match field {

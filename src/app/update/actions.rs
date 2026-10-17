@@ -850,6 +850,25 @@ impl MusicPlayer {
         self.handle_context_menu_clear_cache(provider);
     }
 
+    /// Open the context menu's track page in the desktop's default browser.
+    /// The page is the first provider identity on the track that has one, so
+    /// the item is only ever offered for such tracks.
+    pub fn handle_context_menu_open_in_browser(&mut self) {
+        self.bounds.context_menu = None;
+        let dialog = self.dialog.take();
+        let Some(Dialog::ContextMenu(menu)) = dialog else {
+            self.dialog = dialog;
+            return;
+        };
+        let Some(url) = menu.track.web_url() else {
+            return;
+        };
+        if let Err(e) = crate::util::open_external(&url) {
+            tracing::warn!("opening {url} failed: {e}");
+            self.notify_error((self.strings.ctx_open_in_browser_failed)(&url));
+        }
+    }
+
     pub fn close_context_menu(&mut self) {
         self.dialog = None;
         self.bounds.context_menu = None;

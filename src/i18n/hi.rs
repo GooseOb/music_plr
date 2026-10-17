@@ -90,6 +90,7 @@ pub const STRINGS: Strings = Strings {
     ctx_add_to_trashbin: "कचरापेटी में जोड़ें",
     ctx_remove_from_trashbin: "कचरापेटी से हटाएँ",
     ctx_clear_cache: "कैश साफ़ करें",
+    ctx_open_in_browser: "ब्राउज़र में खोलें",
     trashbin: "कचरापेटी",
     sub_play_via: "इसके माध्यम से चलाएँ",
     sub_download_from: "से डाउनलोड करें",
@@ -201,6 +202,7 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_recent_n: |n| format!("{} हाल ही में चलाए गए से हटाएँ", hi_tracks(n)),
     ctx_add_to_trashbin_n: |n| format!("{} कचरापेटी में जोड़ें", hi_tracks(n)),
     ctx_remove_from_trashbin_n: |n| format!("{} कचरापेटी से हटाएँ", hi_tracks(n)),
+    ctx_open_in_browser_failed: |e| format!("ब्राउज़र नहीं खोला जा सका: {e}"),
 
     import_playlist: "प्लेलिस्ट आयात करें",
     import_method_native: "देशी",

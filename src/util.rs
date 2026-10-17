@@ -55,6 +55,25 @@ pub fn urlencode(s: &str) -> String {
     out
 }
 
+/// Hand `url` to the desktop's default handler (`xdg-open`/`open`/`start`).
+/// The opener is spawned and not waited on — it exits once the browser has the
+/// URL — so this reports only whether the launcher itself could start.
+pub fn open_external(url: &str) -> std::io::Result<()> {
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", "start", ""]);
+        cmd
+    };
+    #[cfg(not(windows))]
+    let mut cmd = std::process::Command::new(if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    });
+    cmd.arg(url).spawn().map(|_| ())
+}
+
 /// Returns the duration of the audio file at `path` in seconds, or `None`
 /// on any failure (missing file, unsupported codec, corrupt header, zero rate).
 pub fn try_probe_duration(path: &str) -> Option<u32> {

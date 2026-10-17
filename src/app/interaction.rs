@@ -162,6 +162,7 @@ pub enum CtxAction {
     AddToQueue,
     Edit,
     GoToArtist,
+    OpenInBrowser,
     AddToPlaylist,
     Download,
     SongRadio,
@@ -184,6 +185,7 @@ impl CtxAction {
             CtxAction::GoToArtist => Some(SubmenuKind::GoToArtist),
             CtxAction::ClearCache => Some(SubmenuKind::ClearCache),
             CtxAction::Edit
+            | CtxAction::OpenInBrowser
             | CtxAction::AddToQueue
             | CtxAction::AddToPlaylist
             | CtxAction::RemoveFromQueue
@@ -203,6 +205,7 @@ impl CtxAction {
             }
             CtxAction::Edit => Message::ContextMenuEditTrack,
             CtxAction::GoToArtist => Message::ContextMenuGoToArtist,
+            CtxAction::OpenInBrowser => Message::ContextMenuOpenInBrowser,
             CtxAction::AddToPlaylist => Message::OpenPlaylistAdd(menu.target_indices.clone()),
             CtxAction::Download => Message::ContextMenuDefault(DefaultCtxAction::Download),
             CtxAction::SongRadio => Message::ContextMenuDefault(DefaultCtxAction::SongRadio),
@@ -271,9 +274,10 @@ impl ContextMenuState {
     /// The visible entries of the main menu, in order. The view renders one
     /// row per entry; keyboard navigation indexes into this list. Trashed
     /// tracks cannot be played, so `Play` is hidden for them; trashed tracks
-    /// offer removal from the trashbin instead of adding.
+    /// offer removal from the trashbin instead of adding. `OpenInBrowser` is
+    /// shown only when some provider identity on the track addresses a page.
     pub fn actions(&self, cache: &StreamCache) -> Vec<CtxAction> {
-        let mut v = Vec::with_capacity(11);
+        let mut v = Vec::with_capacity(12);
         if !self.is_trashed {
             v.push(CtxAction::Play);
         }
@@ -281,6 +285,9 @@ impl ContextMenuState {
         v.push(CtxAction::Edit);
         if !self.track.artist.is_empty() {
             v.push(CtxAction::GoToArtist);
+        }
+        if self.track.web_url().is_some() {
+            v.push(CtxAction::OpenInBrowser);
         }
         v.push(CtxAction::AddToPlaylist);
         if self.is_trashed {

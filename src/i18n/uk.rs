@@ -90,6 +90,7 @@ pub const STRINGS: Strings = Strings {
     ctx_add_to_trashbin: "Додати в кошик",
     ctx_remove_from_trashbin: "Видалити з кошика",
     ctx_clear_cache: "Очистити кеш",
+    ctx_open_in_browser: "Відкрити в браузері",
     trashbin: "Кошик",
     sub_play_via: "Грати через",
     sub_download_from: "Завантажити з",
@@ -201,6 +202,7 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_recent_n: |n| format!("Видалити {} з нещодавніх", uk_tracks(n)),
     ctx_add_to_trashbin_n: |n| format!("Додати {} в кошик", uk_tracks(n)),
     ctx_remove_from_trashbin_n: |n| format!("Видалити {} з кошика", uk_tracks(n)),
+    ctx_open_in_browser_failed: |e| format!("Не вдалося відкрити браузер: {e}"),
 
     import_playlist: "Імпорт плейлиста",
     import_method_native: "Нативний",

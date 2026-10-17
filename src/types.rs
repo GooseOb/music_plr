@@ -166,6 +166,16 @@ impl Track {
         self.provider_url(self.source).unwrap_or("")
     }
 
+    /// The public web page for this track, preferring the source provider and
+    /// falling back to any other carrier that has one. `None` when no provider
+    /// identity this track carries addresses a page.
+    pub fn web_url(&self) -> Option<String> {
+        let source = self.source;
+        std::iter::once(source)
+            .chain(self.providers.keys().copied().filter(|p| *p != source))
+            .find_map(|p| self.providers.get(&p).and_then(|pt| p.track_page_url(pt)))
+    }
+
     /// A stable cache key namespacing the source provider with its id, used to
     /// key the download registry, lyrics cache, and normalization gains. See
     /// [`cache_key`](ProviderId::cache_key), which owns the `slug:id` format
@@ -513,6 +523,50 @@ mod tests {
             "soundcloud:abc123"
         );
         assert_eq!(ProviderId::LastFm.cache_key("x"), "lastfm:x");
+    }
+
+    #[test]
+    fn web_url_prefers_the_source_provider_then_any_carrier() {
+        let mut t = make_track("abc123", "https://youtube.com/watch?v=abc123");
+        assert_eq!(
+            t.web_url().as_deref(),
+            Some("https://youtube.com/watch?v=abc123")
+        );
+
+        // MusicBrainz carries no url, so the page is built from the MBID.
+        t.set_provider(
+            ProviderId::MusicBrainz,
+            ProviderTrack {
+                id: "mbid-1".into(),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            t.web_url().as_deref(),
+            Some("https://youtube.com/watch?v=abc123")
+        );
+        t.source = ProviderId::MusicBrainz;
+        assert_eq!(
+            t.web_url().as_deref(),
+            Some("https://musicbrainz.org/track/mbid-1")
+        );
+
+        // No page anywhere: a Bandcamp source with a direct MP3 url.
+        let mut bc = Track {
+            title: "T".into(),
+            artist: "A".into(),
+            source: ProviderId::Bandcamp,
+            providers: HashMap::new(),
+        };
+        bc.set_provider(
+            ProviderId::Bandcamp,
+            ProviderTrack {
+                id: "12345".into(),
+                url: "https://t4.bcbits.com/stream/abc/file.mp3".into(),
+                ..Default::default()
+            },
+        );
+        assert_eq!(bc.web_url(), None);
     }
 
     #[test]

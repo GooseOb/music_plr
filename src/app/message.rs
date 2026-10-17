@@ -274,6 +274,7 @@ pub enum Message {
     ContextMenuRemoveFromTrashbin(PaneId, Vec<usize>),
     ContextMenuRemoveFromList(PaneId, Vec<usize>),
     ContextMenuEditTrack,
+    ContextMenuOpenInBrowser,
     EditTrackField(EditTrackField, String),
     EditTrackSelectProvider(ProviderId),
     EditTrackFindProvider(ProviderId),

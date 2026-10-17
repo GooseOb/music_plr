@@ -90,6 +90,7 @@ pub const STRINGS: Strings = Strings {
     ctx_add_to_trashbin: "ごみ箱に追加",
     ctx_remove_from_trashbin: "ごみ箱から削除",
     ctx_clear_cache: "キャッシュをクリア",
+    ctx_open_in_browser: "ブラウザで開く",
     trashbin: "ごみ箱",
     sub_play_via: "再生元",
     sub_download_from: "ダウンロード元",
@@ -201,6 +202,7 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_recent_n: |n| format!("{} を最近再生から削除", ja_tracks(n)),
     ctx_add_to_trashbin_n: |n| format!("{} をごみ箱に追加", ja_tracks(n)),
     ctx_remove_from_trashbin_n: |n| format!("{} をごみ箱から削除", ja_tracks(n)),
+    ctx_open_in_browser_failed: |e| format!("ブラウザを開けませんでした: {e}"),
 
     import_playlist: "プレイリストをインポート",
     import_method_native: "ネイティブ",

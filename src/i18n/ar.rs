@@ -90,6 +90,7 @@ pub const STRINGS: Strings = Strings {
     ctx_add_to_trashbin: "إضافة إلى سلة المهملات",
     ctx_remove_from_trashbin: "إزالة من سلة المهملات",
     ctx_clear_cache: "مسح ذاكرة التخزين المؤقت",
+    ctx_open_in_browser: "فتح في المتصفح",
     trashbin: "سلة المهملات",
     sub_play_via: "تشغيل عبر",
     sub_download_from: "تنزيل من",
@@ -201,6 +202,7 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_recent_n: |n| format!("إزالة {} من الأخيرة", ar_tracks(n)),
     ctx_add_to_trashbin_n: |n| format!("إضافة {} إلى سلة المهملات", ar_tracks(n)),
     ctx_remove_from_trashbin_n: |n| format!("إزالة {} من سلة المهملات", ar_tracks(n)),
+    ctx_open_in_browser_failed: |e| format!("تعذّر فتح المتصفح: {e}"),
 
     import_playlist: "استيراد قائمة تشغيل",
     import_method_native: "أصلية",

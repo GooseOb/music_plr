@@ -360,6 +360,26 @@ impl ProviderId {
     pub fn uses_ytdlp(self) -> bool {
         matches!(self, ProviderId::YouTube | ProviderId::SoundCloud)
     }
+
+    /// The public web page for one of this provider's tracks, when one can be
+    /// derived from the data the provider handed us. `None` when the stored
+    /// `url` is a media file or a local path and no page address is
+    /// reconstructible from the id.
+    pub fn track_page_url(self, pt: &ProviderTrack) -> Option<String> {
+        match self {
+            // These already store the page address: YouTube's watch page,
+            // SoundCloud's permalink, Last.fm's track page.
+            ProviderId::YouTube | ProviderId::SoundCloud | ProviderId::LastFm => {
+                (!pt.url.is_empty()).then(|| pt.url.clone())
+            }
+            ProviderId::MusicBrainz => {
+                (!pt.id.is_empty()).then(|| format!("https://musicbrainz.org/track/{}", pt.id))
+            }
+            // Bandcamp's `url` is a direct MP3 and its page slug is not
+            // derivable from the numeric track id; `Local` has no web page.
+            ProviderId::Bandcamp | ProviderId::Local => None,
+        }
+    }
 }
 
 /// A search scope: which kind of result a provider returns.

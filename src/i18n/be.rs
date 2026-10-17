@@ -90,6 +90,7 @@ pub const STRINGS: Strings = Strings {
     ctx_add_to_trashbin: "Дадаць у кошык",
     ctx_remove_from_trashbin: "Прыбраць з кошыка",
     ctx_clear_cache: "Ачысьціць кэш",
+    ctx_open_in_browser: "Адкрыць у браўзэры",
     trashbin: "Кошык",
     sub_play_via: "Граць праз",
     sub_download_from: "Спампаваць з",
@@ -201,6 +202,7 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_recent_n: |n| format!("Прыбраць {} зь нядаўніх", be_tracks(n)),
     ctx_add_to_trashbin_n: |n| format!("Дадаць {} у кошык", be_tracks(n)),
     ctx_remove_from_trashbin_n: |n| format!("Прыбраць {} з кошыка", be_tracks(n)),
+    ctx_open_in_browser_failed: |e| format!("Не ўдалося адкрыць браўзэр: {e}"),
 
     import_playlist: "Імпарт плэйліста",
     import_method_native: "Натыўны",

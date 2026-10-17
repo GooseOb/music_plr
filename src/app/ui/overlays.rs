@@ -326,6 +326,10 @@ fn action_label(
             icons::DELETE_ICON,
         ),
         CtxAction::ClearCache => (Cow::Borrowed(tr.ctx_clear_cache), icons::CACHE_ICON),
+        CtxAction::OpenInBrowser => (
+            Cow::Borrowed(tr.ctx_open_in_browser),
+            icons::EXTERNAL_LINK_ICON,
+        ),
     }
 }
 
