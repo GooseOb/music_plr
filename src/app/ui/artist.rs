@@ -6,14 +6,17 @@ use iced::{
 
 use super::{
     shared_components::{
-        empty_state, loading_state, scope_tab_row, thumbnail, toggle_bookmark_button,
+        empty_state, loading_state, open_in_browser_button, scope_tab_row, thumbnail,
+        toggle_bookmark_button,
     },
     styles::{fg_accent, fg_secondary},
     view_track_list, Message, MusicPlayer,
 };
 use crate::{
     app::{
+        interaction::CardTarget,
         pane::PaneId,
+        update::operation::ScrollTarget,
         view_data::{AlbumRef, PlaylistRef},
         ViewKind,
     },
@@ -64,7 +67,8 @@ pub(super) fn view_artist<'a>(
         children.push(section_body(player, pane, section, kind));
     }
 
-    scrollable(
+    super::card_scrollable(
+        pane,
         Column::with_children(children)
             .spacing(theme::SPACING_2XS)
             .padding(iced::Padding {
@@ -160,13 +164,19 @@ fn header<'a>(
     )];
     if let Some(item) = player.current_library_item(pane) {
         let saved = player.library.contains(item.kind, &item.id);
+        // The artist's public page, when the provider advertised one.
+        let browser_url = item.web_url().map(str::to_string);
+        let mut buttons: Vec<Element<'_, Message, AppTheme>> = vec![toggle_bookmark_button(saved)
+            .on_press(Message::ToggleLibrarySave(item))
+            .into()];
+        if let Some(url) = browser_url {
+            buttons.push(open_in_browser_button(player.strings, &url));
+        }
         actions.push(
-            Container::new(
-                toggle_bookmark_button(saved).on_press(Message::ToggleLibrarySave(item)),
-            )
-            .align_y(alignment::Vertical::Bottom)
-            .height(Length::Fill)
-            .into(),
+            Container::new(Row::with_children(buttons).spacing(theme::SPACING_XS))
+                .align_y(alignment::Vertical::Bottom)
+                .height(Length::Fill)
+                .into(),
         );
     }
 
@@ -219,12 +229,14 @@ fn section_header(
     .into()
 }
 
-/// Render one card section's contents into card widgets.
+/// Render one card section's contents into card widgets. Each card carries the
+/// exact view its click opens, which is also what its right-click menu acts on.
 fn cards<'a>(
     player: &'a MusicPlayer,
     pane: PaneId,
     provider: ProviderId,
     content: &'a SectionContent,
+    row: ArtistSectionKind,
 ) -> Vec<Element<'a, Message, AppTheme>> {
     match content {
         SectionContent::Albums(v) => v
@@ -232,65 +244,43 @@ fn cards<'a>(
             .map(|c| {
                 let subtitle: std::borrow::Cow<'_, str> =
                     super::search::browse_meta(&c.badge, &c.date);
-                h_card(
-                    player,
+                let target = ViewKind::Album(AlbumRef {
+                    id: c.id.clone(),
+                    name: c.title.clone(),
+                    badge: c.badge.clone(),
+                    date: c.date.clone(),
+                    thumbnail: c.thumbnail.clone(),
                     provider,
-                    &c.id,
-                    &c.title,
-                    &subtitle,
-                    Message::Browse(
-                        pane,
-                        ViewKind::Album(AlbumRef {
-                            id: c.id.clone(),
-                            name: c.title.clone(),
-                            badge: c.badge.clone(),
-                            date: c.date.clone(),
-                            thumbnail: c.thumbnail.clone(),
-                            provider,
-                        }),
-                        provider,
-                    ),
-                )
+                    url: c.url.clone(),
+                });
+                h_card(player, pane, target, &c.title, &subtitle, row)
             })
             .collect(),
         SectionContent::Playlists(v) => v
             .iter()
             .map(|c| {
-                h_card(
-                    player,
+                let target = ViewKind::PlaylistView(PlaylistRef {
+                    id: c.id.clone(),
+                    name: c.title.clone(),
+                    thumbnail: c.thumbnail.clone(),
                     provider,
-                    &c.id,
-                    &c.title,
-                    "",
-                    Message::Browse(
-                        pane,
-                        ViewKind::PlaylistView(PlaylistRef {
-                            id: c.id.clone(),
-                            name: c.title.clone(),
-                            thumbnail: c.thumbnail.clone(),
-                            provider,
-                        }),
-                        provider,
-                    ),
-                )
+                    url: c.url.clone(),
+                });
+                h_card(player, pane, target, &c.title, "", row)
             })
             .collect(),
         SectionContent::Related(v) => v
             .iter()
             .map(|r| {
-                h_card(
-                    player,
-                    provider,
-                    &r.id,
-                    &r.name,
-                    &r.stat,
-                    Message::OpenArtist {
-                        pane,
-                        id: r.id.clone(),
-                        name: r.name.clone(),
-                        source: provider,
-                    },
-                )
+                let target = ViewKind::Artist(crate::app::view_data::ArtistEntry {
+                    id: r.id.clone(),
+                    name: r.name.clone(),
+                    source: provider,
+                    url: r.url.clone(),
+                    thumbnail: r.thumbnail.clone(),
+                    page: Box::new(crate::providers::ArtistPageState::new(provider, &r.id)),
+                });
+                h_card(player, pane, target, &r.name, &r.stat, row)
             })
             .collect(),
         SectionContent::Tracks(_) => Vec::new(),
@@ -360,11 +350,23 @@ fn section_body<'a>(
         }
     };
     let provider = section.provider.unwrap_or_default();
-    h_scroll_cards(cards(player, pane, provider, content), player.strings)
+    h_scroll_cards(
+        cards(player, pane, provider, content, kind),
+        player.strings,
+        pane,
+        kind,
+    )
 }
 
-/// A horizontal row of square art cards (pic on top, text below).
-fn h_scroll_cards<'a, I>(cards: I, tr: &'a crate::i18n::Strings) -> Element<'a, Message, AppTheme>
+/// A horizontal row of square art cards (pic on top, text below). The shelf's
+/// id tags the scrollable so its horizontal offset is captured for the cards'
+/// menus.
+fn h_scroll_cards<'a, I>(
+    cards: I,
+    tr: &'a crate::i18n::Strings,
+    pane: PaneId,
+    section: ArtistSectionKind,
+) -> Element<'a, Message, AppTheme>
 where
     I: IntoIterator<Item = Element<'a, Message, AppTheme>>,
 {
@@ -377,44 +379,75 @@ where
             .spacing(theme::SPACING_MD)
             .padding([theme::SPACING_SM, theme::SPACING_XL]),
     )
+    .id(super::card_row_id(pane, section))
     .direction(scrollable::Direction::Horizontal(
         scrollable::Scrollbar::new(),
     ))
+    // Report the horizontal offset as it changes: the capture pass only runs on
+    // navigation, results and resize, and a card's right-click point arrives
+    // shifted by this offset.
+    .on_scroll(move |vp| {
+        super::scrolled(ScrollTarget::CardRow(pane, section), vp.absolute_offset())
+    })
     .into()
 }
 
-/// One square art card: picture with title/date underneath. Clicking fires
-/// `on_press` (drill-down).
+/// One square art card: picture with title/date underneath. Clicking drills
+/// into `target`; right-clicking opens the card menu for it.
 fn h_card<'a>(
     player: &'a MusicPlayer,
-    provider: ProviderId,
-    thumb_id: &str,
+    pane: PaneId,
+    target: ViewKind,
     title: &'a str,
     subtitle: &str,
-    on_press: Message,
+    row: ArtistSectionKind,
 ) -> Element<'a, Message, AppTheme> {
-    let thumb_path = player.thumbnail_index.get(provider, thumb_id);
+    let card = target
+        .card_ref()
+        .expect("an artist page only renders cards for artist/album/playlist views");
+    let thumb_path = player.thumbnail_index.get(card.provider, card.id);
     let image = Container::new(thumbnail(CARD_IMAGE_SIZE, thumb_path)).height(CARD_IMAGE_SIZE);
-    let mut body = vec![image.into()];
-    body.push(
+    let mut body = vec![
+        image.into(),
         text(title)
             .size(theme::TEXT_SIZE_SM)
             .width(CARD_WIDTH)
             .wrapping(text::Wrapping::Word)
             .into(),
-    );
-    if !subtitle.trim().is_empty() {
+    ];
+    let trimmed_subtitle = subtitle.trim();
+    if !trimmed_subtitle.is_empty() {
         body.push(
-            text(subtitle.trim().to_string())
+            text(trimmed_subtitle.to_string())
                 .size(theme::TEXT_SIZE_XS)
                 .style(fg_secondary())
                 .into(),
         );
     }
-    Button::new(Column::with_children(body).spacing(theme::SPACING_2XS))
+    let on_press = match &target {
+        ViewKind::Artist(entry) => Message::OpenArtist {
+            pane,
+            id: entry.id.clone(),
+            name: entry.name.clone(),
+            source: entry.source,
+            url: entry.url.clone(),
+        },
+        target => Message::Browse(pane, target.clone(), card.provider),
+    };
+    let button = Button::new(Column::with_children(body).spacing(theme::SPACING_2XS))
         .padding(theme::SPACING_2XS)
         .width(CARD_WIDTH)
         .style(super::styles::button_style_album())
-        .on_press(on_press)
-        .into()
+        .on_press(on_press);
+    super::right_click::RightClickArea::new(
+        button,
+        CardTarget {
+            host: ScrollTarget::Cards(pane),
+            pane,
+            target,
+            row: Some(row),
+        },
+        CardTarget::into_message,
+    )
+    .into()
 }

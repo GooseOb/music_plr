@@ -12,7 +12,8 @@ auto-generated compare link below it.
 
 ## Added
 
-- "Open in browser" context menu item for tracks.
+- Context menu for albums, artists, and playlists.
+- "Open in browser" context menu item for tracks, albums, artists, and playlists.
 
 ## Changed
 

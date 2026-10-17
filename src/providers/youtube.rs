@@ -270,6 +270,17 @@ pub fn fetch_artist_page(
     if !K::Related.wanted(kinds) {
         raw.related.clear();
     }
+    // The helper reports bare ids for the shelves too; their pages are the same
+    // templates the search path uses.
+    for card in &mut raw.albums {
+        card.url = album_page_url(&card.id);
+    }
+    for card in &mut raw.playlists {
+        card.url = playlist_page_url(&card.id);
+    }
+    for card in &mut raw.related {
+        card.url = artist_page_url(&card.id);
+    }
     Ok(ArtistPage {
         header: Some(raw.header),
         popular: raw.popular.into_iter().map(Track::from).collect(),
@@ -287,6 +298,28 @@ pub fn resolve_artist_id(name: &str) -> Result<Option<String>> {
         SearchTab::Artists(cards) => cards.into_iter().next().map(|c| c.id),
         _ => None,
     })
+}
+
+/// Public page for a `YouTube` Music artist/album/playlist. Card ids are
+/// already addressable (channel ids, album browse ids, playlist ids), so the
+/// page is a template over the id rather than something the helper has to
+/// report. These mirror the shapes the helper itself prints for song results.
+fn artist_page_url(id: &str) -> String {
+    // The shared rule for "artist page for this id" lives on the provider, so
+    // a track's artist id resolves to the same page its cards do.
+    ProviderId::YouTube.artist_page_url(id).unwrap_or_default()
+}
+
+fn album_page_url(id: &str) -> String {
+    // Same id space as the ids on tracks' `TrackAlbum`, so both go through the
+    // shared rule.
+    ProviderId::YouTube.album_page_url(id).unwrap_or_default()
+}
+
+fn playlist_page_url(id: &str) -> String {
+    // Playlist browse ids may carry a `VL` prefix the web page doesn't take.
+    let id = id.strip_prefix("VL").unwrap_or(id);
+    format!("https://music.youtube.com/playlist?list={id}")
 }
 
 fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, SearchTab)> {
@@ -310,18 +343,21 @@ fn search_ytmusic(query: &str, scope: SearchScope) -> Result<(Vec<Track>, Search
         let thumbnail = v["thumbnail"].as_str().unwrap_or_default().to_string();
         match kind {
             "artist" => cards.push(CardData {
+                url: artist_page_url(&id),
                 id,
                 title,
                 subtitle: String::new(),
                 thumbnail,
             }),
             "album" => albums.push(CardData {
+                url: album_page_url(&id),
                 id,
                 title,
                 subtitle,
                 thumbnail,
             }),
             "playlist" => playlists.push(CardData {
+                url: playlist_page_url(&id),
                 id,
                 title,
                 subtitle,

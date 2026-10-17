@@ -166,6 +166,13 @@ impl Track {
         self.provider_url(self.source).unwrap_or("")
     }
 
+    /// The public page for this track's album, when the album id addresses one
+    /// (see [`ProviderId::album_page_url`](crate::providers::ProviderId::album_page_url)).
+    pub fn album_page_url(&self) -> Option<String> {
+        self.album()
+            .and_then(|album| self.source.album_page_url(&album.id))
+    }
+
     /// The public web page for this track, preferring the source provider and
     /// falling back to any other carrier that has one. `None` when no provider
     /// identity this track carries addresses a page.

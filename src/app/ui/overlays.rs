@@ -24,7 +24,10 @@ use crate::{
     app::{
         dependency_dialog::dep_desc,
         import::ImportPlaylistDialog,
-        interaction::{ContextMenuFocus, ContextMenuState, CtxAction, SubmenuKind},
+        interaction::{
+            CardAction, CardMenuState, ContextMenuFocus, ContextMenuState, CtxAction, MenuAnchor,
+            SubmenuKind,
+        },
         CsvPreset, EditTrackField, ImportCsvField, ImportMethod,
     },
     deps::DepKind,
@@ -130,30 +133,91 @@ pub(super) fn view_drop_indicator(rect: Rectangle) -> Element<'static, Message, 
     .into()
 }
 
+/// Length the rows of the open menu take while its geometry is still settling:
+/// they shrink to content until the measured width is stable (a frame at a
+/// clipped position wraps, so Fill is only safe once captures agree), then
+/// they fill the captured panel width.
+fn menu_row_len(player: &MusicPlayer) -> Length {
+    player
+        .bounds
+        .context_menu
+        .as_ref()
+        .filter(|g| g.stable)
+        .map_or(Length::Shrink, |_| Length::Fill)
+}
+
+/// Width of a menu panel: measured on the first frames, then shared by the
+/// panel and its submenu so rows fill it and the submenu can flip side without
+/// remeasuring.
+fn menu_panel_width(player: &MusicPlayer) -> Length {
+    player
+        .bounds
+        .context_menu
+        .as_ref()
+        .filter(|g| g.stable)
+        .map_or(Length::Shrink, |g| Length::Fixed(g.panel.width))
+}
+
+/// One menu panel: rows in display order inside the measured popup container.
+/// Untagged, so only [`main_menu_panel`] (whose rect drives the window-edge
+/// flip) carries the capture id — a submenu sharing it would overwrite the main
+/// panel's measured bounds.
+fn menu_panel<'a>(
+    player: &MusicPlayer,
+    rows: Vec<Element<'a, Message, AppTheme>>,
+) -> Container<'a, Message, AppTheme> {
+    Container::new(
+        Column::with_children(rows)
+            .spacing(theme::SPACING_XXS)
+            .padding(theme::SPACING_SM),
+    )
+    .width(menu_panel_width(player))
+    .style(bg_popup())
+}
+
+/// The menu's main panel, tagged so `CaptureContextMenu` records its rect
+/// alongside the row tops.
+fn main_menu_panel<'a>(
+    player: &MusicPlayer,
+    rows: Vec<Element<'a, Message, AppTheme>>,
+) -> Element<'a, Message, AppTheme> {
+    menu_panel(player, rows)
+        .id(super::CONTEXT_MENU_PANEL_ID)
+        .into()
+}
+
+/// Place `panels` at the anchor's (possibly flipped) position under a
+/// full-window backdrop that closes the menu on press. Shared by the track and
+/// card context menus.
+fn anchored_menu<'a>(
+    anchor: &MenuAnchor,
+    panels: Element<'a, Message, AppTheme>,
+) -> Element<'a, Message, AppTheme> {
+    let (pos_x, pos_y) = anchor.position;
+    let panels = MouseArea::new(panels).on_exit(Message::ContextMenuHover(None));
+    let overlay = pos_absolute(opaque(panels), pos_x.max(0.0), pos_y)
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+    opaque(MouseArea::new(overlay).on_press(Message::CloseContextMenu))
+}
+
 #[allow(clippy::too_many_lines)]
 pub(super) fn view_context_menu<'a>(
     player: &'a MusicPlayer,
     menu: &'a ContextMenuState,
 ) -> Element<'a, Message, AppTheme> {
-    let (pos_x, pos_y) = menu.position;
+    let pos_x = menu.anchor.position.0;
     let n = menu.target_indices.len();
+    let row_len = menu_row_len(player);
 
-    // Rows shrink to content until the measured width is stable (a frame at
-    // a clipped position wraps, so Fill is only safe once captures agree);
-    // then they fill the captured panel width.
-    let row_len = player
-        .bounds
-        .context_menu
-        .as_ref()
-        .filter(|g| g.stable)
-        .map_or(Length::Shrink, |_| Length::Fill);
     let items: Vec<Element<'_, Message, AppTheme>> = menu
         .actions(&player.stream_cache)
         .iter()
         .enumerate()
         .map(|(i, action)| {
             let (label, icon) = action_label(*action, n, player.strings);
-            let focused = menu.hovered == Some(ContextMenuFocus::Item(i));
+            let focused = menu.anchor.hovered == Some(ContextMenuFocus::Item(i));
             let chevron = action.submenu().is_some();
             menu_item(
                 label,
@@ -167,26 +231,8 @@ pub(super) fn view_context_menu<'a>(
         })
         .collect();
 
-    // Width measured on the first frames; both panels share it once stable
-    // so buttons can fill the row and the submenu can flip side without
-    // remeasuring.
-    let panel_width = player
-        .bounds
-        .context_menu
-        .as_ref()
-        .filter(|g| g.stable)
-        .map_or(Length::Shrink, |g| Length::Fixed(g.panel.width));
-
-    let mut row_children: Vec<Element<'_, Message, AppTheme>> = vec![Container::new(
-        Column::with_children(items)
-            .spacing(theme::SPACING_XXS)
-            .padding(theme::SPACING_SM),
-    )
-    .id(super::CONTEXT_MENU_PANEL_ID)
-    .width(panel_width)
-    .style(bg_popup())
-    .into()];
-
+    let mut row_children: Vec<Element<'_, Message, AppTheme>> =
+        vec![main_menu_panel(player, items)];
     let mut anchor_x = pos_x;
 
     if let Some(kind) = menu.open_submenu_kind(&player.stream_cache) {
@@ -199,7 +245,7 @@ pub(super) fn view_context_menu<'a>(
             .as_ref()
             .filter(|_| !entries.is_empty());
         if let Some(geo) = geo {
-            let parent_index = match menu.hovered {
+            let parent_index = match menu.anchor.hovered {
                 Some(ContextMenuFocus::Item(i)) => i,
                 Some(ContextMenuFocus::Sub(..)) => menu
                     .actions(&player.stream_cache)
@@ -214,14 +260,7 @@ pub(super) fn view_context_menu<'a>(
                 pos_x + 2.0 * geo.panel.width + theme::SPACING_XS > player.window_size.width;
             let submenu: Element<'_, Message, AppTheme> = Column::with_children([
                 Space::new().height(offset).into(),
-                Container::new(
-                    Column::with_children(entries)
-                        .spacing(theme::SPACING_XXS)
-                        .padding(theme::SPACING_SM),
-                )
-                .width(panel_width)
-                .style(bg_popup())
-                .into(),
+                menu_panel(player, entries).into(),
             ])
             .into();
             let spacer: Element<'_, Message, AppTheme> =
@@ -239,14 +278,55 @@ pub(super) fn view_context_menu<'a>(
         }
     }
 
-    let panels =
-        MouseArea::new(Row::with_children(row_children)).on_exit(Message::ContextMenuHover(None));
+    let mut anchor = menu.anchor.clone();
+    anchor.position = (anchor_x, menu.anchor.position.1);
+    anchored_menu(&anchor, Row::with_children(row_children).into())
+}
 
-    let overlay = pos_absolute(opaque(panels), anchor_x.max(0.0), pos_y)
-        .width(Length::Fill)
-        .height(Length::Fill);
+/// The card context menu: the flat "Open / Open in browser / Save as playlist"
+/// list for the right-clicked artist, album or playlist card.
+pub(super) fn view_card_menu<'a>(
+    player: &'a MusicPlayer,
+    menu: &'a CardMenuState,
+) -> Element<'a, Message, AppTheme> {
+    let row_len = menu_row_len(player);
+    let saved = menu.saved(&player.library);
+    let rows: Vec<Element<'_, Message, AppTheme>> = menu
+        .actions()
+        .iter()
+        .enumerate()
+        .map(|(i, action)| {
+            let focused = menu.anchor.hovered == Some(ContextMenuFocus::Item(i));
+            let (label, icon) = card_action(*action, saved, player.strings);
+            menu_item(label, icon, i, focused, false, action.to_message(), row_len)
+        })
+        .collect();
 
-    opaque(MouseArea::new(overlay).on_press(Message::CloseContextMenu))
+    anchored_menu(&menu.anchor, main_menu_panel(player, rows))
+}
+
+/// Label and icon shown for a card-menu entry. `saved` decides how the library
+/// entry reads ("Add" vs "Remove").
+fn card_action(
+    action: CardAction,
+    saved: bool,
+    tr: &crate::i18n::Strings,
+) -> (Cow<'static, str>, &'static [u8]) {
+    let label = match action {
+        CardAction::Open => Cow::Borrowed(tr.ctx_open),
+        CardAction::OpenInBrowser => Cow::Borrowed(tr.ctx_open_in_browser),
+        CardAction::SaveAsPlaylist => Cow::Borrowed(tr.save_as_playlist),
+        CardAction::ToggleLibrary if saved => Cow::Borrowed(tr.ctx_remove_from_library),
+        CardAction::ToggleLibrary => Cow::Borrowed(tr.ctx_add_to_library),
+    };
+    let icon = match action {
+        CardAction::Open => icons::FOLDER_ICON,
+        CardAction::OpenInBrowser => icons::EXTERNAL_LINK_ICON,
+        CardAction::SaveAsPlaylist => icons::QUEUE_ICON,
+        CardAction::ToggleLibrary if saved => icons::BOOKMARK_ICON,
+        CardAction::ToggleLibrary => icons::ADD_ICON,
+    };
+    (label, icon)
 }
 
 /// Label and icon shown for a main-menu entry (`n` = selected track count).
@@ -404,7 +484,7 @@ fn submenu_entries<'a>(
         .into_iter()
         .enumerate()
         .map(|(i, provider)| {
-            let focused = menu.hovered == Some(ContextMenuFocus::Sub(kind, i));
+            let focused = menu.anchor.hovered == Some(ContextMenuFocus::Sub(kind, i));
             // `(base label, icon, whether the track carries an id here,
             // whether a missing id falls back to search)`.
             let (base, icon, has_id, search_fallback) = match kind {

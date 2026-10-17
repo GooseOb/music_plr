@@ -37,8 +37,8 @@ use crate::{
     app::{
         pane::{PaneId, QUEUE_PANE_ID, RECENT_PANE_ID},
         ui::{
-            search_history_list_id, search_input_id, track_list_id, QUEUE_LIST_ID,
-            QUEUE_RECENT_LIST_ID,
+            card_list_id, card_row_id, search_history_list_id, search_input_id, track_list_id,
+            QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID,
         },
         Message,
     },
@@ -54,6 +54,52 @@ pub struct ListGeometry {
 
 pub const SIDEBAR_LIST_ID: Id = Id::new("sidebar_playlist_list");
 pub const LIBRARY_LIST_ID: Id = Id::new("sidebar_library_list");
+
+/// Which scrollable a scroll belongs to. The inverse of [`CaptureBounds`]'s
+/// id classification, so every scrollable reports its offset against the same
+/// key the capture pass files it under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollTarget {
+    /// A track list: a pane's own, or the global queue/recent panel (whose
+    /// virtual `PaneId` is not a real pane).
+    Tracks(PaneId),
+    /// A pane's card host: its search card tab or artist page.
+    Cards(PaneId),
+    /// One shelf of an artist page, scrolled sideways.
+    CardRow(PaneId, crate::providers::ArtistSectionKind),
+    /// The sidebar's saved-library list.
+    Library,
+}
+
+/// The slot an id'd scrollable fills, i.e. the reverse of the id functions in
+/// `ui` (`track_list_id`, `card_list_id`, `card_row_id`). Classifying an id
+/// once per scrollable keeps the capture pass from re-deriving every id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Slot {
+    Sidebar,
+    Library,
+    Queue,
+    Recent,
+    Tracks(PaneId),
+    Cards(PaneId),
+    /// Only a horizontal offset — a shelf has no rows of its own to capture.
+    CardRow(PaneId, crate::providers::ArtistSectionKind),
+}
+
+impl From<ScrollTarget> for Slot {
+    fn from(target: ScrollTarget) -> Self {
+        match target {
+            ScrollTarget::Tracks(pane) => match pane {
+                QUEUE_PANE_ID => Slot::Queue,
+                RECENT_PANE_ID => Slot::Recent,
+                _ => Slot::Tracks(pane),
+            },
+            ScrollTarget::Cards(pane) => Slot::Cards(pane),
+            ScrollTarget::CardRow(pane, section) => Slot::CardRow(pane, section),
+            ScrollTarget::Library => Slot::Library,
+        }
+    }
+}
 
 /// Which scrollable list contains a point. `Track` carries its owning pane
 /// because every pane renders its own main track list.
@@ -86,6 +132,16 @@ pub struct CaptureBounds {
     pub library: Option<ListGeometry>,
     pub queue: Option<ListGeometry>,
     pub tracks: HashMap<PaneId, ListGeometry>,
+    /// Scroll offsets of the per-pane scrollables that host cards (a search
+    /// card tab, an artist page). Kept apart from `tracks` because card rows
+    /// are not drop targets and never take part in hit-testing — only in
+    /// converting a card right-click to window coordinates.
+    pub cards: HashMap<PaneId, ListGeometry>,
+    /// Horizontal scroll offsets of artist-page card shelves, keyed by pane *and*
+    /// section (every section lays its shelf out on each pass, so one key per
+    /// pane would collide). A card right-click inside a shelf is reported with
+    /// the cursor shifted by this offset, so the menu has to undo it.
+    pub card_rows: HashMap<(PaneId, crate::providers::ArtistSectionKind), f32>,
     pub recent: Option<ListGeometry>,
     /// Captured separately by [`CaptureSearchHistoryRows`] (see that struct).
     pub search_history: HashMap<PaneId, ListGeometry>,
@@ -96,7 +152,9 @@ pub struct CaptureBounds {
     /// Captured by [`CaptureContextMenu`] when the context menu opens.
     pub context_menu: Option<ContextMenuGeometry>,
     panes: Vec<PaneId>,
-    current: Option<Id>,
+    /// The list whose rows are being visited right now — only the two lists
+    /// with measured rows (`Sidebar`/`Library`) collect containers.
+    current: Option<Slot>,
 }
 
 impl From<CaptureBounds> for Task<Message> {
@@ -121,36 +179,113 @@ impl CaptureBounds {
         self.tracks.get(&pane)
     }
 
-    fn is_tracked(&self, id: &Id) -> bool {
-        *id == SIDEBAR_LIST_ID
-            || *id == LIBRARY_LIST_ID
-            || *id == QUEUE_LIST_ID
-            || *id == QUEUE_RECENT_LIST_ID
-            || self.panes.iter().any(|p| *id == track_list_id(*p))
+    /// How far an artist page's card shelf is scrolled sideways.
+    pub fn card_row_scroll(
+        &self,
+        pane: PaneId,
+        section: crate::providers::ArtistSectionKind,
+    ) -> f32 {
+        self.card_rows.get(&(pane, section)).copied().unwrap_or(0.0)
     }
 
-    fn pane_of(&self, id: &Id) -> Option<PaneId> {
-        self.panes
-            .iter()
-            .copied()
-            .find(|p| *id == track_list_id(*p))
+    /// How far a scrollable is scrolled along its own axis, for turning a
+    /// reported cursor point back into a window position.
+    pub fn scroll_offset(&self, target: ScrollTarget) -> f32 {
+        match target {
+            ScrollTarget::CardRow(pane, section) => self.card_row_scroll(pane, section),
+            _ => self
+                .geometry(Slot::from(target))
+                .map_or(0.0, |g| g.translation_y),
+        }
     }
 
-    fn geo_mut(&mut self, id: &Id) -> Option<&mut ListGeometry> {
+    /// Record an offset a scrollable reported live, keeping it fresh between
+    /// capture passes (which only run on navigation, results and resize).
+    pub fn set_scroll_offset(&mut self, target: ScrollTarget, translation: iced::Vector) {
+        // Only a card host creates its geometry here — it holds nothing but
+        // the offset, as its bounds are never read. Track lists are virtualized
+        // off captured bounds and the library list is a drop target, so those
+        // are only ever updated in place.
+        let geo = match Slot::from(target) {
+            Slot::CardRow(pane, section) => {
+                self.card_rows.insert((pane, section), translation.x);
+                None
+            }
+            Slot::Cards(pane) => Some(self.cards.entry(pane).or_default()),
+            Slot::Tracks(pane) => self.tracks.get_mut(&pane),
+            Slot::Queue => self.queue.as_mut(),
+            Slot::Recent => self.recent.as_mut(),
+            Slot::Library => self.library.as_mut(),
+            Slot::Sidebar => self.sidebar.as_mut(),
+        };
+        if let Some(g) = geo {
+            g.translation_y = translation.y;
+        }
+    }
+
+    /// Drop everything captured for `pane`, so a closed pane leaves nothing
+    /// behind (its lists are gone, so nothing can refresh them).
+    pub fn forget_pane(&mut self, pane: PaneId) {
+        self.tracks.remove(&pane);
+        self.cards.remove(&pane);
+        self.search_history.remove(&pane);
+        self.search_inputs.remove(&pane);
+        self.card_rows.retain(|(p, _), _| *p != pane);
+    }
+
+    /// The slot an id'd scrollable belongs to, if it is one we capture.
+    fn slot(&self, id: &Id) -> Option<Slot> {
         if *id == SIDEBAR_LIST_ID {
-            return Some(self.sidebar.get_or_insert_with(ListGeometry::default));
+            return Some(Slot::Sidebar);
         }
         if *id == LIBRARY_LIST_ID {
-            return Some(self.library.get_or_insert_with(ListGeometry::default));
+            return Some(Slot::Library);
         }
         if *id == QUEUE_LIST_ID {
-            return Some(self.queue.get_or_insert_with(ListGeometry::default));
+            return Some(Slot::Queue);
         }
         if *id == QUEUE_RECENT_LIST_ID {
-            return Some(self.recent.get_or_insert_with(ListGeometry::default));
+            return Some(Slot::Recent);
         }
-        let pane = self.pane_of(id)?;
-        Some(self.tracks.entry(pane).or_default())
+        self.panes.iter().copied().find_map(|pane| {
+            if *id == track_list_id(pane) {
+                Some(Slot::Tracks(pane))
+            } else if *id == card_list_id(pane) {
+                Some(Slot::Cards(pane))
+            } else {
+                crate::providers::ArtistSectionKind::ALL
+                    .into_iter()
+                    .find(|section| *id == card_row_id(pane, *section))
+                    .map(|section| Slot::CardRow(pane, section))
+            }
+        })
+    }
+
+    /// The captured geometry for a slot, creating an empty one on first sight.
+    /// Only the capture pass uses this, which is what creates the entries the
+    /// other lists are read through.
+    fn ensure_geometry(&mut self, slot: Slot) -> &mut ListGeometry {
+        match slot {
+            Slot::Sidebar => self.sidebar.get_or_insert_with(ListGeometry::default),
+            Slot::Library => self.library.get_or_insert_with(ListGeometry::default),
+            Slot::Queue => self.queue.get_or_insert_with(ListGeometry::default),
+            Slot::Recent => self.recent.get_or_insert_with(ListGeometry::default),
+            Slot::Tracks(pane) => self.tracks.entry(pane).or_default(),
+            Slot::Cards(pane) => self.cards.entry(pane).or_default(),
+            Slot::CardRow(_, _) => unreachable!("a card shelf has no geometry of its own"),
+        }
+    }
+
+    fn geometry(&self, slot: Slot) -> Option<&ListGeometry> {
+        match slot {
+            Slot::Sidebar => self.sidebar.as_ref(),
+            Slot::Library => self.library.as_ref(),
+            Slot::Queue => self.queue.as_ref(),
+            Slot::Recent => self.recent.as_ref(),
+            Slot::Tracks(pane) => self.tracks.get(&pane),
+            Slot::Cards(pane) => self.cards.get(&pane),
+            Slot::CardRow(_, _) => None,
+        }
     }
 
     /// The list whose bounds contain `point`, if any. Lists don't overlap so
@@ -198,38 +333,33 @@ impl Operation<Message> for CaptureBounds {
         translation: iced::Vector,
         _state: &mut dyn Scrollable,
     ) {
-        let Some(id) = id else {
+        let Some(slot) = id.and_then(|id| self.slot(id)) else {
             self.current = None;
             return;
         };
-        if !self.is_tracked(id) {
-            self.current = None;
-            return;
-        }
-        self.current = Some(id.clone());
-        if let Some(geo) = self.geo_mut(id) {
-            *geo = ListGeometry {
-                bounds,
-                translation_y: translation.y,
-                rows: Vec::new(),
-            };
+        // Only the two lists with measured rows (sidebar/library) collect containers.
+        self.current = matches!(slot, Slot::Sidebar | Slot::Library).then_some(slot);
+        match slot {
+            // A shelf is horizontal-only: it has no geometry of its own.
+            Slot::CardRow(pane, section) => {
+                self.card_rows.insert((pane, section), translation.x);
+            }
+            _ => {
+                *self.ensure_geometry(slot) = ListGeometry {
+                    bounds,
+                    translation_y: translation.y,
+                    rows: Vec::new(),
+                };
+            }
         }
     }
 
     fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
-        let Some(target) = self.current.clone() else {
+        let Some(slot @ (Slot::Sidebar | Slot::Library)) = self.current else {
             return;
         };
-        if target == QUEUE_LIST_ID
-            || target == QUEUE_RECENT_LIST_ID
-            || self.pane_of(&target).is_some()
-        {
-            return;
-        }
         if id.is_some() {
-            if let Some(g) = self.geo_mut(&target) {
-                g.rows.push(bounds);
-            }
+            self.ensure_geometry(slot).rows.push(bounds);
         }
     }
 
@@ -375,5 +505,80 @@ impl Operation<Message> for CaptureContextMenu {
             panel,
             row_offsets: self.rows.iter().map(|r| r.y - panel.y).collect(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::providers::ArtistSectionKind;
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn card_shelves_are_keyed_per_pane_and_section() {
+        let pane = 3;
+        let mut bounds = CaptureBounds::with_panes(vec![pane, 4]);
+        // Distinct per pane *and* section: every section lays its shelf out on
+        // each pass, so one key per pane would make one shelf's offset land on
+        // another's cards.
+        assert_ne!(
+            card_row_id(pane, ArtistSectionKind::Albums),
+            card_row_id(pane, ArtistSectionKind::Related)
+        );
+        assert_ne!(
+            card_row_id(pane, ArtistSectionKind::Albums),
+            card_row_id(4, ArtistSectionKind::Albums)
+        );
+
+        bounds
+            .card_rows
+            .insert((pane, ArtistSectionKind::Albums), 140.0);
+        assert_eq!(
+            bounds.card_row_scroll(pane, ArtistSectionKind::Albums),
+            140.0
+        );
+        assert_eq!(
+            bounds.card_row_scroll(pane, ArtistSectionKind::Related),
+            0.0
+        );
+    }
+
+    #[test]
+    fn only_live_pane_card_hosts_are_captured() {
+        let bounds = CaptureBounds::with_panes(vec![3]);
+        assert_eq!(bounds.slot(&card_list_id(3)), Some(Slot::Cards(3)));
+        assert_eq!(
+            bounds.slot(&card_row_id(3, ArtistSectionKind::Albums)),
+            Some(Slot::CardRow(3, ArtistSectionKind::Albums))
+        );
+        assert_eq!(bounds.slot(&track_list_id(3)), Some(Slot::Tracks(3)));
+        // A closed pane's ids stop being captured, so its shelves stop feeding
+        // the pass.
+        assert_eq!(bounds.slot(&card_list_id(9)), None);
+        assert_eq!(
+            bounds.slot(&card_row_id(9, ArtistSectionKind::Albums)),
+            None
+        );
+    }
+
+    #[test]
+    fn forgetting_a_pane_drops_all_of_its_captures() {
+        let pane = 3;
+        let mut bounds = CaptureBounds::with_panes(vec![pane, 4]);
+        bounds.cards.insert(pane, ListGeometry::default());
+        bounds.tracks.insert(pane, ListGeometry::default());
+        bounds
+            .card_rows
+            .insert((pane, ArtistSectionKind::Albums), 10.0);
+        bounds.search_history.insert(pane, ListGeometry::default());
+        bounds.search_inputs.insert(pane, Rectangle::default());
+
+        bounds.forget_pane(pane);
+
+        assert!(bounds.cards.is_empty());
+        assert!(bounds.tracks.is_empty());
+        assert!(bounds.search_history.is_empty());
+        assert!(bounds.search_inputs.is_empty());
+        assert!(bounds.card_rows.is_empty());
     }
 }

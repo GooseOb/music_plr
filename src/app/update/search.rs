@@ -3,9 +3,8 @@ use crate::{
     app::{
         pane::PaneId, update::operation::CaptureSearchHistoryRows, view_data::RadioData, ViewKind,
     },
-    data::library::{LibraryItem, LibraryKind},
+    data::library::LibraryItem,
     load_state::LoadState,
-    providers::ProviderId,
     types::Track,
 };
 
@@ -413,31 +412,22 @@ impl MusicPlayer {
         nav_task
     }
 
+    /// The library entry for the pane's current artist/album/playlist page, so
+    /// its header bookmark and browser button can act on what the page is
+    /// showing.
     pub fn current_library_item(&self, pane: PaneId) -> Option<LibraryItem> {
-        match &self.view_data_in(pane).kind {
-            ViewKind::Artist(a) => Some(LibraryItem {
-                kind: LibraryKind::Artist,
-                id: a.id.clone(),
-                title: a.name.clone(),
-                thumbnail: String::new(),
-                provider: a.source,
-            }),
-            ViewKind::Album(r) => Some(LibraryItem {
-                kind: LibraryKind::Album,
-                id: r.id.clone(),
-                title: r.name.clone(),
-                thumbnail: String::new(),
-                provider: ProviderId::YouTube,
-            }),
-            ViewKind::PlaylistView(r) => Some(LibraryItem {
-                kind: LibraryKind::Playlist,
-                id: r.id.clone(),
-                title: r.name.clone(),
-                thumbnail: String::new(),
-                provider: ProviderId::YouTube,
-            }),
-            _ => None,
-        }
+        self.view_data_in(pane).kind.library_item()
+    }
+
+    /// Save/unsave `item` in the library, reporting which happened as a toast.
+    pub fn toggle_library_save_with_toast(&mut self, item: LibraryItem) -> Task<Message> {
+        let saved = self.toggle_library_save(item);
+        self.notify(if saved {
+            self.strings.saved_to_library
+        } else {
+            self.strings.removed_from_library
+        });
+        Task::none()
     }
 
     pub fn toggle_library_save(&mut self, item: LibraryItem) -> bool {

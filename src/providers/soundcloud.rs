@@ -33,6 +33,7 @@ impl From<&AlbumPlaylist> for CardData {
             title: ap.album_playlist.title.clone(),
             subtitle: ap.user.user.username.clone(),
             thumbnail: ap.album_playlist.artwork_url.clone().unwrap_or_default(),
+            url: ap.album_playlist.permalink_url.clone(),
         }
     }
 }
@@ -68,6 +69,7 @@ impl From<&User> for CardData {
             title: u.user.username.clone(),
             subtitle: u.user.full_name.clone(),
             thumbnail: u.user.avatar_url.clone(),
+            url: u.user.permalink_url.clone(),
         }
     }
 }
@@ -273,6 +275,7 @@ async fn album_cards(
             date: String::new(),
             badge: "Album".to_string(),
             thumbnail: ap.album_playlist.artwork_url.clone().unwrap_or_default(),
+            url: ap.album_playlist.permalink_url.clone(),
         })
         .collect())
 }
@@ -288,6 +291,7 @@ async fn playlist_cards(client: &SoundCloudClient, id: u64) -> Result<Vec<CardDa
             title: ap.album_playlist.title.clone(),
             subtitle: String::new(),
             thumbnail: ap.album_playlist.artwork_url.clone().unwrap_or_default(),
+            url: ap.album_playlist.permalink_url.clone(),
         })
         .collect())
 }
@@ -308,6 +312,7 @@ async fn related_artists(
             name: u.user.username.clone(),
             stat: crate::util::format_count(u.user.followers_count.max(0) as u64),
             thumbnail: u.user.avatar_url.clone(),
+            url: u.user.permalink_url.clone(),
         })
         .collect())
 }

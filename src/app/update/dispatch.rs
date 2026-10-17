@@ -82,18 +82,8 @@ impl crate::app::MusicPlayer {
                 self.bounds.search_history.insert(pane, geo);
                 Task::none()
             }
-            Message::ListScrolled {
-                pane,
-                translation_y,
-            } => {
-                let geo = match pane {
-                    QUEUE_PANE_ID => self.bounds.queue.as_mut(),
-                    RECENT_PANE_ID => self.bounds.recent.as_mut(),
-                    _ => self.bounds.tracks.get_mut(&pane),
-                };
-                if let Some(g) = geo {
-                    g.translation_y = translation_y;
-                }
+            Message::Scrolled(target, translation) => {
+                self.bounds.set_scroll_offset(target, translation);
                 Task::none()
             }
             Message::LyricsScrolled {
@@ -226,7 +216,8 @@ impl crate::app::MusicPlayer {
                 id,
                 name,
                 source,
-            } => self.open_artist(pane, Some(&id), &name, source),
+                url,
+            } => self.open_artist(pane, Some(&id), &name, source, &url),
             Message::ArtistSectionProviderChanged(pane, section, provider) => {
                 self.handle_artist_section_provider_changed(pane, section, provider);
                 Task::none()
@@ -235,15 +226,7 @@ impl crate::app::MusicPlayer {
                 self.handle_artist_header_provider_changed(pane, provider);
                 Task::none()
             }
-            Message::ToggleLibrarySave(item) => {
-                let saved = self.toggle_library_save(item);
-                self.notify(if saved {
-                    self.strings.saved_to_library
-                } else {
-                    self.strings.removed_from_library
-                });
-                Task::none()
-            }
+            Message::ToggleLibrarySave(item) => self.toggle_library_save_with_toast(item),
             Message::ToggleLibraryExpanded => {
                 self.library_expanded = !self.library_expanded;
                 self.save_session();
@@ -274,6 +257,16 @@ impl crate::app::MusicPlayer {
             }
             Message::TrackRightClicked(pos, point) => {
                 self.show_context_menu_at(pos, self.window_point(pos.pane, point))
+            }
+            Message::CardRightClicked {
+                host,
+                pane,
+                target,
+                row,
+                point,
+            } => {
+                let point = self.card_window_point(host, row, point);
+                self.show_card_menu_at(pane, target, point)
             }
             Message::PlayTrackAt(pos) => {
                 self.handle_play_track(pos);
@@ -541,8 +534,8 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::ContextMenuHover(focus) => {
-                if let Some(Dialog::ContextMenu(menu)) = &mut self.dialog {
-                    menu.hovered = focus;
+                if let Some(anchor) = self.menu_anchor_mut() {
+                    anchor.hovered = focus;
                 }
                 Task::none()
             }
@@ -552,10 +545,9 @@ impl crate::app::MusicPlayer {
                     .as_ref()
                     .is_none_or(|p| (p.panel.width - panel.width).abs() > f32::EPSILON);
                 let window = self.window_size;
-                let moved = match &mut self.dialog {
-                    Some(Dialog::ContextMenu(menu)) => menu.flip_position(panel, window),
-                    _ => false,
-                };
+                let moved = self
+                    .menu_anchor_mut()
+                    .is_some_and(|anchor| anchor.flip_position(panel, window));
                 let stable = !moved && !width_changed;
                 self.bounds.context_menu = Some(ContextMenuGeometry {
                     panel,
@@ -622,6 +614,23 @@ impl crate::app::MusicPlayer {
             }
             Message::ContextMenuOpenInBrowser => {
                 self.handle_context_menu_open_in_browser();
+                Task::none()
+            }
+            Message::CardMenuOpen => {
+                let Some(menu) = self.take_card_menu() else {
+                    return Task::none();
+                };
+                let (pane, target) = (menu.pane, menu.target);
+                self.open_card(pane, &target)
+            }
+            Message::CardMenuOpenInBrowser => {
+                self.handle_card_menu_open_in_browser();
+                Task::none()
+            }
+            Message::CardMenuSaveAsPlaylist => self.handle_card_menu_save_as_playlist(),
+            Message::CardMenuToggleLibrary => self.handle_card_menu_toggle_library(),
+            Message::OpenInBrowser(url) => {
+                self.open_in_browser(&url);
                 Task::none()
             }
             Message::EditTrackField(field, value) => {

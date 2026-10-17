@@ -6,7 +6,7 @@ use super::{BackendResult, MusicPlayer, Track};
 use crate::{
     app::{
         dialog::Dialog,
-        interaction::TrackPos,
+        interaction::{CardMenuState, ContextMenuState, MenuAnchor, TrackPos},
         pane::{is_main_pane, PaneId},
         update::operation::CaptureContextMenu,
         EditTrackState, LyricsViewMode, Message, ViewKind,
@@ -705,14 +705,12 @@ impl MusicPlayer {
 
         self.dialog = Some(Dialog::ContextMenu(
             crate::app::interaction::ContextMenuState {
+                anchor: crate::app::interaction::MenuAnchor::at(point),
                 pos,
                 target_indices,
-                position: (point.x, point.y),
-                cursor: (point.x, point.y),
                 in_playlist,
                 is_trashed: self.is_trashed(&track),
                 track,
-                hovered: None,
             },
         ));
         CaptureContextMenu::default().into()
@@ -730,6 +728,138 @@ impl MusicPlayer {
         }
         .map_or(0.0, |geo| geo.translation_y);
         Point::new(point.x, point.y - scroll)
+    }
+
+    /// Close the open menu and hand its state to the caller. `None` when no
+    /// menu of that kind is open (the dialog is put back untouched).
+    pub(crate) fn take_context_menu(&mut self) -> Option<ContextMenuState> {
+        self.bounds.context_menu = None;
+        match self.dialog.take() {
+            Some(Dialog::ContextMenu(menu)) => Some(menu),
+            other => {
+                self.dialog = other;
+                None
+            }
+        }
+    }
+
+    /// The card-menu counterpart of [`take_context_menu`](Self::take_context_menu).
+    pub(crate) fn take_card_menu(&mut self) -> Option<CardMenuState> {
+        self.bounds.context_menu = None;
+        match self.dialog.take() {
+            Some(Dialog::CardMenu(menu)) => Some(menu),
+            other => {
+                self.dialog = other;
+                None
+            }
+        }
+    }
+
+    /// The open menu's anchor, for hover focus and the window-edge flip.
+    pub(crate) fn menu_anchor_mut(&mut self) -> Option<&mut MenuAnchor> {
+        match &mut self.dialog {
+            Some(Dialog::ContextMenu(menu)) => Some(&mut menu.anchor),
+            Some(Dialog::CardMenu(menu)) => Some(&mut menu.anchor),
+            _ => None,
+        }
+    }
+
+    /// The pane a menu acts on: the row's own pane, or the focused one for the
+    /// global queue/recent lists. `None` when that pane has since been closed.
+    fn menu_pane(&self, menu: &ContextMenuState) -> Option<PaneId> {
+        let pane = if is_main_pane(menu.pos.pane) {
+            menu.pos.pane
+        } else {
+            self.focused_pane_id
+        };
+        self.panes.contains_key(&pane).then_some(pane)
+    }
+
+    /// Open the context menu for the card at `target` (an artist, album or
+    /// playlist card from a search tab, an artist page or the sidebar
+    /// library), anchored at `point` in window coordinates. A card in a pane
+    /// focuses it first, like clicking it does.
+    pub fn show_card_menu_at(
+        &mut self,
+        pane: PaneId,
+        target: ViewKind,
+        point: Point,
+    ) -> Task<Message> {
+        self.focused_pane_id = pane;
+        self.dialog = Some(Dialog::CardMenu(CardMenuState {
+            anchor: MenuAnchor::at(point),
+            pane,
+            target,
+        }));
+        CaptureContextMenu::default().into()
+    }
+
+    /// Convert a cursor point reported inside a card list to absolute window
+    /// coordinates, like [`window_point`](Self::window_point): a scrollable
+    /// hands its content a cursor shifted by the *whole* translation vector, so
+    /// both axes may need undoing. `row` names the artist-page shelf the card
+    /// sits in, which scrolls sideways on top of the host's vertical offset.
+    pub(super) fn card_window_point(
+        &self,
+        host: super::operation::ScrollTarget,
+        row: Option<crate::providers::ArtistSectionKind>,
+        point: Point,
+    ) -> Point {
+        let vertical = self.bounds.scroll_offset(host);
+        let horizontal = match (host, row) {
+            (super::operation::ScrollTarget::Cards(pane), Some(section)) => {
+                self.bounds.card_row_scroll(pane, section)
+            }
+            _ => 0.0,
+        };
+        Point::new(point.x - horizontal, point.y - vertical)
+    }
+
+    /// Drill into the card the card menu was opened on, exactly as clicking it
+    /// would: artist pages have their own load path, everything else goes
+    /// through the generic browse flow.
+    pub fn open_card(&mut self, pane: PaneId, target: &ViewKind) -> Task<Message> {
+        let Some(card) = target.card_ref() else {
+            return Task::none();
+        };
+        if matches!(target, ViewKind::Artist(_)) {
+            return self.open_artist(pane, Some(card.id), card.title, card.provider, card.url);
+        }
+        self.handle_browse(pane, target, card.provider)
+    }
+
+    /// Open the card menu's public page in the desktop's default browser.
+    pub fn handle_card_menu_open_in_browser(&mut self) {
+        let Some(menu) = self.take_card_menu() else {
+            return;
+        };
+        if let Some(url) = menu.card().web_url() {
+            self.open_in_browser(url);
+        }
+    }
+
+    /// Save the card menu's card in the library, or drop it if already saved —
+    /// the menu's "Add to library" / "Remove from library" entry.
+    pub fn handle_card_menu_toggle_library(&mut self) -> Task<Message> {
+        let Some(menu) = self.take_card_menu() else {
+            return Task::none();
+        };
+        let Some(item) = menu.target.library_item() else {
+            return Task::none();
+        };
+        self.toggle_library_save_with_toast(item)
+    }
+
+    /// Save the card menu's album/playlist as a local playlist, fetching its
+    /// tracks in the background.
+    pub fn handle_card_menu_save_as_playlist(&mut self) -> Task<Message> {
+        let Some(menu) = self.take_card_menu() else {
+            return Task::none();
+        };
+        let Some(item) = menu.target.library_item() else {
+            return Task::none();
+        };
+        self.create_playlist_from_card(&item, self.playlists.playlists.len())
     }
 
     fn track_center_point(&self, pos: TrackPos) -> Option<Point> {
@@ -767,70 +897,51 @@ impl MusicPlayer {
     /// Open the artist page on `provider`, using the track's stored artist
     /// id when present and resolving by name otherwise.
     pub fn handle_context_menu_go_to_artist(&mut self, provider: ProviderId) -> Task<Message> {
-        self.bounds.context_menu = None;
-        let dialog = self.dialog.take();
-        let Some(Dialog::ContextMenu(menu)) = dialog else {
-            self.dialog = dialog;
+        let Some(menu) = self.take_context_menu() else {
             return Task::none();
         };
-        let pane = if is_main_pane(menu.pos.pane) {
-            menu.pos.pane
-        } else {
-            self.focused_pane_id
-        };
-        if !self.panes.contains_key(&pane) {
+        let Some(pane) = self.menu_pane(&menu) else {
             return Task::none();
-        }
+        };
+        // The artist's page, when the provider identifies its artists by a
+        // public address (channel id, MBID, Last.fm name).
+        let url = menu
+            .track
+            .provider_artist_id(provider)
+            .and_then(|id| provider.artist_page_url(id))
+            .unwrap_or_default();
         self.open_artist(
             pane,
             menu.track.provider_artist_id(provider),
             &menu.track.artist,
             provider,
+            &url,
         )
     }
 
     pub fn handle_context_menu_song_radio(&mut self, provider: ProviderId) -> Task<Message> {
-        self.bounds.context_menu = None;
-        let dialog = self.dialog.take();
-        let Some(Dialog::ContextMenu(menu)) = dialog else {
-            self.dialog = dialog;
+        let Some(menu) = self.take_context_menu() else {
             return Task::none();
         };
-        let pane = if is_main_pane(menu.pos.pane) {
-            menu.pos.pane
-        } else {
-            self.focused_pane_id
-        };
-        if !self.panes.contains_key(&pane) {
+        let Some(pane) = self.menu_pane(&menu) else {
             return Task::none();
-        }
+        };
         self.start_radio_provider(pane, provider, &menu.track, false)
     }
 
     pub fn handle_context_menu_artist_radio(&mut self, provider: ProviderId) -> Task<Message> {
-        self.bounds.context_menu = None;
-        let dialog = self.dialog.take();
-        let Some(Dialog::ContextMenu(menu)) = dialog else {
-            self.dialog = dialog;
+        let Some(menu) = self.take_context_menu() else {
             return Task::none();
         };
-        let pane = if is_main_pane(menu.pos.pane) {
-            menu.pos.pane
-        } else {
-            self.focused_pane_id
-        };
-        if !self.panes.contains_key(&pane) {
+        let Some(pane) = self.menu_pane(&menu) else {
             return Task::none();
-        }
+        };
         self.start_radio_provider(pane, provider, &menu.track, true)
     }
 
     /// Clear the stream cache for the context menu's track on `provider`.
     pub fn handle_context_menu_clear_cache(&mut self, provider: ProviderId) {
-        self.bounds.context_menu = None;
-        let dialog = self.dialog.take();
-        let Some(Dialog::ContextMenu(menu)) = dialog else {
-            self.dialog = dialog;
+        let Some(menu) = self.take_context_menu() else {
             return;
         };
         if let Some(id) = menu.track.provider_id(provider).map(str::to_string) {
@@ -854,18 +965,21 @@ impl MusicPlayer {
     /// The page is the first provider identity on the track that has one, so
     /// the item is only ever offered for such tracks.
     pub fn handle_context_menu_open_in_browser(&mut self) {
-        self.bounds.context_menu = None;
-        let dialog = self.dialog.take();
-        let Some(Dialog::ContextMenu(menu)) = dialog else {
-            self.dialog = dialog;
+        let Some(menu) = self.take_context_menu() else {
             return;
         };
-        let Some(url) = menu.track.web_url() else {
-            return;
-        };
-        if let Err(e) = crate::util::open_external(&url) {
+        if let Some(url) = menu.track.web_url() {
+            self.open_in_browser(&url);
+        }
+    }
+
+    /// Hand `url` to the desktop's default browser, reporting a launcher
+    /// failure as a toast. Shared by every "Open in browser" entry (the track
+    /// and card menus, the browse-page header button).
+    pub fn open_in_browser(&mut self, url: &str) {
+        if let Err(e) = crate::util::open_external(url) {
             tracing::warn!("opening {url} failed: {e}");
-            self.notify_error((self.strings.ctx_open_in_browser_failed)(&url));
+            self.notify_error((self.strings.open_in_browser_failed)(url));
         }
     }
 
@@ -970,7 +1084,8 @@ mod tests {
     use super::*;
     use crate::{
         app::{pane::QUEUE_PANE_ID, update::operation::ListGeometry},
-        data::config,
+        data::{config, library::LibraryItem},
+        providers::ArtistSectionKind,
     };
 
     #[test]
@@ -989,5 +1104,124 @@ mod tests {
 
         let unmeasured = p.window_point(QUEUE_PANE_ID, Point::new(10.0, 20.0));
         assert_eq!((unmeasured.x, unmeasured.y), (10.0, 20.0));
+    }
+
+    /// A card's own view, as the three card hosts build it.
+    fn album_view() -> ViewKind {
+        ViewKind::from(LibraryItem {
+            kind: crate::data::library::LibraryKind::Album,
+            id: "a1".into(),
+            title: "Album".into(),
+            thumbnail: String::new(),
+            provider: ProviderId::YouTube,
+            url: "https://music.youtube.com/browse/MPREb_a1".into(),
+        })
+    }
+
+    #[test]
+    fn a_card_right_click_opens_a_menu_that_reads_off_the_target() {
+        use crate::app::{interaction::CardAction, update::operation::ScrollTarget};
+
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        let pane = p.focused_pane_id;
+        let _ = p.update(Message::CardRightClicked {
+            host: ScrollTarget::Cards(pane),
+            pane,
+            target: album_view(),
+            row: None,
+            point: Point::new(10.0, 20.0),
+        });
+
+        let Some(Dialog::CardMenu(menu)) = &p.dialog else {
+            panic!("a card right-click should open the card menu");
+        };
+        assert_eq!(menu.pane, pane);
+        assert_eq!(
+            menu.actions(),
+            vec![
+                CardAction::Open,
+                CardAction::OpenInBrowser,
+                CardAction::SaveAsPlaylist,
+                CardAction::ToggleLibrary,
+            ]
+        );
+        assert!(!menu.saved(&p.library));
+
+        // The library entry comes off the same view the card click opens.
+        let _ = p.update(Message::CardMenuToggleLibrary);
+        assert!(p.dialog.is_none());
+        assert!(p
+            .library
+            .contains(crate::data::library::LibraryKind::Album, "a1"));
+    }
+
+    #[test]
+    fn a_reported_scroll_never_invents_track_list_geometry() {
+        use crate::app::update::operation::ScrollTarget;
+
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        let pane = p.focused_pane_id;
+        let _ = p.update(Message::Scrolled(
+            ScrollTarget::Tracks(pane),
+            iced::Vector::new(0.0, 90.0),
+        ));
+        // Track lists are virtualized off captured bounds, so an offset that
+        // arrives before the capture pass must be dropped, not stored against
+        // empty bounds (which would look like "fits on screen").
+        assert!(p.bounds.tracks.is_empty());
+        assert!(p.bounds.queue.is_none());
+        assert!(p.bounds.library.is_none());
+
+        // A card host only ever carries an offset, so it can record one.
+        let _ = p.update(Message::Scrolled(
+            ScrollTarget::Cards(pane),
+            iced::Vector::new(0.0, 90.0),
+        ));
+        assert_eq!(p.bounds.scroll_offset(ScrollTarget::Cards(pane)), 90.0);
+    }
+
+    #[test]
+    fn card_right_click_undoes_the_host_scroll_on_both_axes() {
+        use crate::app::update::operation::ScrollTarget;
+
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        let pane = p.focused_pane_id;
+        p.bounds.cards.insert(
+            pane,
+            ListGeometry {
+                translation_y: 120.0,
+                ..ListGeometry::default()
+            },
+        );
+
+        // A card in a horizontally scrolled artist-page shelf: both the
+        // shelf's x offset and the page's y offset come off.
+        p.bounds
+            .card_rows
+            .insert((pane, ArtistSectionKind::Albums), 210.0);
+        let anchored = p.card_window_point(
+            ScrollTarget::Cards(pane),
+            Some(ArtistSectionKind::Albums),
+            Point::new(300.0, 500.0),
+        );
+        assert_eq!((anchored.x, anchored.y), (90.0, 380.0));
+
+        // The same host without a shelf only shifts y.
+        let vertical =
+            p.card_window_point(ScrollTarget::Cards(pane), None, Point::new(300.0, 500.0));
+        assert_eq!((vertical.x, vertical.y), (300.0, 380.0));
+
+        // A sidebar row reads the library list's offset, and a shelf with no
+        // captured offset yet (a section still loading) leaves x alone.
+        p.bounds.library = Some(ListGeometry {
+            translation_y: 40.0,
+            ..ListGeometry::default()
+        });
+        let sidebar = p.card_window_point(
+            ScrollTarget::Library,
+            Some(ArtistSectionKind::Related),
+            Point::new(30.0, 300.0),
+        );
+        assert_eq!((sidebar.x, sidebar.y), (30.0, 260.0));
     }
 }

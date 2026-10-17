@@ -6,7 +6,10 @@ use iced::{widget::Id, Point};
 
 use super::pane::{is_main_pane, PaneId, QUEUE_PANE_ID, RECENT_PANE_ID};
 use crate::{
-    data::{cache::StreamCache, library::LibraryItem},
+    data::{
+        cache::StreamCache,
+        library::{LibraryItem, LibraryKind, LibraryStore},
+    },
     types::Track,
 };
 
@@ -227,27 +230,73 @@ impl CtxAction {
 }
 
 /// Where keyboard/mouse focus currently sits inside the open context menu.
+/// Indices address the menu's own entry list, so both the track menu and the
+/// card menu use this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContextMenuFocus {
-    /// An entry of the main menu (index into [`ContextMenuState::actions`]).
+    /// An entry of the main menu (index into the menu's `actions()`).
     Item(usize),
     /// An entry of the open submenu (index into `SubmenuKind::providers`).
     Sub(SubmenuKind, usize),
 }
 
+/// Where a popup menu sits and which entry has focus. Shared by the track
+/// context menu and the card context menu: both anchor at the cursor, both
+/// flip back inside the window as their measured size changes, and both drive
+/// focus from the same hover/arrow keys.
 #[derive(Debug, Clone)]
-#[allow(clippy::struct_excessive_bools)]
-pub struct ContextMenuState {
-    pub pos: TrackPos,
+pub struct MenuAnchor {
+    /// Menu top-left in window coordinates (may be flipped away from the
+    /// cursor).
     pub position: (f32, f32),
     /// Original cursor point; `position` may be flipped away from it, but
     /// every re-measure recomputes the flip relative to this.
     pub cursor: (f32, f32),
+    pub hovered: Option<ContextMenuFocus>,
+}
+
+impl MenuAnchor {
+    pub fn at(point: iced::Point) -> Self {
+        Self {
+            position: (point.x, point.y),
+            cursor: (point.x, point.y),
+            hovered: None,
+        }
+    }
+
+    /// Recompute the flip from the original cursor point using the latest
+    /// measurement. Returns whether the position moved. A panel flush with
+    /// the window edge counts as overflow (its measurement was clipped).
+    pub fn flip_position(&mut self, panel: iced::Rectangle, window: iced::Size) -> bool {
+        const EDGE_EPSILON: f32 = 1.0;
+        let (cx, cy) = self.cursor;
+        let nx = if cx + panel.width > window.width - EDGE_EPSILON {
+            (cx - panel.width).max(0.0)
+        } else {
+            cx
+        };
+        let ny = if cy + panel.height > window.height - EDGE_EPSILON {
+            (cy - panel.height).max(0.0)
+        } else {
+            cy
+        };
+        let moved = (nx, ny) != self.position;
+        self.position = (nx, ny);
+        moved
+    }
+}
+
+/// A context-menu entry for a track row. The menu's contents are derived from
+/// this list so the view and keyboard navigation always agree on indices.
+#[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct ContextMenuState {
+    pub anchor: MenuAnchor,
+    pub pos: TrackPos,
     pub in_playlist: bool,
     pub is_trashed: bool,
     pub track: Track,
     pub target_indices: Vec<usize>,
-    pub hovered: Option<ContextMenuFocus>,
 }
 
 impl ContextMenuState {
@@ -317,7 +366,7 @@ impl ContextMenuState {
     /// main-menu parent opens its own submenu; hovering a submenu entry keeps
     /// that submenu open.
     pub fn open_submenu_kind(&self, cache: &StreamCache) -> Option<SubmenuKind> {
-        match self.hovered? {
+        match self.anchor.hovered? {
             ContextMenuFocus::Item(i) => self.actions(cache).get(i).and_then(|a| a.submenu()),
             ContextMenuFocus::Sub(kind, _) => Some(kind),
         }
@@ -358,26 +407,104 @@ impl ContextMenuState {
             fallback
         }
     }
+}
 
-    /// Recompute the flip from the original cursor point using the latest
-    /// measurement. Returns whether the position moved. A panel flush with
-    /// the window edge counts as overflow (its measurement was clipped).
-    pub fn flip_position(&mut self, panel: iced::Rectangle, window: iced::Size) -> bool {
-        const EDGE_EPSILON: f32 = 1.0;
-        let (cx, cy) = self.cursor;
-        let nx = if cx + panel.width > window.width - EDGE_EPSILON {
-            (cx - panel.width).max(0.0)
-        } else {
-            cx
-        };
-        let ny = if cy + panel.height > window.height - EDGE_EPSILON {
-            (cy - panel.height).max(0.0)
-        } else {
-            cy
-        };
-        let moved = (nx, ny) != self.position;
-        self.position = (nx, ny);
-        moved
+/// An entry of the card context menu. Like [`CtxAction`], the visible rows are
+/// derived from this list so the view and keyboard navigation agree on indices.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardAction {
+    Open,
+    OpenInBrowser,
+    SaveAsPlaylist,
+    ToggleLibrary,
+}
+
+impl CardAction {
+    pub fn to_message(self) -> super::message::Message {
+        use super::message::Message;
+        match self {
+            CardAction::Open => Message::CardMenuOpen,
+            CardAction::OpenInBrowser => Message::CardMenuOpenInBrowser,
+            CardAction::SaveAsPlaylist => Message::CardMenuSaveAsPlaylist,
+            CardAction::ToggleLibrary => Message::CardMenuToggleLibrary,
+        }
+    }
+}
+
+/// The open card context menu. Cards (artists, albums, playlists) have a flat
+/// menu with no provider submenus or multi-selection: `target` is the exact
+/// view the card's click opens, so "Open" lands on the same page and every
+/// other entry reads the card's identity straight off it
+/// ([`ViewKind::library_item`](crate::app::ViewKind::library_item)) — there is
+/// no second copy to fall out of step.
+#[derive(Debug, Clone)]
+pub struct CardMenuState {
+    pub anchor: MenuAnchor,
+    /// Pane the card was right-clicked in (sidebar cards use the focused one).
+    pub pane: PaneId,
+    pub target: super::view_data::ViewKind,
+}
+
+impl CardMenuState {
+    /// The card this menu is for.
+    pub fn card(&self) -> crate::data::library::CardRef<'_> {
+        self.target
+            .card_ref()
+            .expect("a card menu is only opened on an artist/album/playlist view")
+    }
+
+    /// Whether this card is already in the library, which decides how
+    /// `ToggleLibrary` reads ("Add" vs "Remove").
+    pub fn saved(&self, library: &LibraryStore) -> bool {
+        let card = self.card();
+        library.contains(card.kind, card.id)
+    }
+
+    /// The visible entries of the card menu, in order. "Open in browser" needs
+    /// a public page, which not every provider advertises for every kind;
+    /// "Save as playlist" browses the card, which only albums and playlists
+    /// support as a browsable unit (an artist's tracks live on its page).
+    pub fn actions(&self) -> Vec<CardAction> {
+        let card = self.card();
+        let mut v = vec![CardAction::Open];
+        if card.web_url().is_some() {
+            v.push(CardAction::OpenInBrowser);
+        }
+        if card.kind != LibraryKind::Artist {
+            v.push(CardAction::SaveAsPlaylist);
+        }
+        v.push(CardAction::ToggleLibrary);
+        v
+    }
+}
+
+/// What a right-clicked card identifies, and the one place that turns it into
+/// a message: every card host (search card tab, artist-page shelf, sidebar
+/// library row) reports through `RightClickArea::new(_, card, CardTarget::into_message)`
+/// so the field list isn't written out per host.
+#[derive(Debug, Clone)]
+pub struct CardTarget {
+    /// The scrollable the card sits in, which shifts the reported cursor
+    /// position and has to be undone when anchoring the menu.
+    pub host: crate::app::update::operation::ScrollTarget,
+    /// Pane the card belongs to (a sidebar row resolves to the focused pane).
+    pub pane: PaneId,
+    /// The exact view the card's click opens.
+    pub target: super::view_data::ViewKind,
+    /// The artist-page shelf inside `host`, when the card sits in one (the
+    /// shelf scrolls sideways, so it shifts the cursor too).
+    pub row: Option<crate::providers::ArtistSectionKind>,
+}
+
+impl CardTarget {
+    pub fn into_message(self, point: iced::Point) -> super::message::Message {
+        super::message::Message::CardRightClicked {
+            host: self.host,
+            pane: self.pane,
+            target: self.target,
+            row: self.row,
+            point,
+        }
     }
 }
 
@@ -612,8 +739,14 @@ impl DragState {
 
 #[cfg(test)]
 mod tests {
-    use super::super::pane::{pane_first_index, QUEUE_PANE_ID, RECENT_PANE_ID};
-    use crate::app::ui::{track_list_id, QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID};
+    use super::{
+        super::pane::{pane_first_index, QUEUE_PANE_ID, RECENT_PANE_ID},
+        CardMenuState, MenuAnchor,
+    };
+    use crate::{
+        app::ui::{track_list_id, QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID},
+        data::library::LibraryKind,
+    };
 
     #[test]
     fn each_list_targets_a_distinct_scrollable() {
@@ -647,6 +780,68 @@ mod tests {
         drag.forget_pane(0);
         assert_eq!(drag.recall_focus(0), 0);
         assert_eq!(drag.recall_focus(1), 2);
+    }
+
+    /// A card menu over a library item's view, which is how every host builds
+    /// it (`ViewKind::from(LibraryItem)` is the sidebar/search-card shape).
+    fn card_menu(kind: LibraryKind, url: &str) -> CardMenuState {
+        use crate::{app::ViewKind, data::library::LibraryItem, providers::ProviderId};
+        CardMenuState {
+            anchor: MenuAnchor::at(iced::Point::ORIGIN),
+            pane: 0,
+            target: ViewKind::from(LibraryItem {
+                kind,
+                id: "id".into(),
+                title: "T".into(),
+                thumbnail: String::new(),
+                provider: ProviderId::YouTube,
+                url: url.into(),
+            }),
+        }
+    }
+
+    #[test]
+    fn card_menu_offers_only_what_the_card_supports() {
+        use super::CardAction;
+        // An album with a page: everything the card supports.
+        assert_eq!(
+            card_menu(LibraryKind::Album, "https://x.test/a").actions(),
+            vec![
+                CardAction::Open,
+                CardAction::OpenInBrowser,
+                CardAction::SaveAsPlaylist,
+                CardAction::ToggleLibrary,
+            ]
+        );
+        // Without a page, no browser entry.
+        assert_eq!(
+            card_menu(LibraryKind::Album, "").actions(),
+            vec![
+                CardAction::Open,
+                CardAction::SaveAsPlaylist,
+                CardAction::ToggleLibrary,
+            ]
+        );
+        // Artists are not browsable as a unit, so no playlist entry.
+        assert_eq!(
+            card_menu(LibraryKind::Artist, "https://x.test/ar").actions(),
+            vec![
+                CardAction::Open,
+                CardAction::OpenInBrowser,
+                CardAction::ToggleLibrary
+            ]
+        );
+    }
+
+    #[test]
+    fn card_menu_knows_whether_the_card_is_saved() {
+        use crate::data::library::LibraryStore;
+
+        let menu = card_menu(LibraryKind::Album, "");
+        let mut store = LibraryStore::default();
+        assert!(!menu.saved(&store));
+        store.add(menu.target.library_item().expect("album view"));
+        assert!(menu.saved(&store));
     }
 
     #[test]

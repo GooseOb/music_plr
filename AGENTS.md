@@ -52,7 +52,7 @@ src/
 ├── app/shortcut.rs       # Shortcut (key chords decoded at event level; apply_shortcut in update/input.rs)
 ├── app/view_data.rs   # ViewData / ViewKind (per-view state)
 ├── app/message.rs     # Message + BackendResult (pane-scoped messages carry PaneId)
-├── app/interaction.rs # TrackPos (+pane), DragState, ContextMenuState
+├── app/interaction.rs # TrackPos (+pane), DragState, ContextMenuState (tracks), CardMenuState (cards)
 ├── app/import.rs     # ImportPlaylistDialog + filename-pattern matching/conflict engine
 ├── app/translate_dialog.rs # TranslateDialog (AI-translate popup: language + prompt + in-flight flag)
 ├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, split, track_list)
@@ -92,6 +92,27 @@ src/
 - **`ContextMenuState`**: `pos: TrackPos` + selection-aware `target_indices`. Ops apply to all
   selected if the right-clicked track is selected, else just it; "Play"/radio target only it.
   `Recent` tracks come from `recently_played` (queue/playlist items suppressed). Right-click focuses the source pane.
+- **Card menus** (`CardMenuState` + `CardAction`, `Dialog::CardMenu`): right-click on an artist/album/playlist
+  card (search card tab, artist page section, sidebar library row) → `Open` (the exact `ViewKind` the card's
+  click opens, so albums keep badge/date), `Open in browser` (only when the provider advertised a page: the
+  `url` on `CardData`/`ArtistAlbumCard`/`RelatedArtistCard`, carried onto `LibraryItem` and `ViewKind`'s
+  artist/album/playlist refs), `Save as playlist` (albums/playlists only; reuses
+  `create_playlist_from_card`) and `Add to library`/`Remove from library` (one `ToggleLibrary` entry whose label
+  flips on `LibraryStore::contains`; all three kinds are saveable). The menu stores only that `ViewKind`, and
+  every entry reads the card off it through `ViewKind::card_ref()` (borrowed `CardRef`) / `library_item()`, so
+  provider/kind/id/title/artwork/page live in exactly one place. Both menus share `MenuAnchor` (cursor anchor,
+  window-edge flip, hover focus) and the `CaptureContextMenu` panel/row geometry, so only the entry list differs.
+  `open_in_browser()` is the one launcher every "Open in browser" entry funnels into (track menu, card menu, and
+  the header buttons on browse pages next to `Save as playlist` and on artist pages next to the bookmark, each
+  rendered only when the view has a page). An artist page reached from a *track* gets its address from
+  `ProviderId::artist_page_url(id)` — the same rule YouTube's card urls use, and it fills in again on
+  `ArtistIdResolved` for pages opened by name; SoundCloud/Bandcamp identify artists by numeric id, so those
+  pages simply have none; the same two rules (`ProviderId::artist_page_url` / `album_page_url`) cover the artist
+  name button on a track row and the album button, so a page reached from a track keeps its browser button too.
+- **Scroll offsets** (`app/update/operation.rs`): one `ScrollTarget` (Tracks/Cards/CardRow/Library) names both
+  directions of a scrollable — `CaptureBounds::slot()` classifies an id into it during the capture pass,
+  `Message::Scrolled(ScrollTarget, Vector)` refreshes it live between passes, `scroll_offset()` reads it back for
+  click anchoring, and `forget_pane()` drops a closed pane's captures.
 - **`DragState`** (`app/interaction.rs`): `pressed` (dragged thing), `hovered` (cursor target; `Track` doubles as
   keyboard focus), `dragged` (indices resolved at press time). `drop_target`: `Track`/`Playlist`/`Library`
   (insertion line), `PlaylistAdd`, `PlaylistReorder`. Same-pane reorders; cross-list/pane copies move all
@@ -102,7 +123,7 @@ src/
 
 ## Data Flow & Navigation
 
-- User → `Message` → `update()` → handler (spawns bg thread or mutates state). Tick drains `result_rx` → `process_result` (unconditional 1Hz tick); syncs audio, detects stream end → auto-next, sends media-control updates, re-anchors progress. Playback position is a `(progress, Instant)` anchor interpolated with the wall clock — the canvas progress bar animates from it at draw time with no view rebuilds. `view()` reads `&MusicPlayer`. Cursor tracking subscribes only while a press is down (drag); track rows report right-clicks with position via `RightClickArea` and search-input clicks report their pane, so idle mouse movement emits nothing.
+- User → `Message` → `update()` → handler (spawns bg thread or mutates state). Tick drains `result_rx` → `process_result` (unconditional 1Hz tick); syncs audio, detects stream end → auto-next, sends media-control updates, re-anchors progress. Playback position is a `(progress, Instant)` anchor interpolated with the wall clock — the canvas progress bar animates from it at draw time with no view rebuilds. `view()` reads `&MusicPlayer`. Cursor tracking subscribes only while a press is down (drag); track rows and cards report right-clicks with position via `RightClickArea<P>` (payload + `fn` to the message; a card's payload is a `CardTarget`, which names the `ScrollTarget` it sits in so the click can undo that scrollable's offset — iced shifts a scrolled child by the whole translation vector — plus the artist-page shelf it rides in, if any; every scrollable reports its offset live as `Message::Scrolled(ScrollTarget, Vector)`, because the capture pass only runs on navigation, results and resize) and search-input clicks report their pane, so idle mouse movement emits nothing.
 - `nav_history: Vec<ViewData>` + `nav_history_pos` per pane; Back if `pos > 0`, Forward if `pos + 1 < len`. `\` splits side-by-side, `Shift+\` stacks, `Ctrl+W`/header `X` closes (max 4 panes), `Ctrl`+Arrows move focus between adjacent panes with wraparound holding row/column (`SplitNode::neighbor`, `wrap_edge`); sidebar clicks, `/`, and keyboard nav target the focused pane (click or hover any pane to focus; `push_new_view` focuses its pane).
 - `handle_navigate_to(pane, data: ViewData)`: truncates at `pos+1`, installs target `ViewData` (no-op self-nav skipped via `ViewData::same_kind`), pushes, advances `pos`.
 - Results route by request id to the requesting pane's slot (`slot_for_request` scans all panes). `SearchResultsAppend` syncs in place; "Load More" hidden once a page returns < `SEARCH_PAGE_SIZE`.

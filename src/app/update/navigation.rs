@@ -224,9 +224,9 @@ impl MusicPlayer {
         if self.split_root.leaf_count() <= 1 {
             return Task::none();
         }
-        // A dialog anchored to the closing pane (context menu, playlist-jump
-        // add target, track editor) must go with it; its position would
-        // otherwise resolve against a missing pane.
+        // A dialog anchored to the closing pane (context menu, card menu,
+        // playlist-jump add target, track editor) must go with it; its
+        // position would otherwise resolve against a missing pane.
         let dialog_pane = match &self.dialog {
             Some(crate::app::Dialog::ContextMenu(m)) if is_main_pane(m.pos.pane) => {
                 Some(m.pos.pane)
@@ -236,6 +236,7 @@ impl MusicPlayer {
                 .as_ref()
                 .filter(|p| is_main_pane(p.pane))
                 .map(|p| p.pane),
+            Some(crate::app::Dialog::CardMenu(m)) if is_main_pane(m.pane) => Some(m.pane),
             Some(crate::app::Dialog::Edit(e)) => Some(e.pos.pane),
             Some(crate::app::Dialog::Translate(d)) => Some(d.pane),
             _ => None,
@@ -257,9 +258,7 @@ impl MusicPlayer {
         {
             self.track_list_search = None;
         }
-        self.bounds.tracks.remove(&pane);
-        self.bounds.search_history.remove(&pane);
-        self.bounds.search_inputs.remove(&pane);
+        self.bounds.forget_pane(pane);
         self.drag.forget_pane(pane);
         let survivor = self.split_root.remove_leaf(pane);
         self.panes.remove(&pane);

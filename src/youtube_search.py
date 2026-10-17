@@ -242,9 +242,7 @@ def browse(browse_id, limit=50, kind=None):
     out = []
     if kind == "album" or (kind is None and browse_id.startswith("MPRE")):
         album = yt.get_album(browse_id)
-        album_name = album.get("title", "") or ""
-        album_id = album.get("albumId") or album.get("browseId", "") or browse_id
-        album_obj = {"name": album_name, "id": album_id}
+        album_obj = {"name": album.get("title", "") or "", "id": browse_id}
         for e in album.get("tracks", []):
             t = _track_from_album_entry(e, album_obj)
             if t:

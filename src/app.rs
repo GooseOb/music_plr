@@ -26,7 +26,7 @@ pub use dependency_dialog::DependencyDialog;
 pub use dialog::Dialog;
 pub use edit_track::EditTrackState;
 pub use import::{CsvPreset, ImportCsvField, ImportMethod, ImportPlaylistDialog};
-pub use interaction::{ContextMenuState, TrackListSearch};
+pub use interaction::{CardMenuState, ContextMenuState, TrackListSearch};
 pub use lyrics_state::{LyricsState, LyricsViewMode, LyricsViewport};
 pub use message::{BackendResult, EditTrackField, Message};
 pub use pane::{Pane, PaneData, SplitDir, SplitNode};

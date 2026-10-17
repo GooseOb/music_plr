@@ -72,12 +72,7 @@ impl MusicPlayer {
                 Pressed::Card(item, pane) => {
                     let target = pane.unwrap_or(self.focused_pane_id);
                     self.focused_pane_id = target;
-                    let provider = item.provider;
-                    nav_task = if item.kind == crate::data::library::LibraryKind::Artist {
-                        self.open_artist(target, Some(&item.id), &item.title, provider)
-                    } else {
-                        self.handle_browse(target, &item.into(), provider)
-                    }
+                    nav_task = self.open_card(target, &item.clone().into());
                 }
                 // A click without a drag selects the playlist (mirrors how a
                 // library card opens on a plain click).
@@ -514,10 +509,15 @@ impl MusicPlayer {
         }
     }
 
-    /// Create a local playlist from a dragged card at `insert_at`: make a new
+    /// Create a local playlist from a card at `insert_at`: make a new
     /// uniquely-named playlist, then fetch its contents in the background and
-    /// fill it once they arrive.
-    fn create_playlist_from_card(&mut self, item: &LibraryItem, insert_at: usize) -> Task<Message> {
+    /// fill it once they arrive. Shared by dragging a card onto a playlist or
+    /// the library and the card menu's "Save as playlist".
+    pub(crate) fn create_playlist_from_card(
+        &mut self,
+        item: &LibraryItem,
+        insert_at: usize,
+    ) -> Task<Message> {
         let idx = self.playlists.create_at(&item.title, insert_at);
         let name = self.playlists.playlists[idx].name.clone();
 
@@ -528,11 +528,8 @@ impl MusicPlayer {
         };
         let id = item.id.clone();
         let tx = self.result_tx.clone();
-        let provider = match &self.view_data().kind {
-            ViewKind::Search(s) => s.provider,
-            _ => crate::providers::ProviderId::YouTube,
-        };
-        self.notify(format!("Creating playlist \"{name}\"..."));
+        let provider = item.provider;
+        self.notify((self.strings.creating_playlist)(&name));
         let rid = self.request_ids.next();
         Self::spawn_backend_thread(
             rid,

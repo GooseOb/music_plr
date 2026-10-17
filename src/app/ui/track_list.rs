@@ -25,7 +25,7 @@ use crate::{
         interaction::{row_id, HoverTarget, Pressed, TrackPos},
         pane::{is_main_pane, PaneId},
         ui::{shared_components::like_button, styles::fg_accent},
-        update::operation::ListGeometry,
+        update::operation::{ListGeometry, ScrollTarget},
     },
     icons,
     theme::AppTheme,
@@ -127,10 +127,7 @@ where
     scrollable(Column::with_children(children))
         .id(id)
         .height(Length::Fill)
-        .on_scroll(move |vp| Message::ListScrolled {
-            pane,
-            translation_y: vp.absolute_offset().y,
-        })
+        .on_scroll(move |vp| super::scrolled(ScrollTarget::Tracks(pane), vp.absolute_offset()))
         .into()
 }
 
@@ -226,6 +223,7 @@ fn view_track_row_inner<'a>(
             .on_enter(Message::HoverStart(HoverTarget::Track(pos)))
             .on_exit(Message::HoverEnd(HoverTarget::Track(pos))),
         pos,
+        Message::TrackRightClicked,
     );
 
     let border = if is_match || is_dragging {
@@ -287,6 +285,7 @@ fn track_row_layout_inner<'a>(
                     .on_press(Message::Browse(
                         pane,
                         crate::app::ViewKind::Album(crate::app::view_data::AlbumRef {
+                            url: track.album_page_url().unwrap_or_default(),
                             id: album.id.clone(),
                             name: album.name.clone(),
                             provider: track.source,

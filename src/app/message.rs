@@ -10,7 +10,10 @@ use super::{
 use crate::{
     app::{
         interaction::{self, ContextMenuFocus, DefaultCtxAction, TrackPos},
-        update::{operation::CaptureBounds, VersionCheckOutcome},
+        update::{
+            operation::{CaptureBounds, ScrollTarget},
+            VersionCheckOutcome,
+        },
         CsvPreset, ImportCsvField, ImportMethod, ViewKind,
     },
     data::library,
@@ -141,10 +144,10 @@ pub enum Message {
         panel: Rectangle,
         row_offsets: Vec<f32>,
     },
-    ListScrolled {
-        pane: PaneId,
-        translation_y: f32,
-    },
+    /// A scrollable moved. Reported live because the capture pass only runs on
+    /// navigation, results and resize (see [`CaptureBounds`]), so an offset
+    /// that changes in between has to arrive here to stay fresh.
+    Scrolled(crate::app::update::operation::ScrollTarget, iced::Vector),
     LyricsScrolled {
         pane: PaneId,
         translation_y: f32,
@@ -167,6 +170,8 @@ pub enum Message {
         id: String,
         name: String,
         source: ProviderId,
+        /// Public page for the artist, empty when the provider advertises none.
+        url: String,
     },
     ArtistSectionProviderChanged(PaneId, crate::providers::ArtistSectionKind, ProviderId),
     ArtistHeaderProviderChanged(PaneId, ProviderId),
@@ -275,6 +280,26 @@ pub enum Message {
     ContextMenuRemoveFromList(PaneId, Vec<usize>),
     ContextMenuEditTrack,
     ContextMenuOpenInBrowser,
+    CardRightClicked {
+        /// The scrollable the card sits in, whose offset shifted `point`.
+        host: ScrollTarget,
+        pane: PaneId,
+        /// The exact view the card's click opens, so the menu's "Open" lands
+        /// on the same page (and every other entry reads the card's identity
+        /// off it).
+        target: ViewKind,
+        /// The artist-page shelf the card sits in, when it has one (that one
+        /// scrolls sideways).
+        row: Option<crate::providers::ArtistSectionKind>,
+        point: Point,
+    },
+    CardMenuOpen,
+    CardMenuOpenInBrowser,
+    CardMenuSaveAsPlaylist,
+    CardMenuToggleLibrary,
+    /// Open a page in the desktop's default browser (the browse-page header
+    /// button); the card and track menus resolve their own page instead.
+    OpenInBrowser(String),
     EditTrackField(EditTrackField, String),
     EditTrackSelectProvider(ProviderId),
     EditTrackFindProvider(ProviderId),
@@ -339,9 +364,17 @@ impl Message {
             | Message::ClosePane(pane)
             | Message::FocusPane(pane)
             | Message::OpenArtist { pane, .. }
+            | Message::CardRightClicked { pane, .. }
             | Message::SearchHistoryBoundsCaptured(pane, _)
-            | Message::LyricsScrolled { pane, .. } => Some(*pane),
-            Message::ListScrolled { pane, .. } => (is_main_pane(*pane)).then_some(*pane),
+            | Message::LyricsScrolled { pane, .. }
+            | Message::Scrolled(ScrollTarget::Cards(pane) | ScrollTarget::CardRow(pane, _), _) => {
+                Some(*pane)
+            }
+            // The queue/recent virtual ids aren't panes, and the sidebar's
+            // library list belongs to no pane.
+            Message::Scrolled(ScrollTarget::Tracks(pane), _) => {
+                is_main_pane(*pane).then_some(*pane)
+            }
             Message::DragPress(interaction::Pressed::Track(pos))
             | Message::TrackRightClicked(pos, _)
             | Message::PlayTrackAt(pos)
@@ -383,6 +416,7 @@ mod tests {
         let pane = 7;
         let pos = TrackPos::new(0, pane);
         let editor = || iced::widget::text_editor::Action::SelectAll;
+        let scrolled = |target| Message::Scrolled(target, iced::Vector::ZERO);
         let messages = vec![
             Message::SearchInputChanged(pane, String::new()),
             Message::SearchInputClicked(pane),
@@ -428,11 +462,11 @@ mod tests {
                 id: String::new(),
                 name: String::new(),
                 source: ProviderId::YouTube,
+                url: String::new(),
             },
-            Message::ListScrolled {
-                pane,
-                translation_y: 0.0,
-            },
+            scrolled(ScrollTarget::Tracks(pane)),
+            scrolled(ScrollTarget::Cards(pane)),
+            scrolled(ScrollTarget::CardRow(pane, ArtistSectionKind::Albums)),
             Message::LyricsScrolled {
                 pane,
                 translation_y: 0.0,
@@ -451,6 +485,13 @@ mod tests {
             Message::HoverStart(HoverTarget::Track(pos)),
             Message::HoverEnd(HoverTarget::Track(pos)),
             Message::ContextMenuPlayViaProvider(ProviderId::YouTube, pos),
+            Message::CardRightClicked {
+                host: ScrollTarget::Cards(pane),
+                pane,
+                target: ViewKind::Downloads,
+                row: None,
+                point: Point::ORIGIN,
+            },
         ];
         assert!(!messages.is_empty());
         for msg in messages {
@@ -466,14 +507,9 @@ mod tests {
             Message::PlayTrackAt(TrackPos::new(0, RECENT_PANE_ID)).pane(),
             None
         );
-        assert_eq!(
-            Message::ListScrolled {
-                pane: QUEUE_PANE_ID,
-                translation_y: 0.0
-            }
-            .pane(),
-            None
-        );
+        assert_eq!(scrolled(ScrollTarget::Tracks(QUEUE_PANE_ID)).pane(), None);
         assert_eq!(Message::Tick.pane(), None);
+        // The sidebar's library list is not pane-scoped either.
+        assert_eq!(scrolled(ScrollTarget::Library).pane(), None);
     }
 }

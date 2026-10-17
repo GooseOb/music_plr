@@ -21,7 +21,7 @@ A YouTube/SoundCloud/Bandcamp search music player with local playback, downloads
   Library.
 - **Lyrics** — Free, no-key LRCLib lyrics with synced lines that seek on click, plus Genius with per-line annotations, the song blurb, and a language picker row for its translations (loaded on demand); cached per track. Add your own named custom lyrics per track (plain or `[mm:ss.xx]`-synced) — they appear as tabs next to the providers, editable and deletable from the lyrics view. Attach multi-line notes to any custom line with `#` comment lines; the active line's note shows in an editable block below the lyrics. **Translate with AI** — translate the active lyrics (with learner notes) via any OpenAI-compatible server or local Ollama; the API key, server URL, and model live in Settings, and the result opens in the lyrics editor for review.
 - **Media controls** — OS media keys / MPRIS (Linux) / SMTC (Windows) / Now Playing (macOS) via souvlaki.
-- **More** — Search history, volume normalization, navigation history, session restore, right-click context menu, dark theme.
+- **More** — Search history, volume normalization, navigation history, session restore, right-click context menus (tracks, and artist/album/playlist cards for open / open in browser / save as playlist), dark theme.
 - **Localization** — 13 languages: English, Polski, Español, Português (Brasil), 简体中文, العربية, Беларуская, Français, Deutsch, 日本語, Русский, हिन्दी, Українська.
 
 ## Installation

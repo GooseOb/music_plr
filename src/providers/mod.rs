@@ -361,6 +361,52 @@ impl ProviderId {
         matches!(self, ProviderId::YouTube | ProviderId::SoundCloud)
     }
 
+    /// The public web page for the artist this provider identifies by `id`.
+    /// Providers whose artist ids *are* public addresses (channel ids, MBIDs,
+    /// Last.fm artist names) resolve from the id alone; the rest only advertise
+    /// a page on their cards, so a track carrying just the id has none.
+    pub fn artist_page_url(self, id: &str) -> Option<String> {
+        if id.is_empty() {
+            return None;
+        }
+        match self {
+            ProviderId::YouTube => Some(format!("https://music.youtube.com/channel/{id}")),
+            ProviderId::MusicBrainz => Some(format!("https://musicbrainz.org/artist/{id}")),
+            // Last.fm identifies artists by name, which is the last path
+            // segment of their page.
+            ProviderId::LastFm => Some(format!(
+                "https://www.last.fm/music/{}",
+                crate::util::urlencode(id)
+            )),
+            // SoundCloud and Bandcamp address artists by numeric user/band id;
+            // `Local` has no artist at all.
+            ProviderId::SoundCloud | ProviderId::Bandcamp | ProviderId::Local => None,
+        }
+    }
+
+    /// The public web page for the album this provider identifies by `id` —
+    /// the id a track carries in its `TrackAlbum`. Only providers whose album
+    /// ids *are* public addresses resolve; the rest advertise a page on their
+    /// cards alone. `MusicBrainz` tracks name a release group while its album
+    /// cards name a release, so the two spellings differ.
+    pub fn album_page_url(self, id: &str) -> Option<String> {
+        if id.is_empty() {
+            return None;
+        }
+        match self {
+            // The same browse id the album cards carry, so a track's album page
+            // and an album card's page are one address.
+            ProviderId::YouTube => Some(format!("https://music.youtube.com/browse/{id}")),
+            ProviderId::MusicBrainz => Some(format!("https://musicbrainz.org/release-group/{id}")),
+            // SoundCloud and Bandcamp carry numeric ids; Last.fm tracks carry
+            // no album at all.
+            ProviderId::SoundCloud
+            | ProviderId::Bandcamp
+            | ProviderId::LastFm
+            | ProviderId::Local => None,
+        }
+    }
+
     /// The public web page for one of this provider's tracks, when one can be
     /// derived from the data the provider handed us. `None` when the stored
     /// `url` is a media file or a local path and no page address is
@@ -417,7 +463,9 @@ impl SearchScope {
     }
 }
 
-/// Provider-agnostic card result (artist/album/playlist drill-down).
+/// Provider-agnostic card result (artist/album/playlist drill-down). `url` is
+/// the public page the provider advertised for the card, empty when it exposes
+/// none (the card is then not offered "Open in browser").
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CardData {
@@ -425,6 +473,7 @@ pub struct CardData {
     pub title: String,
     pub subtitle: String,
     pub thumbnail: String,
+    pub url: String,
 }
 
 /// Provider-agnostic search result: the playable tracks plus the active tab
@@ -726,3 +775,54 @@ pub struct ProviderTrack {
 
 /// Map of provider id -> that provider's identifier/url for a track.
 pub type ProviderMap = HashMap<ProviderId, ProviderTrack>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn album_pages_resolve_only_where_the_id_is_a_public_address() {
+        // The browse id a YouTube track carries is the same one its album
+        // cards carry, so both resolve to one address.
+        assert_eq!(
+            ProviderId::YouTube.album_page_url("MPREb_abc"),
+            Some("https://music.youtube.com/browse/MPREb_abc".into())
+        );
+        // MusicBrainz tracks carry the release group, not the release.
+        assert_eq!(
+            ProviderId::MusicBrainz.album_page_url("rg-1"),
+            Some("https://musicbrainz.org/release-group/rg-1".into())
+        );
+        for p in [
+            ProviderId::SoundCloud,
+            ProviderId::Bandcamp,
+            ProviderId::LastFm,
+            ProviderId::Local,
+        ] {
+            assert_eq!(p.album_page_url("12345"), None, "{p:?}");
+        }
+        assert_eq!(ProviderId::YouTube.album_page_url(""), None);
+    }
+
+    #[test]
+    fn artist_pages_resolve_only_where_the_id_is_a_public_address() {
+        assert_eq!(
+            ProviderId::YouTube.artist_page_url("UCabc"),
+            Some("https://music.youtube.com/channel/UCabc".into())
+        );
+        assert_eq!(
+            ProviderId::MusicBrainz.artist_page_url("mbid-1"),
+            Some("https://musicbrainz.org/artist/mbid-1".into())
+        );
+        // Last.fm identifies artists by name, so the id needs encoding.
+        assert_eq!(
+            ProviderId::LastFm.artist_page_url("Sigur Rós"),
+            Some("https://www.last.fm/music/Sigur+R%C3%B3s".into())
+        );
+        // Numeric user/band ids address nothing on the web.
+        assert_eq!(ProviderId::SoundCloud.artist_page_url("12345"), None);
+        assert_eq!(ProviderId::Bandcamp.artist_page_url("12345"), None);
+        assert_eq!(ProviderId::Local.artist_page_url("12345"), None);
+        assert_eq!(ProviderId::YouTube.artist_page_url(""), None);
+    }
+}

@@ -14,8 +14,9 @@ use super::{
 };
 use crate::{
     app::{
-        interaction::{DropTarget, HoverTarget, Pressed, PressedDrag},
+        interaction::{CardTarget, DropTarget, HoverTarget, Pressed, PressedDrag},
         ui::styles::{fg_tab, icon_accent_dimmed, icon_fg_secondary, icon_tab},
+        update::operation::ScrollTarget,
         ViewData, ViewKind,
     },
     data::library::LibraryItem,
@@ -137,7 +138,7 @@ fn library_row<'a>(
     } else {
         None
     };
-    MouseArea::new(
+    let area = MouseArea::new(
         shared_row(
             [row.into(), toggle_btn.into()],
             background,
@@ -148,7 +149,18 @@ fn library_row<'a>(
     .interaction(player.drag.clickable_cursor_interaction())
     .on_press(Message::DragPress(Pressed::Card(item.clone(), None)))
     .on_enter(Message::HoverStart(HoverTarget::LibraryCard(item.clone())))
-    .on_exit(Message::HoverEnd(HoverTarget::LibraryCard(item.clone())))
+    .on_exit(Message::HoverEnd(HoverTarget::LibraryCard(item.clone())));
+    // A sidebar row belongs to no pane: its menu opens in the focused one.
+    super::right_click::RightClickArea::new(
+        area,
+        CardTarget {
+            host: ScrollTarget::Library,
+            pane: player.focused_pane_id,
+            target: item.clone().into(),
+            row: None,
+        },
+        CardTarget::into_message,
+    )
     .into()
 }
 
@@ -290,6 +302,9 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     } else if player.library_expanded {
         scrollable(Column::with_children(library_items).spacing(theme::SPACING_XS))
             .id(iced::widget::Id::new("sidebar_library_list"))
+            // Keep the captured offset fresh so a row's card menu anchors at
+            // the cursor rather than at the unscrolled position.
+            .on_scroll(|vp| super::scrolled(ScrollTarget::Library, vp.absolute_offset()))
             .height(Length::Fill)
             .into()
     } else {

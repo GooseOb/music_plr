@@ -19,12 +19,16 @@ use super::{
 };
 use crate::{
     app::{
-        interaction::{HoverTarget, Pressed, PressedDrag},
+        interaction::{CardTarget, HoverTarget, Pressed, PressedDrag},
         pane::PaneId,
-        ui::{overlays::pos_absolute, shared_components::scope_tab_row_h_scroll},
+        ui::{
+            overlays::pos_absolute,
+            shared_components::{open_in_browser_button, scope_tab_row_h_scroll},
+        },
+        update::operation::ScrollTarget,
         view_data::SearchData,
     },
-    data::library::LibraryKind,
+    data::library::{LibraryItem, LibraryKind},
     icons,
     load_state::LoadState,
     providers::{CardData, ProviderId, SearchTab},
@@ -203,17 +207,18 @@ fn view_search_card_tab<'a>(
     }
 
     let cards = items.iter().enumerate().map(|(i, c)| {
-        let item = crate::data::library::LibraryItem {
+        let item = LibraryItem {
             kind,
             id: c.id.clone(),
             title: c.title.clone(),
             thumbnail: c.thumbnail.clone(),
             provider: search.provider,
+            url: c.url.clone(),
         };
-        card_row(player, pane, i, &c.id, &c.title, &c.subtitle, &item)
+        card_row(player, pane, i, &c.title, &c.subtitle, &item)
     });
 
-    scrollable(Column::with_children(cards)).into()
+    super::card_scrollable(pane, Column::with_children(cards)).into()
 }
 
 /// A single drill-down card row. The main area is a `MouseArea` so the
@@ -224,13 +229,12 @@ fn card_row<'a>(
     player: &'a MusicPlayer,
     pane: PaneId,
     index: usize,
-    id: &'a str,
     title: &'a str,
     subtitle: &'a str,
-    item: &crate::data::library::LibraryItem,
+    item: &LibraryItem,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
-    let thumb = player.thumbnail_index.get(item.provider, id);
+    let thumb = player.thumbnail_index.get(item.provider, &item.id);
     let leading = text((index + 1).to_string())
         .size(theme::TEXT_SIZE_SM)
         .style(fg_secondary())
@@ -256,6 +260,17 @@ fn card_row<'a>(
         .on_press(Message::DragPress(Pressed::Card(item.clone(), Some(pane))))
         .on_enter(Message::HoverStart(HoverTarget::Card(item.clone())))
         .on_exit(Message::HoverEnd(HoverTarget::Card(item.clone())));
+    let main = super::right_click::RightClickArea::new(
+        main,
+        CardTarget {
+            host: ScrollTarget::Cards(pane),
+            pane,
+            // The menu's "Open" lands on exactly what a click opens.
+            target: item.clone().into(),
+            row: None,
+        },
+        CardTarget::into_message,
+    );
     track_row(
         main,
         // TODO: make consistent
@@ -295,6 +310,8 @@ pub(super) fn view_browse<'a>(
         .expect("view_browse should only be called for album/playlist views");
 
     let saved = player.library.contains(item.kind, &item.id);
+    // The album/playlist page, when the provider advertised one.
+    let browser_url = item.web_url().map(str::to_string);
     view_track_page(
         player,
         pane,
@@ -304,6 +321,7 @@ pub(super) fn view_browse<'a>(
             meta,
             loading: player.strings.loading,
         },
+        browser_url.as_deref(),
         [toggle_bookmark_button(saved)
             .on_press(Message::ToggleLibrarySave(item))
             .into()],
@@ -327,6 +345,7 @@ pub(super) fn view_radio<'a>(
             meta: meta.into(),
             loading: player.strings.generating_radio,
         },
+        None,
         std::iter::empty(),
     )
 }
@@ -342,14 +361,30 @@ struct TrackPage<'a> {
 /// browse pages and radio pages. Callers prepend their own buttons via
 /// `leading_buttons` (the save-to-library bookmark for browse, none for
 /// radio); the save-as-playlist button is always appended while tracks
-/// are loaded.
+/// are loaded, plus an "open in browser" button when `browser_url` names a
+/// page for what is being viewed (a radio page has none).
 fn view_track_page<'a>(
     player: &'a MusicPlayer,
     pane: PaneId,
     spec: TrackPage<'a>,
+    browser_url: Option<&str>,
     leading_buttons: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
     let content = &player.view_data_in(pane).content;
+    // The trailing buttons are only rendered when they do something: no
+    // save-as-playlist without tracks, no browser button without a page.
+    let mut buttons: Vec<Element<'a, Message, AppTheme>> = leading_buttons.into_iter().collect();
+    if matches!(content, LoadState::Ready(tracks) if !tracks.is_empty()) {
+        buttons.push(
+            Button::new(text(player.strings.save_as_playlist))
+                .padding([theme::SPACING_XS, theme::SPACING_SM])
+                .on_press(Message::SaveBrowseAsPlaylist(pane))
+                .into(),
+        );
+    }
+    if let Some(url) = browser_url {
+        buttons.push(open_in_browser_button(player.strings, url));
+    }
 
     let header = Row::with_children([
         thumbnail(theme::PAGE_THUMBNAIL_SIZE, spec.thumbnail),
@@ -359,19 +394,9 @@ fn view_track_page<'a>(
                 .size(theme::TEXT_SIZE_SM)
                 .style(fg_secondary())
                 .into(),
-            Row::with_children(
-                leading_buttons.into_iter().chain([Button::new(text(
-                    player.strings.save_as_playlist,
-                ))
-                .padding([theme::SPACING_XS, theme::SPACING_SM])
-                .on_press_maybe(
-                    matches!(content, LoadState::Ready(tracks) if !tracks.is_empty())
-                        .then_some(Message::SaveBrowseAsPlaylist(pane)),
-                )
-                .into()]),
-            )
-            .spacing(theme::SPACING_SM)
-            .into(),
+            Row::with_children(buttons)
+                .spacing(theme::SPACING_SM)
+                .into(),
         ])
         .spacing(theme::SPACING_MD)
         .into(),

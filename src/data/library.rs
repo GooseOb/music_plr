@@ -15,7 +15,9 @@ pub enum LibraryKind {
 /// A single saved library entry. Mirrors the fields of a `CardData` plus the
 /// kind, so a saved item can be dragged (onto the playlist list or library)
 /// or opened via the card-press mechanism. `provider` records which provider
-/// supplied `id`, so reopening the item hits the right backend.
+/// supplied `id`, so reopening the item hits the right backend. `url` is the
+/// public page the provider advertised, empty for providers that expose no
+/// page address (the entry is then not offered "Open in browser").
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LibraryItem {
     pub kind: LibraryKind,
@@ -24,6 +26,50 @@ pub struct LibraryItem {
     pub thumbnail: String,
     #[serde(default)]
     pub provider: ProviderId,
+    #[serde(default)]
+    pub url: String,
+}
+
+impl LibraryItem {
+    /// The public web page for this card, when the provider advertised one.
+    pub fn web_url(&self) -> Option<&str> {
+        (!self.url.is_empty()).then_some(self.url.as_str())
+    }
+}
+
+/// A card's identity in borrowed form — the same fields a [`LibraryItem`]
+/// carries, without cloning. Cards describe themselves once (see
+/// `ViewKind::card_ref`) and everything that reads a card's kind, provider, id,
+/// title, artwork or public page goes through this.
+#[derive(Debug, Clone, Copy)]
+pub struct CardRef<'a> {
+    pub kind: LibraryKind,
+    pub provider: ProviderId,
+    pub id: &'a str,
+    pub title: &'a str,
+    pub thumbnail: &'a str,
+    /// Public page, empty when the provider advertised none.
+    pub url: &'a str,
+}
+
+impl<'a> CardRef<'a> {
+    /// The public web page for this card, when one was advertised.
+    pub fn web_url(&self) -> Option<&'a str> {
+        (!self.url.is_empty()).then_some(self.url)
+    }
+}
+
+impl From<CardRef<'_>> for LibraryItem {
+    fn from(card: CardRef<'_>) -> Self {
+        Self {
+            kind: card.kind,
+            id: card.id.to_string(),
+            title: card.title.to_string(),
+            thumbnail: card.thumbnail.to_string(),
+            provider: card.provider,
+            url: card.url.to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -101,7 +147,25 @@ mod tests {
             title: format!("Title {id}"),
             thumbnail: String::new(),
             provider: ProviderId::default(),
+            url: String::new(),
         }
+    }
+
+    #[test]
+    fn web_url_needs_an_advertised_page() {
+        assert_eq!(item(LibraryKind::Album, "a").web_url(), None);
+        let mut with_url = item(LibraryKind::Album, "a");
+        with_url.url = "https://example.test/a".into();
+        assert_eq!(with_url.web_url(), Some("https://example.test/a"));
+    }
+
+    #[test]
+    fn items_saved_without_a_url_still_load() {
+        // Pre-url library.json entries deserialize with an empty page.
+        let json = r#"{"items":[{"kind":"Album","id":"x","title":"X","thumbnail":""}]}"#;
+        let store: LibraryStore = serde_json::from_str(json).unwrap();
+        assert_eq!(store.items[0].url, "");
+        assert_eq!(store.items[0].provider, ProviderId::YouTube);
     }
 
     #[test]

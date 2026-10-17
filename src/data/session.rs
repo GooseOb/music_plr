@@ -104,17 +104,24 @@ impl SessionState {
     /// single-pane tree when needed. Corrupt or missing files degrade to the
     /// default, like every other [`JsonStore`].
     pub fn load_migrated() -> Self {
-        let raw = std::fs::read_to_string(Self::path()).ok();
-        let Some(raw) = raw else {
-            return Self::default();
-        };
-        if let Ok(state) = serde_json::from_str::<SessionState>(&raw) {
-            if !state.panes.is_empty() {
-                return state;
+        // `JsonStore::save` is a no-op under `cfg(test)` so tests never write to
+        // the real user directories; *reading* the live session would still make
+        // them depend on whatever the running app left there (which queue tab was
+        // open, how many panes, …), so tests start from the default.
+        #[cfg(not(test))]
+        {
+            let raw = std::fs::read_to_string(Self::path()).ok();
+            let Some(raw) = raw else {
+                return Self::default();
+            };
+            if let Ok(state) = serde_json::from_str::<SessionState>(&raw) {
+                if !state.panes.is_empty() {
+                    return state;
+                }
             }
-        }
-        if let Ok(legacy) = serde_json::from_str::<LegacySessionState>(&raw) {
-            return Self::from(legacy);
+            if let Ok(legacy) = serde_json::from_str::<LegacySessionState>(&raw) {
+                return Self::from(legacy);
+            }
         }
         Self::default()
     }

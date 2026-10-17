@@ -132,6 +132,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
                 .iter()
                 .filter_map(|item| match item {
                     bandcamp::SearchResultItem::Artist(a) => Some(CardData {
+                        url: a.url.clone(),
                         id: a.url.clone(),
                         title: a.name.clone(),
                         subtitle: a.location.clone().unwrap_or_default(),
@@ -148,6 +149,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
                 .iter()
                 .filter_map(|item| match item {
                     bandcamp::SearchResultItem::Album(a) => Some(CardData {
+                        url: a.url.item_url.clone(),
                         id: format!("{}:{}:a", a.band_id, a.album_id),
                         title: a.name.clone(),
                         subtitle: a.band_name.clone(),
@@ -304,6 +306,8 @@ pub fn fetch_artist_page(
                         "Album".to_string()
                     },
                     thumbnail: sized_thumb!(e.image),
+                    // Discography entries carry no page address.
+                    url: String::new(),
                 }
             })
             .collect();

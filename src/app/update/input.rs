@@ -13,14 +13,31 @@ use crate::{
     types::QueueTab,
 };
 
+/// The next index in a menu list of `count` entries, wrapping at both ends;
+/// an unfocused list starts at the end nearest the direction. `None` when
+/// there is nothing to step through.
+fn step(current: Option<usize>, count: usize, dir: isize) -> Option<usize> {
+    if count == 0 {
+        return None;
+    }
+    Some(current.map_or(if dir < 0 { count - 1 } else { 0 }, |i| {
+        (i.cast_signed() + dir)
+            .rem_euclid(count.cast_signed())
+            .cast_unsigned()
+    }))
+}
+
 impl MusicPlayer {
-    /// Arrow-key navigation and Enter activation while the context menu is
-    /// open. Mirrors track-list nav: Up/Down move within the focused pane and
-    /// wrap at the edges; Left/Right switch between the menu and its submenu.
-    /// Only menu shortcuts arrive here — the listener gates the rest out.
+    /// Arrow-key navigation and Enter activation while a context menu is open.
+    /// Mirrors track-list nav: Up/Down move within the focused pane and wrap at
+    /// the edges; Left/Right switch between the menu and its submenu. Only menu
+    /// shortcuts arrive here — the listener gates the rest out.
     pub fn apply_menu_shortcut(&mut self, shortcut: crate::app::Shortcut) -> Task<Message> {
         use crate::app::Shortcut as S;
         // TODO: pass into other functions instead of re-extracting there
+        if matches!(self.dialog, Some(Dialog::CardMenu(_))) {
+            return self.apply_card_menu_shortcut(shortcut);
+        }
         let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
             return Task::none();
         };
@@ -29,7 +46,7 @@ impl MusicPlayer {
             S::MenuDown => self.set_context_menu_hovered(self.step_context_menu_focus(menu, 1)),
             S::MenuAcross => self.context_menu_horizontal(),
             S::MenuActivate => {
-                let message = match menu.hovered {
+                let message = match menu.anchor.hovered {
                     Some(ContextMenuFocus::Item(i)) => menu
                         .actions(&self.stream_cache)
                         .get(i)
@@ -49,9 +66,36 @@ impl MusicPlayer {
         }
     }
 
+    /// Up/Down move the card menu's focus and Enter activates it. A card menu
+    /// has no submenus, so Left/Right do nothing.
+    fn apply_card_menu_shortcut(&mut self, shortcut: crate::app::Shortcut) -> Task<Message> {
+        use crate::app::Shortcut as S;
+        let Some(Dialog::CardMenu(menu)) = &self.dialog else {
+            return Task::none();
+        };
+        let actions = menu.actions();
+        let current = match menu.anchor.hovered {
+            Some(ContextMenuFocus::Item(i)) => Some(i),
+            _ => None,
+        };
+        let step = |dir| step(current, actions.len(), dir).map(ContextMenuFocus::Item);
+        match shortcut {
+            S::MenuUp => self.set_context_menu_hovered(step(-1)),
+            S::MenuDown => self.set_context_menu_hovered(step(1)),
+            S::MenuActivate => match menu.anchor.hovered {
+                Some(ContextMenuFocus::Item(i)) => menu
+                    .actions()
+                    .get(i)
+                    .map_or_else(Task::none, |a| Task::done(a.to_message())),
+                _ => Task::none(),
+            },
+            _ => Task::none(),
+        }
+    }
+
     fn set_context_menu_hovered(&mut self, hovered: Option<ContextMenuFocus>) -> Task<Message> {
-        if let Some(Dialog::ContextMenu(menu)) = &mut self.dialog {
-            menu.hovered = hovered;
+        if let Some(anchor) = self.menu_anchor_mut() {
+            anchor.hovered = hovered;
         }
         Task::none()
     }
@@ -63,7 +107,7 @@ impl MusicPlayer {
     ) -> Option<ContextMenuFocus> {
         // Move within whichever pane focus is currently in; an unfocused menu
         // starts in the main list.
-        let (kind, count, current) = match menu.hovered {
+        let (kind, count, current) = match menu.anchor.hovered {
             Some(ContextMenuFocus::Sub(kind, i)) => (
                 Some(kind),
                 menu.submenu_providers(kind, &self.stream_cache).len(),
@@ -77,12 +121,7 @@ impl MusicPlayer {
                 (None, menu.actions(&self.stream_cache).len(), i)
             }
         };
-        if count == 0 {
-            return None;
-        }
-        let next = current.map_or(if dir < 0 { count - 1 } else { 0 }, |i| {
-            (i.cast_signed() + dir).rem_euclid(count.cast_signed()) as usize
-        });
+        let next = step(current, count, dir)?;
         Some(match kind {
             Some(kind) => ContextMenuFocus::Sub(kind, next),
             None => ContextMenuFocus::Item(next),
@@ -94,7 +133,7 @@ impl MusicPlayer {
             let Some(Dialog::ContextMenu(menu)) = &self.dialog else {
                 return Task::none();
             };
-            match menu.hovered {
+            match menu.anchor.hovered {
                 // Enter the open submenu from its parent row.
                 Some(ContextMenuFocus::Item(i)) => {
                     let Some(kind) = menu
@@ -118,10 +157,7 @@ impl MusicPlayer {
                 _ => return Task::none(),
             }
         };
-        if let Some(Dialog::ContextMenu(m)) = &mut self.dialog {
-            m.hovered = Some(focus);
-        }
-        Task::none()
+        self.set_context_menu_hovered(Some(focus))
     }
 
     /// Cursor tracking runs only while a press is down (see
@@ -160,16 +196,19 @@ impl MusicPlayer {
     #[allow(clippy::too_many_lines)]
     pub fn apply_shortcut(&mut self, shortcut: crate::app::Shortcut) -> Task<Message> {
         use crate::app::Shortcut as S;
-        if matches!(shortcut, S::Escape) && self.dialog.is_some() {
-            self.save_translate_prefs();
-            self.dialog = None;
-            return Task::none();
-        }
-        if matches!(self.dialog, Some(Dialog::ContextMenu(_))) {
-            return self.apply_menu_shortcut(shortcut);
-        }
-        if matches!(self.dialog, Some(Dialog::PlaylistJump(_))) {
-            return self.apply_jump_shortcut(shortcut);
+        match self.dialog {
+            Some(Dialog::ContextMenu(_)) | Some(Dialog::CardMenu(_)) => {
+                return self.apply_menu_shortcut(shortcut);
+            }
+            Some(Dialog::PlaylistJump(_)) => {
+                return self.apply_jump_shortcut(shortcut);
+            }
+            Some(_) if matches!(shortcut, S::Escape) => {
+                self.save_translate_prefs();
+                self.dialog = None;
+                return Task::none();
+            }
+            _ => {}
         }
         let task = match shortcut {
             S::OpenTrackSearch => self.open_track_list_search(),

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data::library::{LibraryItem, LibraryKind},
+    data::library::{CardRef, LibraryItem, LibraryKind},
     load_state::LoadState,
     providers::ProviderId,
     types::Track,
@@ -49,6 +49,9 @@ pub struct AlbumRef {
     pub date: String,
     #[serde(default)]
     pub thumbnail: String,
+    /// Public page for the album, empty when the provider advertises none.
+    #[serde(default)]
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -59,6 +62,9 @@ pub struct PlaylistRef {
     pub provider: ProviderId,
     #[serde(default)]
     pub thumbnail: String,
+    /// Public page for the playlist, empty when the provider advertises none.
+    #[serde(default)]
+    pub url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,6 +79,11 @@ pub struct ArtistEntry {
     pub name: String,
     /// The provider that owns `id` (the page's entry point).
     pub source: ProviderId,
+    /// Public page for the artist, empty when the provider advertises none.
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub thumbnail: String,
     /// Per-section selected providers, loaded content and known
     /// per-provider artist ids — all persisted so Back/Forward restores
     /// the page exactly as it was.
@@ -140,15 +151,18 @@ impl From<LibraryItem> for ViewKind {
     fn from(item: LibraryItem) -> Self {
         match item.kind {
             LibraryKind::Artist => ViewKind::Artist(ArtistEntry {
+                url: item.url,
                 id: item.id.clone(),
                 name: item.title,
                 source: item.provider,
+                thumbnail: item.thumbnail,
                 page: Box::new(crate::providers::ArtistPageState::new(
                     item.provider,
                     &item.id,
                 )),
             }),
             LibraryKind::Album => ViewKind::Album(AlbumRef {
+                url: item.url,
                 id: item.id,
                 name: item.title,
                 thumbnail: item.thumbnail,
@@ -156,6 +170,7 @@ impl From<LibraryItem> for ViewKind {
                 ..Default::default()
             }),
             LibraryKind::Playlist => ViewKind::PlaylistView(PlaylistRef {
+                url: item.url,
                 id: item.id,
                 name: item.title,
                 thumbnail: item.thumbnail,
@@ -183,6 +198,46 @@ pub struct BrowseParams<'a> {
 }
 
 impl ViewKind {
+    /// The borrowed card identity of an artist/album/playlist view; `None` for
+    /// views that aren't a card. Every read of "what card is this" (the card
+    /// menu, `open_card`, the header bookmark/browser buttons) goes through
+    /// here, so a page and the card it came from never disagree.
+    pub fn card_ref(&self) -> Option<CardRef<'_>> {
+        match self {
+            ViewKind::Artist(a) => Some(CardRef {
+                kind: LibraryKind::Artist,
+                provider: a.source,
+                id: &a.id,
+                title: &a.name,
+                thumbnail: &a.thumbnail,
+                url: &a.url,
+            }),
+            ViewKind::Album(r) => Some(CardRef {
+                kind: LibraryKind::Album,
+                provider: r.provider,
+                id: &r.id,
+                title: &r.name,
+                thumbnail: &r.thumbnail,
+                url: &r.url,
+            }),
+            ViewKind::PlaylistView(r) => Some(CardRef {
+                kind: LibraryKind::Playlist,
+                provider: r.provider,
+                id: &r.id,
+                title: &r.name,
+                thumbnail: &r.thumbnail,
+                url: &r.url,
+            }),
+            _ => None,
+        }
+    }
+
+    /// The owned library entry for this view, for saving it to the library or
+    /// creating a playlist from it.
+    pub fn library_item(&self) -> Option<LibraryItem> {
+        self.card_ref().map(LibraryItem::from)
+    }
+
     pub fn browse_params(&self) -> Option<BrowseParams<'_>> {
         match self {
             // Artist pages have their own load path (`open_artist`) and are

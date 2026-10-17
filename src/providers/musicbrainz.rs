@@ -70,6 +70,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> (Vec<Track>, Se
                     r.entities
                         .into_iter()
                         .map(|a| CardData {
+                            url: format!("https://musicbrainz.org/artist/{}", a.id),
                             id: a.id,
                             title: a.name,
                             subtitle: String::new(),
@@ -89,6 +90,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> (Vec<Track>, Se
                     r.entities
                         .into_iter()
                         .map(|rel| CardData {
+                            url: format!("https://musicbrainz.org/release/{}", rel.id),
                             id: rel.id,
                             title: rel.title,
                             subtitle: rel
@@ -238,6 +240,7 @@ pub fn fetch_artist_page(
                 _ => String::new(),
             },
             thumbnail: format!("https://coverartarchive.org/release-group/{}/front", rg.id),
+            url: format!("https://musicbrainz.org/release-group/{}", rg.id),
         })
         .collect();
     Ok(ArtistPage {

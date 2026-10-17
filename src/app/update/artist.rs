@@ -22,14 +22,22 @@ fn same_popular_ids(
 }
 
 impl MusicPlayer {
+    /// Open the artist page for `id` (or resolve `name` when `id` is `None`)
+    /// on `source`. `url` is the artist's public page, kept so the page can be
+    /// saved to the library with it; pass `""` when it isn't known.
     pub fn open_artist(
         &mut self,
         pane: PaneId,
         id: Option<&str>,
         name: &str,
         source: ProviderId,
+        url: &str,
     ) -> Task<Message> {
         let kind = ViewKind::Artist(ArtistEntry {
+            url: url.to_string(),
+            // Known only when the page was reached from a card that carried it;
+            // `ArtistIdResolved` fills in the page itself.
+            thumbnail: String::new(),
             id: id.unwrap_or_default().to_string(),
             name: name.to_string(),
             source,
@@ -202,6 +210,11 @@ impl MusicPlayer {
                 .page
                 .provider_ids
                 .insert(provider, resolved_id.to_string());
+            // A page opened by name has no address until its id is resolved;
+            // fill it in now so its browser button and library save carry one.
+            if entry.url.is_empty() && entry.id.is_empty() {
+                entry.url = provider.artist_page_url(resolved_id).unwrap_or_default();
+            }
         }
     }
 

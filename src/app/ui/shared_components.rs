@@ -186,6 +186,18 @@ pub fn toggle_bookmark_button(is_saved: bool) -> Button<'static, Message, AppThe
     .style(button_style_scope(is_saved))
 }
 
+/// The header button that opens a page in the desktop's browser. Shared by
+/// every page that has one (artist headers, album/playlist pages).
+pub fn open_in_browser_button(
+    tr: &'static crate::i18n::Strings,
+    url: &str,
+) -> Element<'static, Message, AppTheme> {
+    Button::new(text(tr.ctx_open_in_browser))
+        .padding([theme::SPACING_XS, theme::SPACING_SM])
+        .on_press(Message::OpenInBrowser(url.to_string()))
+        .into()
+}
+
 pub fn subtitle_artist(
     pane: PaneId,
     name: &str,
@@ -199,6 +211,7 @@ pub fn subtitle_artist(
             .style(super::styles::button_style_album())
             .on_press(Message::OpenArtist {
                 pane,
+                url: source.artist_page_url(&id).unwrap_or_default(),
                 id,
                 name: name.to_string(),
                 source,

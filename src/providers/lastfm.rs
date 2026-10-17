@@ -290,6 +290,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
             let cards = collect(&["results", "artistmatches", "artist"], &v)
                 .iter()
                 .map(|a| CardData {
+                    url: str_field(a, "url"),
                     id: str_field(a, "name"),
                     title: str_field(a, "name"),
                     subtitle: String::new(),
@@ -306,6 +307,7 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
             let cards = collect(&["results", "albummatches", "album"], &v)
                 .iter()
                 .map(|a| CardData {
+                    url: str_field(a, "url"),
                     id: format!("{}\u{1f}{}", str_field(a, "artist"), str_field(a, "name")),
                     title: str_field(a, "name"),
                     subtitle: str_field(a, "artist"),
@@ -545,6 +547,7 @@ pub fn fetch_artist_page(
                 .iter()
                 .take(10)
                 .map(|a| RelatedArtistCard {
+                    url: str_field(a, "url"),
                     id: str_field(a, "name"),
                     name: str_field(a, "name"),
                     stat: String::new(),
@@ -570,6 +573,7 @@ pub fn fetch_artist_page(
                         collect(&["topalbums", "album"], &top)
                             .iter()
                             .map(|a| ArtistAlbumCard {
+                                url: str_field(a, "url"),
                                 id: format!("{}\u{1f}{}", id, str_field(a, "name")),
                                 title: str_field(a, "name"),
                                 date: String::new(),

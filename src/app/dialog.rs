@@ -1,6 +1,6 @@
 use super::{
-    ContextMenuState, DependencyDialog, EditTrackState, ImportPlaylistDialog, PlaylistJump,
-    TranslateDialog,
+    CardMenuState, ContextMenuState, DependencyDialog, EditTrackState, ImportPlaylistDialog,
+    PlaylistJump, TranslateDialog,
 };
 
 #[derive(Debug, Clone)]
@@ -13,4 +13,5 @@ pub enum Dialog {
     Import(ImportPlaylistDialog),
     Translate(TranslateDialog),
     ContextMenu(ContextMenuState),
+    CardMenu(CardMenuState),
 }

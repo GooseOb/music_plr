@@ -8,7 +8,6 @@ use iced::{
 };
 
 use super::Message;
-use crate::app::interaction::TrackPos;
 
 /// Reports right-clicks with the cursor position. `MouseArea::on_right_press`
 /// carries no position and the global cursor subscription runs only while
@@ -25,24 +24,31 @@ use crate::app::interaction::TrackPos;
 /// content's own, so widget state and tree shape are unchanged. Right presses
 /// are observed before delegating and never captured, so hover, press, focus,
 /// and scroll behavior are unchanged.
-pub struct RightClickArea<'a> {
+///
+/// `P` is whatever the right-click identifies — a track row's `TrackPos`, or a
+/// card's identity — and `make` turns it plus the cursor point into the
+/// message that opens that kind of menu.
+pub struct RightClickArea<'a, P> {
     content: Element<'a, Message, crate::theme::AppTheme, iced::Renderer>,
-    pos: TrackPos,
+    payload: P,
+    make: fn(P, iced::Point) -> Message,
 }
 
-impl<'a> RightClickArea<'a> {
+impl<'a, P: Clone> RightClickArea<'a, P> {
     pub fn new(
         content: impl Into<Element<'a, Message, crate::theme::AppTheme, iced::Renderer>>,
-        pos: TrackPos,
+        payload: P,
+        make: fn(P, iced::Point) -> Message,
     ) -> Self {
         Self {
             content: content.into(),
-            pos,
+            payload,
+            make,
         }
     }
 }
 
-impl Widget<Message, crate::theme::AppTheme, iced::Renderer> for RightClickArea<'_> {
+impl<P: Clone> Widget<Message, crate::theme::AppTheme, iced::Renderer> for RightClickArea<'_, P> {
     fn tag(&self) -> tree::Tag {
         self.content.as_widget().tag()
     }
@@ -100,7 +106,7 @@ impl Widget<Message, crate::theme::AppTheme, iced::Renderer> for RightClickArea<
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
         ) {
             if let Some(point) = cursor.position_over(layout.bounds()) {
-                shell.publish(Message::TrackRightClicked(self.pos, point));
+                shell.publish((self.make)(self.payload.clone(), point));
             }
         }
 
@@ -151,8 +157,10 @@ impl Widget<Message, crate::theme::AppTheme, iced::Renderer> for RightClickArea<
     }
 }
 
-impl<'a> From<RightClickArea<'a>> for Element<'a, Message, crate::theme::AppTheme, iced::Renderer> {
-    fn from(area: RightClickArea<'a>) -> Self {
+impl<'a, P: Clone + 'a> From<RightClickArea<'a, P>>
+    for Element<'a, Message, crate::theme::AppTheme, iced::Renderer>
+{
+    fn from(area: RightClickArea<'a, P>) -> Self {
         Element::new(area)
     }
 }

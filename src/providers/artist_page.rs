@@ -43,6 +43,8 @@ pub struct ArtistAlbumCard {
     pub date: String,
     pub badge: String,
     pub thumbnail: String,
+    /// Public page for the release, empty when the provider advertises none.
+    pub url: String,
 }
 
 /// One entry in the "Fans also like" row.
@@ -53,6 +55,8 @@ pub struct RelatedArtistCard {
     pub name: String,
     pub stat: String,
     pub thumbnail: String,
+    /// Public page for the artist, empty when the provider advertises none.
+    pub url: String,
 }
 
 /// Everything a provider can serve for one artist page load.
@@ -352,7 +356,7 @@ impl ArtistPage {
 }
 
 /// Identifies one section of the artist page.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ArtistSectionKind {
     Popular,
     Albums,
