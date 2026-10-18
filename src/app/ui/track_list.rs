@@ -24,7 +24,7 @@ use crate::{
     app::{
         interaction::{row_id, HoverTarget, Pressed, TrackPos},
         pane::{is_main_pane, PaneId},
-        ui::{shared_components::like_button, styles::fg_accent},
+        ui::shared_components::like_button,
         update::operation::{ListGeometry, ScrollTarget},
     },
     icons,
@@ -379,14 +379,4 @@ fn track_row_layout_inner<'a>(
             .align_y(alignment::Vertical::Center)
             .into(),
     )
-}
-
-pub(super) fn section_header(label: &str) -> Container<'_, Message, AppTheme> {
-    Container::new(
-        text(label)
-            .size(theme::TEXT_SIZE_XS)
-            .style(fg_accent())
-            .width(Length::Fill),
-    )
-    .padding([theme::SPACING_SM, theme::SPACING_MD])
 }

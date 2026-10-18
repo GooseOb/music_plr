@@ -7,9 +7,7 @@ use iced::{
 use super::{
     shared_components::empty_state,
     styles::{bg_secondary, button_style_album, button_style_panel_item, fg_secondary},
-    track_list::{
-        section_header, track_row_layout, view_track_list, view_track_row, virtual_scrollable,
-    },
+    track_list::{track_row_layout, view_track_list, view_track_row, virtual_scrollable},
     Message, MusicPlayer,
 };
 use crate::{
@@ -52,12 +50,6 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
         track_list_search,
         view,
     ]))
-    .padding(Padding {
-        top: theme::SPACING_SM,
-        right: 0.0,
-        bottom: 0.0,
-        left: 0.0,
-    })
     .width(queue_width)
     .style(bg_secondary())
     .into()
@@ -72,6 +64,8 @@ fn view_queue_tabs(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             QueueTab::RecentlyPlayed,
         ),
     ])
+    .spacing(theme::SPACING_SM)
+    .padding(theme::SPACING_SM)
     .into()
 }
 
@@ -116,17 +110,27 @@ pub fn now_playing_source_label<'a>(
     }
 }
 
+pub(super) fn section_text(label: &str) -> Element<'_, Message, AppTheme> {
+    text(label)
+        .size(theme::TEXT_SIZE_XS)
+        .style(fg_accent())
+        .into()
+}
+
 fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    const NOW_PLAYING_PADDING: Padding = Padding {
+        top: 0.0,
+        right: theme::SPACING_MD,
+        bottom: theme::SPACING_XS,
+        left: theme::SPACING_MD,
+    };
     let now_playing_header: Element<'_, Message, AppTheme> = match player
         .now_playing_from
         .as_ref()
         .and_then(|v| now_playing_source_label(&v.kind, player.strings))
     {
         Some(source) => Row::with_children([
-            text(player.strings.now_playing_from)
-                .size(theme::TEXT_SIZE_XS)
-                .style(fg_accent())
-                .into(),
+            section_text(player.strings.now_playing_from),
             Button::new(text(source).size(theme::TEXT_SIZE_XS))
                 .padding(0)
                 .style(button_style_album())
@@ -134,10 +138,12 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                 .into(),
         ])
         .spacing(theme::SPACING_XS)
-        .padding([theme::SPACING_SM, theme::SPACING_MD])
+        .padding(NOW_PLAYING_PADDING)
         .align_y(alignment::Vertical::Center)
         .into(),
-        None => section_header(player.strings.now_playing).into(),
+        None => Container::new(section_text(player.strings.now_playing))
+            .padding(NOW_PLAYING_PADDING)
+            .into(),
     };
 
     let now_playing_row: Element<'_, Message, AppTheme> =
@@ -161,7 +167,8 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             .into()
         };
 
-    let up_next_header = section_header(player.strings.up_next);
+    let up_next_header = Container::new(section_text(player.strings.up_next))
+        .padding([theme::SPACING_SM, theme::SPACING_MD]);
 
     let offset = 1;
     let upcoming = if offset <= player.queue.tracks.len() {
