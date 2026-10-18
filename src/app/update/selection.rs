@@ -5,9 +5,10 @@
 
 use super::{MusicPlayer, Track, QUEUE_PANE_ID, RECENT_PANE_ID};
 use crate::app::{
+    dialog::Dialog,
     interaction::TrackPos,
-    pane::{is_main_pane, PaneId},
-    ViewKind,
+    pane::{is_main_pane, PaneId, MANUAL_SEARCH_PANE_ID},
+    EditManualSearch, ViewKind,
 };
 
 impl MusicPlayer {
@@ -15,6 +16,9 @@ impl MusicPlayer {
         match pane {
             QUEUE_PANE_ID => &self.queue_selected_indices,
             RECENT_PANE_ID => &self.recent_selected_indices,
+            MANUAL_SEARCH_PANE_ID => self
+                .edit_manual()
+                .map_or(&[], |manual| manual.selection.as_slice()),
             _ => &self.pane(pane).view_data().selection,
         }
     }
@@ -26,15 +30,23 @@ impl MusicPlayer {
         self.selection_in(pane).binary_search(&index).is_ok()
     }
 
-    fn selection_mut_in(&mut self, pane: PaneId) -> &mut Vec<usize> {
+    /// The selection vector of a list, or `None` when the list is gone (a
+    /// virtual pane whose popup closed under a stale row message).
+    fn selection_mut_in(&mut self, pane: PaneId) -> Option<&mut Vec<usize>> {
         match pane {
-            QUEUE_PANE_ID => &mut self.queue_selected_indices,
-            RECENT_PANE_ID => &mut self.recent_selected_indices,
-            _ => &mut self.pane_mut(pane).view_data_mut().selection,
+            QUEUE_PANE_ID => Some(&mut self.queue_selected_indices),
+            RECENT_PANE_ID => Some(&mut self.recent_selected_indices),
+            MANUAL_SEARCH_PANE_ID => self.edit_manual_mut().map(|m| &mut m.selection),
+            _ => Some(&mut self.pane_mut(pane).view_data_mut().selection),
         }
     }
 
+    /// The Edit popup's manual-search list, addressed by
+    /// [`MANUAL_SEARCH_PANE_ID`] so its rows are ordinary track rows.
     pub fn view_tracks_in(&self, pane: PaneId) -> &[Track] {
+        if pane == MANUAL_SEARCH_PANE_ID {
+            return self.edit_manual().map_or(&[], EditManualSearch::tracks);
+        }
         let vd = self.view_data_in(pane);
         match &vd.kind {
             ViewKind::Playlist(entry) => self
@@ -52,13 +64,26 @@ impl MusicPlayer {
     }
 
     pub fn select_range_in(&mut self, pane: PaneId, from: usize, to: usize) {
-        let sel = self.selection_mut_in(pane);
+        let Some(sel) = self.selection_mut_in(pane) else {
+            return;
+        };
         sel.clear();
         sel.extend(from.min(to)..=from.max(to));
     }
 
     pub fn toggle_selection(&mut self, pos: TrackPos) {
-        let sel = self.selection_mut_in(pos.pane);
+        // The popup picks one result, so a pick replaces the previous one
+        // instead of extending a selection.
+        if pos.pane == MANUAL_SEARCH_PANE_ID {
+            if let Some(manual) = self.edit_manual_mut() {
+                manual.selection.clear();
+                manual.selection.push(pos.index);
+            }
+            return;
+        }
+        let Some(sel) = self.selection_mut_in(pos.pane) else {
+            return;
+        };
         match sel.binary_search(&pos.index) {
             Ok(at) => {
                 sel.remove(at);
@@ -76,10 +101,15 @@ impl MusicPlayer {
         }
         self.clear_selection_in(QUEUE_PANE_ID);
         self.clear_selection_in(RECENT_PANE_ID);
+        if self.edit_manual_open() {
+            self.clear_selection_in(MANUAL_SEARCH_PANE_ID);
+        }
     }
 
     pub fn clear_selection_in(&mut self, pane: PaneId) {
-        self.selection_mut_in(pane).clear();
+        if let Some(sel) = self.selection_mut_in(pane) {
+            sel.clear();
+        }
     }
 
     /// Whether any list currently holds a selection.
@@ -106,7 +136,9 @@ impl MusicPlayer {
             .hovered_track()
             .map_or(self.focused_pane_id, |h| h.pane);
         let count = self.track_count_in(pane);
-        let sel = self.selection_mut_in(pane);
+        let Some(sel) = self.selection_mut_in(pane) else {
+            return;
+        };
         sel.clear();
         sel.extend(super::pane_first_index(pane)..count);
     }
@@ -161,6 +193,25 @@ impl MusicPlayer {
             QUEUE_PANE_ID => self.queue.tracks.len(),
             RECENT_PANE_ID => self.queue.recently_played.len(),
             _ => self.view_tracks_in(pane).len(),
+        }
+    }
+
+    /// The Edit popup's manual-search step, if it is open.
+    pub fn edit_manual(&self) -> Option<&EditManualSearch> {
+        match &self.dialog {
+            Some(Dialog::Edit(edit)) => edit.manual.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// The manual-search step mutably. Panes are never missing (only the
+    /// virtual ids are, and this is a real dialog state), so a missing step
+    /// means the popup was closed under a stale row message — treat it as
+    /// nothing to do rather than panicking.
+    pub fn edit_manual_mut(&mut self) -> Option<&mut EditManualSearch> {
+        match &mut self.dialog {
+            Some(Dialog::Edit(edit)) => edit.manual.as_mut(),
+            _ => None,
         }
     }
 }

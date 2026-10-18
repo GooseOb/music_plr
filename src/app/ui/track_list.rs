@@ -8,6 +8,7 @@ pub fn track_list_id(pane: PaneId) -> Id {
     match pane {
         crate::app::pane::QUEUE_PANE_ID => crate::app::ui::QUEUE_LIST_ID,
         crate::app::pane::RECENT_PANE_ID => crate::app::ui::QUEUE_RECENT_LIST_ID,
+        crate::app::pane::MANUAL_SEARCH_PANE_ID => crate::app::ui::MANUAL_SEARCH_LIST_ID,
         _ => Id::from(format!("track_list:{pane}")),
     }
 }
@@ -78,11 +79,7 @@ pub(super) fn virtual_scrollable<'a, F>(
 where
     F: Fn(usize) -> Element<'a, Message, AppTheme>,
 {
-    let geo = match pane {
-        crate::app::pane::QUEUE_PANE_ID => player.bounds.queue.as_ref(),
-        crate::app::pane::RECENT_PANE_ID => player.bounds.recent.as_ref(),
-        _ => player.bounds.track_geo(pane),
-    };
+    let geo = player.bounds.list_geo(pane);
     let children: Vec<Element<'a, Message, AppTheme>> = match geo {
         Some(ListGeometry {
             translation_y,

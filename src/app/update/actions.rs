@@ -9,9 +9,8 @@ use crate::{
         interaction::{CardMenuState, ContextMenuState, MenuAnchor, TrackPos},
         pane::{is_main_pane, PaneId},
         update::operation::CaptureContextMenu,
-        EditTrackState, LyricsViewMode, Message, ViewKind,
+        LyricsViewMode, Message, ViewKind,
     },
-    data::JsonStore,
     load_state::LoadState,
     providers::ProviderId,
 };
@@ -703,6 +702,10 @@ impl MusicPlayer {
             vec![index]
         };
 
+        // A menu can be opened from inside a dialog (the Edit popup's
+        // manual search), which the single-overlay slot would otherwise
+        // destroy: it is stashed here and put back when the menu closes.
+        let return_to = self.dialog.take().map(Box::new);
         self.dialog = Some(Dialog::ContextMenu(
             crate::app::interaction::ContextMenuState {
                 anchor: crate::app::interaction::MenuAnchor::at(point),
@@ -711,6 +714,7 @@ impl MusicPlayer {
                 in_playlist,
                 is_trashed: self.is_trashed(&track),
                 track,
+                return_to,
             },
         ));
         CaptureContextMenu::default().into()
@@ -721,12 +725,10 @@ impl MusicPlayer {
     /// by the scroll offset, so the reported point sits that far below the
     /// window position; lists scroll vertically only, so only `y` shifts.
     pub(super) fn window_point(&self, pane: PaneId, point: Point) -> Point {
-        let scroll = match pane {
-            super::QUEUE_PANE_ID => self.bounds.queue.as_ref(),
-            super::RECENT_PANE_ID => self.bounds.recent.as_ref(),
-            _ => self.bounds.track_geo(pane),
-        }
-        .map_or(0.0, |geo| geo.translation_y);
+        let scroll = self
+            .bounds
+            .list_geo(pane)
+            .map_or(0.0, |geo| geo.translation_y);
         Point::new(point.x, point.y - scroll)
     }
 
@@ -735,7 +737,13 @@ impl MusicPlayer {
     pub(crate) fn take_context_menu(&mut self) -> Option<ContextMenuState> {
         self.bounds.context_menu = None;
         match self.dialog.take() {
-            Some(Dialog::ContextMenu(menu)) => Some(menu),
+            Some(Dialog::ContextMenu(mut menu)) => {
+                // Hand back the dialog the menu covered (the Edit popup's
+                // manual search) so the action runs on top of it, as it would
+                // with no menu at all.
+                self.dialog = menu.return_to.take().map(|dialog| *dialog);
+                Some(menu)
+            }
             other => {
                 self.dialog = other;
                 None
@@ -864,11 +872,7 @@ impl MusicPlayer {
 
     fn track_center_point(&self, pos: TrackPos) -> Option<Point> {
         let TrackPos { index, pane } = pos;
-        let geo = match pane {
-            super::QUEUE_PANE_ID => self.bounds.queue.as_ref(),
-            super::RECENT_PANE_ID => self.bounds.recent.as_ref(),
-            _ => self.bounds.track_geo(pane),
-        }?;
+        let geo = self.bounds.list_geo(pane)?;
         let scroll = geo.translation_y;
         let visual_index = index - super::pane_first_index(pane).min(index);
         Some(if let Some(row) = geo.rows.get(visual_index) {
@@ -984,98 +988,13 @@ impl MusicPlayer {
     }
 
     pub fn close_context_menu(&mut self) {
-        self.dialog = None;
-        self.bounds.context_menu = None;
-    }
-
-    /// Open the track-editing popup for the track at `pos`, seeding the
-    /// working copy from the live track. Only one track is edited at a time
-    /// (the right-clicked one), so multi-selection is ignored here.
-    pub fn open_edit_track(&mut self, pos: TrackPos) {
-        let Some(track) = self.get_track_at(pos) else {
-            return;
-        };
-        self.dialog = Some(Dialog::Edit(EditTrackState {
-            title: track.title.clone(),
-            artist: track.artist.clone(),
-            source: track.source,
-            original: track,
-            pos,
-            finding: None,
-        }));
-    }
-
-    /// Resolve an unresolved provider for the track being edited: the "Find"
-    /// button in the Edit Track popup. Searches the provider for the track's
-    /// title/artist and, on success, merges the resolved identity into the
-    /// working copy so it can later be selected as the source.
-    pub fn handle_edit_track_find_provider(&mut self, provider: ProviderId) {
-        let Some(Dialog::Edit(edit)) = &mut self.dialog else {
-            return;
-        };
-        if edit.finding.is_some() {
-            return;
-        }
-        edit.finding = Some(provider);
-        let original = edit.original.clone();
-        let tx = self.result_tx.clone();
-        std::thread::spawn(move || {
-            let msg = match crate::providers::resolve_id(provider, &original) {
-                Ok(resolved) => {
-                    crate::app::BackendResult::EditTrackProviderResolved(provider, resolved)
-                }
-                Err(e) => {
-                    crate::app::BackendResult::EditTrackProviderError(provider, e.to_string())
-                }
-            };
-            let _ = tx.send(msg);
-        });
-    }
-
-    /// Merge a resolved provider identity (from the Edit Track "Find" action)
-    /// into the working copy. `None` means no match was found; `Some(track)`
-    /// carries that provider's identity (and its rich metadata).
-    pub fn apply_edit_track_provider_resolution(
-        &mut self,
-        provider: ProviderId,
-        resolved: Option<Track>,
-    ) {
-        let found_on = self.strings.found_on;
-        let could_not_find_on = self.strings.could_not_find_on;
-        {
-            let Some(Dialog::Edit(edit)) = &mut self.dialog else {
-                return;
-            };
-            edit.finding = None;
-            if let Some(track) = resolved {
-                if let Some(pt) = track.providers.get(&provider) {
-                    edit.original.set_provider(provider, pt.clone());
-                }
-            } else {
-                let msg = could_not_find_on(&edit.title, provider.label());
-                self.notify_error(msg);
-                return;
-            }
-        }
-        self.notify(found_on(provider.label()));
-    }
-
-    /// Apply the edited fields back to the track's source list and close the
-    /// popup. `source` follows the working copy (changed via the provider
-    /// "select" buttons); `title`/`artist` are overwritten from the inputs.
-    pub fn apply_edit_track(&mut self) {
         let dialog = self.dialog.take();
-        let Some(Dialog::Edit(edit)) = dialog else {
-            self.dialog = dialog;
-            return;
-        };
-        let mut track = edit.original;
-        track.title = edit.title;
-        track.artist = edit.artist;
-        track.source = edit.source;
-        self.set_track_at(edit.pos, track);
-        self.playlists.save();
-        self.save_session();
+        self.bounds.context_menu = None;
+        // Hand back the dialog the menu covered (the Edit popup's manual
+        // search) instead of leaving no overlay at all.
+        if let Some(Dialog::ContextMenu(menu)) = dialog {
+            self.dialog = menu.return_to.map(|dialog| *dialog);
+        }
     }
 }
 

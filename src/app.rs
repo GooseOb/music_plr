@@ -24,7 +24,7 @@ mod view_data;
 
 pub use dependency_dialog::DependencyDialog;
 pub use dialog::Dialog;
-pub use edit_track::EditTrackState;
+pub use edit_track::{EditManualSearch, EditTrackState};
 pub use import::{CsvPreset, ImportCsvField, ImportMethod, ImportPlaylistDialog};
 pub use interaction::{CardMenuState, ContextMenuState, TrackListSearch};
 pub use lyrics_state::{LyricsState, LyricsViewMode, LyricsViewport};

@@ -102,6 +102,13 @@ pub enum BackendResult {
     EditTrackProviderResolved(ProviderId, Option<Track>),
     /// The Edit Track "Find" action failed to resolve `provider`.
     EditTrackProviderError(ProviderId, String),
+    /// An Edit Track "Manual search" query finished; the payload is its
+    /// track results. It applies to the popup only while it still awaits this
+    /// request id, so a superseded query's late reply is dropped.
+    ManualSearchResults {
+        rid: u64,
+        results: Result<Vec<Track>, String>,
+    },
     /// A background version-check completed.
     VersionChecked(Result<VersionCheckOutcome, String>),
     /// Download progress for an in-flight self-update.
@@ -303,6 +310,13 @@ pub enum Message {
     EditTrackField(EditTrackField, String),
     EditTrackSelectProvider(ProviderId),
     EditTrackFindProvider(ProviderId),
+    /// Open the Edit Track popup's "Manual search" step for one provider.
+    EditTrackManualSearch(ProviderId),
+    EditTrackManualQuery(String),
+    EditTrackManualScope(crate::providers::SearchScope),
+    EditTrackManualRun,
+    EditTrackManualConfirm,
+    EditTrackManualCancel,
     SaveEditTrack,
     CloseContextMenu,
     CloseDialog,

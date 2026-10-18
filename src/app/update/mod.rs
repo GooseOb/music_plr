@@ -7,7 +7,9 @@ use crate::{
     app::{
         interaction::TrackPos,
         message::{BackendResult, Message},
-        pane::{is_main_pane, pane_first_index, QUEUE_PANE_ID, RECENT_PANE_ID},
+        pane::{
+            is_main_pane, pane_first_index, MANUAL_SEARCH_PANE_ID, QUEUE_PANE_ID, RECENT_PANE_ID,
+        },
         view_data::ViewData,
         MusicPlayer,
     },
@@ -19,6 +21,7 @@ mod actions;
 mod artist;
 mod dispatch;
 mod drag;
+mod edit_track;
 mod input;
 mod navigation;
 pub mod operation;

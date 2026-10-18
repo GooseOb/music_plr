@@ -607,8 +607,7 @@ impl crate::app::MusicPlayer {
                     return Task::none();
                 };
                 let pos = menu.pos;
-                self.dialog = None;
-                self.bounds.context_menu = None;
+                self.close_context_menu();
                 self.open_edit_track(pos);
                 Task::none()
             }
@@ -652,6 +651,27 @@ impl crate::app::MusicPlayer {
                 self.handle_edit_track_find_provider(provider);
                 Task::none()
             }
+            Message::EditTrackManualSearch(provider) => self.open_edit_manual_search(provider),
+            Message::EditTrackManualQuery(value) => {
+                self.handle_edit_manual_query(value);
+                Task::none()
+            }
+            Message::EditTrackManualScope(scope) => {
+                // A scope change re-runs the query, like the search bar's chips.
+                if self.handle_edit_manual_scope(scope) {
+                    self.handle_edit_manual_run();
+                }
+                Task::none()
+            }
+            Message::EditTrackManualRun => {
+                self.handle_edit_manual_run();
+                Task::none()
+            }
+            Message::EditTrackManualConfirm => {
+                self.apply_edit_manual_selection();
+                Task::none()
+            }
+            Message::EditTrackManualCancel => self.handle_edit_manual_cancel(),
             Message::SaveEditTrack => {
                 self.apply_edit_track();
                 Task::none()

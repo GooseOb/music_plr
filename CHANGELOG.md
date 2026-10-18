@@ -12,6 +12,7 @@ auto-generated compare link below it.
 
 ## Added
 
+- Changing the source track in edit track dialog via "Manual search" button.
 - Context menu for albums, artists, and playlists.
 - "Open in browser" context menu item for tracks, albums, artists, and playlists.
 

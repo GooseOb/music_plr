@@ -17,9 +17,14 @@ pub const QUEUE_PANE_ID: PaneId = PaneId::MAX;
 /// The global recently-played list, addressed as a pane. Same rules as
 /// [`QUEUE_PANE_ID`].
 pub const RECENT_PANE_ID: PaneId = PaneId::MAX - 1;
+/// The Edit popup's manual-search result list, addressed as a pane so its rows
+/// are ordinary track rows (hover, right-click, keyboard nav, playback) with
+/// no list tag of their own. Same rules as [`QUEUE_PANE_ID`]: never in
+/// `panes`, resolved from the popup's state instead.
+pub const MANUAL_SEARCH_PANE_ID: PaneId = PaneId::MAX - 2;
 
 pub const fn is_main_pane(id: PaneId) -> bool {
-    id != QUEUE_PANE_ID && id != RECENT_PANE_ID
+    id != QUEUE_PANE_ID && id != RECENT_PANE_ID && id != MANUAL_SEARCH_PANE_ID
 }
 
 /// First scrollable row of a list: the queue's now-playing track renders in
@@ -37,6 +42,7 @@ pub const fn pane_slot(pane: PaneId) -> usize {
     match pane {
         QUEUE_PANE_ID => 0,
         RECENT_PANE_ID => 2,
+        MANUAL_SEARCH_PANE_ID => 3,
         _ => 1,
     }
 }

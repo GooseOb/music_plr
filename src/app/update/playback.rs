@@ -2,10 +2,14 @@ use std::path::PathBuf;
 
 use tracing::debug;
 
-use super::{is_main_pane, MusicPlayer, Track, TrackPos, QUEUE_PANE_ID, RECENT_PANE_ID};
+use super::{
+    is_main_pane, MusicPlayer, Track, TrackPos, MANUAL_SEARCH_PANE_ID, QUEUE_PANE_ID,
+    RECENT_PANE_ID,
+};
 use crate::{
-    app::{pane::PaneId, Dialog, ViewKind},
+    app::{pane::PaneId, ViewKind},
     data::{cache::StreamCache, JsonStore},
+    load_state::LoadState,
     providers::ProviderId,
 };
 
@@ -28,6 +32,12 @@ impl MusicPlayer {
                 let queue = self.queue.tracks.get(index..).unwrap_or(&[]);
                 self.set_queue(queue.to_vec());
             }
+            // The popup's results are a transient list inside a dialog, so
+            // there is no view to record as the origin.
+            MANUAL_SEARCH_PANE_ID => {
+                let queue = self.view_tracks_in(pane).get(index..).unwrap_or(&[]);
+                self.set_queue(queue.to_vec());
+            }
             _ => {
                 let queue = self.view_tracks_in(pane).get(index..).unwrap_or(&[]);
                 self.set_queue(queue.to_vec());
@@ -48,6 +58,14 @@ impl MusicPlayer {
         if pane == QUEUE_PANE_ID {
             if let Some(t) = self.queue.tracks.get_mut(index) {
                 *t = track;
+            }
+        } else if pane == MANUAL_SEARCH_PANE_ID {
+            if let Some(manual) = self.edit_manual_mut() {
+                if let LoadState::Ready(tracks) = &mut manual.results {
+                    if let Some(t) = tracks.get_mut(index) {
+                        *t = track;
+                    }
+                }
             }
         } else if is_main_pane(pane) {
             let view = self.view_data_in_mut(pane);
@@ -135,13 +153,9 @@ impl MusicPlayer {
     /// lacking the provider id are resolved first (best-effort; the resolve
     /// flow stores the id and then downloads).
     pub fn download_track_via_provider(&mut self, provider: ProviderId) {
-        let dialog = self.dialog.take();
-        let Some(Dialog::ContextMenu(menu)) = dialog else {
-            self.dialog = dialog;
-            self.bounds.context_menu = None;
+        let Some(menu) = self.take_context_menu() else {
             return;
         };
-        self.bounds.context_menu = None;
         let pane = menu.pos.pane;
         let indices = menu.target_indices;
         let mut to_download: Vec<Track> = Vec::new();

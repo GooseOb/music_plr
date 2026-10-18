@@ -456,6 +456,9 @@ impl MusicPlayer {
                 self.notify_error(message);
                 Task::none()
             }
+            BackendResult::ManualSearchResults { rid, results } => {
+                self.apply_manual_search_results(rid, results)
+            }
             BackendResult::ProviderResolved {
                 original,
                 provider,

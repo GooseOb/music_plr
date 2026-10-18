@@ -4,7 +4,10 @@ use std::time::{Duration, Instant};
 
 use iced::{widget::Id, Point};
 
-use super::pane::{is_main_pane, PaneId, QUEUE_PANE_ID, RECENT_PANE_ID};
+use super::{
+    dialog::Dialog,
+    pane::{is_main_pane, PaneId, MANUAL_SEARCH_PANE_ID, QUEUE_PANE_ID, RECENT_PANE_ID},
+};
 use crate::{
     data::{
         cache::StreamCache,
@@ -297,6 +300,11 @@ pub struct ContextMenuState {
     pub is_trashed: bool,
     pub track: Track,
     pub target_indices: Vec<usize>,
+    /// The dialog the menu was opened from, restored when it closes. Only the
+    /// Edit popup's manual search right-clicks from inside a dialog, which a
+    /// single-overlay `Dialog` slot would otherwise destroy. Boxed to break
+    /// the `Dialog::ContextMenu` cycle.
+    pub return_to: Option<Box<Dialog>>,
 }
 
 impl ContextMenuState {
@@ -331,7 +339,11 @@ impl ContextMenuState {
             v.push(CtxAction::Play);
         }
         v.push(CtxAction::AddToQueue);
-        v.push(CtxAction::Edit);
+        // A manual-search result is a transient row inside the Edit popup's
+        // own editor; editing it there would replace the editor itself.
+        if self.pos.pane != MANUAL_SEARCH_PANE_ID {
+            v.push(CtxAction::Edit);
+        }
         if !self.track.artist.is_empty() {
             v.push(CtxAction::GoToArtist);
         }
@@ -572,9 +584,9 @@ pub struct DragState {
     /// owns the hover (see [`KEYBOARD_HOVER_GRACE`]).
     pub hover_guard_until: Option<Instant>,
     /// Last focused row per list, so returning to a list restores focus.
-    /// The queue/recent slots are global; the main-list slot is
+    /// The queue/recent/manual-search slots are global; the main-list slot is
     /// remembered per pane instead (see `pane_focus`).
-    pub last_focus: [usize; 3],
+    pub last_focus: [usize; 4],
     /// Last focused row of each pane's main track list.
     pub pane_focus: std::collections::HashMap<PaneId, usize>,
 }
@@ -669,6 +681,14 @@ impl DragState {
     /// Clear a hovered track without disturbing an unrelated card hover.
     pub fn clear_hovered_track(&mut self) {
         if matches!(self.hovered, Some(HoverTarget::Track(_))) {
+            self.hovered = None;
+        }
+    }
+
+    /// Clear a hovered track belonging to `pane`, leaving any other list's
+    /// hover alone.
+    pub fn clear_hovered_track_in(&mut self, pane: PaneId) {
+        if self.hovered_track().is_some_and(|pos| pos.pane == pane) {
             self.hovered = None;
         }
     }

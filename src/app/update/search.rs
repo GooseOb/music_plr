@@ -103,7 +103,9 @@ impl MusicPlayer {
         Task::none()
     }
 
-    pub fn scope_name(&self, scope: crate::providers::SearchScope) -> &str {
+    /// The localized name of a search scope. `&'static` (not tied to the
+    /// player) so it can label a scope chip built outside a view's borrow.
+    pub fn scope_name(&self, scope: crate::providers::SearchScope) -> &'static str {
         match scope {
             crate::providers::SearchScope::Songs => self.strings.scope_songs,
             crate::providers::SearchScope::Videos => self.strings.scope_videos,

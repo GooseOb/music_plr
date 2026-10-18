@@ -355,6 +355,18 @@ impl ProviderId {
         }
     }
 
+    /// The scopes that return playable tracks rather than cards, restricted to
+    /// the ones this provider supports (`Songs` everywhere, `Videos` for
+    /// `YouTube`). Picker for pick-one-result searches (the Edit Track popup's
+    /// "Manual search"), where an artist/album/playlist scope would yield
+    /// nothing selectable.
+    pub fn track_scopes(self) -> Vec<SearchScope> {
+        [SearchScope::Songs, SearchScope::Videos]
+            .into_iter()
+            .filter(|scope| self.supported_scopes().contains(scope))
+            .collect()
+    }
+
     /// Whether this provider streams/ downloads via yt-dlp (`YouTube`,
     /// `SoundCloud`) rather than a direct HTTP file URL.
     pub fn uses_ytdlp(self) -> bool {

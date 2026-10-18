@@ -2,7 +2,7 @@ use iced::widget::operation;
 
 use super::{
     is_main_pane, pane_first_index, Message, MusicPlayer, Task, Track, TrackPos, ViewData,
-    QUEUE_PANE_ID, RECENT_PANE_ID,
+    MANUAL_SEARCH_PANE_ID, QUEUE_PANE_ID, RECENT_PANE_ID,
 };
 use crate::{
     app::{
@@ -202,6 +202,11 @@ impl MusicPlayer {
             }
             Some(Dialog::PlaylistJump(_)) => {
                 return self.apply_jump_shortcut(shortcut);
+            }
+            // The Edit popup's manual-search step is a nested page: Escape
+            // returns to the form rather than closing the whole popup.
+            Some(Dialog::Edit(_)) if self.edit_manual_open() && matches!(shortcut, S::Escape) => {
+                return self.handle_edit_manual_cancel();
             }
             Some(_) if matches!(shortcut, S::Escape) => {
                 self.save_translate_prefs();
@@ -580,13 +585,7 @@ impl MusicPlayer {
     fn scroll_track_into_view(&self, pos: TrackPos) -> Task<Message> {
         let TrackPos { index, pane } = pos;
 
-        let bounds = match pane {
-            QUEUE_PANE_ID => self.bounds.queue.as_ref().map(|g| g.bounds),
-            RECENT_PANE_ID => self.bounds.recent.as_ref().map(|g| g.bounds),
-            _ => self.bounds.track_geo(pane).map(|g| g.bounds),
-        };
-
-        let Some(bounds) = bounds else {
+        let Some(bounds) = self.bounds.list_geo(pane).map(|geo| geo.bounds) else {
             return Task::none();
         };
 
@@ -675,6 +674,12 @@ impl MusicPlayer {
     }
 
     fn hovered_pane(&self) -> PaneId {
+        // The Edit popup's manual search is the only list a key can reach while
+        // its step is open (the panes behind the modal take no input), so it
+        // owns navigation until the step closes.
+        if self.edit_manual_open() && self.track_count_in(MANUAL_SEARCH_PANE_ID) > 0 {
+            return MANUAL_SEARCH_PANE_ID;
+        }
         self.drag
             .hovered_track()
             .map_or(self.focused_pane_id, |h| h.pane)

@@ -123,6 +123,19 @@ pub fn scope_button(
         .style(button_style_scope(selected))
 }
 
+/// The magnifier button that runs a search: the search bar's, reused by the
+/// Edit popup's manual-search step so both read as the same control.
+/// `on_press` is `None` while no query can run (blank query, or one already
+/// in flight), which renders it disabled.
+pub fn search_button(on_press: Option<Message>) -> Button<'static, Message, AppTheme> {
+    Button::new(icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_MD).style(icon_primary()))
+        .padding(theme::SPACING_SM)
+        .style(button_style_primary())
+        .width(theme::SEARCH_BTN_SIZE)
+        .height(theme::SEARCH_BTN_SIZE)
+        .on_press_maybe(on_press)
+}
+
 /// Build a segmented row of scope/provider chips. Each item is
 /// `(label, selected, on_press)`; `pad_x`/`pad_y` set the button padding.
 pub fn scope_tab_row<I, S>(items: I) -> Element<'static, Message, AppTheme>

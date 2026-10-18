@@ -28,7 +28,7 @@ mod styles;
 mod track_list;
 pub(super) mod track_list_search;
 pub use lyrics::lyrics_scroll_id;
-pub use overlays::playlist_jump_input_id;
+pub use overlays::{edit_manual_search_input_id, playlist_jump_input_id};
 pub use queue::{QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID};
 pub use search::{search_history_list_id, search_input_id};
 pub use track_list::track_list_id;
@@ -41,6 +41,11 @@ use track_list::view_track_list;
 pub fn card_list_id(pane: PaneId) -> Id {
     Id::from(format!("card_list:{pane}"))
 }
+
+/// Id of the Edit popup's manual-search result list: a fixed id like the queue
+/// panel's two, so the capture pass files its geometry without the popup's
+/// virtual pane id having to be a real pane.
+pub const MANUAL_SEARCH_LIST_ID: Id = Id::new("edit_manual_search_list");
 
 /// Id of an artist page's horizontal card shelf (one section's row). Keyed by
 /// pane *and* section: every section lays its shelf out on each pass, so one id
@@ -95,32 +100,17 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let mut stack = Stack::new().push(layout);
 
     match &player.dialog {
-        Some(Dialog::Dependencies(dialog)) => {
-            stack = stack.push(overlays::view_dependency_dialog(player, dialog));
-        }
-        Some(Dialog::PlaylistJump(jump)) => {
-            stack = stack.push(overlays::view_playlist_jump(player, jump));
-        }
-        Some(Dialog::Shortcuts) => {
-            stack = stack.push(overlays::view_shortcuts(player));
-        }
-        Some(Dialog::DeleteConfirm(_)) => {
-            stack = stack.push(overlays::view_delete_confirm(player.strings));
-        }
-        Some(Dialog::Edit(edit)) => {
-            stack = stack.push(overlays::view_edit_track(player, edit));
-        }
-        Some(Dialog::Import(dialog)) => {
-            stack = stack.push(overlays::view_import_playlist(player, dialog));
-        }
-        Some(Dialog::Translate(dialog)) => {
-            stack = stack.push(overlays::view_translate_dialog(player, dialog));
-        }
+        // A menu opened from inside a dialog (the Edit popup's manual search)
+        // keeps that dialog alive in `return_to`: render it underneath, so the
+        // menu reads as a popover of the popup rather than of nothing.
         Some(Dialog::ContextMenu(context_menu)) => {
+            if let Some(covered) = context_menu.return_to.as_deref() {
+                stack = stack.push(overlays::view_dialog_overlay(player, covered));
+            }
             stack = stack.push(overlays::view_context_menu(player, context_menu));
         }
-        Some(Dialog::CardMenu(card_menu)) => {
-            stack = stack.push(overlays::view_card_menu(player, card_menu));
+        Some(dialog) => {
+            stack = stack.push(overlays::view_dialog_overlay(player, dialog));
         }
         None => {
             if let Some(rect) = player.drop_indicator_rect() {

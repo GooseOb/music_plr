@@ -11,7 +11,8 @@ use iced::{
 
 use super::{
     shared_components::{
-        dep_install_status, disabled_text_input_row, scope_tab_row, text_input_row, thumbnail,
+        dep_install_status, disabled_text_input_row, empty_state, loading_state, scope_tab_row,
+        search_button, text_input_row, thumbnail,
     },
     styles::{
         bg_overlay, bg_popup, bg_toast, button_style_danger, button_style_primary,
@@ -23,6 +24,7 @@ use super::{
 use crate::{
     app::{
         dependency_dialog::dep_desc,
+        dialog::Dialog,
         import::ImportPlaylistDialog,
         interaction::{
             CardAction, CardMenuState, ContextMenuFocus, ContextMenuState, CtxAction, MenuAnchor,
@@ -32,9 +34,24 @@ use crate::{
     },
     deps::DepKind,
     icons,
+    load_state::LoadState,
     providers::{ProviderId, ProviderTrack},
     theme::AppTheme,
 };
+
+/// Opens the Edit popup's manual-search step for one provider. Offered only
+/// where a search could actually answer it.
+fn manual_search_button(
+    player: &MusicPlayer,
+    provider: ProviderId,
+) -> Option<Element<'_, Message, AppTheme>> {
+    provider.capabilities().search.then(|| {
+        Button::new(text(player.strings.manual_search))
+            .padding([theme::SPACING_XS, theme::SPACING_MD])
+            .on_press(Message::EditTrackManualSearch(provider))
+            .into()
+    })
+}
 
 fn provider_row<'a>(
     player: &'a MusicPlayer,
@@ -43,37 +60,46 @@ fn provider_row<'a>(
     source: ProviderId,
     finding: bool,
 ) -> Element<'a, Message, AppTheme> {
+    let manual_search = manual_search_button(player, provider);
     let header: Element<'a, Message, AppTheme> = match pt {
-        Some(_pt) => Row::with_children([
-            text(provider.label()).into(),
-            if provider == source {
-                text(player.strings.current).style(fg_secondary()).into()
-            } else {
-                Button::new(text(player.strings.select))
-                    .padding([theme::SPACING_XS, theme::SPACING_MD])
-                    .on_press(Message::EditTrackSelectProvider(provider))
-                    .into()
-            },
-        ])
-        .spacing(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center)
-        .into(),
-        None if provider.capabilities().search => Row::with_children([
-            text(provider.label()).into(),
-            if finding {
-                Button::new(text(player.strings.finding))
-                    .padding([theme::SPACING_XS, theme::SPACING_MD])
-                    .into()
-            } else {
-                Button::new(text(player.strings.find))
-                    .padding([theme::SPACING_XS, theme::SPACING_MD])
-                    .on_press(Message::EditTrackFindProvider(provider))
-                    .into()
-            },
-        ])
-        .spacing(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center)
-        .into(),
+        Some(_pt) => {
+            let mut children: Vec<Element<'a, Message, AppTheme>> = vec![
+                text(provider.label()).into(),
+                if provider == source {
+                    text(player.strings.current).style(fg_secondary()).into()
+                } else {
+                    Button::new(text(player.strings.select))
+                        .padding([theme::SPACING_XS, theme::SPACING_MD])
+                        .on_press(Message::EditTrackSelectProvider(provider))
+                        .into()
+                },
+            ];
+            children.extend(manual_search);
+            Row::with_children(children)
+                .spacing(theme::SPACING_SM)
+                .align_y(alignment::Vertical::Center)
+                .into()
+        }
+        None if provider.capabilities().search => {
+            let mut children: Vec<Element<'a, Message, AppTheme>> = vec![
+                text(provider.label()).into(),
+                if finding {
+                    Button::new(text(player.strings.finding))
+                        .padding([theme::SPACING_XS, theme::SPACING_MD])
+                        .into()
+                } else {
+                    Button::new(text(player.strings.find))
+                        .padding([theme::SPACING_XS, theme::SPACING_MD])
+                        .on_press(Message::EditTrackFindProvider(provider))
+                        .into()
+                },
+            ];
+            children.extend(manual_search);
+            Row::with_children(children)
+                .spacing(theme::SPACING_SM)
+                .align_y(alignment::Vertical::Center)
+                .into()
+        }
         None => text(provider.label()).into(),
     };
 
@@ -552,6 +578,12 @@ pub(super) fn view_edit_track<'a>(
     player: &'a MusicPlayer,
     edit: &'a crate::app::EditTrackState,
 ) -> Element<'a, Message, AppTheme> {
+    // The manual-search step takes over the popup while it is open; the
+    // working copy waits underneath it.
+    if let Some(manual) = &edit.manual {
+        return view_edit_manual_search(player, manual);
+    }
+
     // List every searchable provider plus any extra provider the track
     // already carries an identity for (e.g. Local for imported files), so
     // unresolved providers show a "Find" action next to them.
@@ -642,6 +674,100 @@ pub(super) fn view_edit_track<'a>(
     .height(player.window_size.height * 0.7);
 
     view_dialog(dialog.into(), Message::CloseDialog)
+}
+
+pub fn edit_manual_search_input_id() -> iced::widget::Id {
+    iced::widget::Id::new("edit_manual_search_input")
+}
+
+/// The manual search's result list: ordinary track rows, so a result gets the
+/// same hover, now-playing highlight, right-click menu, playback and keyboard
+/// navigation every other track list has. The list is addressed by
+/// [`MANUAL_SEARCH_PANE_ID`], a virtual pane resolved against the popup.
+fn manual_search_results<'a>(
+    player: &'a MusicPlayer,
+    manual: &'a crate::app::EditManualSearch,
+) -> Element<'a, Message, AppTheme> {
+    let tr = player.strings;
+    match &manual.results {
+        LoadState::Loading => loading_state(tr.searching),
+        LoadState::Failed(e) => empty_state((tr.couldnt_load)(e)),
+        LoadState::Ready(tracks) if tracks.is_empty() => empty_state(tr.no_results_found),
+        LoadState::Ready(tracks) => {
+            super::view_track_list(tracks, player, crate::app::pane::MANUAL_SEARCH_PANE_ID, 0)
+        }
+    }
+}
+
+/// The Edit popup's manual-search step: search one provider, pick at most one
+/// result, then confirm it onto the track being edited.
+pub(super) fn view_edit_manual_search<'a>(
+    player: &'a MusicPlayer,
+    manual: &'a crate::app::EditManualSearch,
+) -> Element<'a, Message, AppTheme> {
+    let tr = player.strings;
+
+    let placeholder = (tr.search_placeholder)(manual.provider);
+    let query = text_input(&placeholder, &manual.query)
+        .on_input(Message::EditTrackManualQuery)
+        .on_submit(Message::EditTrackManualRun)
+        .padding([theme::SPACING_SM, theme::SPACING_MD])
+        .id(edit_manual_search_input_id())
+        .width(Length::Fill)
+        .into();
+    let search_btn = search_button(manual.can_run().then_some(Message::EditTrackManualRun));
+
+    let scopes = scope_tab_row(
+        manual
+            .provider
+            .track_scopes()
+            .into_iter()
+            .map(|scope| {
+                (
+                    player.scope_name(scope),
+                    scope == manual.scope,
+                    Message::EditTrackManualScope(scope),
+                )
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    let cancel_btn = Button::new(Container::new(text(tr.cancel)).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .on_press(Message::EditTrackManualCancel);
+    let confirm_btn = Button::new(Container::new(text(tr.confirm)).center_x(Length::Fill))
+        .padding(theme::SPACING_SM)
+        .style(button_style_primary())
+        .on_press_maybe(
+            manual
+                .selected_track()
+                .map(|_| Message::EditTrackManualConfirm),
+        );
+
+    view_dialog(
+        Column::with_children([
+            text((tr.manual_search_on)(manual.provider.label()))
+                .size(theme::TEXT_SIZE_LG)
+                .into(),
+            Row::with_children([query, search_btn.into()])
+                .spacing(theme::SPACING_SM)
+                .align_y(alignment::Vertical::Center)
+                .into(),
+            scopes,
+            manual_search_results(player, manual),
+            Row::with_children([cancel_btn.into(), confirm_btn.into()])
+                .spacing(theme::SPACING_SM)
+                .align_y(alignment::Vertical::Center)
+                .into(),
+        ])
+        .spacing(theme::SPACING_SM)
+        .align_x(alignment::Horizontal::Center)
+        .width(theme::DIALOG_WIDTH_XL)
+        .height(player.window_size.height * 0.7)
+        .padding(theme::SPACING_MD)
+        .into(),
+        Message::EditTrackManualCancel,
+    )
 }
 
 pub fn pos_absolute(
@@ -820,6 +946,28 @@ pub(super) fn view_shortcuts(player: &MusicPlayer) -> Element<'_, Message, AppTh
         .into(),
         Message::CloseDialog,
     )
+}
+
+/// The overlay element for one dialog. Shared by the top-level `Dialog` slot
+/// and by a context menu's `return_to`, which renders the dialog it covered
+/// underneath itself.
+pub(super) fn view_dialog_overlay<'a>(
+    player: &'a MusicPlayer,
+    dialog: &'a Dialog,
+) -> Element<'a, Message, AppTheme> {
+    match dialog {
+        Dialog::Dependencies(dialog) => view_dependency_dialog(player, dialog),
+        Dialog::PlaylistJump(jump) => view_playlist_jump(player, jump),
+        Dialog::Shortcuts => view_shortcuts(player),
+        Dialog::DeleteConfirm(_) => view_delete_confirm(player.strings),
+        Dialog::Edit(edit) => view_edit_track(player, edit),
+        Dialog::Import(dialog) => view_import_playlist(player, dialog),
+        Dialog::Translate(dialog) => view_translate_dialog(player, dialog),
+        // A menu's own `return_to` is rendered by its caller, so a menu inside
+        // one renders just its panel.
+        Dialog::ContextMenu(menu) => view_context_menu(player, menu),
+        Dialog::CardMenu(menu) => view_card_menu(player, menu),
+    }
 }
 
 fn view_dialog(

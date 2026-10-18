@@ -35,10 +35,10 @@ use iced_core::widget::operation::{Operation, Outcome, Scrollable};
 
 use crate::{
     app::{
-        pane::{PaneId, QUEUE_PANE_ID, RECENT_PANE_ID},
+        pane::{PaneId, MANUAL_SEARCH_PANE_ID, QUEUE_PANE_ID, RECENT_PANE_ID},
         ui::{
             card_list_id, card_row_id, search_history_list_id, search_input_id, track_list_id,
-            QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID,
+            MANUAL_SEARCH_LIST_ID, QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID,
         },
         Message,
     },
@@ -80,6 +80,8 @@ enum Slot {
     Library,
     Queue,
     Recent,
+    /// The Edit popup's manual-search results, inside a dialog.
+    ManualSearch,
     Tracks(PaneId),
     Cards(PaneId),
     /// Only a horizontal offset — a shelf has no rows of its own to capture.
@@ -92,6 +94,7 @@ impl From<ScrollTarget> for Slot {
             ScrollTarget::Tracks(pane) => match pane {
                 QUEUE_PANE_ID => Slot::Queue,
                 RECENT_PANE_ID => Slot::Recent,
+                MANUAL_SEARCH_PANE_ID => Slot::ManualSearch,
                 _ => Slot::Tracks(pane),
             },
             ScrollTarget::Cards(pane) => Slot::Cards(pane),
@@ -131,6 +134,8 @@ pub struct CaptureBounds {
     pub sidebar: Option<ListGeometry>,
     pub library: Option<ListGeometry>,
     pub queue: Option<ListGeometry>,
+    /// The Edit popup's manual-search list, captured while that popup is open.
+    pub manual_search: Option<ListGeometry>,
     pub tracks: HashMap<PaneId, ListGeometry>,
     /// Scroll offsets of the per-pane scrollables that host cards (a search
     /// card tab, an artist page). Kept apart from `tracks` because card rows
@@ -179,6 +184,17 @@ impl CaptureBounds {
         self.tracks.get(&pane)
     }
 
+    /// The captured viewport of any track list addressed by a pane id,
+    /// including the virtual ones (queue, recent, manual search).
+    pub fn list_geo(&self, pane: PaneId) -> Option<&ListGeometry> {
+        match pane {
+            QUEUE_PANE_ID => self.queue.as_ref(),
+            RECENT_PANE_ID => self.recent.as_ref(),
+            MANUAL_SEARCH_PANE_ID => self.manual_search.as_ref(),
+            _ => self.tracks.get(&pane),
+        }
+    }
+
     /// How far an artist page's card shelf is scrolled sideways.
     pub fn card_row_scroll(
         &self,
@@ -215,6 +231,7 @@ impl CaptureBounds {
             Slot::Tracks(pane) => self.tracks.get_mut(&pane),
             Slot::Queue => self.queue.as_mut(),
             Slot::Recent => self.recent.as_mut(),
+            Slot::ManualSearch => self.manual_search.as_mut(),
             Slot::Library => self.library.as_mut(),
             Slot::Sidebar => self.sidebar.as_mut(),
         };
@@ -227,6 +244,7 @@ impl CaptureBounds {
     /// behind (its lists are gone, so nothing can refresh them).
     pub fn forget_pane(&mut self, pane: PaneId) {
         self.tracks.remove(&pane);
+        self.manual_search = None;
         self.cards.remove(&pane);
         self.search_history.remove(&pane);
         self.search_inputs.remove(&pane);
@@ -246,6 +264,9 @@ impl CaptureBounds {
         }
         if *id == QUEUE_RECENT_LIST_ID {
             return Some(Slot::Recent);
+        }
+        if *id == MANUAL_SEARCH_LIST_ID {
+            return Some(Slot::ManualSearch);
         }
         self.panes.iter().copied().find_map(|pane| {
             if *id == track_list_id(pane) {
@@ -270,6 +291,7 @@ impl CaptureBounds {
             Slot::Library => self.library.get_or_insert_with(ListGeometry::default),
             Slot::Queue => self.queue.get_or_insert_with(ListGeometry::default),
             Slot::Recent => self.recent.get_or_insert_with(ListGeometry::default),
+            Slot::ManualSearch => self.manual_search.get_or_insert_with(ListGeometry::default),
             Slot::Tracks(pane) => self.tracks.entry(pane).or_default(),
             Slot::Cards(pane) => self.cards.entry(pane).or_default(),
             Slot::CardRow(_, _) => unreachable!("a card shelf has no geometry of its own"),
@@ -282,6 +304,7 @@ impl CaptureBounds {
             Slot::Library => self.library.as_ref(),
             Slot::Queue => self.queue.as_ref(),
             Slot::Recent => self.recent.as_ref(),
+            Slot::ManualSearch => self.manual_search.as_ref(),
             Slot::Tracks(pane) => self.tracks.get(&pane),
             Slot::Cards(pane) => self.cards.get(&pane),
             Slot::CardRow(_, _) => None,

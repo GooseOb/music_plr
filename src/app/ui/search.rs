@@ -9,11 +9,12 @@ use iced::{
 
 use super::{
     shared_components::{
-        empty_state, inner_row_layout, loading_state, thumbnail, toggle_bookmark_button, track_row,
+        empty_state, inner_row_layout, loading_state, search_button, thumbnail,
+        toggle_bookmark_button, track_row,
     },
     styles::{
-        bg_search_hist, bg_secondary, button_style_hist, button_style_primary, fg_secondary,
-        icon_color, icon_fg_secondary, icon_primary, scroll_padding,
+        bg_search_hist, bg_secondary, button_style_hist, fg_secondary, icon_color,
+        icon_fg_secondary, scroll_padding,
     },
     theme, view_track_list, Message, MusicPlayer,
 };
@@ -77,18 +78,14 @@ pub(super) fn view_search_bar(
     .on_release(Message::SearchInputClicked(pane))
     .into();
 
-    let search_btn =
-        Button::new(icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_MD).style(icon_primary()))
-            .padding(theme::SPACING_SM)
-            .style(button_style_primary())
-            .width(theme::SEARCH_BTN_SIZE)
-            .height(theme::SEARCH_BTN_SIZE)
-            .on_press_maybe(if pane_state.search_provider.capabilities().search {
-                Some(Message::SearchExecute(pane))
-            } else {
-                None
-            })
-            .into();
+    let search_btn = search_button(
+        pane_state
+            .search_provider
+            .capabilities()
+            .search
+            .then_some(Message::SearchExecute(pane)),
+    )
+    .into();
 
     let controls = Row::with_children([input, search_btn])
         .spacing(theme::SPACING_SM)
