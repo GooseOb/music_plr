@@ -51,7 +51,8 @@ src/
 ├── app/interaction.rs # TrackPos (+pane), DragState, ContextMenuState (tracks), CardMenuState (cards)
 ├── app/import.rs      # ImportPlaylistDialog + filename-pattern matching/conflict engine
 ├── app/translate_dialog.rs # TranslateDialog (AI-translate popup: language + prompt + in-flight flag)
-├── app/ui/            # Pure functional view (mod, styles, content, overlays, playbar, queue, sidebar, split, track_list)
+├── app/ui/            # Pure functional view (mod, styles, content, playbar, queue, sidebar, split, track_list)
+├── app/ui/overlays/   # Window overlays: mod (dialog dispatch + shared chrome) + one file per dialog (edit, menus, playlist, import, translate, deps, shortcuts)
 ├── app/update/        # Per-domain handlers (actions, artist, dispatch, drag, edit_track, input, navigation, operation, playback, playlists, search, selection, session, settings, tick, translate); dispatch.rs holds update()/subscription()
 ├── audio/mod.rs       # AudioPlayer: rodio sink + yt-dlp process management
 ├── audio/growing.rs   # GrowingMediaSource (the still-growing file reader)
