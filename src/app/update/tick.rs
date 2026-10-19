@@ -822,7 +822,12 @@ impl MusicPlayer {
 
             if let Some((pane, slot)) = slot {
                 self.set_track_at_slot(pane, slot, pos.index, original.clone());
-                if play {
+            } else if !is_main_pane(pos.pane) {
+                self.set_track_at(pos, original.clone());
+            }
+
+            if play {
+                if let Some((pane, slot)) = slot {
                     let queue = self
                         .slot_tracks(pane, slot)
                         .get(pos.index..)
@@ -831,17 +836,10 @@ impl MusicPlayer {
                     self.set_queue(queue);
                     self.record_now_playing_origin();
                 } else {
-                    self.spawn_download_thread_for(provider, original);
+                    self.handle_play_track(pos);
                 }
             } else {
-                if !is_main_pane(pos.pane) {
-                    self.set_track_at(pos, original.clone());
-                }
-                if play {
-                    self.handle_play_track(pos);
-                } else {
-                    self.spawn_download_thread_for(provider, original);
-                }
+                self.spawn_download_thread_for(provider, original);
             }
         } else {
             let msg = (self.strings.could_not_find_on)(&original.title, provider.label());

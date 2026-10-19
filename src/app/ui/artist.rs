@@ -449,7 +449,7 @@ fn h_card<'a>(
     .interaction(player.drag.clickable_cursor_interaction())
     .on_press(Message::DragPress(Pressed::Card(item.clone(), Some(pane))))
     .on_enter(Message::HoverStart(HoverTarget::Card(item.clone())))
-    .on_exit(Message::HoverEnd(HoverTarget::Card(item.clone())));
+    .on_exit(Message::HoverEnd(HoverTarget::Card(item)));
     super::right_click::RightClickArea::new(
         area,
         CardTarget {

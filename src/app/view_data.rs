@@ -150,17 +150,20 @@ pub enum ViewKind {
 impl From<LibraryItem> for ViewKind {
     fn from(item: LibraryItem) -> Self {
         match item.kind {
-            LibraryKind::Artist => ViewKind::Artist(ArtistEntry {
-                url: item.url,
-                id: item.id.clone(),
-                name: item.title,
-                source: item.provider,
-                thumbnail: item.thumbnail,
-                page: Box::new(crate::providers::ArtistPageState::new(
+            LibraryKind::Artist => {
+                let page = Box::new(crate::providers::ArtistPageState::new(
                     item.provider,
                     &item.id,
-                )),
-            }),
+                ));
+                ViewKind::Artist(ArtistEntry {
+                    url: item.url,
+                    id: item.id,
+                    name: item.title,
+                    source: item.provider,
+                    thumbnail: item.thumbnail,
+                    page,
+                })
+            }
             LibraryKind::Album => ViewKind::Album(AlbumRef {
                 url: item.url,
                 id: item.id,
@@ -364,6 +367,24 @@ impl ViewData {
             kind: ViewKind::Settings,
             ..Default::default()
         }
+    }
+
+    /// Whether an album column should be shown for this view.
+    pub fn show_album(&self) -> bool {
+        !matches!(self.kind, ViewKind::Album(_))
+    }
+
+    /// Whether a play-count column should be shown for this view.
+    pub fn show_plays(&self) -> bool {
+        matches!(
+            self.kind,
+            ViewKind::Search(_)
+                | ViewKind::SongRadio(_)
+                | ViewKind::ArtistRadio(_)
+                | ViewKind::Artist(_)
+                | ViewKind::Album(_)
+                | ViewKind::PlaylistView(_)
+        )
     }
 
     /// The view's track list; empty while loading or after a failure.

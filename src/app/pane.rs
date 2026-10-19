@@ -109,25 +109,26 @@ impl Pane {
     }
 
     pub fn from_data(data: PaneData) -> Self {
-        let mut pane = Self {
+        let (nav_history, nav_history_pos) = if data.nav_history.is_empty() {
+            (vec![ViewData::default()], 0)
+        } else {
+            let len = data.nav_history.len();
+            (
+                data.nav_history,
+                data.nav_history_pos.min(len - 1),
+            )
+        };
+        Self {
             id: data.id,
-            nav_history: vec![ViewData::default()],
-            nav_history_pos: 0,
-            search_query: String::new(),
-            search_scope: SearchScope::Songs,
-            search_provider: ProviderId::YouTube,
+            nav_history,
+            nav_history_pos,
+            search_query: data.search_query,
+            search_scope: data.search_scope,
+            search_provider: data.search_provider,
             show_search_history: false,
             last_filtered_history: Vec::new(),
             lyrics: None,
-        };
-        if !data.nav_history.is_empty() {
-            pane.nav_history = data.nav_history;
-            pane.nav_history_pos = data.nav_history_pos.min(pane.nav_history.len() - 1);
         }
-        pane.search_query = data.search_query;
-        pane.search_scope = data.search_scope;
-        pane.search_provider = data.search_provider;
-        pane
     }
 }
 

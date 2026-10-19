@@ -393,18 +393,18 @@ impl ContextMenuState {
         fallback: crate::providers::ProviderId,
     ) -> crate::providers::ProviderId {
         use crate::providers::ProviderId;
-        let capable = |p: ProviderId| match action {
-            DefaultCtxAction::Download => p.capabilities().download,
-            DefaultCtxAction::SongRadio | DefaultCtxAction::ArtistRadio => p.capabilities().radio,
-        };
-        if capable(self.track.source) {
-            return self.track.source;
+        let src = self.track.source;
+        let src_cap = src.capabilities();
+        match action {
+            DefaultCtxAction::Download if src_cap.download => src,
+            DefaultCtxAction::Download => fallback,
+            DefaultCtxAction::SongRadio | DefaultCtxAction::ArtistRadio if src_cap.radio => src,
+            DefaultCtxAction::SongRadio | DefaultCtxAction::ArtistRadio => ProviderId::searchable()
+                .iter()
+                .copied()
+                .find(|&p| p.capabilities().radio)
+                .unwrap_or(fallback),
         }
-        ProviderId::searchable()
-            .iter()
-            .copied()
-            .find(|&p| action != DefaultCtxAction::Download && capable(p))
-            .unwrap_or(fallback)
     }
 
     /// Provider used when "Go to artist" is clicked directly: the track's
@@ -533,7 +533,6 @@ pub enum DropTarget {
 pub enum HoverTarget {
     Track(TrackPos),
     Card(LibraryItem),
-    LibraryCard(LibraryItem),
     Playlist(usize),
     SearchHistory(usize),
 }
@@ -717,11 +716,6 @@ impl DragState {
     /// Whether the given search card is the hovered one.
     pub fn is_hovered_card(&self, item: &LibraryItem) -> bool {
         matches!(self.hovered, Some(HoverTarget::Card(ref c)) if c == item)
-    }
-
-    /// Whether the given library card is the hovered one.
-    pub fn is_hovered_library_card(&self, item: &LibraryItem) -> bool {
-        matches!(self.hovered, Some(HoverTarget::LibraryCard(ref c)) if c == item)
     }
 
     /// Whether a card (vs track) drag is active.

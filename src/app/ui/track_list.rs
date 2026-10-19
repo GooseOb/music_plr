@@ -27,6 +27,7 @@ use crate::{
         pane::{is_main_pane, PaneId},
         ui::shared_components::like_button,
         update::operation::{ListGeometry, ScrollTarget},
+        ViewData,
     },
     icons,
     theme::AppTheme,
@@ -43,21 +44,9 @@ pub(super) fn view_track_list<'a>(
         return empty_state(player.strings.no_tracks_found);
     }
 
-    let show_album = is_main_pane(pane)
-        && !matches!(
-            player.view_data_in(pane).kind,
-            crate::app::ViewKind::Album(_)
-        );
-    let show_plays = is_main_pane(pane)
-        && matches!(
-            player.view_data_in(pane).kind,
-            crate::app::ViewKind::Search(_)
-                | crate::app::ViewKind::SongRadio(_)
-                | crate::app::ViewKind::ArtistRadio(_)
-                | crate::app::ViewKind::Artist(_)
-                | crate::app::ViewKind::Album(_)
-                | crate::app::ViewKind::PlaylistView(_)
-        );
+    let view_data = is_main_pane(pane).then(|| player.view_data_in(pane));
+    let show_album = view_data.is_some_and(ViewData::show_album);
+    let show_plays = view_data.is_some_and(ViewData::show_plays);
 
     virtual_scrollable(tracks.len(), pane, player, |i| {
         view_track_row_inner(

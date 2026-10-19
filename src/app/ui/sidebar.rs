@@ -120,7 +120,7 @@ fn library_row<'a>(
     };
     let thumb = player.thumbnail_index.get(item.provider, &item.id);
     let thumb = thumbnail(theme::ICON_SIZE_LG + 4.0, thumb);
-    let is_hovered = player.drag.is_hovered_library_card(item);
+    let is_hovered = player.drag.is_hovered_card(item);
     let row = Row::with_children([thumb, text(&item.title).color(text_color).into()])
         .spacing(theme::SPACING_MD)
         .align_y(alignment::Vertical::Center)
@@ -148,15 +148,15 @@ fn library_row<'a>(
     )
     .interaction(player.drag.clickable_cursor_interaction())
     .on_press(Message::DragPress(Pressed::Card(item.clone(), None)))
-    .on_enter(Message::HoverStart(HoverTarget::LibraryCard(item.clone())))
-    .on_exit(Message::HoverEnd(HoverTarget::LibraryCard(item.clone())));
+    .on_enter(Message::HoverStart(HoverTarget::Card(item.clone())))
+    .on_exit(Message::HoverEnd(HoverTarget::Card(item.clone())));
     // A sidebar row belongs to no pane: its menu opens in the focused one.
     super::right_click::RightClickArea::new(
         area,
         CardTarget {
             host: ScrollTarget::Library,
             pane: player.focused_pane_id,
-            target: item.clone().into(),
+            target: item.into(),
             row: None,
         },
         CardTarget::into_message,

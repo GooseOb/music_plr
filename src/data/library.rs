@@ -35,6 +35,22 @@ impl LibraryItem {
     pub fn web_url(&self) -> Option<&str> {
         (!self.url.is_empty()).then_some(self.url.as_str())
     }
+
+    /// Build a library entry from a provider card.
+    pub fn from_card_data(
+        card: &crate::providers::CardData,
+        kind: LibraryKind,
+        provider: ProviderId,
+    ) -> Self {
+        Self {
+            kind,
+            id: card.id.clone(),
+            title: card.title.clone(),
+            thumbnail: card.thumbnail.clone(),
+            provider,
+            url: card.url.clone(),
+        }
+    }
 }
 
 /// A card's identity in borrowed form — the same fields a [`LibraryItem`]
