@@ -37,7 +37,7 @@ use crate::{
     app::{
         pane::{PaneId, MANUAL_SEARCH_PANE_ID, QUEUE_PANE_ID, RECENT_PANE_ID},
         ui::{
-            card_list_id, card_row_id, search_history_list_id, search_input_id, track_list_id,
+            card_list_id, card_row_id, search_history_list_id, track_list_id,
             MANUAL_SEARCH_LIST_ID, QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID,
         },
         Message,
@@ -157,6 +157,8 @@ pub struct CaptureBounds {
     /// Captured by [`CaptureContextMenu`] when the context menu opens.
     pub context_menu: Option<ContextMenuGeometry>,
     panes: Vec<PaneId>,
+    /// Cached id→pane map for search inputs, so `text_input` is O(1).
+    search_input_ids: HashMap<Id, PaneId>,
     /// The list whose rows are being visited right now — only the two lists
     /// with measured rows (`Sidebar`/`Library`) collect containers.
     current: Option<Slot>,
@@ -174,10 +176,16 @@ impl CaptureBounds {
     }
 
     pub fn with_panes(panes: Vec<PaneId>) -> Self {
-        Self {
+        let mut bounds = Self {
             panes,
             ..Self::default()
+        };
+        for pane in bounds.panes.clone() {
+            bounds
+                .search_input_ids
+                .insert(crate::app::ui::search_input_id(pane), pane);
         }
+        bounds
     }
 
     pub fn track_geo(&self, pane: PaneId) -> Option<&ListGeometry> {
@@ -248,6 +256,7 @@ impl CaptureBounds {
         self.cards.remove(&pane);
         self.search_history.remove(&pane);
         self.search_inputs.remove(&pane);
+        self.search_input_ids.retain(|_, p| *p != pane);
         self.card_rows.retain(|(p, _), _| *p != pane);
     }
 
@@ -395,12 +404,7 @@ impl Operation<Message> for CaptureBounds {
         let Some(id) = id else {
             return;
         };
-        if let Some(pane) = self
-            .panes
-            .iter()
-            .copied()
-            .find(|p| *id == search_input_id(*p))
-        {
+        if let Some(pane) = self.search_input_ids.get(id).copied() {
             self.search_inputs.insert(pane, bounds);
         }
     }

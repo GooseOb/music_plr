@@ -113,10 +113,7 @@ impl Pane {
             (vec![ViewData::default()], 0)
         } else {
             let len = data.nav_history.len();
-            (
-                data.nav_history,
-                data.nav_history_pos.min(len - 1),
-            )
+            (data.nav_history, data.nav_history_pos.min(len - 1))
         };
         Self {
             id: data.id,

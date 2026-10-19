@@ -17,7 +17,7 @@ auto-generated compare link below it.
 - Context menu for albums, artists, and playlists.
 - "Open in browser" context menu item for tracks, albums, artists, and playlists.
 
-## Changed
+## [1.3.16] - 2026-10-19
 
 - Adjusted position of navigation buttons and queue panel tab buttons to be aligned with search bar.
 

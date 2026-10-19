@@ -196,6 +196,7 @@ mod tests {
                     selection: vec![2],
                     scroll: 42.0,
                     request_id: 0,
+                    thumbnails_seeded: false,
                 }],
                 nav_history_pos: 0,
                 search_query: String::new(),

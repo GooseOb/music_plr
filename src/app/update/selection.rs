@@ -156,6 +156,16 @@ impl MusicPlayer {
         self.get_track_ref_at(pos).cloned()
     }
 
+    /// Collect the tracks at `indices` in the list addressed by `pane`,
+    /// skipping any out-of-range entries. Centralizes the per-index lookup
+    /// and cloning that callers previously inlined.
+    pub fn tracks_at_indices(&self, pane: PaneId, indices: &[usize]) -> Vec<Track> {
+        indices
+            .iter()
+            .filter_map(|&i| self.get_track_ref_at(TrackPos::new(i, pane)).cloned())
+            .collect()
+    }
+
     /// The hovered track when it belongs to the focused pane. Keyboard
     /// navigation always acts on the focused pane; a hover in another pane is
     /// ignored. Queue/Recent rows live in the global panel and always count.

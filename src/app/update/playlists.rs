@@ -365,10 +365,7 @@ impl MusicPlayer {
             return;
         }
 
-        let tracks: Vec<Track> = indices
-            .iter()
-            .filter_map(|&i| self.get_track_at(TrackPos::new(i, pane)))
-            .collect();
+        let tracks = self.tracks_at_indices(pane, indices);
         let count = self
             .playlists
             .insert_tracks_at(playlist_idx, tracks.iter(), PREPEND);
@@ -389,10 +386,7 @@ impl MusicPlayer {
     }
 
     pub fn handle_add_to_trashbin(&mut self, pane: PaneId, indices: &[usize]) {
-        let tracks: Vec<Track> = indices
-            .iter()
-            .filter_map(|&i| self.get_track_at(TrackPos::new(i, pane)))
-            .collect();
+        let tracks = self.tracks_at_indices(pane, indices);
         if tracks.is_empty() {
             return;
         }

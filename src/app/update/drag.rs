@@ -28,7 +28,7 @@ impl MusicPlayer {
             if self.suppress_history_close {
                 self.suppress_history_close = false;
             } else {
-                for pane in self.pane_ids() {
+                for pane in self.pane_ids_unsorted() {
                     if self.pane(pane).show_search_history {
                         self.pane_mut(pane).show_search_history = false;
                     }
@@ -38,7 +38,7 @@ impl MusicPlayer {
             self.drag.stop();
             return Task::none();
         }
-        for pane in self.pane_ids() {
+        for pane in self.pane_ids_unsorted() {
             if self.pane(pane).show_search_history {
                 self.pane_mut(pane).show_search_history = false;
             }
@@ -264,16 +264,11 @@ impl MusicPlayer {
             Some(DropTarget::PlaylistAdd(_)) | None => return None,
         };
 
-        // The queue/active lists are virtualized, so `geo.rows` is intentionally
-        // empty for them; their boundary comes from the uniform `ROW_HEIGHT`.
-        // Sidebar/library lists are not virtualized, so their measured `rows`
-        // must be present for the drop math below.
-        let is_track = matches!(self.drag.drop_target, Some(DropTarget::Track(_)));
+        // Virtualized (queue/active) lists leave `geo.rows` empty, so their
+        // boundary comes from the uniform `ROW_HEIGHT`; measured lists use
+        // their captured row geometry.
         let rows = &geo.rows;
-        if !is_track && rows.is_empty() {
-            return None;
-        }
-        let boundary_y = if is_track {
+        let boundary_y = if rows.is_empty() {
             geo.bounds.y - geo.translation_y + rel as f32 * crate::theme::ROW_HEIGHT
         } else if rel == 0 {
             rows[0].y - geo.translation_y

@@ -25,6 +25,8 @@ pub struct ViewData {
     pub scroll: f32,
     #[serde(skip)]
     pub request_id: u64,
+    #[serde(skip)]
+    pub thumbnails_seeded: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -397,6 +399,7 @@ impl ViewData {
 
     pub fn set_tracks(&mut self, tracks: Vec<Track>) {
         self.content = LoadState::Ready(tracks);
+        self.thumbnails_seeded = false;
     }
 
     pub fn set_failed(&mut self, msg: String) {

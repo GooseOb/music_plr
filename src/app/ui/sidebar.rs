@@ -156,7 +156,7 @@ fn library_row<'a>(
         CardTarget {
             host: ScrollTarget::Library,
             pane: player.focused_pane_id,
-            target: item.into(),
+            target: item.clone().into(),
             row: None,
         },
         CardTarget::into_message,

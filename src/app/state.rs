@@ -336,9 +336,16 @@ impl MusicPlayer {
     }
 
     pub fn pane_ids(&self) -> Vec<PaneId> {
-        let mut ids: Vec<PaneId> = self.panes.keys().copied().collect();
+        let mut ids: Vec<PaneId> = self.pane_ids_unsorted();
         ids.sort_unstable();
         ids
+    }
+
+    /// Pane ids in arbitrary (hash-map) order, for order-insensitive loops
+    /// that only need an owned snapshot (so `self` can be mutated while
+    /// iterating).
+    pub fn pane_ids_unsorted(&self) -> Vec<PaneId> {
+        self.panes.keys().copied().collect()
     }
 
     /// Borrow a pane's active view state (its live

@@ -103,8 +103,8 @@ pub(in crate::app::ui) fn view_context_menu<'a>(
     let n = menu.target_indices.len();
     let row_len = menu_row_len(player);
 
-    let items: Vec<Element<'_, Message, AppTheme>> = menu
-        .actions(&player.stream_cache)
+    let actions = menu.actions(&player.stream_cache);
+    let items: Vec<Element<'_, Message, AppTheme>> = actions
         .iter()
         .enumerate()
         .map(|(i, action)| {
@@ -139,8 +139,7 @@ pub(in crate::app::ui) fn view_context_menu<'a>(
         if let Some(geo) = geo {
             let parent_index = match menu.anchor.hovered {
                 Some(ContextMenuFocus::Item(i)) => i,
-                Some(ContextMenuFocus::Sub(..)) => menu
-                    .actions(&player.stream_cache)
+                Some(ContextMenuFocus::Sub(..)) => actions
                     .iter()
                     .position(|a| a.submenu() == Some(kind))
                     .unwrap_or(0),
