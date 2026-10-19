@@ -197,7 +197,7 @@ impl MusicPlayer {
     pub fn apply_shortcut(&mut self, shortcut: crate::app::Shortcut) -> Task<Message> {
         use crate::app::Shortcut as S;
         match self.dialog {
-            Some(Dialog::ContextMenu(_)) | Some(Dialog::CardMenu(_)) => {
+            Some(Dialog::ContextMenu(_) | Dialog::CardMenu(_)) => {
                 return self.apply_menu_shortcut(shortcut);
             }
             Some(Dialog::PlaylistJump(_)) => {

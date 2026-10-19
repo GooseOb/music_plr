@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, Button, Column, Container, Row},
+    widget::{scrollable, text, Button, Column, Container, MouseArea, Row},
     Element, Length,
 };
 
@@ -14,7 +14,7 @@ use super::{
 };
 use crate::{
     app::{
-        interaction::CardTarget,
+        interaction::{CardTarget, HoverTarget, Pressed},
         pane::PaneId,
         update::operation::ScrollTarget,
         view_data::{AlbumRef, PlaylistRef},
@@ -405,6 +405,16 @@ fn h_card<'a>(
     let card = target
         .card_ref()
         .expect("an artist page only renders cards for artist/album/playlist views");
+    let item = target.library_item().expect("artist page card");
+    let is_hovered = player.drag.is_hovered_card(&item);
+    let is_dragging_this = matches!(
+        player.drag.pressed,
+        Some(crate::app::interaction::PressedDrag {
+            what: Pressed::Card(ref c, _),
+            ..
+        }) if c == &item
+    );
+    let hot = is_hovered || is_dragging_this;
     let thumb_path = player.thumbnail_index.get(card.provider, card.id);
     let image = Container::new(thumbnail(CARD_IMAGE_SIZE, thumb_path)).height(CARD_IMAGE_SIZE);
     let mut body = vec![
@@ -413,6 +423,13 @@ fn h_card<'a>(
             .size(theme::TEXT_SIZE_SM)
             .width(CARD_WIDTH)
             .wrapping(text::Wrapping::Word)
+            .style(move |t: &AppTheme| iced::widget::text::Style {
+                color: Some(if hot {
+                    t.palette.fg
+                } else {
+                    t.palette.fg_secondary
+                }),
+            })
             .into(),
     ];
     let trimmed_subtitle = subtitle.trim();
@@ -424,23 +441,17 @@ fn h_card<'a>(
                 .into(),
         );
     }
-    let on_press = match &target {
-        ViewKind::Artist(entry) => Message::OpenArtist {
-            pane,
-            id: entry.id.clone(),
-            name: entry.name.clone(),
-            source: entry.source,
-            url: entry.url.clone(),
-        },
-        target => Message::Browse(pane, target.clone(), card.provider),
-    };
-    let button = Button::new(Column::with_children(body).spacing(theme::SPACING_2XS))
-        .padding(theme::SPACING_2XS)
-        .width(CARD_WIDTH)
-        .style(super::styles::button_style_album())
-        .on_press(on_press);
+    let area = MouseArea::new(
+        Container::new(Column::with_children(body).spacing(theme::SPACING_2XS))
+            .padding(theme::SPACING_2XS)
+            .width(CARD_WIDTH),
+    )
+    .interaction(player.drag.clickable_cursor_interaction())
+    .on_press(Message::DragPress(Pressed::Card(item.clone(), Some(pane))))
+    .on_enter(Message::HoverStart(HoverTarget::Card(item.clone())))
+    .on_exit(Message::HoverEnd(HoverTarget::Card(item.clone())));
     super::right_click::RightClickArea::new(
-        button,
+        area,
         CardTarget {
             host: ScrollTarget::Cards(pane),
             pane,
