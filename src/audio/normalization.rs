@@ -69,13 +69,12 @@ pub fn compute_normalization_gain(path: &Path) -> Option<f32> {
             continue;
         };
         let spec = audio_buf.spec().to_owned();
-        let mut buf = symphonia::core::audio::SampleBuffer::<i16>::new(
+        let mut buf = symphonia::core::audio::SampleBuffer::<f32>::new(
             symphonia::core::units::Duration::from(audio_buf.capacity() as u64),
             spec,
         );
         buf.copy_interleaved_ref(audio_buf);
-        for &s in buf.samples() {
-            let v = f32::from(s) / 32768.0;
+        for &v in buf.samples() {
             sum_squares += f64::from(v) * f64::from(v);
             n_samples += 1;
             let a = v.abs();

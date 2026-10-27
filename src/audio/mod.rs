@@ -11,6 +11,7 @@ use std::{
     time::Duration,
 };
 
+use rodio::cpal::traits::HostTrait;
 use tracing::{debug, warn};
 
 use crate::providers::ClientEvent;
@@ -69,7 +70,7 @@ enum PlayerCommand {
 impl AudioPlayer {
     /// Spawn the dedicated output thread and return a handle to it.
     ///
-    /// The thread body is one long-lived state machine: it owns the sink,
+    /// The thread body is one long-lived state machine: it owns the player,
     /// yt-dlp child, and cache-file handles as locals, and each loop iteration
     /// drains a command then polls playback/download progress. Splitting it
     /// further would mean hoisting that state into a struct purely to satisfy
@@ -92,8 +93,8 @@ impl AudioPlayer {
         let state_clone = state.clone();
 
         thread::spawn(move || {
-            let mut output: Option<rodio::Sink> = None;
-            let mut output_stream: Option<(rodio::OutputStream, rodio::OutputStreamHandle)> = None;
+            let mut output: Option<rodio::Player> = None;
+            let mut output_stream: Option<rodio::MixerDeviceSink> = None;
             let mut ytdlp: Option<std::process::Child> = None;
             let mut ytdlp_stderr: Option<std::sync::Arc<std::sync::Mutex<Vec<u8>>>> = None;
             // Set to `true` while the copy thread is still draining yt-dlp's
@@ -139,9 +140,6 @@ impl AudioPlayer {
                     stream_allow_retry = false;
                     stream_url = None;
                     playback_file = None;
-                    if let Some(s) = &output {
-                        s.stop();
-                    }
                     output = None;
                     if let Ok(mut st) = state_clone.lock() {
                         st.stream_finished = false;
@@ -324,7 +322,7 @@ impl AudioPlayer {
                 // does NOT gate playback — decoding starts as soon as enough
                 // of the file has arrived (see below), so the track streams
                 // progressively rather than after a full download. `PlayCached`
-                // has no streaming state and finishes via the sink-empty path.
+                // has no streaming state and finishes via the player-empty path.
                 if stream_active {
                     // `ytdlp` is `None` for the direct-HTTP path (StreamHttp),
                     // so treat a missing child process as already finished.
@@ -380,9 +378,6 @@ impl AudioPlayer {
                                         // clean; decoding restarts below once
                                         // enough of the new stream has landed.
                                         let _ = std::fs::File::create(&path);
-                                        if let Some(s) = &output {
-                                            s.stop();
-                                        }
                                         output = None;
                                         if let Ok(mut st) = state_clone.lock() {
                                             st.has_output = false;
@@ -450,11 +445,13 @@ impl AudioPlayer {
         Self { cmd_tx, state }
     }
 
-    /// Build and start a rodio `Sink` decoding `path` via symphonia.
+    /// Build and start a rodio `Player` decoding `path` via symphonia.
     ///
-    /// Uses `SymphoniaStreamingSource` rather than `rodio::Decoder::new`: the
-    /// latter hardcodes `byte_len() == None` on its `MediaSource`, which makes
-    /// symphonia's MKV/MP4 init seek and trip rodio's `unreachable!` panic.
+    /// Uses `SymphoniaStreamingSource` rather than `rodio::Decoder`: the file
+    /// starts out non-seekable while the download runs and becomes seekable in
+    /// place once it completes, muxed MP4s need a retry budget for transient
+    /// packet-read errors, and the known `expected_duration` has to stand in
+    /// for the container's missing length.
     ///
     /// For a live stream `writer_alive` is `Some` — the reader blocks at EOF
     /// until the copy thread finishes; for a cached file it is `None` (real
@@ -468,8 +465,8 @@ impl AudioPlayer {
         duration: f32,
         state: &Arc<Mutex<PlayerState>>,
         gain: f32,
-        output_stream: &mut Option<(rodio::OutputStream, rodio::OutputStreamHandle)>,
-    ) -> Option<rodio::Sink> {
+        output_stream: &mut Option<rodio::MixerDeviceSink>,
+    ) -> Option<rodio::Player> {
         let file = match std::fs::File::open(path) {
             Ok(f) => f,
             Err(e) => {
@@ -489,26 +486,22 @@ impl AudioPlayer {
             }
         };
         if output_stream.is_none() {
-            match rodio::OutputStream::try_default() {
-                Ok(s) => output_stream.replace(s),
+            match open_output_stream(state) {
+                Ok(stream) => {
+                    *output_stream = Some(stream);
+                }
                 Err(e) => {
-                    warn!("rodio::OutputStream::try_default failed: {e}");
+                    warn!("Failed to open audio output stream: {e}");
                     return None;
                 }
-            };
-        }
-        let handle = &output_stream.as_ref()?.1;
-        let sink = match rodio::Sink::try_new(handle) {
-            Ok(s) => s,
-            Err(e) => {
-                warn!("rodio::Sink::try_new failed: {e}");
-                return None;
             }
-        };
+        }
+        let mixer = output_stream.as_ref()?.mixer();
+        let player = rodio::Player::connect_new(mixer);
         let vol = state.lock().map_or(1.0, |st| st.volume);
-        sink.set_volume(vol);
-        sink.append(source);
-        sink.play();
+        player.set_volume(vol);
+        player.append(source);
+        player.play();
         if let Ok(mut st) = state.lock() {
             st.is_playing = true;
             st.duration = duration;
@@ -517,7 +510,7 @@ impl AudioPlayer {
             st.cache_ready = false;
             st.has_output = true;
         }
-        Some(sink)
+        Some(player)
     }
 
     pub fn play_stream_cache(&self, url: &str, duration: f32, cache_path: PathBuf, gain: f32) {
@@ -605,6 +598,63 @@ fn ensure_cache_dir(cache_path: &std::path::Path) {
     if let Some(dir) = cache_path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
+}
+
+/// Open the OS output stream, falling back to the other available devices if
+/// the default one refuses to open. Fatal stream errors are forwarded to
+/// `PlayerState.error` once per stream (cpal invokes the callback again on
+/// every retry, so without the guard an unrecoverable device would flood the
+/// shared state and the UI).
+fn open_output_stream(
+    state: &Arc<Mutex<PlayerState>>,
+) -> Result<rodio::MixerDeviceSink, rodio::DeviceSinkError> {
+    fn callback(state: Arc<Mutex<PlayerState>>) -> impl FnMut(rodio::CpalError) + Clone + Send {
+        let reported = Arc::new(AtomicBool::new(false));
+        move |err: rodio::CpalError| {
+            if !matches!(
+                err.kind(),
+                rodio::CpalErrorKind::DeviceNotAvailable
+                    | rodio::CpalErrorKind::HostUnavailable
+                    | rodio::CpalErrorKind::StreamInvalidated
+            ) {
+                return;
+            }
+            if reported.swap(true, Ordering::Relaxed) {
+                return;
+            }
+            if let Ok(mut st) = state.lock() {
+                st.error = Some(format!("Audio output error: {err}"));
+            }
+        }
+    }
+
+    let callback = callback(state.clone());
+    let open = |device| {
+        rodio::DeviceSinkBuilder::from_device(device)
+            .ok()
+            .and_then(|builder| {
+                builder
+                    .with_error_callback(callback.clone())
+                    .open_sink_or_fallback()
+                    .ok()
+            })
+    };
+
+    let mut sink = rodio::DeviceSinkBuilder::from_default_device()
+        .and_then(|builder| {
+            builder
+                .with_error_callback(callback.clone())
+                .open_sink_or_fallback()
+        })
+        .or_else(|err| {
+            rodio::cpal::default_host()
+                .output_devices()
+                .ok()
+                .and_then(|mut devices| devices.find_map(open))
+                .ok_or(err)
+        })?;
+    sink.log_on_drop(false);
+    Ok(sink)
 }
 
 /// Record a player-client race event for the tick loop to surface as a toast.

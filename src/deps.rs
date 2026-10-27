@@ -866,10 +866,15 @@ fn install_ytmusicapi() -> Result<()> {
 
 /// SHA-256 hex digest (used to verify downloads).
 pub(crate) fn sha256(data: &[u8]) -> String {
+    use std::fmt::Write as _;
+
     use sha2::{Digest, Sha256};
-    let mut h = Sha256::new();
-    h.update(data);
-    format!("{:x}", h.finalize())
+
+    let mut out = String::with_capacity(64);
+    for b in Sha256::digest(data) {
+        let _ = write!(out, "{b:02x}");
+    }
+    out
 }
 
 #[cfg(test)]

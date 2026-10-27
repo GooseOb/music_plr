@@ -8,35 +8,41 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
-# [Unreleased]
+## [Unreleased]
 
-## Added
+### Fixed
+
+- No longer uses 100% CPU on ALSA worker issues.
+
+## [1.3.16] - 2026-10-19
+
+### Added
 
 - On artist page, section list items are now draggable (into library or playlists).
 - Changing the source track in edit track dialog via "Manual search" button.
 - Context menu for albums, artists, and playlists.
 - "Open in browser" context menu item for tracks, albums, artists, and playlists.
 
-## [1.3.16] - 2026-10-19
+### Changed
 
 - Adjusted position of navigation buttons and queue panel tab buttons to be aligned with search bar.
 
-# [1.3.15] - 2026-10-16
+## [1.3.15] - 2026-10-16
 
-## Fixed
+### Fixed
 
 Context menu position in scrolled lists is now correct.
 
 ## [1.3.14] - 2026-10-15
 
-## Changed
+### Changed
 
 - Playback progress bar is now more smooth.
 - Reduced amount of rerenders, potentially reducing CPU usage.
 
 ## [1.3.13] - 2026-10-11
 
-## Fixed
+### Fixed
 
 Plain lyrics are now displayed correctly when synced lyrics are not available.
 

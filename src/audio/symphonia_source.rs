@@ -18,20 +18,20 @@ const MAX_CONSECUTIVE_PACKET_ERRORS: usize = 200;
 /// streaming samples as they arrive. Mirrors rodio's internal
 /// `SymphoniaDecoder` but built over our non-seekable `GrowingMediaSource`,
 /// so it works on a partially-downloaded file without seeking. Samples are
-/// produced as `i16` (matching rodio's `Sink` expectation) and the known
+/// produced as normalized `f32` (rodio's sample type) and the known
 /// `expected_duration` is reported so the progress bar works even though the
 /// container length is unknown mid-stream.
 pub(super) struct SymphoniaStreamingSource {
     format: Box<dyn symphonia::core::formats::FormatReader>,
     decoder: Box<dyn symphonia::core::codecs::Decoder>,
     spec: symphonia::core::audio::SignalSpec,
-    buffer: symphonia::core::audio::SampleBuffer<i16>,
+    buffer: symphonia::core::audio::SampleBuffer<f32>,
     current_frame_offset: usize,
     expected_duration: f32,
     track_id: u32,
     /// Linear sample-scaling gain (1.0 = unchanged). Applied per-sample so
-    /// volume normalization composes with the sink's master volume and the
-    /// source stays seekable (unlike wrapping it in rodio's `Amplify`).
+    /// the gain composes with the player's master volume and peaks are
+    /// clamped before the mixer.
     gain: f32,
     /// The download flag shared with the copy thread (`None` for a complete
     /// cached file). Consulted live so a seek attempted while the download is
@@ -102,7 +102,7 @@ impl SymphoniaStreamingSource {
         };
 
         let spec = first_decoded.spec().to_owned();
-        let mut buffer = symphonia::core::audio::SampleBuffer::<i16>::new(
+        let mut buffer = symphonia::core::audio::SampleBuffer::<f32>::new(
             symphonia::core::units::Duration::from(first_decoded.capacity() as u64),
             spec,
         );
@@ -151,10 +151,10 @@ impl SymphoniaStreamingSource {
         let spec = *decoded.spec();
         let duration = symphonia::core::units::Duration::from(decoded.capacity() as u64);
         if spec != self.spec {
-            self.buffer = symphonia::core::audio::SampleBuffer::<i16>::new(duration, spec);
+            self.buffer = symphonia::core::audio::SampleBuffer::<f32>::new(duration, spec);
             self.spec = spec;
         } else if decoded.capacity() * spec.channels.count() > self.buffer.samples().len() {
-            self.buffer = symphonia::core::audio::SampleBuffer::<i16>::new(duration, spec);
+            self.buffer = symphonia::core::audio::SampleBuffer::<f32>::new(duration, spec);
         }
         self.buffer.copy_interleaved_ref(decoded);
         Some(())
@@ -184,9 +184,9 @@ impl SymphoniaStreamingSource {
 }
 
 impl Iterator for SymphoniaStreamingSource {
-    type Item = i16;
+    type Item = f32;
 
-    fn next(&mut self) -> Option<i16> {
+    fn next(&mut self) -> Option<f32> {
         while self.current_frame_offset >= self.buffer.len() {
             let packet = self.next_audio_packet()?;
             if self.decode_into_buffer(&packet).is_none() {
@@ -196,24 +196,23 @@ impl Iterator for SymphoniaStreamingSource {
         }
         let sample = self.buffer.samples()[self.current_frame_offset];
         self.current_frame_offset += 1;
-        // Apply the volume-normalization gain (clamped to i16 range).
-        let scaled =
-            (f32::from(sample) * self.gain).clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16;
-        Some(scaled)
+        // Apply the volume-normalization gain (clamped to the f32 sample range).
+        Some((sample * self.gain).clamp(-1.0, 1.0))
     }
 }
 
 impl rodio::Source for SymphoniaStreamingSource {
-    fn current_frame_len(&self) -> Option<usize> {
+    fn current_span_len(&self) -> Option<usize> {
         Some(self.buffer.samples().len())
     }
 
-    fn channels(&self) -> u16 {
-        self.spec.channels.count() as u16
+    fn channels(&self) -> rodio::ChannelCount {
+        rodio::ChannelCount::new(self.spec.channels.count().max(1) as u16)
+            .expect("audio specs always have at least one channel")
     }
 
-    fn sample_rate(&self) -> u32 {
-        self.spec.rate
+    fn sample_rate(&self) -> rodio::SampleRate {
+        rodio::SampleRate::new(self.spec.rate.max(1)).expect("audio sample rates are non-zero")
     }
 
     fn total_duration(&self) -> Option<std::time::Duration> {
@@ -263,7 +262,7 @@ impl rodio::Source for SymphoniaStreamingSource {
         };
 
         self.decode_into_buffer(&packet).ok_or(FAILED)?;
-        let offset = samples_to_pass as usize * self.channels() as usize;
+        let offset = samples_to_pass as usize * self.spec.channels.count();
         self.current_frame_offset = offset.min(self.buffer.samples().len());
         Ok(())
     }
