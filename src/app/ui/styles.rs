@@ -107,7 +107,7 @@ pub fn fg_tab(active: bool) -> impl Fn(&AppTheme) -> text::Style + 'static {
     }
 }
 
-pub fn icon(
+pub fn icon_style(
     color: fn(&Palette) -> Color,
 ) -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
     move |theme, _| svg::Style {
@@ -115,19 +115,19 @@ pub fn icon(
     }
 }
 
-pub fn icon_fg() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
-    icon(|p| p.fg)
+pub fn icon_style_fg() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    icon_style(|p| p.fg)
 }
 
-pub fn icon_fg_muted() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
-    icon(|p| p.fg_muted)
+pub fn icon_style_fg_muted() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    icon_style(|p| p.fg_muted)
 }
 
-pub fn icon_fg_secondary() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
-    icon(|p| p.fg_secondary)
+pub fn icon_style_fg_secondary() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    icon_style(|p| p.fg_secondary)
 }
 
-pub fn icon_accent_dimmed() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+pub fn icon_style_accent_dimmed() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
     |theme, _| svg::Style {
         color: Some(blend_colors(
             theme.palette.fg_accent,
@@ -137,15 +137,15 @@ pub fn icon_accent_dimmed() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + '
     }
 }
 
-pub fn icon_accent() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
-    icon(|p| p.fg_accent)
+pub fn icon_style_accent() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    icon_style(|p| p.fg_accent)
 }
 
-pub fn icon_primary() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
-    icon(|p| p.fg_on_accent)
+pub fn icon_style_primary() -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+    icon_style(|p| p.fg_on_accent)
 }
 
-pub fn icon_playbar_button(
+pub fn icon_style_playbar_button(
     active: bool,
 ) -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
     move |theme, _| svg::Style {
@@ -157,7 +157,7 @@ pub fn icon_playbar_button(
     }
 }
 
-pub fn icon_tab(active: bool) -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
+pub fn icon_style_tab(active: bool) -> impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static {
     move |theme, _| svg::Style {
         color: Some(if active {
             theme.palette.fg_accent

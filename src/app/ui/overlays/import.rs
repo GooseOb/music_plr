@@ -3,8 +3,8 @@
 
 use iced::{
     alignment,
-    widget::{text, text_input, Button, Column, Container, Row},
-    Element, Length,
+    widget::{text, text_input, Button, Column, Row},
+    Element,
 };
 
 use super::{theme, view_dialog, Message, MusicPlayer};
@@ -12,8 +12,8 @@ use crate::{
     app::{
         import::ImportPlaylistDialog,
         ui::{
-            shared_components::{scope_tab_row, text_input_row},
-            styles::{button_style_primary, fg_secondary, icon_fg_muted},
+            shared_components::{dialog_button, scope_tab_row, text_button, text_input_row},
+            styles::{button_style_primary, fg_secondary, icon_style_fg_muted},
         },
         CsvPreset, ImportCsvField, ImportMethod,
     },
@@ -106,7 +106,8 @@ pub(super) fn view_import_playlist<'a>(
                     .padding(theme::SPACING_SM)
                     .into();
                 let remove = Button::new(
-                    icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM).style(icon_fg_muted()),
+                    icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM)
+                        .style(icon_style_fg_muted()),
                 )
                 .padding(theme::SPACING_XS)
                 .on_press(Message::ImportRemovePattern(i))
@@ -116,8 +117,7 @@ pub(super) fn view_import_playlist<'a>(
                     .align_y(alignment::Vertical::Center)
                     .into()
             });
-            let add = Button::new(text(tr.import_add_pattern))
-                .padding([theme::SPACING_XS, theme::SPACING_MD])
+            let add = text_button(tr.import_add_pattern)
                 .on_press(Message::ImportAddPattern)
                 .into();
             Column::with_children([
@@ -156,17 +156,14 @@ pub(super) fn view_import_playlist<'a>(
         ImportMethod::FileList => tr.import_select_folder,
         ImportMethod::Native | ImportMethod::Csv => tr.import_select_file,
     };
-    let select_btn = Button::new(Container::new(text(select_label)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
+    let select_btn = dialog_button(select_label)
         .style(button_style_primary())
         .on_press_maybe(if dialog.can_select() {
             Some(Message::ImportSelectFiles)
         } else {
             None
         });
-    let cancel_btn = Button::new(Container::new(text(tr.cancel)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
-        .on_press(Message::CloseDialog);
+    let cancel_btn = dialog_button(tr.cancel).on_press(Message::CloseDialog);
 
     children.push(
         Row::with_children([cancel_btn.into(), select_btn.into()])

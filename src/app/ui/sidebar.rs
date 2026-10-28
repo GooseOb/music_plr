@@ -8,14 +8,14 @@ use super::{
     shared_components::{thumbnail, toggle_bookmark_button},
     styles::{
         bg_secondary, button_style_list_item, button_style_nav, button_style_panel_item,
-        button_style_primary, fg_secondary, icon_color, icon_fg_muted, icon_primary,
+        button_style_primary, fg_secondary, icon_color, icon_style_fg_muted, icon_style_primary,
     },
     theme, widget, Message, MusicPlayer,
 };
 use crate::{
     app::{
         interaction::{CardTarget, DropTarget, HoverTarget, Pressed, PressedDrag},
-        ui::styles::{fg_tab, icon_accent_dimmed, icon_fg_secondary, icon_tab},
+        ui::styles::{fg_tab, icon_style_accent_dimmed, icon_style_fg_secondary, icon_style_tab},
         update::operation::ScrollTarget,
         ViewData, ViewKind,
     },
@@ -53,19 +53,22 @@ fn playlist_row<'a>(
     index: usize,
     name: &'a str,
     track_count: usize,
-    active: bool,
-    dragged_over: bool,
+    is_active: bool,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
+    let is_dragged_over = matches!(
+        player.drag.drop_target,
+        Some(DropTarget::PlaylistAdd(j)) if j == index
+    );
     let is_dragging_this = matches!(
         player.drag.pressed,
         Some(PressedDrag { what: Pressed::Playlist(i), .. }) if i == index
     );
     let is_hovered = player.drag.hovered_playlist() == Some(index);
-    let interacting = active || dragged_over || is_hovered;
-    let background = if dragged_over {
+    let interacting = is_active || is_dragged_over || is_hovered;
+    let background = if is_dragged_over {
         Some(p.bg_current.into())
-    } else if active {
+    } else if is_active {
         Some(p.bg_current.scale_alpha(0.7).into())
     } else if is_hovered {
         Some(p.bg_hover.scale_alpha(0.7).into())
@@ -81,7 +84,7 @@ fn playlist_row<'a>(
     MouseArea::new(shared_row(
         [
             icons::icon(icon, theme::ICON_SIZE_MD)
-                .style(icon_tab(interacting))
+                .style(icon_style_tab(interacting))
                 .into(),
             text(name).style(fg_tab(interacting)).into(),
             iced::widget::right(text(track_count).style(fg_secondary())).into(),
@@ -207,6 +210,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     let p = &player.app_theme.palette;
 
     let focused = player.focused_pane_id;
+    let focused_pane = player.focused_pane();
     let can_back = player.can_navigate_back(focused);
     let can_forward = player.can_navigate_forward(focused);
 
@@ -233,8 +237,8 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             player.strings.search,
             ViewData::new_search(
                 String::new(),
-                player.focused_pane().search_provider,
-                player.focused_pane().search_scope,
+                focused_pane.search_provider,
+                focused_pane.search_scope,
             ),
             player,
             None,
@@ -259,31 +263,19 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         ),
     ];
 
+    let current_playlist_index = match &focused_pane.view_data().kind {
+        ViewKind::Playlist(entry) => Some(entry.index),
+        _ => None,
+    };
+
     let playlist_items = player
         .playlists
         .playlists
         .iter()
         .enumerate()
         .map(|(i, pl)| {
-            let is_active = match &player.focused_pane().view_data().kind {
-                ViewKind::Playlist(entry) => entry.index == i,
-                _ => false,
-            };
-            let is_dragged_over = matches!(
-                player.drag.drop_target,
-                Some(DropTarget::PlaylistAdd(j)) if j == i
-            ) || matches!(
-                player.drag.drop_target,
-                Some(DropTarget::PlaylistReorder { to: j, .. }) if j == i
-            );
-            let row = playlist_row(
-                player,
-                i,
-                &pl.name,
-                pl.tracks.len(),
-                is_active,
-                is_dragged_over,
-            );
+            let is_active = current_playlist_index == Some(i);
+            let row = playlist_row(player, i, &pl.name, pl.tracks.len(), is_active);
             iced::widget::Container::new(row)
                 .width(Length::Fill)
                 .id(iced::widget::Id::from(format!("sidebar_pl:{i}")))
@@ -314,7 +306,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     let library_header = Button::new(
         Row::with_children([
             icons::icon(icons::BOOKMARK_ICON, theme::ICON_SIZE_LG)
-                .style(icon_fg_muted())
+                .style(icon_style_fg_muted())
                 .into(),
             text(player.strings.library).into(),
             iced::widget::right(
@@ -326,7 +318,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
                     },
                     theme::ICON_SIZE_LG,
                 )
-                .style(icon_fg_muted()),
+                .style(icon_style_fg_muted()),
             )
             .into(),
         ])
@@ -347,7 +339,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .on_input(Message::NewPlaylistNameChanged)
         .padding(theme::SPACING_SM)
         .into(),
-        Button::new(icons::icon(icons::ADD_ICON, theme::ICON_SIZE_SM).style(icon_primary()))
+        Button::new(icons::icon(icons::ADD_ICON, theme::ICON_SIZE_SM).style(icon_style_primary()))
             .padding(theme::SPACING_SM)
             .style(button_style_primary())
             .on_press(Message::CreatePlaylist)
@@ -361,7 +353,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         Button::new(
             Row::with_children([
                 icons::icon(icons::FOLDER_ICON, theme::ICON_SIZE_MD)
-                    .style(icon_fg_secondary())
+                    .style(icon_style_fg_secondary())
                     .into(),
                 text(player.strings.import_playlist)
                     .style(fg_secondary())
@@ -378,7 +370,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .into();
 
     let stack = Stack::with_children([
-        Container::new(icons::icon(icons::LOGO_ICON, 200.0).style(icon_accent_dimmed()))
+        Container::new(icons::icon(icons::LOGO_ICON, 200.0).style(icon_style_accent_dimmed()))
             .center(Length::Fill)
             .into(),
         Column::with_children([
@@ -434,7 +426,7 @@ fn sidebar_nav_item<'a>(
 
     let mut children = vec![
         icons::icon(icon_name, theme::ICON_SIZE_MD)
-            .style(icon_tab(is_active))
+            .style(icon_style_tab(is_active))
             .into(),
         text(name).into(),
     ];

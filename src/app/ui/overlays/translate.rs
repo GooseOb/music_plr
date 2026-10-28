@@ -1,14 +1,16 @@
 //! The AI-translate lyrics popup: target language, prompt, in-flight flag.
 
 use iced::{
-    alignment,
-    widget::{text, text_input, Button, Column, Container, Row},
+    widget::{text, text_input, Column},
     Element, Length,
 };
 
 use super::{theme, view_dialog, Message, MusicPlayer};
 use crate::{
-    app::ui::styles::{button_style_primary, fg_secondary},
+    app::ui::{
+        shared_components::{dialog_button, dialog_button_row},
+        styles::{button_style_primary, fg_secondary},
+    },
     theme::AppTheme,
 };
 
@@ -38,21 +40,13 @@ pub(super) fn view_translate_dialog<'a>(
         .height(Length::Fixed(180.0))
         .into();
 
-    let cancel_btn = Button::new(Container::new(text(tr.cancel)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
-        .on_press(Message::CloseDialog);
-    let reset_btn = Button::new(Container::new(text(tr.translate_reset)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
-        .on_press(Message::TranslateResetPrompt);
-    let submit_btn = Button::new(
-        Container::new(text(if dialog.translating {
-            tr.translating
-        } else {
-            tr.translate_submit
-        }))
-        .center_x(Length::Fill),
-    )
-    .padding(theme::SPACING_SM)
+    let cancel_btn = dialog_button(tr.cancel).on_press(Message::CloseDialog);
+    let reset_btn = dialog_button(tr.translate_reset).on_press(Message::TranslateResetPrompt);
+    let submit_btn = dialog_button(if dialog.translating {
+        tr.translating
+    } else {
+        tr.translate_submit
+    })
     .style(button_style_primary())
     .on_press_maybe(
         (!dialog.translating && !dialog.language.trim().is_empty())
@@ -71,12 +65,8 @@ pub(super) fn view_translate_dialog<'a>(
     if dialog.translating {
         children.push(text(tr.translating).style(fg_secondary()).into());
     }
-    children.push(
-        Row::with_children([cancel_btn.into(), reset_btn.into(), submit_btn.into()])
-            .spacing(theme::SPACING_SM)
-            .align_y(alignment::Vertical::Center)
-            .into(),
-    );
+    children
+        .push(dialog_button_row([cancel_btn.into(), reset_btn.into(), submit_btn.into()]).into());
 
     view_dialog(
         Column::with_children(children)

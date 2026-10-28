@@ -3,13 +3,16 @@
 
 use iced::{
     alignment,
-    widget::{container, scrollable, text, text_input, Button, Column, Container, MouseArea, Row},
+    widget::{container, scrollable, text, text_input, Column, Container, MouseArea, Row},
     Element, Length,
 };
 
 use super::{theme, view_dialog, Message, MusicPlayer};
 use crate::{
-    app::ui::styles::{button_style_danger, fg_secondary},
+    app::ui::{
+        shared_components::dialog_button,
+        styles::{button_style_danger, fg_secondary},
+    },
     theme::AppTheme,
 };
 
@@ -83,12 +86,7 @@ pub(super) fn view_playlist_jump<'a>(
         .id(playlist_jump_input_id())
         .width(Length::Fill);
 
-    let cancel_btn = Button::new(
-        Container::new(text(player.strings.cancel).size(theme::TEXT_SIZE_SM))
-            .center_x(Length::Fill),
-    )
-    .padding(theme::SPACING_SM)
-    .on_press(Message::CloseDialog);
+    let cancel_btn = dialog_button(player.strings.cancel).on_press(Message::CloseDialog);
 
     view_dialog(
         Column::with_children([
@@ -110,12 +108,9 @@ pub(super) fn view_playlist_jump<'a>(
 pub(super) fn view_delete_confirm(
     strings: &crate::i18n::Strings,
 ) -> Element<'_, Message, AppTheme> {
-    let cancel_btn = Button::new(Container::new(text(strings.cancel)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
-        .on_press(Message::CloseDialog);
+    let cancel_btn = dialog_button(strings.cancel).on_press(Message::CloseDialog);
 
-    let delete_btn = Button::new(Container::new(text(strings.delete)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
+    let delete_btn = dialog_button(strings.delete)
         .style(button_style_danger())
         .on_press(Message::ConfirmDeletePlaylist);
 

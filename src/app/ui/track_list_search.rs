@@ -1,14 +1,15 @@
 use iced::{
     alignment,
-    widget::{text, text_input, Button, Container, Id, Row},
+    widget::{text, text_input, Container, Id, Row},
     Element,
 };
 
-use super::{styles::icon_fg, theme, Message, MusicPlayer};
-use crate::{
-    app::{ui::styles::fg_secondary, TrackListSearch},
-    theme::AppTheme,
+use super::{
+    shared_components::icon_button,
+    styles::{fg_secondary, icon_style_fg},
+    theme, Message, MusicPlayer,
 };
+use crate::{app::TrackListSearch, icons, theme::AppTheme};
 
 pub const TRACK_LIST_SEARCH_ID: Id = Id::new("track_list_search_input");
 
@@ -26,13 +27,17 @@ pub(super) fn view_track_list_search<'a>(
         .on_input(Message::TrackListSearchInput)
         .padding([theme::SPACING_XS, theme::SPACING_SM]);
 
-    let prev = icon_button(crate::icons::CHEVRON_UP_ICON, Message::TrackListSearchPrev);
+    let prev = icon_button(icons::CHEVRON_UP_ICON, theme::ICON_SIZE_MD, icon_style_fg())
+        .on_press(Message::TrackListSearchPrev);
     let next = icon_button(
-        crate::icons::CHEVRON_DOWN_ICON,
-        Message::TrackListSearchNext,
-    );
+        icons::CHEVRON_DOWN_ICON,
+        theme::ICON_SIZE_MD,
+        icon_style_fg(),
+    )
+    .on_press(Message::TrackListSearchNext);
 
-    let close = icon_button(crate::icons::CLOSE_ICON, Message::TrackListSearchClose);
+    let close = icon_button(icons::CLOSE_ICON, theme::ICON_SIZE_MD, icon_style_fg())
+        .on_press(Message::TrackListSearchClose);
 
     let bar = Row::with_children([
         close.into(),
@@ -47,10 +52,4 @@ pub(super) fn view_track_list_search<'a>(
     Container::new(bar)
         .padding([theme::SPACING_SM, theme::SPACING_MD])
         .into()
-}
-
-fn icon_button(icon_data: &'static [u8], on_press: Message) -> Button<'static, Message, AppTheme> {
-    Button::new(crate::icons::icon(icon_data, theme::ICON_SIZE_MD).style(icon_fg()))
-        .padding(theme::SPACING_XS)
-        .on_press(on_press)
 }

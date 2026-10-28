@@ -1,15 +1,15 @@
 use iced::{
     alignment,
     widget::{
-        container, image, scrollable, text, text_input, Button, Column, Container, Id, ProgressBar,
-        Row,
+        container, image, scrollable, svg, text, text_input, Button, Column, Container, Id,
+        ProgressBar, Row,
     },
     Color, Element, Length,
 };
 
 use super::styles::{
-    bg_secondary, button_style_primary, button_style_scope, fg_accent, fg_secondary, icon_fg_muted,
-    icon_primary,
+    bg_secondary, button_style_album, button_style_primary, button_style_scope, fg_accent,
+    fg_secondary, icon_style_fg_muted, icon_style_primary,
 };
 use crate::{
     app::{
@@ -17,7 +17,7 @@ use crate::{
         pane::PaneId,
         ui::{
             spinner::spinner,
-            styles::{button_style_playbar, icon_playbar_button},
+            styles::{button_style_playbar, icon_style_playbar_button},
         },
         Message,
     },
@@ -36,7 +36,7 @@ pub fn thumbnail(size: f32, thumb: Option<&std::path::PathBuf>) -> Element<'_, M
             .into()
     } else {
         icons::icon(icons::MUSIC_ICON, size)
-            .style(icon_fg_muted())
+            .style(icon_style_fg_muted())
             .into()
     }
 }
@@ -128,7 +128,7 @@ pub fn scope_button(
 /// `on_press` is `None` while no query can run (blank query, or one already
 /// in flight), which renders it disabled.
 pub fn search_button(on_press: Option<Message>) -> Button<'static, Message, AppTheme> {
-    Button::new(icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_MD).style(icon_primary()))
+    Button::new(icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_MD).style(icon_style_primary()))
         .padding(theme::SPACING_SM)
         .style(button_style_primary())
         .width(theme::SEARCH_BTN_SIZE)
@@ -186,14 +186,15 @@ pub fn play_pause_button(is_playing: bool) -> Button<'static, Message, AppTheme>
             },
             theme::ICON_SIZE_LG,
         )
-        .style(icon_primary()),
+        .style(icon_style_primary()),
     )
     .style(button_style_primary())
 }
 
 pub fn toggle_bookmark_button(is_saved: bool) -> Button<'static, Message, AppTheme> {
     Button::new(
-        icons::icon(icons::BOOKMARK_ICON, theme::ICON_SIZE_SM).style(icon_playbar_button(is_saved)),
+        icons::icon(icons::BOOKMARK_ICON, theme::ICON_SIZE_SM)
+            .style(icon_style_playbar_button(is_saved)),
     )
     .padding(theme::SPACING_SM)
     .style(button_style_scope(is_saved))
@@ -205,8 +206,7 @@ pub fn open_in_browser_button(
     tr: &'static crate::i18n::Strings,
     url: &str,
 ) -> Element<'static, Message, AppTheme> {
-    Button::new(text(tr.ctx_open_in_browser))
-        .padding([theme::SPACING_XS, theme::SPACING_SM])
+    text_button(tr.ctx_open_in_browser)
         .on_press(Message::OpenInBrowser(url.to_string()))
         .into()
 }
@@ -219,9 +219,7 @@ pub fn subtitle_artist(
 ) -> Element<'_, Message, AppTheme> {
     let artist = text(name).size(size);
     if let Some((id, source)) = artist_target {
-        Button::new(artist)
-            .padding(0)
-            .style(super::styles::button_style_album())
+        link_button(artist)
             .on_press(Message::OpenArtist {
                 pane,
                 url: source.artist_page_url(&id).unwrap_or_default(),
@@ -337,8 +335,54 @@ pub fn dep_install_status(
 
 pub fn like_button(liked: bool) -> Button<'static, Message, AppTheme> {
     Button::new(
-        icons::icon(icons::HEART_ICON, theme::ICON_SIZE_MD).style(icon_playbar_button(liked)),
+        icons::icon(icons::HEART_ICON, theme::ICON_SIZE_MD).style(icon_style_playbar_button(liked)),
     )
     .padding(theme::SPACING_XS)
     .style(button_style_playbar(liked))
+}
+
+pub fn dialog_button(
+    label: impl text::IntoFragment<'static>,
+) -> Button<'static, Message, AppTheme> {
+    Button::new(Container::new(text(label)).center_x(Length::Fill)).padding(theme::SPACING_SM)
+}
+
+pub fn dialog_button_row(
+    buttons: impl IntoIterator<Item = Element<'static, Message, AppTheme>>,
+) -> Row<'static, Message, AppTheme> {
+    Row::with_children(buttons)
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center)
+}
+
+pub fn text_button(label: impl text::IntoFragment<'static>) -> Button<'static, Message, AppTheme> {
+    Button::new(text(label)).padding([theme::SPACING_XS, theme::SPACING_MD])
+}
+
+pub fn icon_button(
+    icon_data: &'static [u8],
+    size: f32,
+    color: impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static,
+) -> Button<'static, Message, AppTheme> {
+    Button::new(icons::icon(icon_data, size).style(color)).padding(theme::SPACING_XS)
+}
+
+pub fn link_button<'a>(
+    content: impl Into<Element<'a, Message, AppTheme>>,
+) -> Button<'a, Message, AppTheme> {
+    Button::new(content).padding(0).style(button_style_album())
+}
+
+pub fn playbar_toggle_button(
+    icon_data: &'static [u8],
+    active: bool,
+) -> Button<'static, Message, AppTheme> {
+    icon_button(
+        icon_data,
+        theme::ICON_SIZE_MD,
+        icon_style_playbar_button(active),
+    )
+    .style(button_style_playbar(active))
+    .width(theme::QUEUE_BTN_WIDTH)
+    .height(theme::QUEUE_BTN_WIDTH)
 }

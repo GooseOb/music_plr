@@ -9,12 +9,12 @@ use iced::{
 
 use super::{
     shared_components::{
-        empty_state, inner_row_layout, loading_state, search_button, thumbnail,
-        toggle_bookmark_button, track_row,
+        empty_state, icon_button, inner_row_layout, loading_state, search_button, text_button,
+        thumbnail, toggle_bookmark_button, track_row,
     },
     styles::{
         bg_search_hist, bg_secondary, button_style_hist, fg_secondary, icon_color,
-        icon_fg_secondary, scroll_padding,
+        icon_style_fg_secondary, scroll_padding,
     },
     theme, view_track_list, Message, MusicPlayer,
 };
@@ -366,8 +366,7 @@ fn view_track_page<'a>(
     let mut buttons: Vec<Element<'a, Message, AppTheme>> = leading_buttons.into_iter().collect();
     if matches!(content, LoadState::Ready(tracks) if !tracks.is_empty()) {
         buttons.push(
-            Button::new(text(player.strings.save_as_playlist))
-                .padding([theme::SPACING_XS, theme::SPACING_SM])
+            text_button(player.strings.save_as_playlist)
                 .on_press(Message::SaveBrowseAsPlaylist(pane))
                 .into(),
         );
@@ -450,11 +449,11 @@ pub(super) fn view_search_history(
                         })
                         .on_press(Message::SearchHistorySelected(pane, i))
                         .into(),
-                        Button::new(
-                            icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM)
-                                .style(icon_fg_secondary()),
+                        icon_button(
+                            icons::DELETE_ICON,
+                            theme::ICON_SIZE_SM,
+                            icon_style_fg_secondary(),
                         )
-                        .padding(theme::SPACING_XS)
                         .style(button_style_hist())
                         .on_press(Message::DeleteSearchHistory(pane, i))
                         .into(),

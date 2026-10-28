@@ -5,8 +5,8 @@ use iced::{
 };
 
 use super::{
-    shared_components::empty_state,
-    styles::{bg_secondary, button_style_album, button_style_panel_item, fg_secondary},
+    shared_components::{empty_state, link_button},
+    styles::{bg_secondary, button_style_panel_item, fg_secondary},
     track_list::{track_row_layout, view_track_list, view_track_row, virtual_scrollable},
     Message, MusicPlayer,
 };
@@ -14,7 +14,7 @@ use crate::{
     app::{
         interaction::TrackPos,
         pane::{is_main_pane, QUEUE_PANE_ID, RECENT_PANE_ID},
-        ui::styles::{fg_accent, icon_tab},
+        ui::styles::{fg_accent, icon_style_tab},
         ViewKind,
     },
     icons,
@@ -79,7 +79,7 @@ fn queue_tab<'a>(
     Button::new(
         Row::with_children([
             icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_SM)
-                .style(icon_tab(active))
+                .style(icon_style_tab(active))
                 .into(),
             text(label).into(),
         ])
@@ -131,9 +131,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     {
         Some(source) => Row::with_children([
             section_text(player.strings.now_playing_from),
-            Button::new(text(source).size(theme::TEXT_SIZE_XS))
-                .padding(0)
-                .style(button_style_album())
+            link_button(text(source).size(theme::TEXT_SIZE_XS))
                 .on_press(Message::RevealNowPlaying)
                 .into(),
         ])

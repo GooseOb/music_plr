@@ -1,11 +1,11 @@
 use iced::{
     alignment,
-    widget::{checkbox, scrollable, text, text_input, Button, Column, Container, Space},
+    widget::{checkbox, scrollable, text, text_input, Column, Container, Space},
     Element, Length,
 };
 
 use super::{
-    shared_components::{dep_install_status, scope_tab_row, text_input_row},
+    shared_components::{dep_install_status, scope_tab_row, text_button, text_input_row},
     Message, MusicPlayer,
 };
 use crate::{
@@ -87,8 +87,7 @@ fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .translation_models
         .as_ref()
         .is_some_and(crate::load_state::LoadState::is_loading);
-    let refresh = Button::new(text(player.strings.translation_refresh_models))
-        .padding([theme::SPACING_XS, theme::SPACING_MD])
+    let refresh = text_button(player.strings.translation_refresh_models)
         .on_press_maybe((!loading).then_some(Message::RequestTranslationModels))
         .into();
     let mut children: Vec<Element<'_, Message, AppTheme>> = vec![base_url, api_key, model, refresh];
@@ -177,8 +176,7 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             text((tr.update_available)(version))
                 .style(fg_accent())
                 .into(),
-            Button::new(text(tr.update_now))
-                .padding([theme::SPACING_XS, theme::SPACING_MD])
+            text_button(tr.update_now)
                 .on_press(Message::UpdateApp)
                 .into(),
         ])
@@ -210,8 +208,7 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     };
 
     Column::with_children([
-        Button::new(text(tr.check_for_updates))
-            .padding([theme::SPACING_XS, theme::SPACING_MD])
+        text_button(tr.check_for_updates)
             .on_press(Message::CheckForUpdates)
             .into(),
         text((tr.current_version)(crate::app::update::APP_VERSION))
@@ -330,8 +327,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         Column::with_children([
             section(player.strings.language_lbl, [language_section(player)]),
             section(player.strings.sec_appearance, [theme_section(player)]),
-            Button::new(text(player.strings.reset_defaults))
-                .padding([theme::SPACING_SM, theme::SPACING_MD])
+            text_button(player.strings.reset_defaults)
                 .on_press(Message::SettingsResetDefaults)
                 .into(),
         ])
@@ -384,8 +380,7 @@ fn dep_settings_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
 
     let app_managed = crate::deps::installed_via_app(kind);
     let install_delete_btn: Element<'_, Message, AppTheme> = if app_managed {
-        Button::new(text(tr.deps_delete))
-            .padding([theme::SPACING_XS, theme::SPACING_MD])
+        text_button(tr.deps_delete)
             .on_press_maybe(if installing || deleting {
                 None
             } else {
@@ -393,8 +388,7 @@ fn dep_settings_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
             })
             .into()
     } else if kind.auto_installable() {
-        Button::new(text(tr.deps_install))
-            .padding([theme::SPACING_XS, theme::SPACING_MD])
+        text_button(tr.deps_install)
             .on_press_maybe(if installing || deleting {
                 None
             } else {

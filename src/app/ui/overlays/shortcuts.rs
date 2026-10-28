@@ -2,13 +2,16 @@
 
 use iced::{
     alignment,
-    widget::{scrollable, text, Button, Column, Container, Row},
+    widget::{scrollable, text, Column, Row},
     Element, Length,
 };
 
 use super::{theme, view_dialog, Message, MusicPlayer};
 use crate::{
-    app::ui::styles::{fg_accent, fg_secondary},
+    app::ui::{
+        shared_components::dialog_button,
+        styles::{fg_accent, fg_secondary},
+    },
     theme::AppTheme,
 };
 
@@ -44,12 +47,7 @@ pub(super) fn view_shortcuts(player: &MusicPlayer) -> Element<'_, Message, AppTh
         );
     }
 
-    let close_btn = Button::new(
-        Container::new(text(player.strings.cancel).size(theme::TEXT_SIZE_SM))
-            .center_x(Length::Fill),
-    )
-    .padding(theme::SPACING_SM)
-    .on_press(Message::CloseDialog);
+    let close_btn = dialog_button(player.strings.cancel).on_press(Message::CloseDialog);
 
     view_dialog(
         Column::with_children([

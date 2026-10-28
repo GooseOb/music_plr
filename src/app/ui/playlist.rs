@@ -5,7 +5,10 @@ use iced::{
 };
 
 use super::{
-    styles::{button_style_danger, fg_secondary, icon_fg, icon_fg_muted, icon_fg_secondary},
+    styles::{
+        button_style_danger, fg_secondary, icon_style_fg, icon_style_fg_muted,
+        icon_style_fg_secondary,
+    },
     theme, view_track_list, Message, MusicPlayer,
 };
 use crate::{
@@ -33,7 +36,7 @@ pub(super) fn view_playlist<'a>(
         Button::new(
             Row::with_children([
                 icons::icon(icons::FOLDER_ICON, theme::ICON_SIZE_SM)
-                    .style(icon_fg_secondary())
+                    .style(icon_style_fg_secondary())
                     .into(),
                 text(player.strings.add_local)
                     .align_y(alignment::Vertical::Center)
@@ -46,7 +49,7 @@ pub(super) fn view_playlist<'a>(
         .height(theme::BUTTON_HEIGHT)
         .on_press(Message::AddLocalMusic)
         .into(),
-        Button::new(icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM).style(icon_fg()))
+        Button::new(icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM).style(icon_style_fg()))
             .padding(theme::SPACING_SM)
             .height(theme::BUTTON_HEIGHT)
             .width(theme::BUTTON_HEIGHT)
@@ -75,7 +78,7 @@ pub(super) fn view_trashbin(player: &MusicPlayer, pane: PaneId) -> Element<'_, M
 pub(super) fn view_downloads(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> {
     let header = Row::with_children([
         icons::icon(icons::DOWNLOAD_ICON, theme::ICON_SIZE_MD)
-            .style(icon_fg_muted())
+            .style(icon_style_fg_muted())
             .into(),
         text(player.strings.downloaded_tracks)
             .style(fg_secondary())

@@ -18,7 +18,10 @@ use super::{
     shared_components::{
         empty_state, inner_row_layout, play_pause_button, subtitle_artist, thumbnail, track_row,
     },
-    styles::{button_style_album, button_style_primary, fg_secondary, icon_accent, icon_primary},
+    styles::{
+        button_style_album, button_style_primary, fg_secondary, icon_style_accent,
+        icon_style_primary,
+    },
     theme, Message, MusicPlayer,
 };
 use crate::{
@@ -138,7 +141,7 @@ pub(super) fn leading_control<'a>(
             .on_press(Message::TogglePlayPause)
             .into()
     } else if is_hovered && !player.is_trashed(track) {
-        Button::new(icons::icon(icons::PLAY_ICON, theme::ICON_SIZE_LG).style(icon_primary()))
+        Button::new(icons::icon(icons::PLAY_ICON, theme::ICON_SIZE_LG).style(icon_style_primary()))
             .padding(theme::SPACING_2XS)
             .style(button_style_primary())
             .on_press(Message::PlayTrackAt(pos))
@@ -302,18 +305,18 @@ fn track_row_layout_inner<'a>(
     if player.is_trashed(track) {
         trailing_children.push(
             icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_MD)
-                .style(icon_accent())
+                .style(icon_style_accent())
                 .into(),
         );
     }
 
     trailing_children.push(if is_downloaded {
         icons::icon(icons::DOWNLOAD_ICON, theme::ICON_SIZE_MD)
-            .style(icon_accent())
+            .style(icon_style_accent())
             .into()
     } else if is_cached {
         icons::icon(icons::CACHE_ICON, theme::ICON_SIZE_MD)
-            .style(icon_accent())
+            .style(icon_style_accent())
             .into()
     } else {
         Space::new().width(theme::ICON_SIZE_MD).into()

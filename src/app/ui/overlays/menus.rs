@@ -18,7 +18,9 @@ use crate::{
             SubmenuKind,
         },
         ui::{
-            styles::{bg_popup, context_menu_item_style, icon_fg_muted, icon_fg_secondary},
+            styles::{
+                bg_popup, context_menu_item_style, icon_style_fg_muted, icon_style_fg_secondary,
+            },
             CONTEXT_MENU_PANEL_ID, CONTEXT_MENU_ROW_ID,
         },
     },
@@ -318,14 +320,14 @@ fn menu_item<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let mut children = vec![
         icons::icon(icon, theme::ICON_SIZE_SM)
-            .style(icon_fg_muted())
+            .style(icon_style_fg_muted())
             .into(),
         text(label).width(Length::Fill).into(),
     ];
     if chevron {
         children.push(
             icons::icon(icons::CHEVRON_RIGHT_ICON, theme::ICON_SIZE_SM)
-                .style(icon_fg_secondary())
+                .style(icon_style_fg_secondary())
                 .into(),
         );
     }
@@ -423,7 +425,7 @@ fn submenu_entries<'a>(
             let item = context_menu_item(
                 [
                     icons::icon(icon, theme::ICON_SIZE_SM)
-                        .style(icon_fg_muted())
+                        .style(icon_style_fg_muted())
                         .into(),
                     text(label).into(),
                 ],

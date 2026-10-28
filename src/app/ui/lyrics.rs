@@ -19,7 +19,7 @@ use super::{
     theme, Message, MusicPlayer,
 };
 use crate::{
-    app::{pane::PaneId, LyricsState, LyricsViewMode},
+    app::{pane::PaneId, ui::shared_components::dialog_button, LyricsState, LyricsViewMode},
     load_state::LoadState,
     theme::AppTheme,
 };
@@ -120,11 +120,13 @@ fn view_edit_custom_button<'a>(
     pane: PaneId,
     name: &'a str,
 ) -> Element<'a, Message, AppTheme> {
-    Button::new(Container::new(text(player.strings.edit_lyrics)).center_x(Length::Fill))
-        .width(Length::Fill)
-        .padding([theme::SPACING_XS, theme::SPACING_MD])
-        .on_press(Message::EditCustomLyrics(pane, name.to_string()))
-        .into()
+    Container::new(
+        dialog_button(player.strings.edit_lyrics)
+            .width(Length::Fill)
+            .on_press(Message::EditCustomLyrics(pane, name.to_string())),
+    )
+    .padding([0.0, theme::SPACING_SM])
+    .into()
 }
 
 fn view_custom_editor<'a>(
@@ -147,21 +149,17 @@ fn view_custom_editor<'a>(
         .padding(theme::SPACING_LG)
         .height(Length::Fill);
 
-    let save_btn = Button::new(Container::new(text(player.strings.save)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
+    let save_btn = dialog_button(player.strings.save)
         .style(button_style_primary())
         .on_press(Message::SaveCustomLyrics(pane));
 
     let cancel_btn =
-        Button::new(Container::new(text(player.strings.cancel)).center_x(Length::Fill))
-            .padding(theme::SPACING_SM)
-            .on_press(Message::CancelCustomLyricsEdit(pane));
+        dialog_button(player.strings.cancel).on_press(Message::CancelCustomLyricsEdit(pane));
 
     let mut buttons: Vec<Element<'a, Message, AppTheme>> = vec![cancel_btn.into(), save_btn.into()];
     if lyrics_state.editing_custom_name.is_some() {
         buttons.push(
-            Button::new(Container::new(text(player.strings.delete)).center_x(Length::Fill))
-                .padding(theme::SPACING_SM)
+            dialog_button(player.strings.delete)
                 .style(button_style_danger())
                 .on_press(Message::DeleteCustomLyrics(pane))
                 .into(),

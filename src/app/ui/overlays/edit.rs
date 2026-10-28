@@ -3,7 +3,7 @@
 
 use iced::{
     alignment,
-    widget::{scrollable, text, text_input, Button, Column, Container, Row},
+    widget::{scrollable, text, text_input, Column, Row},
     Element, Length,
 };
 
@@ -13,8 +13,9 @@ use crate::{
         pane::MANUAL_SEARCH_PANE_ID,
         ui::{
             shared_components::{
-                disabled_text_input_row, empty_state, loading_state, scope_tab_row, search_button,
-                text_input_row, thumbnail,
+                dialog_button, dialog_button_row, disabled_text_input_row, empty_state,
+                loading_state, scope_tab_row, search_button, text_button, text_input_row,
+                thumbnail,
             },
             styles::{button_style_primary, fg_accent, fg_secondary, scroll_padding},
             view_track_list,
@@ -33,8 +34,7 @@ fn manual_search_button(
     provider: ProviderId,
 ) -> Option<Element<'_, Message, AppTheme>> {
     provider.capabilities().search.then(|| {
-        Button::new(text(player.strings.manual_search))
-            .padding([theme::SPACING_XS, theme::SPACING_MD])
+        text_button(player.strings.manual_search)
             .on_press(Message::EditTrackManualSearch(provider))
             .into()
     })
@@ -55,8 +55,7 @@ fn provider_row<'a>(
                 if provider == source {
                     text(player.strings.current).style(fg_secondary()).into()
                 } else {
-                    Button::new(text(player.strings.select))
-                        .padding([theme::SPACING_XS, theme::SPACING_MD])
+                    text_button(player.strings.select)
                         .on_press(Message::EditTrackSelectProvider(provider))
                         .into()
                 },
@@ -71,12 +70,9 @@ fn provider_row<'a>(
             let mut children: Vec<Element<'a, Message, AppTheme>> = vec![
                 text(provider.label()).into(),
                 if finding {
-                    Button::new(text(player.strings.finding))
-                        .padding([theme::SPACING_XS, theme::SPACING_MD])
-                        .into()
+                    text_button(player.strings.finding).into()
                 } else {
-                    Button::new(text(player.strings.find))
-                        .padding([theme::SPACING_XS, theme::SPACING_MD])
+                    text_button(player.strings.find)
                         .on_press(Message::EditTrackFindProvider(provider))
                         .into()
                 },
@@ -180,15 +176,11 @@ pub(super) fn view_edit_track<'a>(
     .spacing(theme::SPACING_SM)
     .into();
 
-    let save_btn = Button::new(Container::new(text(player.strings.save)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
+    let save_btn = dialog_button(player.strings.save)
         .style(button_style_primary())
         .on_press(Message::SaveEditTrack);
 
-    let cancel_btn =
-        Button::new(Container::new(text(player.strings.cancel)).center_x(Length::Fill))
-            .padding(theme::SPACING_SM)
-            .on_press(Message::CloseDialog);
+    let cancel_btn = dialog_button(player.strings.cancel).on_press(Message::CloseDialog);
 
     let body = Column::with_children([
         Column::with_children([
@@ -217,10 +209,7 @@ pub(super) fn view_edit_track<'a>(
             .size(theme::TEXT_SIZE_LG)
             .into(),
         scrollable(body).height(Length::Fill).into(),
-        Row::with_children([cancel_btn.into(), save_btn.into()])
-            .spacing(theme::SPACING_SM)
-            .align_y(alignment::Vertical::Center)
-            .into(),
+        dialog_button_row([cancel_btn.into(), save_btn.into()]).into(),
     ])
     .spacing(theme::SPACING_MD)
     .padding(theme::SPACING_MD)
@@ -284,11 +273,8 @@ pub(super) fn view_edit_manual_search<'a>(
             .collect::<Vec<_>>(),
     );
 
-    let cancel_btn = Button::new(Container::new(text(tr.cancel)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
-        .on_press(Message::EditTrackManualCancel);
-    let confirm_btn = Button::new(Container::new(text(tr.confirm)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
+    let cancel_btn = dialog_button(tr.cancel).on_press(Message::EditTrackManualCancel);
+    let confirm_btn = dialog_button(tr.confirm)
         .style(button_style_primary())
         .on_press_maybe(
             manual
@@ -307,10 +293,7 @@ pub(super) fn view_edit_manual_search<'a>(
                 .into(),
             scopes,
             manual_search_results(player, manual),
-            Row::with_children([cancel_btn.into(), confirm_btn.into()])
-                .spacing(theme::SPACING_SM)
-                .align_y(alignment::Vertical::Center)
-                .into(),
+            dialog_button_row([cancel_btn.into(), confirm_btn.into()]).into(),
         ])
         .spacing(theme::SPACING_SM)
         .align_x(alignment::Horizontal::Center)

@@ -2,8 +2,8 @@
 
 use iced::{
     alignment,
-    widget::{checkbox, scrollable, text, Button, Column, Container, Row, Space},
-    Element, Length,
+    widget::{checkbox, scrollable, text, Column, Row, Space},
+    Element,
 };
 
 use super::{theme, view_dialog, Message, MusicPlayer};
@@ -11,7 +11,7 @@ use crate::{
     app::{
         dependency_dialog::dep_desc,
         ui::{
-            shared_components::dep_install_status,
+            shared_components::{dep_install_status, dialog_button, dialog_button_row},
             styles::{button_style_primary, fg_accent, fg_secondary},
         },
     },
@@ -71,24 +71,16 @@ pub(super) fn view_dependency_dialog<'a>(
 
     let pending = dialog.pending(&player.dep_ops);
     let installing_any = player.dep_ops.values().any(|o| o.installing);
-    let install_btn =
-        Button::new(Container::new(text(tr.deps_install_selected)).center_x(Length::Fill))
-            .padding(theme::SPACING_SM)
-            .style(button_style_primary())
-            .on_press_maybe(if pending.is_empty() && !installing_any {
-                None
-            } else {
-                Some(Message::DepInstall)
-            });
-    let discard_btn = Button::new(Container::new(text(tr.deps_discard)).center_x(Length::Fill))
-        .padding(theme::SPACING_SM)
-        .on_press(Message::DepDismiss);
+    let install_btn = dialog_button(tr.deps_install_selected)
+        .style(button_style_primary())
+        .on_press_maybe(if pending.is_empty() && !installing_any {
+            None
+        } else {
+            Some(Message::DepInstall)
+        });
+    let discard_btn = dialog_button(tr.deps_discard).on_press(Message::DepDismiss);
 
-    children.push(
-        Row::with_children([discard_btn.into(), install_btn.into()])
-            .spacing(theme::SPACING_SM)
-            .into(),
-    );
+    children.push(dialog_button_row([discard_btn.into(), install_btn.into()]).into());
 
     let content = Column::with_children(children)
         .spacing(theme::SPACING_MD)
