@@ -8,11 +8,12 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
-## [Unreleased]
+## [1.3.17] - 2026-10-28
 
 ### Fixed
 
 - No longer uses 100% CPU on ALSA worker issues.
+- A little performance and size improvement due to removing unused iced features.
 
 ## [1.3.16] - 2026-10-19
 
