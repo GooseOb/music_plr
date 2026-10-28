@@ -12,13 +12,13 @@ use std::{
 ///
 /// Reports itself as **non-seekable** while the download is running so
 /// symphonia's format readers demux *sequentially* during initialization. On
-/// a partial file a seek would hit missing bytes and trip rodio's
-/// `unreachable!("Seek errors should not occur during initialization")`.
-/// Reads at EOF *block* (with a short sleep) while the writer is alive, so the
-/// decoder sees a file that grows until the download finishes — at which
-/// point a real `EOF` is reported and the track ends normally. Once the
-/// writer is done the file is whole, so the source becomes seekable and
-/// in-place seeks (e.g. the progress bar) work without replaying.
+/// a partial file a seek would hit bytes the writer has not produced yet,
+/// which can fail the probe outright. Reads at EOF *block* (with a short
+/// sleep) while the writer is alive, so the decoder sees a file that grows
+/// until the download finishes — at which point a real `EOF` is reported and
+/// the track ends normally. Once the writer is done the file is whole, so the
+/// source becomes seekable and in-place seeks (e.g. the progress bar) work
+/// without replaying.
 pub(super) struct GrowingMediaSource {
     pub(super) file: std::fs::File,
     /// `Some(flag)` while the copy thread is still writing: reads block at
@@ -79,10 +79,10 @@ impl io::Seek for GrowingMediaSource {
 impl symphonia::core::io::MediaSource for GrowingMediaSource {
     fn is_seekable(&self) -> bool {
         // Live (partial) files are non-seekable so symphonia demuxes
-        // sequentially; the probe then never seeks (and never hits the
-        // `byte_len() == None` seek-error panic inside rodio's `Decoder`).
-        // Once the download is done the file is whole, so the still-playing
-        // source becomes seekable without a replay.
+        // sequentially; the probe then never tries to seek into bytes the
+        // writer has not produced yet. Once the download is done the file is
+        // whole, so the still-playing source becomes seekable without a
+        // replay.
         self.download_done()
     }
 

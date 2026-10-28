@@ -16,6 +16,7 @@ use tracing::{debug, warn};
 
 use crate::providers::ClientEvent;
 
+mod decoder;
 mod growing;
 mod normalization;
 mod symphonia_source;
@@ -447,7 +448,7 @@ impl AudioPlayer {
 
     /// Build and start a rodio `Player` decoding `path` via symphonia.
     ///
-    /// Uses `SymphoniaStreamingSource` rather than `rodio::Decoder`: the file
+    /// Uses `SymphoniaStreamingSource` rather than a generic decoder: the file
     /// starts out non-seekable while the download runs and becomes seekable in
     /// place once it completes, muxed MP4s need a retry budget for transient
     /// packet-read errors, and the known `expected_duration` has to stand in
@@ -758,11 +759,10 @@ fn spawn_stream_to_cache(
     client: Option<&str>,
 ) -> Option<StreamParts> {
     // Request AAC-in-M4A (see `STREAM_FORMAT`): symphonia can decode AAC
-    // (unlike Opus/WebM, which neither rodio's `symphonia-all` nor the
-    // standalone `symphonia` 0.5 crate can decode), and YouTube serves it as
-    // a fast-start DASH stream (moov at the front) that demuxes
-    // sequentially — ideal for streaming. The muxed tail of the selector
-    // covers age-restricted tracks that only offer a 360p MP4.
+    // (Opus/WebM has no decoder), and YouTube serves it as a fast-start DASH
+    // stream (moov at the front) that demuxes sequentially — ideal for
+    // streaming. The muxed tail of the selector covers age-restricted tracks
+    // that only offer a 360p MP4.
     let Some(path) = crate::deps::resolve_yt_dlp() else {
         warn!(
             "yt-dlp not found; install it from the Dependencies dialog (or place yt-dlp on PATH)"

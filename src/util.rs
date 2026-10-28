@@ -80,10 +80,9 @@ pub fn try_probe_duration(path: &str) -> Option<u32> {
     use std::fs::File;
 
     use symphonia::core::{
-        formats::FormatOptions,
+        formats::{probe::Hint, FormatOptions, TrackType},
         io::{MediaSourceStream, MediaSourceStreamOptions},
         meta::MetadataOptions,
-        probe::Hint,
     };
 
     let file = File::open(path).ok()?;
@@ -97,31 +96,33 @@ pub fn try_probe_duration(path: &str) -> Option<u32> {
         hint.with_extension(ext);
     }
 
-    let probed = symphonia::default::get_probe()
-        .format(
+    let format = symphonia::default::get_probe()
+        .probe(
             &hint,
             mss,
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
+            FormatOptions::default(),
+            MetadataOptions::default(),
         )
         .ok()?;
 
-    let track = probed
-        .format
-        .tracks()
-        .iter()
-        .find(|t| t.codec_params.sample_rate.is_some())?;
+    let track = format.default_track(TrackType::Audio)?;
+    let params = track.codec_params.as_ref()?.audio()?;
 
-    let params = &track.codec_params;
-    // `sample_rate == 0` would mean a corrupt header, which we treat as
-    // undeterminable.
-    let sample_rate = params.sample_rate.filter(|&r| r != 0)?;
-    let n_frames = params.n_frames?;
+    // Prefer the exact frame count when the container provides one (its
+    // demuxers scale codec frames up to PCM frames); otherwise fall back to
+    // the track duration in its own timebase, which also covers containers
+    // whose timescale differs from the sample rate.
+    let seconds = if let Some(n_frames) = track.num_frames {
+        // `sample_rate == 0` would mean a corrupt header, which we treat as
+        // undeterminable.
+        let sample_rate = params.sample_rate.filter(|&r| r != 0)?;
+        n_frames / u64::from(sample_rate)
+    } else {
+        let time = track.time_base?.calc_duration(track.duration?)?;
+        time.as_secs_f64() as u64
+    };
 
-    // `n_frames` is the number of PCM samples (symphonia's MP3/FLAC/etc.
-    // demuxers scale codec frames up to PCM samples), so dividing by the
-    // sample rate yields seconds.
-    Some(n_frames as u32 / sample_rate)
+    u32::try_from(seconds).ok()
 }
 
 pub fn fuzzy_match(query: &str, text: &str) -> bool {

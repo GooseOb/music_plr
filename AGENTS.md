@@ -56,6 +56,7 @@ src/
 ├── app/update/        # Per-domain handlers (actions, artist, dispatch, drag, edit_track, input, navigation, operation, playback, playlists, search, selection, session, settings, tick, translate); dispatch.rs holds update()/subscription()
 ├── audio/mod.rs       # AudioPlayer: rodio player + yt-dlp process management
 ├── audio/growing.rs   # GrowingMediaSource (the still-growing file reader)
+├── audio/decoder.rs   # make_audio_decoder: AAC-LC core fallback for HE-AAC (SBR) streams
 ├── audio/symphonia_source.rs # SymphoniaStreamingSource (rodio Source + Iterator); applies the normalization gain
 ├── audio/normalization.rs # compute_normalization_gain: RMS-based loudness analysis via symphonia
 ├── data/mod.rs        # JsonStore trait + config_path()/cache_path()
@@ -108,7 +109,7 @@ src/
 `AudioPlayer` runs a dedicated output thread (mpsc command channel). Decoding is fully native via symphonia.
 
 - **Stream+cache**: `yt-dlp -f bestaudio[ext=m4a]/bestaudio/best[ext=mp4]/best -o -` writes AAC audio (muxed MP4 fallback for age-restricted tracks, whose AAC symphonia still decodes) to the cache file (`.cache`, owned by `StreamCache`); a copy thread drains stdout and flips `writer_alive` when done. When yt-dlp and that thread both finish, the tick registers the cache; track end → player empties → auto-advance.
-- **Decoding**: a custom `SymphoniaStreamingSource` (rodio `Source` + `Iterator<Item=f32>`) wraps a non-seekable `GrowingMediaSource`, so symphonia demuxes sequentially and plays a still-growing file without `rodio::Decoder::new`'s `SeekError`. The reader blocks at EOF while `writer_alive`, so playback starts within a few KB. Cached/downloaded/local (`PlayCached`) reuse it with `writer_alive = None` (real `byte_len`) so seeking works on replay.
+- **Decoding**: a custom `SymphoniaStreamingSource` (rodio `Source` + `Iterator<Item=f32>`) wraps `GrowingMediaSource`, whose seekability flips when the download completes, so symphonia probes/demuxes sequentially while live and in-place seeks work on replay. The reader blocks at EOF while `writer_alive`, so playback starts within a few KB. `audio/decoder.rs` retries HE-AAC as LC-core-only (the old 0.5 behavior) because symphonia 0.6 rejects SBR outright, keeping muxed MP4 fallbacks playable.
 - **Volume normalization** (optional `config.volume_normalization`): a per-track RMS/peak gain from `compute_normalization_gain`, applied per-sample inside `SymphoniaStreamingSource` (composes with `set_volume`, survives seeking). First play uses gain 1.0; `request_normalization_analysis` fills the cache afterwards.
 
 ## YouTube & Key Files

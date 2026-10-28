@@ -9,14 +9,14 @@ use std::path::Path;
 
 use symphonia::{
     core::{
-        codecs::{DecoderOptions, CODEC_TYPE_NULL},
-        formats::FormatOptions,
+        formats::{probe::Hint, FormatOptions, TrackType},
         io::MediaSourceStream,
         meta::MetadataOptions,
-        probe::Hint,
     },
     default::get_probe,
 };
+
+use super::decoder::make_audio_decoder;
 
 /// Target RMS amplitude (linear, full scale = 1.0). Tracks quieter or louder
 /// than this are scaled toward it, so playback loudness is consistent.
@@ -37,44 +37,35 @@ pub fn compute_normalization_gain(path: &Path) -> Option<f32> {
         Box::new(file),
         symphonia::core::io::MediaSourceStreamOptions::default(),
     );
-    let mut probed = get_probe()
-        .format(
+    let mut format = get_probe()
+        .probe(
             &Hint::new(),
             mss,
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
+            FormatOptions::default(),
+            MetadataOptions::default(),
         )
         .ok()?;
 
-    let track = probed
-        .format
-        .tracks()
-        .iter()
-        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)?;
+    let track = format.default_track(TrackType::Audio)?;
+    let params = track.codec_params.as_ref()?.audio()?;
     let track_id = track.id;
-    let mut decoder = symphonia::default::get_codecs()
-        .make(&track.codec_params, &DecoderOptions::default())
-        .ok()?;
+    let mut decoder = make_audio_decoder(params).ok()?;
 
     let mut sum_squares: f64 = 0.0;
     let mut n_samples: u64 = 0;
     let mut peak: f32 = 0.0;
+    let mut samples: Vec<f32> = Vec::new();
 
-    while let Ok(packet) = probed.format.next_packet() {
-        if packet.track_id() != track_id {
+    while let Ok(Some(packet)) = format.next_packet() {
+        if packet.track_id != track_id {
             continue;
         }
         let Ok(audio_buf) = decoder.decode(&packet) else {
             // Recoverable decode error: skip the packet and keep going.
             continue;
         };
-        let spec = audio_buf.spec().to_owned();
-        let mut buf = symphonia::core::audio::SampleBuffer::<f32>::new(
-            symphonia::core::units::Duration::from(audio_buf.capacity() as u64),
-            spec,
-        );
-        buf.copy_interleaved_ref(audio_buf);
-        for &v in buf.samples() {
+        audio_buf.copy_to_vec_interleaved(&mut samples);
+        for &v in &samples {
             sum_squares += f64::from(v) * f64::from(v);
             n_samples += 1;
             let a = v.abs();
