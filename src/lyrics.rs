@@ -269,6 +269,9 @@ impl Lyrics {
     }
 
     pub fn to_edit_text(&self) -> String {
+        if self.lines.is_empty() {
+            return self.plain.clone();
+        }
         let mut out = Vec::new();
         for line in &self.lines {
             match line.time {
@@ -1305,6 +1308,29 @@ mod tests {
     #[test]
     fn custom_text_empty_is_none() {
         assert!(Lyrics::from_custom_text("  \n ").is_none());
+    }
+
+    #[test]
+    fn edit_text_falls_back_to_plain_when_lines_are_missing() {
+        let lyrics = Lyrics {
+            lines: Vec::new(),
+            plain: "first line\nsecond line".into(),
+            provider: LyricsProvider::LrcLib,
+            translations: Vec::new(),
+        };
+        assert!(!lyrics.has_timed());
+        assert_eq!(lyrics.to_edit_text(), "first line\nsecond line");
+    }
+
+    #[test]
+    fn plain_only_lrclib_record_has_editable_text() {
+        let rec = LrcLibRecord {
+            synced_lyrics: None,
+            plain_lyrics: Some("first line\nsecond line".into()),
+        };
+        let lyrics = record_to_lyrics(rec, LyricsProvider::LrcLib);
+        assert!(lyrics.lines.is_empty());
+        assert_eq!(lyrics.to_edit_text(), "first line\nsecond line");
     }
 
     fn genius_req(artist: &str, title: &str) -> LyricsRequest {

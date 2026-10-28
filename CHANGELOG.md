@@ -8,6 +8,12 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+## [Unreleased]
+
+### Fixed
+
+- "Translate with AI" now works with non-synced lyrics.
+
 ## [1.3.17] - 2026-10-28
 
 ### Fixed
