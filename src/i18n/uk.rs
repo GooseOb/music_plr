@@ -1,7 +1,9 @@
 use super::{
     plural::{slavic, slavic_genitive},
-    Strings,
+    with_search_marker, Strings,
 };
+
+const SEARCH_MARKER: &str = "(пошук)";
 
 pub const STRINGS: Strings = Strings {
     search: "Пошук",
@@ -97,12 +99,15 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_library: "Вилучити з бібліотеки",
     ctx_open_in_browser: "Відкрити в браузері",
     trashbin: "Кошик",
-    sub_play_via: "Грати через",
-    sub_download_from: "Завантажити з",
-    sub_via: "Через",
-    sub_on: "На",
-    sub_clear_cache_from: "Очистити з",
-    via_search_suffix: "(пошук)",
+    sub_play_via: |p, search| {
+        with_search_marker(format_args!("Грати через {p}"), search, SEARCH_MARKER)
+    },
+    sub_download_from: |p, search| {
+        with_search_marker(format_args!("Завантажити з {p}"), search, SEARCH_MARKER)
+    },
+    sub_via: |p, _| format!("Через {p}"),
+    sub_on: |p, search| with_search_marker(format_args!("На {p}"), search, SEARCH_MARKER),
+    sub_clear_cache_from: |p, _| format!("Очистити з {p}"),
 
     current: "(поточний)",
     select: "вибрати",
@@ -277,7 +282,6 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("Оновлення не вдалося: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
     deps_failed_detail: |e| format!("Failed: {e}"),
     deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 

@@ -378,9 +378,9 @@ fn submenu_entries<'a>(
         .enumerate()
         .map(|(i, provider)| {
             let focused = menu.anchor.hovered == Some(ContextMenuFocus::Sub(kind, i));
-            // `(base label, icon, whether the track carries an id here,
+            // `(label builder, icon, whether the track carries an id here,
             // whether a missing id falls back to search)`.
-            let (base, icon, has_id, search_fallback) = match kind {
+            let (label_for, icon, has_id, search_fallback) = match kind {
                 SubmenuKind::Play => (
                     tr.sub_play_via,
                     icons::PLAY_ICON,
@@ -412,13 +412,9 @@ fn submenu_entries<'a>(
             };
             let by_search = search_fallback && !has_id;
             let label = if provider == ProviderId::Local {
-                tr.ctx_play_local.to_string()
-            } else if by_search {
-                (tr.sub_menu_label)(base, provider.label(), tr.via_search_suffix)
+                Cow::Borrowed(tr.ctx_play_local)
             } else {
-                (tr.sub_menu_label)(base, provider.label(), "")
-                    .trim_end()
-                    .to_string()
+                Cow::Owned(label_for(provider.label(), by_search))
             };
             let icon = if by_search { icons::SEARCH_ICON } else { icon };
             let message = kind.entry_message(provider, menu);

@@ -1,4 +1,6 @@
-use super::{plural::zero_or_one, Strings};
+use super::{plural::zero_or_one, with_search_marker, Strings};
+
+const SEARCH_MARKER: &str = "(recherche)";
 
 pub const STRINGS: Strings = Strings {
     search: "Rechercher",
@@ -94,12 +96,13 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_library: "Retirer de la bibliothèque",
     ctx_open_in_browser: "Ouvrir dans le navigateur",
     trashbin: "Corbeille",
-    sub_play_via: "Lire via",
-    sub_download_from: "Télécharger depuis",
-    sub_via: "Via",
-    sub_on: "Sur",
-    sub_clear_cache_from: "Effacer de",
-    via_search_suffix: "(recherche)",
+    sub_play_via: |p, search| with_search_marker(format_args!("Lire via {p}"), search, SEARCH_MARKER),
+    sub_download_from: |p, search| {
+        with_search_marker(format_args!("Télécharger depuis {p}"), search, SEARCH_MARKER)
+    },
+    sub_via: |p, _| format!("Via {p}"),
+    sub_on: |p, search| with_search_marker(format_args!("Sur {p}"), search, SEARCH_MARKER),
+    sub_clear_cache_from: |p, _| format!("Effacer de {p}"),
 
     current: "(actuelle)",
     select: "sélectionner",
@@ -274,7 +277,6 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("Échec de la mise à jour : {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
     deps_failed_detail: |e| format!("Failed: {e}"),
     deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 

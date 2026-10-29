@@ -94,12 +94,29 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_library: "ライブラリから削除",
     ctx_open_in_browser: "ブラウザで開く",
     trashbin: "ごみ箱",
-    sub_play_via: "再生元",
-    sub_download_from: "ダウンロード元",
-    sub_via: "経由",
-    sub_on: "で",
-    sub_clear_cache_from: "クリア元",
-    via_search_suffix: "（検索）",
+    sub_play_via: |p, search| {
+        if search {
+            format!("{p} で検索して再生")
+        } else {
+            format!("{p} で再生")
+        }
+    },
+    sub_download_from: |p, search| {
+        if search {
+            format!("{p} で検索してダウンロード")
+        } else {
+            format!("{p} からダウンロード")
+        }
+    },
+    sub_via: |p, _| format!("{p} 経由"),
+    sub_on: |p, search| {
+        if search {
+            format!("{p} で検索して開く")
+        } else {
+            format!("{p} で開く")
+        }
+    },
+    sub_clear_cache_from: |p, _| format!("{p} のキャッシュを消去"),
 
     current: "（現在）",
     select: "選択",
@@ -274,7 +291,6 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("アップデートに失敗しました: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
     deps_failed_detail: |e| format!("Failed: {e}"),
     deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 

@@ -94,12 +94,29 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_library: "从音乐库移除",
     ctx_open_in_browser: "在浏览器中打开",
     trashbin: "回收站",
-    sub_play_via: "通过……播放",
-    sub_download_from: "从……下载",
-    sub_via: "通过",
-    sub_on: "在",
-    sub_clear_cache_from: "从……清除",
-    via_search_suffix: "（搜索）",
+    sub_play_via: |p, search| {
+        if search {
+            format!("通过 {p} 搜索并播放")
+        } else {
+            format!("通过 {p} 播放")
+        }
+    },
+    sub_download_from: |p, search| {
+        if search {
+            format!("从 {p} 搜索并下载")
+        } else {
+            format!("从 {p} 下载")
+        }
+    },
+    sub_via: |p, _| format!("通过 {p}"),
+    sub_on: |p, search| {
+        if search {
+            format!("在 {p} 上搜索")
+        } else {
+            format!("在 {p} 上")
+        }
+    },
+    sub_clear_cache_from: |p, _| format!("清除 {p} 缓存"),
 
     current: "（当前）",
     select: "选择",
@@ -274,7 +291,6 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("更新失败：{e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
     deps_failed_detail: |e| format!("Failed: {e}"),
     deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 

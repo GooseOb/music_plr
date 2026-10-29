@@ -1,6 +1,11 @@
+use std::fmt::{self, Write};
+
 use serde::{Deserialize, Serialize};
 
 use crate::providers::ProviderId;
+
+/// Generous upper bound for one submenu label, so `with_search_marker` fills a single buffer.
+const SUBMENU_LABEL_CAPACITY: usize = 96;
 
 pub mod ar;
 pub mod be;
@@ -181,12 +186,12 @@ pub struct Strings {
     pub ctx_add_to_library: &'static str,
     pub ctx_remove_from_library: &'static str,
     pub trashbin: &'static str,
-    pub sub_play_via: &'static str,
-    pub sub_download_from: &'static str,
-    pub sub_via: &'static str,
-    pub sub_on: &'static str,
-    pub sub_clear_cache_from: &'static str,
-    pub via_search_suffix: &'static str,
+    /// Submenu entries are full sentences: `(provider label, falls back to a search)`.
+    pub sub_play_via: fn(&str, bool) -> String,
+    pub sub_download_from: fn(&str, bool) -> String,
+    pub sub_via: fn(&str, bool) -> String,
+    pub sub_on: fn(&str, bool) -> String,
+    pub sub_clear_cache_from: fn(&str, bool) -> String,
 
     pub current: &'static str,
     pub select: &'static str,
@@ -358,7 +363,6 @@ pub struct Strings {
     pub update_failed: fn(&str) -> String,
     pub percent: fn(u64) -> String,
     pub list_match_pos: fn(usize, usize) -> String,
-    pub sub_menu_label: fn(&str, &str, &str) -> String,
     pub deps_failed_detail: fn(&str) -> String,
     pub deps_delete_failed_detail: fn(&str) -> String,
 
@@ -409,6 +413,93 @@ impl Strings {
             ProviderId::YouTube => self.search_youtube.into(),
             ProviderId::Local => self.search_local.into(),
             other => (self.search_provider)(other.label()),
+        }
+    }
+}
+
+/// Builds a submenu label in one buffer, appending `marker` when the action falls back to a search.
+pub(super) fn with_search_marker(label: fmt::Arguments<'_>, search: bool, marker: &str) -> String {
+    let mut out = String::with_capacity(SUBMENU_LABEL_CAPACITY);
+    let _ = out.write_fmt(label);
+    if search {
+        out.push(' ');
+        let _ = out.write_str(marker);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn submenu_labels_name_the_provider() {
+        for lang in Language::ALL {
+            let s = lang.strings();
+            let labels = [
+                (s.sub_play_via)("YouTube", true),
+                (s.sub_download_from)("YouTube", true),
+                (s.sub_via)("YouTube", false),
+                (s.sub_on)("YouTube", true),
+                (s.sub_clear_cache_from)("YouTube", false),
+            ];
+            for label in labels {
+                assert!(label.contains("YouTube"), "{lang:?}: {label}");
+                assert_eq!(label.trim(), label, "{lang:?}: {label}");
+            }
+        }
+    }
+
+    #[test]
+    fn search_fallback_changes_the_label() {
+        for lang in Language::ALL {
+            let s = lang.strings();
+            for build in [s.sub_play_via, s.sub_download_from, s.sub_on] {
+                assert_ne!(build("YouTube", false), build("YouTube", true), "{lang:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn with_search_marker_fills_one_buffer() {
+        let plain = with_search_marker(
+            format_args!("Play via {provider}", provider = "X"),
+            false,
+            "(search)",
+        );
+        assert_eq!(plain, "Play via X");
+        assert_eq!(plain.capacity(), SUBMENU_LABEL_CAPACITY);
+        let marked = with_search_marker(
+            format_args!("Play via {provider}", provider = "X"),
+            true,
+            "(search)",
+        );
+        assert_eq!(marked, "Play via X (search)");
+        assert_eq!(marked.capacity(), SUBMENU_LABEL_CAPACITY);
+    }
+
+    #[test]
+    fn submenu_labels_fit_the_shared_buffer() {
+        for lang in Language::ALL {
+            let s = lang.strings();
+            let builds = [
+                s.sub_play_via,
+                s.sub_download_from,
+                s.sub_via,
+                s.sub_on,
+                s.sub_clear_cache_from,
+            ];
+            for build in builds {
+                for provider in ProviderId::all() {
+                    for search in [false, true] {
+                        let label = build(provider.label(), search);
+                        assert!(
+                            label.len() <= SUBMENU_LABEL_CAPACITY,
+                            "{lang:?} {provider:?} search={search}: {label}"
+                        );
+                    }
+                }
+            }
         }
     }
 }

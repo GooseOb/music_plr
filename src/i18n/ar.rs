@@ -1,4 +1,6 @@
-use super::{plural::arabic, Strings};
+use super::{plural::arabic, with_search_marker, Strings};
+
+const SEARCH_MARKER: &str = "(بحث)";
 
 pub const STRINGS: Strings = Strings {
     search: "بحث",
@@ -94,12 +96,13 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_library: "إزالة من المكتبة",
     ctx_open_in_browser: "فتح في المتصفح",
     trashbin: "سلة المهملات",
-    sub_play_via: "تشغيل عبر",
-    sub_download_from: "تنزيل من",
-    sub_via: "عبر",
-    sub_on: "على",
-    sub_clear_cache_from: "مسح من",
-    via_search_suffix: "(بحث)",
+    sub_play_via: |p, search| with_search_marker(format_args!("تشغيل عبر {p}"), search, SEARCH_MARKER),
+    sub_download_from: |p, search| {
+        with_search_marker(format_args!("تنزيل من {p}"), search, SEARCH_MARKER)
+    },
+    sub_via: |p, _| format!("عبر {p}"),
+    sub_on: |p, search| with_search_marker(format_args!("على {p}"), search, SEARCH_MARKER),
+    sub_clear_cache_from: |p, _| format!("مسح من {p}"),
 
     current: "(الحالية)",
     select: "تحديد",
@@ -274,7 +277,6 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("فشل التحديث: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
     deps_failed_detail: |e| format!("Failed: {e}"),
     deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 

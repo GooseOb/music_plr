@@ -1,4 +1,6 @@
-use super::Strings;
+use super::{with_search_marker, Strings};
+
+const SEARCH_MARKER: &str = "(खोज)";
 
 pub const STRINGS: Strings = Strings {
     search: "खोज",
@@ -94,12 +96,15 @@ pub const STRINGS: Strings = Strings {
     ctx_remove_from_library: "लाइब्रेरी से हटाएँ",
     ctx_open_in_browser: "ब्राउज़र में खोलें",
     trashbin: "कचरापेटी",
-    sub_play_via: "इसके माध्यम से चलाएँ",
-    sub_download_from: "से डाउनलोड करें",
-    sub_via: "माध्यम",
-    sub_on: "पर",
-    sub_clear_cache_from: "से साफ़ करें",
-    via_search_suffix: "(खोज)",
+    sub_play_via: |p, search| {
+        with_search_marker(format_args!("{p} के माध्यम से चलाएँ"), search, SEARCH_MARKER)
+    },
+    sub_download_from: |p, search| {
+        with_search_marker(format_args!("{p} से डाउनलोड करें"), search, SEARCH_MARKER)
+    },
+    sub_via: |p, _| format!("{p} के माध्यम से"),
+    sub_on: |p, search| with_search_marker(format_args!("{p} पर"), search, SEARCH_MARKER),
+    sub_clear_cache_from: |p, _| format!("{p} का कैश साफ़ करें"),
 
     current: "(वर्तमान)",
     select: "चुनें",
@@ -274,7 +279,6 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("अपडेट विफल: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    sub_menu_label: |base, provider, suffix| format!("{base} {provider} {suffix}"),
     deps_failed_detail: |e| format!("Failed: {e}"),
     deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
 
