@@ -20,6 +20,7 @@ use crate::{
         view_data::{AlbumRef, PlaylistRef},
         ViewKind,
     },
+    data::library::Card,
     load_state::LoadState,
     providers::{ArtistSection, ArtistSectionKind, ProviderId, SectionContent},
     theme::{self, AppTheme},
@@ -405,7 +406,7 @@ fn h_card<'a>(
     let card = target
         .card_ref()
         .expect("an artist page only renders cards for artist/album/playlist views");
-    let item = target.library_item().expect("artist page card");
+    let item = Card::new(target.library_item().expect("artist page card"));
     let is_hovered = player.drag.is_hovered_card(&item);
     let is_dragging_this = matches!(
         player.drag.pressed,

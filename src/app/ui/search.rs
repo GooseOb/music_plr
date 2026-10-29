@@ -29,7 +29,7 @@ use crate::{
         update::operation::ScrollTarget,
         view_data::SearchData,
     },
-    data::library::{LibraryItem, LibraryKind},
+    data::library::{Card, LibraryItem, LibraryKind},
     icons,
     load_state::LoadState,
     providers::{CardData, ProviderId, SearchTab},
@@ -204,8 +204,8 @@ fn view_search_card_tab<'a>(
     }
 
     let cards = items.iter().enumerate().map(|(i, c)| {
-        let item = LibraryItem::from_card_data(c, kind, search.provider);
-        card_row(player, pane, i, &c.title, &c.subtitle, item)
+        let item = Card::new(LibraryItem::from_card_data(c, kind, search.provider));
+        card_row(player, pane, i, &c.title, &c.subtitle, &item)
     });
 
     super::card_scrollable(pane, Column::with_children(cards)).into()
@@ -221,7 +221,7 @@ fn card_row<'a>(
     index: usize,
     title: &'a str,
     subtitle: &'a str,
-    item: LibraryItem,
+    item: &Card,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let thumb = player.thumbnail_index.get(item.provider, &item.id);
@@ -240,10 +240,10 @@ fn card_row<'a>(
         .style(fg_secondary())
         .into();
     let main = inner_row_layout(leading.into(), thumb, title, subtitle_el, toggle);
-    let is_hovered = player.drag.is_hovered_card(&item);
+    let is_hovered = player.drag.is_hovered_card(item);
     let is_dragging_this = matches!(
         player.drag.pressed,
-        Some(PressedDrag { what: Pressed::Card(ref c, _), .. }) if c == &item
+        Some(PressedDrag { what: Pressed::Card(ref c, _), .. }) if c == item
     );
     let main = MouseArea::new(main)
         .interaction(player.drag.clickable_cursor_interaction())
@@ -256,7 +256,7 @@ fn card_row<'a>(
             host: ScrollTarget::Cards(pane),
             pane,
             // The menu's "Open" lands on exactly what a click opens.
-            target: item.into(),
+            target: item.as_ref().into(),
             row: None,
         },
         CardTarget::into_message,

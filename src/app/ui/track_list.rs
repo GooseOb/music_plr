@@ -128,11 +128,12 @@ pub(super) fn leading_control<'a>(
     pos: TrackPos,
     track: &'a Track,
     player: &'a MusicPlayer,
+    trashed: bool,
 ) -> Element<'a, Message, AppTheme> {
     let is_current = player
         .queue
         .current()
-        .is_some_and(|t| t.cache_key() == track.cache_key());
+        .is_some_and(|t| t.same_identity(track));
     let is_hovered = player.drag.hovered_track() == Some(pos);
 
     if is_current {
@@ -140,7 +141,7 @@ pub(super) fn leading_control<'a>(
             .padding(theme::SPACING_2XS)
             .on_press(Message::TogglePlayPause)
             .into()
-    } else if is_hovered && !player.is_trashed(track) {
+    } else if is_hovered && !trashed {
         Button::new(icons::icon(icons::PLAY_ICON, theme::ICON_SIZE_LG).style(icon_style_primary()))
             .padding(theme::SPACING_2XS)
             .style(button_style_primary())
@@ -179,8 +180,9 @@ fn view_track_row_inner<'a>(
     let is_current = player
         .queue
         .current()
-        .is_some_and(|t| t.cache_key() == track.cache_key());
+        .is_some_and(|t| t.same_identity(track));
     let is_match = player.is_track_list_match(pos);
+    let trashed = player.is_trashed(track);
     let is_interacting = is_hovered || is_dragging;
 
     let row_bg = {
@@ -201,9 +203,10 @@ fn view_track_row_inner<'a>(
         }
     };
 
-    let leading = leading_control(pos, track, player);
+    let leading = leading_control(pos, track, player, trashed);
 
-    let inner = track_row_layout_inner(leading, track, player, pos, show_album, show_plays);
+    let inner =
+        track_row_layout_inner(leading, track, player, pos, show_album, show_plays, trashed);
 
     let track_area = RightClickArea::new(
         MouseArea::new(inner)
@@ -241,7 +244,8 @@ pub(super) fn track_row_layout<'a>(
     pos: TrackPos,
     show_album: bool,
 ) -> Row<'a, Message, AppTheme> {
-    track_row_layout_inner(leading, track, player, pos, show_album, false)
+    let trashed = player.is_trashed(track);
+    track_row_layout_inner(leading, track, player, pos, show_album, false, trashed)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -252,6 +256,7 @@ fn track_row_layout_inner<'a>(
     pos: TrackPos,
     show_album: bool,
     show_plays: bool,
+    trashed: bool,
 ) -> Row<'a, Message, AppTheme> {
     let pane = if is_main_pane(pos.pane) {
         pos.pane
@@ -302,7 +307,7 @@ fn track_row_layout_inner<'a>(
         }
     }
 
-    if player.is_trashed(track) {
+    if trashed {
         trailing_children.push(
             icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_MD)
                 .style(icon_style_accent())

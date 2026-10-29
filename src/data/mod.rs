@@ -87,11 +87,17 @@ pub trait JsonStore: Serialize + DeserializeOwned + Default {
     }
 
     fn load() -> Self {
-        std::fs::read_to_string(Self::path())
+        let mut store: Self = std::fs::read_to_string(Self::path())
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        store.after_load();
+        store
     }
+
+    /// Called by [`load`](Self::load) once the file is deserialized, for stores
+    /// that keep derived in-memory state next to the persisted fields.
+    fn after_load(&mut self) {}
 
     #[cfg(not(test))]
     fn save(&self) {

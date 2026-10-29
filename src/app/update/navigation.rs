@@ -138,11 +138,10 @@ impl MusicPlayer {
         // be routed into the restored snapshot.
         origin.request_id = 0;
         let nav_task = self.handle_navigate_to(pane, origin);
-        let key = track.cache_key();
         let index = self
             .view_tracks_in(pane)
             .iter()
-            .position(|t| t.cache_key() == key);
+            .position(|t| t.same_identity(&track));
         let Some(index) = index else {
             return nav_task;
         };

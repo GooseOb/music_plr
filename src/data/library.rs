@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
 use super::{JsonStore, StoreLocation};
@@ -88,9 +90,15 @@ impl From<CardRef<'_>> for LibraryItem {
     }
 }
 
+/// A card handed around by the UI: the view and every message it emits for one
+/// card row share a single [`LibraryItem`], so cloning the handle never copies
+/// the strings inside it. `Arc` (not `Rc`) because [`Message`](crate::app::Message)
+/// has to stay `Send`.
+pub type Card = Arc<LibraryItem>;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LibraryStore {
-    pub items: Vec<LibraryItem>,
+    pub items: Vec<Card>,
 }
 
 impl JsonStore for LibraryStore {
@@ -106,7 +114,7 @@ impl LibraryStore {
 
     /// Save an item, replacing any existing one with the same kind+id.
     /// No-op if it is already present (so repeated saves are idempotent).
-    pub fn add(&mut self, item: LibraryItem) {
+    pub fn add(&mut self, item: Card) {
         if !self.contains(item.kind, &item.id) {
             self.items.push(item);
             self.save_to_disk();
@@ -127,7 +135,7 @@ impl LibraryStore {
 
     /// Insert an item at `pos` (clamped), skipping it if an identical kind+id
     /// already exists. Persists to disk.
-    pub fn insert(&mut self, item: LibraryItem, pos: usize) {
+    pub fn insert(&mut self, item: Card, pos: usize) {
         if self.contains(item.kind, &item.id) {
             return;
         }
@@ -156,22 +164,22 @@ impl LibraryStore {
 mod tests {
     use super::*;
 
-    fn item(kind: LibraryKind, id: &str) -> LibraryItem {
-        LibraryItem {
+    fn item(kind: LibraryKind, id: &str) -> Card {
+        Arc::new(LibraryItem {
             kind,
             id: id.to_string(),
             title: format!("Title {id}"),
             thumbnail: String::new(),
             provider: ProviderId::default(),
             url: String::new(),
-        }
+        })
     }
 
     #[test]
     fn web_url_needs_an_advertised_page() {
         assert_eq!(item(LibraryKind::Album, "a").web_url(), None);
         let mut with_url = item(LibraryKind::Album, "a");
-        with_url.url = "https://example.test/a".into();
+        Arc::make_mut(&mut with_url).url = "https://example.test/a".into();
         assert_eq!(with_url.web_url(), Some("https://example.test/a"));
     }
 

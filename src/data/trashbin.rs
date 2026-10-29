@@ -8,17 +8,30 @@ use crate::types::Track;
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TrashStore {
     pub tracks: Vec<Track>,
+    /// Membership index over `tracks`, rebuilt on load and kept in sync by
+    /// [`add_tracks`](Self::add_tracks)/[`remove_keys`](Self::remove_keys).
+    /// Tracks may only be edited in place through `tracks`, never added or
+    /// dropped, since that would desync this.
+    #[serde(skip)]
+    keys: HashSet<String>,
 }
 
 impl JsonStore for TrashStore {
     const FILE: &'static str = "trashbin.json";
     const LOCATION: StoreLocation = StoreLocation::Data;
+
+    fn after_load(&mut self) {
+        self.reindex();
+    }
 }
 
 impl TrashStore {
+    fn reindex(&mut self) {
+        self.keys = self.tracks.iter().map(Track::cache_key).collect();
+    }
+
     pub fn contains(&self, track: &Track) -> bool {
-        let key = track.cache_key();
-        self.tracks.iter().any(|t| t.cache_key() == key)
+        self.keys.contains(&track.cache_key())
     }
 
     pub fn len(&self) -> usize {
@@ -29,21 +42,15 @@ impl TrashStore {
     where
         I: IntoIterator<Item = &'a Track>,
     {
-        let mut seen: HashSet<String> = self.tracks.iter().map(Track::cache_key).collect();
-        let batch: Vec<Track> = tracks
-            .into_iter()
-            .filter_map(|track| {
-                let key = track.cache_key();
-                if seen.contains(&key) {
-                    return None;
-                }
-                seen.insert(key);
-                Some(track.clone())
-            })
-            .collect();
-        let inserted = batch.len();
+        let before = self.tracks.len();
+        self.tracks.extend(
+            tracks
+                .into_iter()
+                .filter(|track| self.keys.insert(track.cache_key()))
+                .cloned(),
+        );
+        let inserted = self.tracks.len() - before;
         if inserted > 0 {
-            self.tracks.splice(0..0, batch);
             self.save();
         }
         inserted
@@ -58,6 +65,7 @@ impl TrashStore {
         }
         let before = self.tracks.len();
         self.tracks.retain(|t| !keys.contains(&t.cache_key()));
+        self.keys.retain(|key| !keys.contains(key));
         let removed = before - self.tracks.len();
         if removed > 0 {
             self.save();
@@ -114,6 +122,20 @@ mod tests {
         assert_eq!(store.remove_keys(&keys), 2);
         assert_eq!(store.len(), 1);
         assert!(store.contains(&mk("b")));
+        assert!(!store.contains(&mk("a")));
         assert_eq!(store.remove_keys(&std::collections::HashSet::new()), 0);
+    }
+
+    #[test]
+    fn loading_rebuilds_the_membership_index() {
+        // `keys` is never persisted, so a deserialized store has to reindex.
+        let json = r#"{"tracks":[{"title":"a","artist":"","source":"YouTube",
+            "providers":{"YouTube":{"id":"a","url":"a","artist_id":null,
+            "duration":0,"thumbnail":"","album":null,"play_count":0}}}]}"#;
+        let mut store: TrashStore = serde_json::from_str(json).unwrap();
+        assert!(!store.contains(&mk("a")));
+        store.after_load();
+        assert!(store.contains(&mk("a")));
+        assert_eq!(store.tracks.len(), 1);
     }
 }

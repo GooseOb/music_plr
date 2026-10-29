@@ -11,6 +11,7 @@ use crate::{
         update::operation::CaptureContextMenu,
         LyricsViewMode, Message, ViewKind,
     },
+    data::library::Card,
     load_state::LoadState,
     providers::ProviderId,
 };
@@ -855,7 +856,7 @@ impl MusicPlayer {
         let Some(item) = menu.target.library_item() else {
             return Task::none();
         };
-        self.toggle_library_save_with_toast(item)
+        self.toggle_library_save_with_toast(Card::new(item))
     }
 
     /// Save the card menu's album/playlist as a local playlist, fetching its
@@ -1027,14 +1028,15 @@ mod tests {
 
     /// A card's own view, as the three card hosts build it.
     fn album_view() -> ViewKind {
-        ViewKind::from(LibraryItem {
+        let item = LibraryItem {
             kind: crate::data::library::LibraryKind::Album,
             id: "a1".into(),
             title: "Album".into(),
             thumbnail: String::new(),
             provider: ProviderId::YouTube,
             url: "https://music.youtube.com/browse/MPREb_a1".into(),
-        })
+        };
+        ViewKind::from(&item)
     }
 
     #[test]

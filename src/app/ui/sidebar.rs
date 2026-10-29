@@ -19,7 +19,7 @@ use crate::{
         update::operation::ScrollTarget,
         ViewData, ViewKind,
     },
-    data::library::LibraryItem,
+    data::library::Card,
     icons,
     theme::AppTheme,
 };
@@ -102,7 +102,7 @@ fn playlist_row<'a>(
 
 fn library_row<'a>(
     player: &'a MusicPlayer,
-    item: &'a LibraryItem,
+    item: &'a Card,
     index: usize,
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
@@ -159,7 +159,7 @@ fn library_row<'a>(
         CardTarget {
             host: ScrollTarget::Library,
             pane: player.focused_pane_id,
-            target: item.clone().into(),
+            target: item.as_ref().into(),
             row: None,
         },
         CardTarget::into_message,

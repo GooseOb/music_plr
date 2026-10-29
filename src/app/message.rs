@@ -185,7 +185,7 @@ pub enum Message {
     DragPress(interaction::Pressed),
     HoverStart(interaction::HoverTarget),
     HoverEnd(interaction::HoverTarget),
-    ToggleLibrarySave(library::LibraryItem),
+    ToggleLibrarySave(library::Card),
     ToggleLibraryExpanded,
 
     TrackRightClicked(TrackPos, Point),

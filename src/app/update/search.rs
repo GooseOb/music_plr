@@ -3,7 +3,7 @@ use crate::{
     app::{
         pane::PaneId, update::operation::CaptureSearchHistoryRows, view_data::RadioData, ViewKind,
     },
-    data::library::LibraryItem,
+    data::library::Card,
     load_state::LoadState,
     types::Track,
 };
@@ -417,12 +417,12 @@ impl MusicPlayer {
     /// The library entry for the pane's current artist/album/playlist page, so
     /// its header bookmark and browser button can act on what the page is
     /// showing.
-    pub fn current_library_item(&self, pane: PaneId) -> Option<LibraryItem> {
-        self.view_data_in(pane).kind.library_item()
+    pub fn current_library_item(&self, pane: PaneId) -> Option<Card> {
+        self.view_data_in(pane).kind.library_item().map(Card::new)
     }
 
     /// Save/unsave `item` in the library, reporting which happened as a toast.
-    pub fn toggle_library_save_with_toast(&mut self, item: LibraryItem) -> Task<Message> {
+    pub fn toggle_library_save_with_toast(&mut self, item: Card) -> Task<Message> {
         let saved = self.toggle_library_save(item);
         self.notify(if saved {
             self.strings.saved_to_library
@@ -432,7 +432,7 @@ impl MusicPlayer {
         Task::none()
     }
 
-    pub fn toggle_library_save(&mut self, item: LibraryItem) -> bool {
+    pub fn toggle_library_save(&mut self, item: Card) -> bool {
         if self.library.contains(item.kind, &item.id) {
             self.library.remove(item.kind, &item.id);
             false

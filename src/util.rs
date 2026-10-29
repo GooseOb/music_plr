@@ -129,10 +129,8 @@ pub fn fuzzy_match(query: &str, text: &str) -> bool {
     if query.is_empty() {
         return true;
     }
-    let query = query.to_lowercase();
-    let text = text.to_lowercase();
-    let mut qi = query.chars().peekable();
-    for c in text.chars() {
+    let mut qi = query.chars().flat_map(char::to_lowercase).peekable();
+    for c in text.chars().flat_map(char::to_lowercase) {
         if qi.peek() == Some(&c) {
             qi.next();
         }

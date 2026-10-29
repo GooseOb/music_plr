@@ -188,7 +188,7 @@ impl MusicPlayer {
     /// Whether `pos` is a match in the active track list search (any occurrence).
     pub fn is_track_list_match(&self, pos: TrackPos) -> bool {
         match &self.track_list_search {
-            Some(fs) if fs.pane == pos.pane => fs.matches.contains(&pos.index),
+            Some(fs) if fs.pane == pos.pane => fs.matches.binary_search(&pos.index).is_ok(),
             _ => false,
         }
     }

@@ -191,6 +191,12 @@ impl Track {
         self.source.cache_key(self.primary_id())
     }
 
+    /// Whether `other` addresses the same track, i.e. whether both yield the
+    /// same [`cache_key`](Self::cache_key) — without building the key.
+    pub fn same_identity(&self, other: &Track) -> bool {
+        self.source == other.source && self.primary_id() == other.primary_id()
+    }
+
     /// Build a `Track` owned by `provider`, carrying that provider's id/url in
     /// `providers` and set as `source`. Centralizes the invariant that the
     /// `source` provider is always present in `providers`. Provider-specific
@@ -530,6 +536,20 @@ mod tests {
             "soundcloud:abc123"
         );
         assert_eq!(ProviderId::LastFm.cache_key("x"), "lastfm:x");
+    }
+
+    #[test]
+    fn same_identity_matches_cache_key_equality() {
+        let a = make_track("abc123", "url");
+        let b = make_track("abc123", "other-url");
+        assert!(a.same_identity(&b));
+
+        let mut same_id_other_source = a.clone();
+        same_id_other_source.source = ProviderId::SoundCloud;
+        assert!(!a.same_identity(&same_id_other_source));
+
+        let other_id = make_track("def456", "url");
+        assert!(!a.same_identity(&other_id));
     }
 
     #[test]

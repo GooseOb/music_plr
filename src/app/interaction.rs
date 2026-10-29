@@ -11,7 +11,7 @@ use super::{
 use crate::{
     data::{
         cache::StreamCache,
-        library::{LibraryItem, LibraryKind, LibraryStore},
+        library::{Card, LibraryItem, LibraryKind, LibraryStore},
     },
     types::Track,
 };
@@ -51,6 +51,7 @@ pub struct TrackListSearch {
     /// [`RECENT_PANE_ID`] for the global panel lists.
     pub pane: PaneId,
     pub query: String,
+    /// Ascending track indices, so membership is a binary search.
     pub matches: Vec<usize>,
 }
 
@@ -532,7 +533,7 @@ pub enum DropTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HoverTarget {
     Track(TrackPos),
-    Card(LibraryItem),
+    Card(Card),
     Playlist(usize),
     SearchHistory(usize),
 }
@@ -542,7 +543,7 @@ pub enum Pressed {
     Track(TrackPos),
     /// A drill-down card. `Some(pane)` when pressed inside a main-view pane,
     /// `None` for sidebar library rows (which target the focused pane).
-    Card(LibraryItem, Option<PaneId>),
+    Card(Card, Option<PaneId>),
     Playlist(usize),
 }
 
@@ -715,7 +716,7 @@ impl DragState {
 
     /// Whether the given search card is the hovered one.
     pub fn is_hovered_card(&self, item: &LibraryItem) -> bool {
-        matches!(self.hovered, Some(HoverTarget::Card(ref c)) if c == item)
+        matches!(self.hovered, Some(HoverTarget::Card(ref c)) if c.as_ref() == item)
     }
 
     /// Whether a card (vs track) drag is active.
@@ -759,7 +760,7 @@ mod tests {
     };
     use crate::{
         app::ui::{track_list_id, QUEUE_LIST_ID, QUEUE_RECENT_LIST_ID},
-        data::library::LibraryKind,
+        data::library::{Card, LibraryKind},
     };
 
     #[test]
@@ -797,13 +798,13 @@ mod tests {
     }
 
     /// A card menu over a library item's view, which is how every host builds
-    /// it (`ViewKind::from(LibraryItem)` is the sidebar/search-card shape).
+    /// it (`ViewKind::from(&LibraryItem)` is the sidebar/search-card shape).
     fn card_menu(kind: LibraryKind, url: &str) -> CardMenuState {
         use crate::{app::ViewKind, data::library::LibraryItem, providers::ProviderId};
         CardMenuState {
             anchor: MenuAnchor::at(iced::Point::ORIGIN),
             pane: 0,
-            target: ViewKind::from(LibraryItem {
+            target: ViewKind::from(&LibraryItem {
                 kind,
                 id: "id".into(),
                 title: "T".into(),
@@ -854,7 +855,7 @@ mod tests {
         let menu = card_menu(LibraryKind::Album, "");
         let mut store = LibraryStore::default();
         assert!(!menu.saved(&store));
-        store.add(menu.target.library_item().expect("album view"));
+        store.add(Card::new(menu.target.library_item().expect("album view")));
         assert!(menu.saved(&store));
     }
 

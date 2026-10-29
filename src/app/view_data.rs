@@ -149,8 +149,8 @@ pub enum ViewKind {
     Settings,
 }
 
-impl From<LibraryItem> for ViewKind {
-    fn from(item: LibraryItem) -> Self {
+impl From<&LibraryItem> for ViewKind {
+    fn from(item: &LibraryItem) -> Self {
         match item.kind {
             LibraryKind::Artist => {
                 let page = Box::new(crate::providers::ArtistPageState::new(
@@ -158,27 +158,27 @@ impl From<LibraryItem> for ViewKind {
                     &item.id,
                 ));
                 ViewKind::Artist(ArtistEntry {
-                    url: item.url,
-                    id: item.id,
-                    name: item.title,
+                    url: item.url.clone(),
+                    id: item.id.clone(),
+                    name: item.title.clone(),
                     source: item.provider,
-                    thumbnail: item.thumbnail,
+                    thumbnail: item.thumbnail.clone(),
                     page,
                 })
             }
             LibraryKind::Album => ViewKind::Album(AlbumRef {
-                url: item.url,
-                id: item.id,
-                name: item.title,
-                thumbnail: item.thumbnail,
+                url: item.url.clone(),
+                id: item.id.clone(),
+                name: item.title.clone(),
+                thumbnail: item.thumbnail.clone(),
                 provider: item.provider,
                 ..Default::default()
             }),
             LibraryKind::Playlist => ViewKind::PlaylistView(PlaylistRef {
-                url: item.url,
-                id: item.id,
-                name: item.title,
-                thumbnail: item.thumbnail,
+                url: item.url.clone(),
+                id: item.id.clone(),
+                name: item.title.clone(),
+                thumbnail: item.thumbnail.clone(),
                 provider: item.provider,
             }),
         }

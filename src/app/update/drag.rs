@@ -14,7 +14,7 @@ use crate::{
         ViewKind,
     },
     data::{
-        library::{LibraryItem, LibraryKind},
+        library::{Card, LibraryItem, LibraryKind},
         JsonStore,
     },
 };
@@ -72,7 +72,7 @@ impl MusicPlayer {
                 Pressed::Card(item, pane) => {
                     let target = pane.unwrap_or(self.focused_pane_id);
                     self.focused_pane_id = target;
-                    nav_task = self.open_card(target, &item.clone().into());
+                    nav_task = self.open_card(target, &item.as_ref().into());
                 }
                 // A click without a drag selects the playlist (mirrors how a
                 // library card opens on a plain click).
@@ -469,7 +469,7 @@ impl MusicPlayer {
         self.notify(self.strings.reordered_playlist);
     }
 
-    fn handle_card_drop(&mut self, item: LibraryItem, target: DropTarget) -> Task<Message> {
+    fn handle_card_drop(&mut self, item: Card, target: DropTarget) -> Task<Message> {
         match target {
             DropTarget::Playlist(idx) => self.create_playlist_from_card(&item, idx),
             DropTarget::Library(idx) => {
