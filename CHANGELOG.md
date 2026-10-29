@@ -8,13 +8,14 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
-## [Unreleased]
+## [1.3.18] - 2026-10-29
 
 ### Fixed
 
 - "Translate with AI" works with non-synced lyrics.
 - Jump playlist dialog closes when Escape is pressed.
 - "Add to queue" on empty queue does not crash the app anymore.
+- Track list no longer looks empty in some cases.
 
 ## [1.3.17] - 2026-10-28
 

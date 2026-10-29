@@ -490,7 +490,7 @@ impl MusicPlayer {
             }
         };
         self.notify(msg);
-        self.capture_bounds_task()
+        Task::none()
     }
 
     pub fn handle_delete_selected(&mut self) {

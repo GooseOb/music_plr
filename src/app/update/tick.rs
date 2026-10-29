@@ -362,15 +362,11 @@ impl MusicPlayer {
             }
             BackendResult::SearchResults(rid, tracks, tab) => {
                 self.process_search_results(rid, tracks, tab);
-                self.capture_bounds_task()
+                Task::none()
             }
             BackendResult::SearchResultsAppend(rid, tracks) => {
-                let captured = self.process_search_results_append(rid, tracks);
-                if captured {
-                    self.capture_bounds_task()
-                } else {
-                    Task::none()
-                }
+                self.process_search_results_append(rid, tracks);
+                Task::none()
             }
             BackendResult::BrowseResults(rid, tracks, meta) => {
                 self.process_browse_results(rid, tracks, meta);
@@ -399,7 +395,7 @@ impl MusicPlayer {
             }
             BackendResult::RadioResults(rid, tracks) => {
                 self.process_radio_results(rid, tracks);
-                self.capture_bounds_task()
+                Task::none()
             }
             BackendResult::DownloadComplete(track, _provider) => {
                 self.process_download_complete(track);
@@ -767,10 +763,8 @@ impl MusicPlayer {
         }
     }
 
-    /// Apply a resolved provider track to `original`: write its full provider
-    /// metadata back into the source list, then either play (replacing the
-    /// queue) or download.
-    fn process_search_results_append(&mut self, rid: u64, tracks: Vec<Track>) -> bool {
+    /// Append the next page of search results to the view that asked for it.
+    fn process_search_results_append(&mut self, rid: u64, tracks: Vec<Track>) {
         let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
         if let Some((pane, idx)) = self.slot_for_request(rid) {
             {
@@ -792,9 +786,6 @@ impl MusicPlayer {
                 self.last_search_view = Some(self.pane(pane).nav_history[idx].clone());
             }
             self.finalize_view(pane, idx);
-            true
-        } else {
-            false
         }
     }
 

@@ -442,7 +442,7 @@ impl MusicPlayer {
         self.queue.queue_tab = tab;
         self.drag.clear_hovered_track();
         self.save_session();
-        self.capture_bounds_task()
+        Task::none()
     }
 
     pub fn cycle_queue_tab(&mut self) -> Task<Message> {

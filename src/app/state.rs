@@ -157,6 +157,10 @@ pub struct MusicPlayer {
     pub app_theme: AppTheme,
 
     pub bounds: CaptureBounds,
+    /// Row counts of every track list the last update rendered (see
+    /// `list_shape`). A change means the captured geometry predates the
+    /// current content, so the update loop schedules one capture pass.
+    pub rendered_shape: Vec<(PaneId, usize)>,
     pub window_size: iced::Size,
 
     pub update_status: crate::app::update::UpdateStatus,
@@ -173,7 +177,7 @@ impl MusicPlayer {
     pub fn new() -> (Self, Task<Message>) {
         let mut player = Self::default();
         let boot = Task::batch([
-            CaptureBounds::with_panes(vec![0]).into(),
+            CaptureBounds::with_panes(player.pane_ids()).into(),
             player.take_media_bridge(),
         ]);
         (player, boot)
@@ -277,6 +281,7 @@ impl MusicPlayer {
             track_list_search: None,
             app_theme,
             bounds: CaptureBounds::default(),
+            rendered_shape: Vec::new(),
             window_size: iced::Size::default(),
             clipboard: Vec::new(),
             last_click: None,

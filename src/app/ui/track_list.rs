@@ -71,16 +71,19 @@ pub(super) fn virtual_scrollable<'a, F>(
 where
     F: Fn(usize) -> Element<'a, Message, AppTheme>,
 {
-    let geo = player.bounds.list_geo(pane);
-    let children: Vec<Element<'a, Message, AppTheme>> = match geo {
+    let row_h = theme::ROW_HEIGHT;
+    let children: Vec<Element<'a, Message, AppTheme>> = match player.bounds.list_geo(pane) {
         Some(ListGeometry {
             translation_y,
             bounds,
             ..
-        }) if count > 0 && count as f32 * theme::ROW_HEIGHT > bounds.height + 1.0 => {
+        }) if count > 0 && count as f32 * row_h > bounds.height + 1.0 => {
+            // The scrollable clamps its own offset to the content's height, so
+            // a capture taken before the list shrank can point past the last
+            // row. Clamp it too, or the window would start after the content.
+            let translation_y = translation_y.min((count as f32 * row_h - bounds.height).max(0.0));
             let viewport_height = bounds.height;
             let overscan = 6i32;
-            let row_h = theme::ROW_HEIGHT;
 
             let first =
                 ((((translation_y / row_h) - overscan as f32).max(0.0)) as usize).min(count);
@@ -99,17 +102,11 @@ where
             }
             items
         }
-        // Bounds known and the list fits within the viewport: render every row
-        // directly (no virtualization needed).
-        Some(_) => (0..count).map(render_row).collect(),
-        // Bounds not known yet
-        None => {
-            if count == 0 {
-                Vec::new()
-            } else {
-                vec![row_spacer(count as f32 * theme::ROW_HEIGHT)]
-            }
-        }
+        // Bounds known and the list fits within the viewport, or no capture has
+        // seen this list yet: render every row. The captured geometry only ever
+        // narrows the window; a missing capture must never read as an empty
+        // list (the update loop refreshes it once the list's shape changes).
+        _ => (0..count).map(render_row).collect(),
     };
 
     let id = track_list_id(pane);

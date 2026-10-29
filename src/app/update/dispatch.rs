@@ -15,19 +15,82 @@ use crate::{
         import::{ImportCsvField, ImportPlaylistDialog},
         interaction::DefaultCtxAction,
         message::{BackendResult, EditTrackField, Message},
-        pane::{QUEUE_PANE_ID, RECENT_PANE_ID},
+        pane::{PaneId, MANUAL_SEARCH_PANE_ID, QUEUE_PANE_ID, RECENT_PANE_ID},
         update::operation::{CaptureContextMenu, CaptureSearchHistoryRows, ContextMenuGeometry},
         PendingAdd,
     },
     deps::DepKind,
     providers::ProviderId,
+    types::QueueTab,
 };
 
 impl crate::app::MusicPlayer {
+    /// Entry point for every message: dispatch, then repair the captured
+    /// geometry if what the lists render has changed.
+    ///
+    /// The capture pass is a snapshot taken on navigation, resize and results,
+    /// so a list whose *content* changed afterwards would keep rendering off
+    /// the old geometry until the next snapshot. Comparing the rendered row
+    /// counts keeps that invariant here, once, instead of asking every mutation
+    /// site to remember a `capture_bounds_task()` — the reason a list that was
+    /// empty (or shorter) when last captured could look empty until an
+    /// unrelated capture happened.
+    pub fn update(&mut self, message: Message) -> Task<Message> {
+        let task = self.handle_message(message);
+        if self.rendered_shape_changed() {
+            task.chain(self.capture_bounds_task())
+        } else {
+            task
+        }
+    }
+
+    /// The row counts of every list `view` virtualizes from captured geometry:
+    /// each pane's track list (skipping panes showing lyrics, which render no
+    /// list), the queue panel's active tab, and the Edit popup's manual search.
+    /// The queue's own scrollable holds "up next", so its now-playing row does
+    /// not count.
+    fn list_shape(&self) -> Vec<(PaneId, usize)> {
+        let mut shape: Vec<(PaneId, usize)> = self
+            .panes
+            .iter()
+            .filter(|(_, pane)| pane.lyrics.is_none())
+            .map(|(&pane, _)| (pane, self.track_count_in(pane)))
+            .filter(|(_, count)| *count > 0)
+            .collect();
+        if self.show_queue {
+            let (pane, count) = match self.queue.queue_tab {
+                QueueTab::Queue => (QUEUE_PANE_ID, self.queue.tracks.len().saturating_sub(1)),
+                QueueTab::RecentlyPlayed => (RECENT_PANE_ID, self.queue.recently_played.len()),
+            };
+            if count > 0 {
+                shape.push((pane, count));
+            }
+        }
+        if let Some(manual) = self.edit_manual() {
+            let count = manual.tracks().len();
+            if count > 0 {
+                shape.push((MANUAL_SEARCH_PANE_ID, count));
+            }
+        }
+        shape.sort_unstable();
+        shape
+    }
+
+    /// True when the current shape differs from the one last dispatched, after
+    /// recording it — one capture per change, so this can never loop.
+    fn rendered_shape_changed(&mut self) -> bool {
+        let shape = self.list_shape();
+        if shape == self.rendered_shape {
+            return false;
+        }
+        self.rendered_shape = shape;
+        true
+    }
+
     /// Flat dispatch over every `Message` variant. Long by nature: each arm is
     /// a one-to-three-line delegation to a handler in `app/update/`.
     #[allow(clippy::too_many_lines)]
-    pub fn update(&mut self, message: Message) -> Task<Message> {
+    fn handle_message(&mut self, message: Message) -> Task<Message> {
         if let Some(pane) = message.pane() {
             if !self.panes.contains_key(&pane) {
                 return Task::none();
@@ -892,5 +955,71 @@ impl crate::app::MusicPlayer {
             }
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{app::ViewData, data::config, types::Track};
+
+    fn track(id: &str) -> Track {
+        Track::from_provider(
+            ProviderId::YouTube,
+            id.into(),
+            format!("https://example.com/{id}"),
+            format!("Track {id}"),
+            "Artist",
+            10,
+            String::new(),
+            None,
+            None,
+        )
+    }
+
+    fn player() -> crate::app::MusicPlayer {
+        let mut p = crate::app::MusicPlayer::new_with(config::Config::default());
+        p.reset_test_pane(vec![ViewData::new_downloads(Vec::new())]);
+        p.rendered_shape = p.list_shape();
+        p
+    }
+
+    #[test]
+    fn a_list_gaining_or_losing_rows_asks_for_one_capture() {
+        let mut p = player();
+        assert!(p.list_shape().is_empty());
+
+        p.view_data_mut()
+            .set_tracks(vec![track("1"), track("2"), track("3")]);
+        // Geometry captured while the list was empty (or shorter) no longer
+        // describes what renders, so the update loop recaptures exactly once.
+        assert!(p.rendered_shape_changed());
+        assert!(!p.rendered_shape_changed());
+
+        p.view_data_mut().set_tracks(vec![track("1")]);
+        assert!(p.rendered_shape_changed());
+        assert!(!p.rendered_shape_changed());
+    }
+
+    #[test]
+    fn the_queue_counts_up_next_and_a_lyrics_overlay_hides_its_pane() {
+        let mut p = player();
+        p.show_queue = true;
+        assert!(p.list_shape().is_empty());
+
+        // A lone track is the panel's now-playing row, rendered outside the
+        // scrollable, so it does not need list geometry.
+        p.queue.tracks = vec![track("1")];
+        assert!(p.list_shape().is_empty());
+
+        p.queue.tracks.push(track("2"));
+        assert_eq!(p.list_shape(), vec![(QUEUE_PANE_ID, 1)]);
+
+        p.view_data_mut().set_tracks(vec![track("1")]);
+        let pane = p.focused_pane_id;
+        p.pane_mut(pane).lyrics = Some(crate::app::LyricsState::new(
+            crate::lyrics::LyricsProvider::LrcLib,
+        ));
+        assert_eq!(p.list_shape(), vec![(QUEUE_PANE_ID, 1)]);
     }
 }

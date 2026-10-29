@@ -54,7 +54,7 @@ impl MusicPlayer {
     pub fn handle_show_lyrics(&mut self, pane: PaneId) -> Task<Message> {
         if self.pane(pane).lyrics.is_some() {
             self.pane_mut(pane).lyrics = None;
-            self.capture_bounds_task()
+            Task::none()
         } else {
             let provider = self.lyrics_provider;
             self.pane_mut(pane).lyrics = Some(crate::app::LyricsState::new(provider));

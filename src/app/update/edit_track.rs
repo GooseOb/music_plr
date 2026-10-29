@@ -188,9 +188,8 @@ impl MusicPlayer {
         Task::none()
     }
 
-    /// Store a finished manual-search query and re-capture the list's
-    /// geometry, which its rows are virtualized off. Replies to a query that
-    /// has since been replaced (or whose popup closed) are dropped.
+    /// Store a finished manual-search query. Replies to a query that has since
+    /// been replaced (or whose popup closed) are dropped.
     pub fn apply_manual_search_results(
         &mut self,
         rid: u64,
@@ -226,7 +225,7 @@ impl MusicPlayer {
         }
         // The rows under the cursor are different ones now.
         self.drag.clear_hovered_track_in(MANUAL_SEARCH_PANE_ID);
-        self.capture_bounds_task()
+        Task::none()
     }
 
     /// Assign the picked result to the track being edited and return to the
