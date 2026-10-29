@@ -125,17 +125,124 @@ pub fn try_probe_duration(path: &str) -> Option<u32> {
     u32::try_from(seconds).ok()
 }
 
-pub fn fuzzy_match(query: &str, text: &str) -> bool {
-    if query.is_empty() {
-        return true;
+/// Latin spelling of a letter that Unicode does not decompose (`ł`, `ø`, `ß`,
+/// …) or of a Cyrillic letter; `Some("")` marks letters with no Latin value
+/// (the soft/hard signs), `None` means "decompose it instead".
+///
+/// Where a letter has competing romanizations, the spelling is chosen so the
+/// common ones are all subsequences of it (`ё` → `yoe` matches both "yolka"
+/// and "elka", `й` → `yi` both "tolstoy" and "tolstoi"), because matching is
+/// subsequence-based rather than exact.
+fn fold_form(c: char) -> Option<&'static str> {
+    Some(match c {
+        'ß' => "ss",
+        'þ' => "th",
+        'æ' => "ae",
+        'œ' => "oe",
+        'ı' | 'и' | 'і' => "i",
+        'ł' | 'л' => "l",
+        'đ' | 'ð' | 'д' => "d",
+        'ħ' => "h",
+        'ŋ' | 'н' => "n",
+        'ŧ' | 'т' => "t",
+        'ø' | 'о' => "o",
+        'е' | 'э' => "e",
+        'а' => "a",
+        'б' => "b",
+        'в' => "v",
+        'г' | 'ґ' => "g",
+        'ё' => "yoe",
+        'ж' => "zh",
+        'з' => "z",
+        'й' | 'ы' | 'ї' => "yi",
+        'к' => "k",
+        'м' => "m",
+        'п' => "p",
+        'р' => "r",
+        'с' => "s",
+        'у' | 'ў' => "u",
+        'ф' => "f",
+        'х' => "kh",
+        'ц' => "ts",
+        'ч' => "tch",
+        'ш' => "sh",
+        'щ' => "shch",
+        'ъ' | 'ь' => "",
+        'ю' => "yu",
+        'я' => "ya",
+        'є' => "ye",
+        'ј' => "j",
+        'љ' => "lj",
+        'њ' => "nj",
+        'ћ' => "c",
+        'ђ' => "dj",
+        'џ' | 'ѕ' => "dz",
+        'ќ' => "kj",
+        'ѓ' => "gj",
+        _ => return None,
+    })
+}
+
+/// One character in its matching form: lowercased, transliterated or
+/// compatibility-decomposed, combining marks dropped. Unused slots stay `'\0'`.
+fn fold(c: char) -> [char; 4] {
+    let mut out = ['\0'; 4];
+    if c.is_ascii() {
+        out[0] = c;
+        return out;
     }
-    let mut qi = query.chars().flat_map(char::to_lowercase).peekable();
-    for c in text.chars().flat_map(char::to_lowercase) {
-        if qi.peek() == Some(&c) {
-            qi.next();
+    if let Some(spelled) = fold_form(c) {
+        for (slot, folded) in out.iter_mut().zip(spelled.chars()) {
+            *slot = folded;
+        }
+        return out;
+    }
+    let mut len = 0;
+    unicode_normalization::char::decompose_compatible(c, |d| {
+        if len < out.len() && !unicode_normalization::char::is_combining_mark(d) {
+            out[len] = d;
+            len += 1;
+        }
+    });
+    out
+}
+
+/// Case-, accent- and script-insensitive characters of `text` (`Björk` →
+/// `bjork`, `Straße` → `strasse`, `Кино` → `kino`).
+fn folded(text: &str) -> impl Iterator<Item = char> + '_ {
+    text.chars()
+        .flat_map(char::to_lowercase)
+        .flat_map(fold)
+        .filter(|&c| c != '\0')
+}
+
+/// A query folded once, for subsequence-matching many texts with the same
+/// needle (list filters run this per row on every keystroke).
+pub struct FuzzyQuery {
+    needles: Vec<char>,
+}
+
+impl FuzzyQuery {
+    pub fn new(query: &str) -> Self {
+        Self {
+            needles: folded(query).collect(),
         }
     }
-    qi.peek().is_none()
+
+    /// Whether the query characters appear in `text` in order, ignoring case,
+    /// accents, and compatibility forms (`motörhead` matches `Motorhead`).
+    pub fn matches(&self, text: &str) -> bool {
+        if self.needles.is_empty() {
+            return true;
+        }
+        let mut needles = self.needles.iter().copied().peekable();
+        for c in folded(text) {
+            if needles.peek() == Some(&c) {
+                needles.next();
+            }
+        }
+        needles.peek().is_none()
+    }
 }
 
 pub fn sorted_targets(indices: &[usize]) -> std::iter::Peekable<std::vec::IntoIter<usize>> {
@@ -279,37 +386,86 @@ mod tests {
         assert_eq!(format_duration(3600).as_ref(), "60:00");
     }
 
+    fn matched(query: &str, text: &str) -> bool {
+        FuzzyQuery::new(query).matches(text)
+    }
+
     #[test]
     fn fuzzy_match_exact() {
-        assert!(fuzzy_match("hello", "hello"));
+        assert!(matched("hello", "hello"));
     }
 
     #[test]
     fn fuzzy_match_subsequence() {
-        assert!(fuzzy_match("hlo", "hello"));
-        assert!(fuzzy_match("hlo", "Hello World"));
+        assert!(matched("hlo", "hello"));
+        assert!(matched("hlo", "Hello World"));
     }
 
     #[test]
     fn fuzzy_match_empty_query() {
-        assert!(fuzzy_match("", "anything"));
+        assert!(matched("", "anything"));
     }
 
     #[test]
     fn fuzzy_match_no_match() {
-        assert!(!fuzzy_match("xyz", "hello"));
+        assert!(!matched("xyz", "hello"));
     }
 
     #[test]
     fn fuzzy_match_case_insensitive() {
-        assert!(fuzzy_match("HELLO", "hello"));
-        assert!(fuzzy_match("HeLlO", "HELLO"));
+        assert!(matched("HELLO", "hello"));
+        assert!(matched("HeLlO", "HELLO"));
     }
 
     #[test]
     fn fuzzy_match_partial() {
-        assert!(fuzzy_match("ell", "hello"));
-        assert!(!fuzzy_match("leh", "hello"));
+        assert!(matched("ell", "hello"));
+        assert!(!matched("leh", "hello"));
+    }
+
+    #[test]
+    fn fuzzy_match_ignores_accents() {
+        assert!(matched("bjork", "Björk"));
+        assert!(matched("motörhead", "Motorhead"));
+        assert!(matched("sao paulo", "São Paulo"));
+        assert!(matched("zolc", "Żółć"));
+        assert!(matched("smorrebrod", "Smørrebrød"));
+        assert!(matched("strasse", "Straße"));
+        assert!(matched("piotr", "Piotr Łukasz"));
+    }
+
+    #[test]
+    fn fuzzy_match_transliterates_cyrillic() {
+        assert!(matched("kino", "Кино"));
+        assert!(matched("zemfira", "Земфира"));
+        assert!(matched("mumiy troll", "Мумий Тролль"));
+        assert!(matched("korolev", "Королёв"));
+        assert!(matched("yolka", "Ёлка"));
+        assert!(matched("tolstoi", "Толстой"));
+        assert!(matched("tolstoy", "Толстой"));
+        assert!(matched("kharkiv", "Харків"));
+        assert!(matched("kyiv", "Київ"));
+        assert!(matched("minsk", "Мінск"));
+        assert!(matched("tchaikovsky", "Чайковский"));
+        assert!(matched("chekhov", "Чехов"));
+        assert!(matched("кот", "kot"));
+        assert!(matched("кино", "Kino"));
+    }
+
+    #[test]
+    fn fuzzy_match_ignores_normalization() {
+        let composed = "café";
+        let decomposed = "cafe\u{301}";
+        assert!(matched(composed, decomposed));
+        assert!(matched(decomposed, composed));
+        assert!(matched("cafe", decomposed));
+    }
+
+    #[test]
+    fn fuzzy_match_keeps_distinct_letters_apart() {
+        assert!(!matched("cat", "dog"));
+        assert!(!matched("kot", "корова"));
+        assert!(!matched("kot", "κοτ"));
     }
 
     #[test]

@@ -24,10 +24,11 @@ impl PlaylistJump {
         if self.query.trim().is_empty() {
             return (0..names.len()).collect();
         }
+        let needle = crate::util::FuzzyQuery::new(&self.query);
         names
             .iter()
             .enumerate()
-            .filter(|(_, name)| crate::util::fuzzy_match(&self.query, name))
+            .filter(|(_, name)| needle.matches(name))
             .map(|(i, _)| i)
             .collect()
     }

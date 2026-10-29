@@ -740,13 +740,11 @@ impl MusicPlayer {
             RECENT_PANE_ID => self.queue.recently_played.as_slices().0,
             _ => self.view_tracks_in(pane),
         };
+        let needle = crate::util::FuzzyQuery::new(query);
         let matches: Vec<usize> = tracks
             .iter()
             .enumerate()
-            .filter(|(_, t)| {
-                crate::util::fuzzy_match(query, &t.title)
-                    || crate::util::fuzzy_match(query, &t.artist)
-            })
+            .filter(|(_, t)| needle.matches(&t.title) || needle.matches(&t.artist))
             .map(|(i, _)| i)
             .collect();
         let fs = self.track_list_search.as_mut().expect("checked above");

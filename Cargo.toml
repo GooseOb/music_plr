@@ -63,6 +63,7 @@ sys-locale = "0.3"
 flate2 = "1"
 tar = "0.4"
 sha2 = "0.11"
+unicode-normalization = "0.1.26"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 

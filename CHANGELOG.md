@@ -18,6 +18,12 @@ auto-generated compare link below it.
 - Destination in notification text e.g. "Queue: added 5 tracks" instead of "Added 5 tracks to Queue" for languages where case is not nominative.
 - The local provider is translated ("Local files" in English) instead of a hardcoded "Local" in toasts, menus, the Edit popup and the default-provider picker.
 
+### Changed
+
+#### Search
+
+- In-list search, the playlist jumper, search history and the AI model filter ignore accents, case and script: "bjork" finds "Björk", "zolc" finds "Żółć", "strasse" finds "Straße", and Latin input finds Cyrillic titles ("kino", "korolev", "kyiv") while Cyrillic input finds Latin ones.
+
 ## [1.3.18] - 2026-10-29
 
 ### Fixed

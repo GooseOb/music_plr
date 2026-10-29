@@ -40,9 +40,10 @@ impl SearchHistory {
         if query_lower.is_empty() {
             return self.queries.clone();
         }
+        let needle = crate::util::FuzzyQuery::new(query_lower);
         self.queries
             .iter()
-            .filter(|q| crate::util::fuzzy_match(query_lower, q))
+            .filter(|q| needle.matches(q))
             .cloned()
             .collect()
     }

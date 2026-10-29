@@ -120,10 +120,8 @@ fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                 .padding(theme::SPACING_SM)
                 .into(),
             );
-            let visible: Vec<&String> = models
-                .iter()
-                .filter(|name| crate::util::fuzzy_match(&player.translation_models_filter, name))
-                .collect();
+            let needle = crate::util::FuzzyQuery::new(&player.translation_models_filter);
+            let visible: Vec<&String> = models.iter().filter(|name| needle.matches(name)).collect();
             if visible.is_empty() {
                 children.push(
                     text(player.strings.no_results_found)
