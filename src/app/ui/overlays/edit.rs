@@ -248,7 +248,7 @@ pub(super) fn view_edit_manual_search<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let tr = player.strings;
 
-    let placeholder = (tr.search_placeholder)(manual.provider);
+    let placeholder = tr.search_placeholder(manual.provider);
     let query = text_input(&placeholder, &manual.query)
         .on_input(Message::EditTrackManualQuery)
         .on_submit(Message::EditTrackManualRun)

@@ -1,5 +1,4 @@
 use super::Strings;
-use crate::providers::ProviderId;
 
 pub const STRINGS: Strings = Strings {
     search: "搜索",
@@ -171,11 +170,9 @@ pub const STRINGS: Strings = Strings {
 
     n_saved: |n| format!("已保存 {n} 项"),
     n_plays: |n| format!("{} 次播放", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "在 YouTube Music 中搜索…".into(),
-        ProviderId::Local => "搜索…".into(),
-        other => format!("在 {} 中搜索…", other.label()),
-    },
+    search_youtube: "在 YouTube Music 中搜索…",
+    search_local: "搜索…",
+    search_provider: |p| format!("在 {p} 中搜索…"),
     added: |n| format!("已添加 {}", zh_tracks(n)),
     added_to: |n, to| format!("已添加 {} 到 {to}", zh_tracks(n)),
     removed_n: |n| format!("已移除 {}", zh_tracks(n)),

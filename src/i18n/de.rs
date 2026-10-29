@@ -1,5 +1,4 @@
-use super::Strings;
-use crate::providers::ProviderId;
+use super::{plural::two, Strings};
 
 pub const STRINGS: Strings = Strings {
     search: "Suchen",
@@ -170,17 +169,15 @@ pub const STRINGS: Strings = Strings {
     max_panes_reached: "Maximale Anzahl an Bereichen erreicht",
 
     n_saved: |n| format!("{n} gespeichert"),
-    n_plays: |n| format!("{} Wiedergaben", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "YouTube Music durchsuchen…".into(),
-        ProviderId::Local => "Suchen…".into(),
-        other => format!("{} durchsuchen…", other.label()),
-    },
+    n_plays: de_plays,
+    search_youtube: "YouTube Music durchsuchen…",
+    search_local: "Suchen…",
+    search_provider: |p| format!("{p} durchsuchen…"),
     added: |n| format!("Hinzugefügt: {}", de_tracks(n)),
-    added_to: |n, to| format!("Hinzugefügt: {} zu {to}", de_tracks(n)),
+    added_to: |n, to| format!("{to}: {} hinzugefügt", de_tracks(n)),
     removed_n: |n| format!("Entfernt: {}", de_tracks(n)),
-    removed_from: |n, from| format!("Entfernt: {} aus {from}", de_tracks(n)),
-    pasted_into: |n, into| format!("Eingefügt: {} in {into}", de_tracks(n)),
+    removed_from: |n, from| format!("{from}: {} entfernt", de_tracks(n)),
+    pasted_into: |n, into| format!("{into}: {} eingefügt", de_tracks(n)),
     saved_title: |t| format!("\"{t}\" in Bibliothek gespeichert"),
     playlist_created: |n| format!("Wiedergabeliste \"{n}\" erstellt"),
     added_local: |n| format!("Hinzugefügt: {} (wähle eine Wiedergabeliste zum Ordnen)", de_tracks(n)),
@@ -323,9 +320,13 @@ pub const STRINGS: Strings = Strings {
 };
 
 fn de_tracks(n: usize) -> String {
-    if n == 1 {
-        "1 Titel".into()
-    } else {
-        format!("{n} Titel")
-    }
+    format!("{n} Titel")
+}
+
+fn de_plays(n: u64) -> String {
+    format!(
+        "{} {}",
+        crate::util::format_count(n),
+        two(n, "Wiedergabe", "Wiedergaben")
+    )
 }

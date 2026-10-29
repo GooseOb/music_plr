@@ -1,5 +1,7 @@
-use super::Strings;
-use crate::providers::ProviderId;
+use super::{
+    plural::{slavic, slavic_genitive},
+    Strings,
+};
 
 pub const STRINGS: Strings = Strings {
     search: "Поиск",
@@ -170,21 +172,19 @@ pub const STRINGS: Strings = Strings {
     max_panes_reached: "Достигнуто максимальное число панелей",
 
     n_saved: |n| format!("Сохранено: {n}"),
-    n_plays: |n| format!("{} воспроизведений", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "Искать в YouTube Music…".into(),
-        ProviderId::Local => "Искать…".into(),
-        other => format!("Искать в {}…", other.label()),
-    },
+    n_plays: ru_plays,
+    search_youtube: "Искать в YouTube Music…",
+    search_local: "Искать…",
+    search_provider: |p| format!("Искать в {p}…"),
     added: |n| format!("Добавлено: {}", ru_tracks(n)),
-    added_to: |n, to| format!("Добавлено: {} в {to}", ru_tracks(n)),
+    added_to: |n, to| format!("{to}: добавлено {}", ru_tracks(n)),
     removed_n: |n| format!("Удалено: {}", ru_tracks(n)),
-    removed_from: |n, from| format!("Удалено: {} из {from}", ru_tracks(n)),
-    pasted_into: |n, into| format!("Вставлено: {} в {into}", ru_tracks(n)),
+    removed_from: |n, from| format!("{from}: удалено {}", ru_tracks(n)),
+    pasted_into: |n, into| format!("{into}: вставлено {}", ru_tracks(n)),
     saved_title: |t| format!("«{t}» сохранено в библиотеку"),
     playlist_created: |n| format!("Плейлист «{n}» создан"),
     added_local: |n| format!("Добавлено: {} (выберите плейлист для упорядочивания)", ru_tracks(n)),
-    downloading_n: |n| format!("Загрузка {}…", ru_gen_tracks(n)),
+    downloading_n: |n| format!("Загрузка {}…", ru_tracks_genitive(n)),
     resolving_on: |title, p| format!("Разрешение «{title}» на {p}…"),
     resolving_player_client: "Подбор совместимого плеер-клиента…",
     resolved_player_client: |c| format!("Выбран плеер-клиент: {c}"),
@@ -323,23 +323,17 @@ pub const STRINGS: Strings = Strings {
 };
 
 fn ru_tracks(n: usize) -> String {
-    let m10 = n % 10;
-    let m100 = n % 100;
-    if m10 == 1 && m100 != 11 {
-        format!("{n} трек")
-    } else if (2..=4).contains(&m10) && !(12..=14).contains(&m100) {
-        format!("{n} трека")
-    } else {
-        format!("{n} треков")
-    }
+    format!("{n} {}", slavic(n as u64, "трек", "трека", "треков"))
 }
 
-fn ru_gen_tracks(n: usize) -> String {
-    let m10 = n % 10;
-    let m100 = n % 100;
-    if m10 == 1 && m100 != 11 {
-        format!("{n} трека")
-    } else {
-        format!("{n} треков")
-    }
+fn ru_tracks_genitive(n: usize) -> String {
+    format!("{n} {}", slavic_genitive(n as u64, "трека", "треков"))
+}
+
+fn ru_plays(n: u64) -> String {
+    format!(
+        "{} {}",
+        crate::util::format_count(n),
+        slavic(n, "воспроизведение", "воспроизведения", "воспроизведений")
+    )
 }

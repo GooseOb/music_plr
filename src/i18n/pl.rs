@@ -1,5 +1,7 @@
-use super::Strings;
-use crate::providers::ProviderId;
+use super::{
+    plural::{slavic, slavic_genitive},
+    Strings,
+};
 
 pub const STRINGS: Strings = Strings {
     search: "Szukaj",
@@ -170,17 +172,15 @@ pub const STRINGS: Strings = Strings {
     max_panes_reached: "Osiągnięto maksymalną liczbę paneli",
 
     n_saved: |n| format!("zapisano: {n}"),
-    n_plays: |n| format!("{} odtworzeń", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "Szukaj w YouTube Music...".into(),
-        ProviderId::Local => "Szukaj...".into(),
-        other => format!("Szukaj w {}...", other.label()),
-    },
+    n_plays: pl_plays,
+    search_youtube: "Szukaj w YouTube Music...",
+    search_local: "Szukaj...",
+    search_provider: |p| format!("Szukaj w {p}..."),
     added: |n| format!("Dodano {}", pl_tracks(n)),
-    added_to: |n, to| format!("Dodano {} do: {to}", pl_tracks(n)),
+    added_to: |n, to| format!("{to}: dodano {}", pl_tracks(n)),
     removed_n: |n| format!("Usunięto {}", pl_tracks(n)),
-    removed_from: |n, from| format!("Usunięto {} z: {from}", pl_tracks(n)),
-    pasted_into: |n, into| format!("Wklejono {} do: {into}", pl_tracks(n)),
+    removed_from: |n, from| format!("{from}: usunięto {}", pl_tracks(n)),
+    pasted_into: |n, into| format!("{into}: wklejono {}", pl_tracks(n)),
     saved_title: |t| format!("Zapisano \"{t}\" w bibliotece"),
     playlist_created: |n| format!("Playlista \"{n}\" utworzona"),
     added_local: |n| {
@@ -189,7 +189,7 @@ pub const STRINGS: Strings = Strings {
             pl_tracks(n)
         )
     },
-    downloading_n: |n| format!("Pobieranie {}...", pl_gen_tracks(n)),
+    downloading_n: |n| format!("Pobieranie {}...", pl_tracks_genitive(n)),
     resolving_on: |title, p| format!("Rozwiązywanie \"{title}\" na {p}..."),
     resolving_player_client: "Wyszukiwanie zgodnego klienta odtwarzacza...",
     resolved_player_client: |c| format!("Wybrano klienta odtwarzacza: {c}"),
@@ -329,16 +329,17 @@ pub const STRINGS: Strings = Strings {
 };
 
 fn pl_tracks(n: usize) -> String {
-    match n {
-        1 => "1 utwór".into(),
-        2..=4 => format!("{n} utwory"),
-        _ => format!("{n} utworów"),
-    }
+    format!("{n} {}", slavic(n as u64, "utwór", "utwory", "utworów"))
 }
 
-fn pl_gen_tracks(n: usize) -> String {
-    match n {
-        1 => "1 utworu".into(),
-        _ => format!("{n} utworów"),
-    }
+fn pl_tracks_genitive(n: usize) -> String {
+    format!("{n} {}", slavic_genitive(n as u64, "utworu", "utworów"))
+}
+
+fn pl_plays(n: u64) -> String {
+    format!(
+        "{} {}",
+        crate::util::format_count(n),
+        slavic(n, "odtworzenie", "odtworzenia", "odtworzeń")
+    )
 }

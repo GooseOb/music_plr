@@ -1,5 +1,4 @@
-use super::Strings;
-use crate::providers::ProviderId;
+use super::{plural::two, Strings};
 
 pub const STRINGS: Strings = Strings {
     search: "Search",
@@ -171,12 +170,10 @@ pub const STRINGS: Strings = Strings {
     max_panes_reached: "Maximum number of panes reached",
 
     n_saved: |n| format!("{n} saved"),
-    n_plays: |n| format!("{} plays", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "Search YouTube Music...".into(),
-        ProviderId::Local => "Search...".into(),
-        other => format!("Search {}...", other.label()),
-    },
+    n_plays: en_plays,
+    search_youtube: "Search YouTube Music...",
+    search_local: "Search...",
+    search_provider: |p| format!("Search {p}..."),
     added: |n| format!("Added {}", en_tracks(n)),
     added_to: |n, to| format!("Added {} to {to}", en_tracks(n)),
     removed_n: |n| format!("Removed {}", en_tracks(n)),
@@ -324,9 +321,13 @@ pub const STRINGS: Strings = Strings {
 };
 
 fn en_tracks(n: usize) -> String {
-    if n == 1 {
-        "1 track".into()
-    } else {
-        format!("{n} tracks")
-    }
+    format!("{n} {}", two(n as u64, "track", "tracks"))
+}
+
+fn en_plays(n: u64) -> String {
+    format!(
+        "{} {}",
+        crate::util::format_count(n),
+        two(n, "play", "plays")
+    )
 }

@@ -66,7 +66,10 @@ pub(super) fn view_search_bar(
     // pane can be focused without cursor hit-testing.
     let input = MouseArea::new(
         text_input(
-            (player.strings.search_placeholder)(pane_state.search_provider).as_str(),
+            player
+                .strings
+                .search_placeholder(pane_state.search_provider)
+                .as_str(),
             &pane_state.search_query,
         )
         .on_input(move |q| Message::SearchInputChanged(pane, q))

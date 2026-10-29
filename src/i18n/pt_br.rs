@@ -1,5 +1,4 @@
-use super::Strings;
-use crate::providers::ProviderId;
+use super::{plural::two, Strings};
 
 pub const STRINGS: Strings = Strings {
     search: "Buscar",
@@ -170,17 +169,15 @@ pub const STRINGS: Strings = Strings {
     max_panes_reached: "Número máximo de painéis atingido",
 
     n_saved: |n| format!("{n} salvo{}", if n == 1 { "" } else { "s" }),
-    n_plays: |n| format!("{} reproduções", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "Buscar no YouTube Music…".into(),
-        ProviderId::Local => "Buscar…".into(),
-        other => format!("Buscar em {}…", other.label()),
-    },
+    n_plays: pt_plays,
+    search_youtube: "Buscar no YouTube Music…",
+    search_local: "Buscar…",
+    search_provider: |p| format!("Buscar em {p}…"),
     added: |n| format!("Adicionadas {}", pt_tracks(n)),
-    added_to: |n, to| format!("Adicionadas {} a {to}", pt_tracks(n)),
+    added_to: |n, to| format!("{to}: {} adicionadas", pt_tracks(n)),
     removed_n: |n| format!("Removidas {}", pt_tracks(n)),
-    removed_from: |n, from| format!("Removidas {} de {from}", pt_tracks(n)),
-    pasted_into: |n, into| format!("Coladas {} em {into}", pt_tracks(n)),
+    removed_from: |n, from| format!("{from}: {} removidas", pt_tracks(n)),
+    pasted_into: |n, into| format!("{into}: {} coladas", pt_tracks(n)),
     saved_title: |t| format!("Salva \"{t}\" na biblioteca"),
     playlist_created: |n| format!("Playlist \"{n}\" criada"),
     added_local: |n| format!("Adicionadas {} (selecione uma playlist para organizar)", pt_tracks(n)),
@@ -323,9 +320,13 @@ pub const STRINGS: Strings = Strings {
 };
 
 fn pt_tracks(n: usize) -> String {
-    if n == 1 {
-        "1 faixa".into()
-    } else {
-        format!("{n} faixas")
-    }
+    format!("{n} {}", two(n as u64, "faixa", "faixas"))
+}
+
+fn pt_plays(n: u64) -> String {
+    format!(
+        "{} {}",
+        crate::util::format_count(n),
+        two(n, "reprodução", "reproduções")
+    )
 }

@@ -1,5 +1,4 @@
 use super::Strings;
-use crate::providers::ProviderId;
 
 pub const STRINGS: Strings = Strings {
     search: "खोज",
@@ -171,16 +170,14 @@ pub const STRINGS: Strings = Strings {
 
     n_saved: |n| format!("{n} सहेजे गए"),
     n_plays: |n| format!("{} प्लेबैक", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "YouTube Music पर खोजें…".into(),
-        ProviderId::Local => "खोजें…".into(),
-        other => format!("{} पर खोजें…", other.label()),
-    },
+    search_youtube: "YouTube Music पर खोजें…",
+    search_local: "खोजें…",
+    search_provider: |p| format!("{p} पर खोजें…"),
     added: |n| format!("जोड़े गए {}", hi_tracks(n)),
-    added_to: |n, to| format!("जोड़े गए {} को {to}", hi_tracks(n)),
+    added_to: |n, to| format!("{to} में {} जोड़े गए", hi_tracks(n)),
     removed_n: |n| format!("हटाए गए {}", hi_tracks(n)),
-    removed_from: |n, from| format!("हटाए गए {} से {from}", hi_tracks(n)),
-    pasted_into: |n, into| format!("चिपकाए गए {} में {into}", hi_tracks(n)),
+    removed_from: |n, from| format!("{from} से {} हटाए गए", hi_tracks(n)),
+    pasted_into: |n, into| format!("{into} में {} चिपकाए गए", hi_tracks(n)),
     saved_title: |t| format!("\"{t}\" को लाइब्रेरी में सहेजा गया"),
     playlist_created: |n| format!("प्लेलिस्ट \"{n}\" बनाई गई"),
     added_local: |n| format!("जोड़े गए {} (व्यवस्थित करने के लिए एक प्लेलिस्ट चुनें)", hi_tracks(n)),
@@ -323,9 +320,5 @@ pub const STRINGS: Strings = Strings {
 };
 
 fn hi_tracks(n: usize) -> String {
-    if n == 1 {
-        "1 ट्रैक".into()
-    } else {
-        format!("{n} ट्रैक")
-    }
+    format!("{n} ट्रैक")
 }

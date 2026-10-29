@@ -16,6 +16,8 @@ pub mod ru;
 pub mod uk;
 pub mod zh_cn;
 
+mod plural;
+
 /// Declares the `Language` enum and its `ALL` / `label` / `strings` machinery
 /// from a single list, so adding a language only requires creating its module
 /// and appending one entry here — the enum itself is never hand-edited.
@@ -255,8 +257,11 @@ pub struct Strings {
 
     pub n_saved: fn(usize) -> String,
     pub n_plays: fn(u64) -> String,
-    pub search_placeholder: fn(ProviderId) -> String,
+    pub search_youtube: &'static str,
+    pub search_local: &'static str,
+    pub search_provider: fn(&str) -> String,
     pub added: fn(usize) -> String,
+    /// Destination is a label in citation form (queue, trashbin, playlist name); templates must keep it out of a case-governed slot.
     pub added_to: fn(usize, &str) -> String,
     pub removed_n: fn(usize) -> String,
     pub removed_from: fn(usize, &str) -> String,
@@ -396,4 +401,14 @@ pub struct Strings {
     pub sc_sec_menu: &'static str,
     pub sc_open_menu: &'static str,
     pub sc_nav_menu: &'static str,
+}
+
+impl Strings {
+    pub fn search_placeholder(&self, provider: ProviderId) -> String {
+        match provider {
+            ProviderId::YouTube => self.search_youtube.into(),
+            ProviderId::Local => self.search_local.into(),
+            other => (self.search_provider)(other.label()),
+        }
+    }
 }

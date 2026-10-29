@@ -1,5 +1,4 @@
-use super::Strings;
-use crate::providers::ProviderId;
+use super::{plural::zero_or_one, Strings};
 
 pub const STRINGS: Strings = Strings {
     search: "Rechercher",
@@ -170,17 +169,15 @@ pub const STRINGS: Strings = Strings {
     max_panes_reached: "Nombre maximal de volets atteint",
 
     n_saved: |n| format!("{n} enregistré{}", if n == 1 { "" } else { "s" }),
-    n_plays: |n| format!("{} écoutes", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "Rechercher sur YouTube Music…".into(),
-        ProviderId::Local => "Rechercher…".into(),
-        other => format!("Rechercher sur {}…", other.label()),
-    },
+    n_plays: fr_plays,
+    search_youtube: "Rechercher sur YouTube Music…",
+    search_local: "Rechercher…",
+    search_provider: |p| format!("Rechercher sur {p}…"),
     added: |n| format!("Ajoutées {}", fr_tracks(n)),
-    added_to: |n, to| format!("Ajoutées {} à {to}", fr_tracks(n)),
+    added_to: |n, to| format!("{to} : {} ajoutées", fr_tracks(n)),
     removed_n: |n| format!("Retirées {}", fr_tracks(n)),
-    removed_from: |n, from| format!("Retirées {} de {from}", fr_tracks(n)),
-    pasted_into: |n, into| format!("Collées {} dans {into}", fr_tracks(n)),
+    removed_from: |n, from| format!("{from} : {} retirées", fr_tracks(n)),
+    pasted_into: |n, into| format!("{into} : {} collées", fr_tracks(n)),
     saved_title: |t| format!("« {t} » enregistré dans la bibliothèque"),
     playlist_created: |n| format!("Playlist « {n} » créée"),
     added_local: |n| format!("Ajoutées {} (sélectionnez une playlist pour les organiser)", fr_tracks(n)),
@@ -323,9 +320,13 @@ pub const STRINGS: Strings = Strings {
 };
 
 fn fr_tracks(n: usize) -> String {
-    if n <= 1 {
-        format!("{n} piste")
-    } else {
-        format!("{n} pistes")
-    }
+    format!("{n} {}", zero_or_one(n as u64, "piste", "pistes"))
+}
+
+fn fr_plays(n: u64) -> String {
+    format!(
+        "{} {}",
+        crate::util::format_count(n),
+        zero_or_one(n, "écoute", "écoutes")
+    )
 }

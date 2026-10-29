@@ -1,5 +1,4 @@
-use super::Strings;
-use crate::providers::ProviderId;
+use super::{plural::arabic, Strings};
 
 pub const STRINGS: Strings = Strings {
     search: "بحث",
@@ -170,17 +169,15 @@ pub const STRINGS: Strings = Strings {
     max_panes_reached: "تم الوصول إلى الحد الأقصى لعدد الأجزاء",
 
     n_saved: |n| format!("{n} محفوظة"),
-    n_plays: |n| format!("{} تشغيل", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "ابحث في YouTube Music…".into(),
-        ProviderId::Local => "ابحث…".into(),
-        other => format!("ابحث في {}…", other.label()),
-    },
+    n_plays: ar_plays,
+    search_youtube: "ابحث في YouTube Music…",
+    search_local: "ابحث…",
+    search_provider: |p| format!("ابحث في {p}…"),
     added: |n| format!("تمت إضافة {}", ar_tracks(n)),
-    added_to: |n, to| format!("تمت إضافة {} إلى {to}", ar_tracks(n)),
+    added_to: |n, to| format!("{to}: تمت إضافة {}", ar_tracks(n)),
     removed_n: |n| format!("تمت إزالة {}", ar_tracks(n)),
-    removed_from: |n, from| format!("تمت إزالة {} من {from}", ar_tracks(n)),
-    pasted_into: |n, into| format!("تم لصق {} في {into}", ar_tracks(n)),
+    removed_from: |n, from| format!("{from}: تمت إزالة {}", ar_tracks(n)),
+    pasted_into: |n, into| format!("{into}: تم لصق {}", ar_tracks(n)),
     saved_title: |t| format!("تم حفظ \"{t}\" في المكتبة"),
     playlist_created: |n| format!("تم إنشاء قائمة التشغيل \"{n}\""),
     added_local: |n| format!("تمت إضافة {} (اختر قائمة تشغيل لتنظيمها)", ar_tracks(n)),
@@ -323,30 +320,16 @@ pub const STRINGS: Strings = Strings {
 };
 
 fn ar_tracks(n: usize) -> String {
-    let form = if n == 0 {
-        0
-    } else if n == 2 {
-        2
-    } else if (3..=10).contains(&n) {
-        3
-    } else if (11..=99).contains(&n) {
-        4
-    } else {
-        let m = n % 100;
-        if m == 0 {
-            4
-        } else if m == 2 {
-            2
-        } else if (3..=10).contains(&m) {
-            3
-        } else {
-            4
-        }
-    };
-    match form {
-        0 => String::from("0 أغنية"),
-        2 => format!("{n} أغنيتان"),
-        3 => format!("{n} أغاني"),
-        _ => format!("{n} أغنية"),
-    }
+    format!(
+        "{n} {}",
+        arabic(n as u64, "أغنية", "أغنيتان", "أغاني", "أغنية")
+    )
+}
+
+fn ar_plays(n: u64) -> String {
+    format!(
+        "{} {}",
+        crate::util::format_count(n),
+        arabic(n, "تشغيل", "تشغيلان", "تشغيلات", "تشغيل")
+    )
 }

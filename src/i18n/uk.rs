@@ -1,5 +1,7 @@
-use super::Strings;
-use crate::providers::ProviderId;
+use super::{
+    plural::{slavic, slavic_genitive},
+    Strings,
+};
 
 pub const STRINGS: Strings = Strings {
     search: "Пошук",
@@ -170,17 +172,15 @@ pub const STRINGS: Strings = Strings {
     max_panes_reached: "Досягнуто максимальну кількість панелей",
 
     n_saved: |n| format!("Збережено: {n}"),
-    n_plays: |n| format!("{} відтворень", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "Шукати в YouTube Music…".into(),
-        ProviderId::Local => "Шукати…".into(),
-        other => format!("Шукати в {}…", other.label()),
-    },
+    n_plays: uk_plays,
+    search_youtube: "Шукати в YouTube Music…",
+    search_local: "Шукати…",
+    search_provider: |p| format!("Шукати в {p}…"),
     added: |n| format!("Додано: {}", uk_tracks(n)),
-    added_to: |n, to| format!("Додано: {} до {to}", uk_tracks(n)),
+    added_to: |n, to| format!("{to}: додано {}", uk_tracks(n)),
     removed_n: |n| format!("Видалено: {}", uk_tracks(n)),
-    removed_from: |n, from| format!("Видалено: {} з {from}", uk_tracks(n)),
-    pasted_into: |n, into| format!("Вставлено: {} до {into}", uk_tracks(n)),
+    removed_from: |n, from| format!("{from}: видалено {}", uk_tracks(n)),
+    pasted_into: |n, into| format!("{into}: вставлено {}", uk_tracks(n)),
     saved_title: |t| format!("«{t}» збережено до бібліотеки"),
     playlist_created: |n| format!("Плейлист «{n}» створено"),
     added_local: |n| format!("Додано: {} (оберіть плейлист для впорядкування)", uk_tracks(n)),
@@ -323,23 +323,17 @@ pub const STRINGS: Strings = Strings {
 };
 
 fn uk_tracks(n: usize) -> String {
-    let m10 = n % 10;
-    let m100 = n % 100;
-    if m10 == 1 && m100 != 11 {
-        format!("{n} трек")
-    } else if (2..=4).contains(&m10) && !(12..=14).contains(&m100) {
-        format!("{n} треки")
-    } else {
-        format!("{n} треків")
-    }
+    format!("{n} {}", slavic(n as u64, "трек", "треки", "треків"))
 }
 
 fn uk_tracks_genitive(n: usize) -> String {
-    let m10 = n % 10;
-    let m100 = n % 100;
-    if m10 == 1 && m100 != 11 {
-        format!("{n} треку")
-    } else {
-        format!("{n} треків")
-    }
+    format!("{n} {}", slavic_genitive(n as u64, "треку", "треків"))
+}
+
+fn uk_plays(n: u64) -> String {
+    format!(
+        "{} {}",
+        crate::util::format_count(n),
+        slavic(n, "відтворення", "відтворення", "відтворень")
+    )
 }

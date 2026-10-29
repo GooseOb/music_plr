@@ -8,6 +8,15 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+## [Unreleased]
+
+### Fixed
+
+#### Localization
+
+- "{n} plays" on tracks is count-aware (e.g. "1 play" instead of "1 plays").
+- Destination in notification text e.g. "Queue: added 5 tracks" instead of "Added 5 tracks to Queue" for languages where case is not nominative.
+
 ## [1.3.18] - 2026-10-29
 
 ### Fixed

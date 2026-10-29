@@ -1,5 +1,4 @@
 use super::Strings;
-use crate::providers::ProviderId;
 
 pub const STRINGS: Strings = Strings {
     search: "検索",
@@ -171,11 +170,9 @@ pub const STRINGS: Strings = Strings {
 
     n_saved: |n| format!("{n} 件保存"),
     n_plays: |n| format!("{} 回再生", crate::util::format_count(n)),
-    search_placeholder: |p| match p {
-        ProviderId::YouTube => "YouTube Music を検索…".into(),
-        ProviderId::Local => "検索…".into(),
-        other => format!("{} を検索…", other.label()),
-    },
+    search_youtube: "YouTube Music を検索…",
+    search_local: "検索…",
+    search_provider: |p| format!("{p} を検索…"),
     added: |n| format!("{} を追加", ja_tracks(n)),
     added_to: |n, to| format!("{} を {to} に追加", ja_tracks(n)),
     removed_n: |n| format!("{} を削除", ja_tracks(n)),
