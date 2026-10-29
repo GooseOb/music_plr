@@ -94,22 +94,26 @@ fn header_provider_picker(
     selected: Option<ProviderId>,
     tr: &'static crate::i18n::Strings,
 ) -> Element<'static, Message, AppTheme> {
-    Row::with_children([
-        text(tr.provided_by)
-            .size(theme::TEXT_SIZE_XS)
-            .style(fg_secondary())
-            .into(),
-        scope_tab_row(ProviderId::header_providers().iter().map(|&p| {
-            (
-                tr.provider(p),
-                selected == Some(p),
-                Message::ArtistHeaderProviderChanged(pane, p),
-            )
-        })),
-    ])
-    .spacing(theme::SPACING_XS)
-    .align_y(alignment::Vertical::Center)
-    .into()
+    tr.direction
+        .row([
+            text(tr.provided_by)
+                .size(theme::TEXT_SIZE_XS)
+                .style(fg_secondary())
+                .into(),
+            scope_tab_row(
+                tr.direction,
+                ProviderId::header_providers().iter().map(|&p| {
+                    (
+                        tr.provider(p),
+                        selected == Some(p),
+                        Message::ArtistHeaderProviderChanged(pane, p),
+                    )
+                }),
+            ),
+        ])
+        .spacing(theme::SPACING_XS)
+        .align_y(alignment::Vertical::Center)
+        .into()
 }
 
 /// Header block: picture, artist name and the "label: value" stat pairs of
@@ -122,6 +126,7 @@ fn header<'a>(
     header: Option<&'a crate::providers::ArtistHeader>,
     header_provider: Option<ProviderId>,
 ) -> Element<'a, Message, AppTheme> {
+    let dir = player.strings.direction;
     let thumb = player
         .thumbnail_index
         .get(header_provider.unwrap_or_default(), &header_thumb_key(id));
@@ -174,22 +179,24 @@ fn header<'a>(
             buttons.push(open_in_browser_button(player.strings, &url));
         }
         actions.push(
-            Container::new(Row::with_children(buttons).spacing(theme::SPACING_XS))
+            Container::new(dir.row(buttons).spacing(theme::SPACING_XS))
                 .align_y(alignment::Vertical::Bottom)
                 .height(Length::Fill)
                 .into(),
         );
     }
 
-    Row::with_children([
+    let dir = player.strings.direction;
+    dir.row([
         image,
         Column::with_children(info)
             .spacing(theme::SPACING_2XS)
             .width(Length::Fill)
             .height(Length::Fill)
+            .align_x(dir.align())
             .into(),
         Column::with_children(actions)
-            .align_x(alignment::Horizontal::Right)
+            .align_x(player.strings.direction.end_align())
             .into(),
     ])
     .spacing(theme::SPACING_LG)
@@ -203,29 +210,33 @@ fn section_header(
     selected: Option<ProviderId>,
     tr: &'static crate::i18n::Strings,
 ) -> Element<'static, Message, AppTheme> {
-    let picker = scope_tab_row(kind.providers().iter().map(|&provider| {
-        (
-            tr.provider(provider),
-            selected == Some(provider),
-            Message::ArtistSectionProviderChanged(pane, kind, provider),
-        )
-    }));
+    let picker = scope_tab_row(
+        tr.direction,
+        kind.providers().iter().map(|&provider| {
+            (
+                tr.provider(provider),
+                selected == Some(provider),
+                Message::ArtistSectionProviderChanged(pane, kind, provider),
+            )
+        }),
+    );
     Container::new(
-        Row::with_children([
-            text(section_kind_label(kind, tr))
-                .style(fg_accent())
-                .size(theme::TEXT_SIZE_LG)
-                .width(Length::Fill)
-                .into(),
-            text(tr.provided_by)
-                .size(theme::TEXT_SIZE_SM)
-                .style(fg_secondary())
-                .into(),
-            picker,
-        ])
-        .align_y(alignment::Vertical::Center)
-        .spacing(theme::SPACING_MD)
-        .padding([theme::SPACING_SM, theme::SPACING_XL]),
+        tr.direction
+            .row([
+                text(section_kind_label(kind, tr))
+                    .style(fg_accent())
+                    .size(theme::TEXT_SIZE_LG)
+                    .width(Length::Fill)
+                    .into(),
+                text(tr.provided_by)
+                    .size(theme::TEXT_SIZE_SM)
+                    .style(fg_secondary())
+                    .into(),
+                picker,
+            ])
+            .align_y(alignment::Vertical::Center)
+            .spacing(theme::SPACING_MD)
+            .padding([theme::SPACING_SM, theme::SPACING_XL]),
     )
     .into()
 }

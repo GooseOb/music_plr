@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{text, Button, Column, Container, MouseArea, Row, Space, Stack},
+    widget::{text, Button, Column, Container, MouseArea, Space, Stack},
     Element, Length,
 };
 
@@ -19,20 +19,22 @@ pub(super) fn view_split_tree<'a>(
     player: &'a MusicPlayer,
     node: &'a crate::app::pane::SplitNode,
 ) -> Element<'a, Message, AppTheme> {
+    let dir = player.strings.direction;
     match node {
         crate::app::pane::SplitNode::Leaf(pane) => view_pane(player, *pane),
-        crate::app::pane::SplitNode::Row { first, second } => Row::with_children([
-            Container::new(view_split_tree(player, first))
-                .width(Length::FillPortion(1))
-                .height(Length::Fill)
-                .into(),
-            Container::new(view_split_tree(player, second))
-                .width(Length::FillPortion(1))
-                .height(Length::Fill)
-                .into(),
-        ])
-        .height(Length::Fill)
-        .into(),
+        crate::app::pane::SplitNode::Row { first, second } => dir
+            .row([
+                Container::new(view_split_tree(player, first))
+                    .width(Length::FillPortion(1))
+                    .height(Length::Fill)
+                    .into(),
+                Container::new(view_split_tree(player, second))
+                    .width(Length::FillPortion(1))
+                    .height(Length::Fill)
+                    .into(),
+            ])
+            .height(Length::Fill)
+            .into(),
         crate::app::pane::SplitNode::Column { first, second } => Column::with_children([
             Container::new(view_split_tree(player, first))
                 .height(Length::FillPortion(1))
@@ -95,12 +97,19 @@ fn view_pane_header(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, 
     let can_back = player.can_navigate_back(pane);
     let can_forward = player.can_navigate_forward(pane);
     let p = player.app_theme.palette;
-    Row::with_children([
-        header_button(&p, can_back, icons::BACK_ICON, Message::NavigateBack(pane)).into(),
+    let dir = player.strings.direction;
+    let buttons = [
+        header_button(
+            &p,
+            can_back,
+            dir.mirror(icons::BACK_ICON, icons::FORWARD_ICON),
+            Message::NavigateBack(pane),
+        )
+        .into(),
         header_button(
             &p,
             can_forward,
-            icons::FORWARD_ICON,
+            dir.mirror(icons::FORWARD_ICON, icons::BACK_ICON),
             Message::NavigateForward(pane),
         )
         .into(),
@@ -108,13 +117,15 @@ fn view_pane_header(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, 
             .size(theme::TEXT_SIZE_SM)
             .style(fg_secondary())
             .width(Length::Fill)
+            .align_x(dir.align())
             .into(),
         header_button(&p, true, icons::CLOSE_ICON, Message::ClosePane(pane)).into(),
-    ])
-    .spacing(theme::SPACING_XS)
-    .align_y(alignment::Vertical::Center)
-    .padding([theme::SPACING_XS, theme::SPACING_SM])
-    .into()
+    ];
+    dir.row(buttons)
+        .spacing(theme::SPACING_XS)
+        .align_y(alignment::Vertical::Center)
+        .padding([theme::SPACING_XS, theme::SPACING_SM])
+        .into()
 }
 
 fn header_button(

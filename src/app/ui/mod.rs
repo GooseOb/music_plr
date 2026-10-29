@@ -1,5 +1,5 @@
 use iced::{
-    widget::{self, scrollable, Column, Id, Row, Stack},
+    widget::{self, scrollable, Column, Id, Stack},
     Element,
 };
 
@@ -11,6 +11,7 @@ use crate::{
 
 pub(crate) mod artist;
 mod content;
+mod direction;
 pub(crate) mod lyrics;
 mod overlays;
 mod playbar;
@@ -93,7 +94,7 @@ pub fn view(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     }
 
     let layout = Column::with_children([
-        Row::with_children(body).into(),
+        player.strings.direction.row(body).into(),
         playbar::view_playbar(player),
     ]);
 

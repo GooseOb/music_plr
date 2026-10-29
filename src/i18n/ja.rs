@@ -1,4 +1,4 @@
-use super::Strings;
+use super::{Direction, Strings};
 
 pub const STRINGS: Strings = Strings {
     search: "検索",
@@ -341,6 +341,7 @@ pub const STRINGS: Strings = Strings {
     sc_sec_menu: "コンテキストメニュー",
     sc_open_menu: "フォーカス中の曲に対して開く",
     sc_nav_menu: "メニュー内を移動",
+    direction: Direction::Ltr,
 };
 
 fn ja_tracks(n: usize) -> String {

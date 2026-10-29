@@ -21,16 +21,19 @@ use crate::{
 };
 
 fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let row = scope_tab_row(ProviderId::defaultable().iter().map(|&provider| {
-        (
-            player.strings.provider(provider),
-            player.config.default_provider == provider,
-            Message::SettingsChanged(SettingsChange::DefaultProvider(provider)),
-        )
-    }));
+    let row = scope_tab_row(
+        player.strings.direction,
+        ProviderId::defaultable().iter().map(|&provider| {
+            (
+                player.strings.provider(provider),
+                player.config.default_provider == provider,
+                Message::SettingsChanged(SettingsChange::DefaultProvider(provider)),
+            )
+        }),
+    );
     Column::with_children([text(player.strings.default_provider_lbl).into(), row])
         .spacing(theme::SPACING_SM)
-        .align_x(alignment::Horizontal::Left)
+        .align_x(player.strings.direction.align())
         .into()
 }
 
@@ -50,16 +53,17 @@ fn cookie_browser_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme
             Message::SettingsChanged(SettingsChange::CookieBrowser(Some(browser.to_string()))),
         ));
     }
-    let row = scope_tab_row(items);
+    let row = scope_tab_row(player.strings.direction, items);
     Column::with_children([text(player.strings.cookie_browser_lbl).into(), row])
         .spacing(theme::SPACING_SM)
-        .align_x(alignment::Horizontal::Left)
+        .align_x(player.strings.direction.align())
         .into()
 }
 
 fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let cfg = &player.config;
     let base_url = text_input_row(
+        player.strings.direction,
         player.strings.translation_base_url_lbl,
         &cfg.translation_base_url,
         crate::translate::DEFAULT_BASE_URL,
@@ -71,13 +75,16 @@ fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             .into(),
         text_input("", &cfg.translation_api_key)
             .secure(true)
+            .align_x(player.strings.direction.align())
             .on_input(|s| Message::SettingsChanged(SettingsChange::TranslationApiKey(s)))
             .padding([theme::SPACING_SM, theme::SPACING_MD])
             .into(),
     ])
     .spacing(theme::SPACING_XS)
+    .align_x(player.strings.direction.align())
     .into();
     let model = text_input_row(
+        player.strings.direction,
         player.strings.translation_model_lbl,
         &cfg.translation_model,
         crate::translate::DEFAULT_MODEL,
@@ -116,6 +123,7 @@ fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                     player.strings.find_in_list,
                     &player.translation_models_filter,
                 )
+                .align_x(player.strings.direction.align())
                 .on_input(Message::TranslationModelsFilterChanged)
                 .padding(theme::SPACING_SM)
                 .into(),
@@ -129,23 +137,29 @@ fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                         .into(),
                 );
             } else {
-                children.push(scope_tab_row(visible.into_iter().map(|name| {
-                    (
-                        name.clone(),
-                        *name == cfg.translation_model,
-                        Message::SettingsChanged(SettingsChange::TranslationModel(name.clone())),
-                    )
-                })));
+                children.push(scope_tab_row(
+                    player.strings.direction,
+                    visible.into_iter().map(|name| {
+                        (
+                            name.clone(),
+                            *name == cfg.translation_model,
+                            Message::SettingsChanged(SettingsChange::TranslationModel(
+                                name.clone(),
+                            )),
+                        )
+                    }),
+                ));
             }
         }
     }
     Column::with_children(children)
         .spacing(theme::SPACING_SM)
-        .align_x(alignment::Horizontal::Left)
+        .align_x(player.strings.direction.align())
         .into()
 }
 
 fn section<'a>(
+    dir: crate::i18n::Direction,
     label: &'a str,
     children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
@@ -156,9 +170,11 @@ fn section<'a>(
             .into(),
         Column::with_children(children)
             .spacing(theme::SPACING_SM)
+            .align_x(dir.align())
             .into(),
     ])
     .spacing(theme::SPACING_MD)
+    .align_x(dir.align())
     .into()
 }
 
@@ -179,6 +195,7 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                 .into(),
         ])
         .spacing(theme::SPACING_SM)
+        .align_x(tr.direction.align())
         .into(),
         crate::app::update::UpdateStatus::Updating { progress } => {
             let (downloaded, total) = *progress;
@@ -192,6 +209,7 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                 text((tr.percent)(pct)).style(fg_secondary()).into(),
             ])
             .spacing(theme::SPACING_SM)
+            .align_x(tr.direction.align())
             .into()
         }
         crate::app::update::UpdateStatus::UpdateApplied { version } => {
@@ -215,37 +233,45 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         status,
     ])
     .spacing(theme::SPACING_SM)
+    .align_x(tr.direction.align())
     .into()
 }
 
 fn language_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let row = scope_tab_row(Language::ALL.iter().map(|&language| {
-        (
-            language.label(),
-            player.config.language == language,
-            Message::SettingsChanged(SettingsChange::Language(language)),
-        )
-    }));
+    let row = scope_tab_row(
+        player.strings.direction,
+        Language::ALL.iter().map(|&language| {
+            (
+                language.label(),
+                player.config.language == language,
+                Message::SettingsChanged(SettingsChange::Language(language)),
+            )
+        }),
+    );
     Column::with_children([text(player.strings.language_lbl).into(), row])
         .spacing(theme::SPACING_SM)
-        .align_x(alignment::Horizontal::Left)
+        .align_x(player.strings.direction.align())
         .into()
 }
 
 fn theme_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let row = scope_tab_row(theme::ThemeKind::ALL.iter().map(|&kind| {
-        (
-            kind.label(),
-            player.config.theme_kind == kind,
-            Message::SettingsChanged(SettingsChange::Theme(kind)),
-        )
-    }));
+    let row = scope_tab_row(
+        player.strings.direction,
+        theme::ThemeKind::ALL.iter().map(|&kind| {
+            (
+                kind.label(),
+                player.config.theme_kind == kind,
+                Message::SettingsChanged(SettingsChange::Theme(kind)),
+            )
+        }),
+    );
     Column::with_children([text(player.strings.theme_lbl).into(), row])
         .spacing(theme::SPACING_SM)
-        .align_x(alignment::Horizontal::Left)
+        .align_x(player.strings.direction.align())
         .into()
 }
 
+#[allow(clippy::too_many_lines)]
 pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let cfg = &player.config;
 
@@ -264,6 +290,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         .into();
 
     let download_dir = text_input_row(
+        player.strings.direction,
         player.strings.download_dir_lbl,
         &cfg.download_dir,
         "",
@@ -271,6 +298,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
     );
 
     let cache_size = text_input_row(
+        player.strings.direction,
         player.strings.cache_size_lbl,
         &format!("{}", cfg.cache_max_size_mb),
         "1024",
@@ -278,6 +306,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
     );
 
     let hist_visible = text_input_row(
+        player.strings.direction,
         player.strings.hist_rows_lbl,
         &format!("{}", cfg.max_search_history_visible),
         "10",
@@ -285,6 +314,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
     );
 
     let hist_stored = text_input_row(
+        player.strings.direction,
         player.strings.hist_entries_lbl,
         &format!("{}", cfg.max_search_history_stored),
         "100",
@@ -292,6 +322,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
     );
 
     let recent = text_input_row(
+        player.strings.direction,
         player.strings.recent_kept_lbl,
         &format!("{}", cfg.max_recently_played),
         "50",
@@ -301,6 +332,7 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
     let content = Column::with_children([
         footer.into(),
         section(
+            player.strings.direction,
             player.strings.sec_playback,
             [
                 normalize,
@@ -309,30 +341,51 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
             ],
         ),
         section(
+            player.strings.direction,
             player.strings.sec_translation,
             [translation_section(player)],
         ),
-        section(player.strings.sec_storage, [download_dir, cache_size]),
         section(
+            player.strings.direction,
+            player.strings.sec_storage,
+            [download_dir, cache_size],
+        ),
+        section(
+            player.strings.direction,
             player.strings.sec_history,
             [hist_visible, hist_stored, recent],
         ),
         section(
+            player.strings.direction,
             player.strings.sec_dependencies,
             [dep_settings_section(player)],
         ),
-        section(player.strings.sec_updates, [updates_section(player)]),
+        section(
+            player.strings.direction,
+            player.strings.sec_updates,
+            [updates_section(player)],
+        ),
         Column::with_children([
-            section(player.strings.language_lbl, [language_section(player)]),
-            section(player.strings.sec_appearance, [theme_section(player)]),
+            section(
+                player.strings.direction,
+                player.strings.language_lbl,
+                [language_section(player)],
+            ),
+            section(
+                player.strings.direction,
+                player.strings.sec_appearance,
+                [theme_section(player)],
+            ),
             text_button(player.strings.reset_defaults)
                 .on_press(Message::SettingsResetDefaults)
                 .into(),
         ])
         .spacing(theme::SPACING_XL)
+        .align_x(player.strings.direction.align())
         .into(),
     ])
-    .spacing(theme::SPACING_XL);
+    .spacing(theme::SPACING_XL)
+    .align_x(player.strings.direction.align());
 
     scrollable(Container::new(content).padding([theme::SPACING_MD, theme::SPACING_XL]))
         .id(iced::widget::Id::new("settings_scroll"))
@@ -345,6 +398,7 @@ fn dep_settings_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> 
         .map(|&kind| dep_settings_row(player, kind));
     Column::with_children(rows)
         .spacing(theme::SPACING_MD)
+        .align_x(player.strings.direction.align())
         .into()
 }
 
@@ -404,5 +458,6 @@ fn dep_settings_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
         status,
     ])
     .spacing(theme::SPACING_XS)
+    .align_x(tr.direction.align())
     .into()
 }

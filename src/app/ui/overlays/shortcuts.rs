@@ -2,7 +2,7 @@
 
 use iced::{
     alignment,
-    widget::{scrollable, text, Column, Row},
+    widget::{scrollable, text, Column},
     Element, Length,
 };
 
@@ -25,24 +25,26 @@ pub(super) fn view_shortcuts(player: &MusicPlayer) -> Element<'_, Message, AppTh
             .into()];
         for row in section.rows {
             children.push(
-                Row::with_children([
-                    text(row.keys)
-                        .size(theme::TEXT_SIZE_SM)
-                        .style(fg_secondary())
-                        .width(theme::DIALOG_WIDTH)
-                        .into(),
-                    text((row.action)(tr))
-                        .size(theme::TEXT_SIZE_SM)
-                        .width(Length::Fill)
-                        .into(),
-                ])
-                .spacing(theme::SPACING_SM)
-                .into(),
+                tr.direction
+                    .row([
+                        text(row.keys)
+                            .size(theme::TEXT_SIZE_SM)
+                            .style(fg_secondary())
+                            .width(theme::DIALOG_WIDTH)
+                            .into(),
+                        text((row.action)(tr))
+                            .size(theme::TEXT_SIZE_SM)
+                            .width(Length::Fill)
+                            .into(),
+                    ])
+                    .spacing(theme::SPACING_SM)
+                    .into(),
             );
         }
         sections.push(
             Column::with_children(children)
                 .spacing(theme::SPACING_XS)
+                .align_x(tr.direction.align())
                 .into(),
         );
     }

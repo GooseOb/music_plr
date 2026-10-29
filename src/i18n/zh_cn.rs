@@ -1,4 +1,4 @@
-use super::Strings;
+use super::{Direction, Strings};
 
 pub const STRINGS: Strings = Strings {
     search: "搜索",
@@ -341,6 +341,7 @@ pub const STRINGS: Strings = Strings {
     sc_sec_menu: "右键菜单",
     sc_open_menu: "针对聚焦的曲目打开",
     sc_nav_menu: "在菜单中导航",
+    direction: Direction::Ltr,
 };
 
 fn zh_tracks(n: usize) -> String {

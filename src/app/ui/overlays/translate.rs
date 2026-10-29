@@ -22,6 +22,7 @@ pub(super) fn view_translate_dialog<'a>(
     let language = text_input(tr.translate_language_lbl, &dialog.language)
         .on_input(Message::TranslateLanguageChanged)
         .on_submit(Message::TranslateLanguageSubmit)
+        .align_x(tr.direction.align())
         .padding(theme::SPACING_SM)
         .into();
     let prompt = iced::widget::text_editor(&dialog.prompt)
@@ -65,13 +66,19 @@ pub(super) fn view_translate_dialog<'a>(
     if dialog.translating {
         children.push(text(tr.translating).style(fg_secondary()).into());
     }
-    children
-        .push(dialog_button_row([cancel_btn.into(), reset_btn.into(), submit_btn.into()]).into());
+    children.push(
+        dialog_button_row(
+            tr.direction,
+            [cancel_btn.into(), reset_btn.into(), submit_btn.into()],
+        )
+        .into(),
+    );
 
     view_dialog(
         Column::with_children(children)
             .spacing(theme::SPACING_MD)
             .padding(theme::SPACING_MD)
+            .align_x(tr.direction.align())
             .width(theme::DIALOG_WIDTH_LG)
             .into(),
         Message::CloseDialog,

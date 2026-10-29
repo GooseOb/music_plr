@@ -1,6 +1,6 @@
 use super::{
     plural::{slavic, slavic_genitive},
-    with_search_marker, Strings,
+    with_search_marker, Direction, Strings,
 };
 
 const SEARCH_MARKER: &str = "(поиск)";
@@ -332,6 +332,7 @@ pub const STRINGS: Strings = Strings {
     sc_sec_menu: "Контекстное меню",
     sc_open_menu: "Открыть для выбранного трека",
     sc_nav_menu: "Навигация по меню",
+    direction: Direction::Ltr,
 };
 
 fn ru_tracks(n: usize) -> String {

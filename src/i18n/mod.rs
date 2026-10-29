@@ -23,6 +23,23 @@ pub mod zh_cn;
 
 mod plural;
 
+/// Writing direction of a language. The layout mirrors itself for [`Rtl`]:
+/// rows put their first child on the right and paragraphs align right.
+///
+/// [`Rtl`]: Direction::Rtl
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Direction {
+    #[default]
+    Ltr,
+    Rtl,
+}
+
+impl Direction {
+    pub fn is_rtl(self) -> bool {
+        matches!(self, Self::Rtl)
+    }
+}
+
 /// Declares the `Language` enum and its `ALL` / `label` / `strings` machinery
 /// from a single list, so adding a language only requires creating its module
 /// and appending one entry here — the enum itself is never hand-edited.
@@ -58,6 +75,10 @@ macro_rules! languages {
                     Language::$first => &$fm::STRINGS,
                     $( Language::$variant => &$module::STRINGS, )*
                 }
+            }
+
+            pub fn direction(self) -> Direction {
+                self.strings().direction
             }
 
             pub fn from_system_locale() -> Option<Self> {
@@ -186,7 +207,6 @@ pub struct Strings {
     pub ctx_add_to_library: &'static str,
     pub ctx_remove_from_library: &'static str,
     pub trashbin: &'static str,
-    /// Submenu entries are full sentences: `(provider label, falls back to a search)`.
     pub sub_play_via: fn(&str, bool) -> String,
     pub sub_download_from: fn(&str, bool) -> String,
     pub sub_via: fn(&str, bool) -> String,
@@ -200,8 +220,6 @@ pub struct Strings {
     pub found_on: fn(&str) -> String,
     pub not_linked: &'static str,
     pub providers: &'static str,
-    /// Provider display name for [`ProviderId::Local`]; brand names come from
-    /// [`ProviderId::name`].
     pub provider_local: &'static str,
     pub no_provider_data: &'static str,
     pub save: &'static str,
@@ -269,7 +287,6 @@ pub struct Strings {
     pub search_local: &'static str,
     pub search_provider: fn(&str) -> String,
     pub added: fn(usize) -> String,
-    /// Destination is a label in citation form (queue, trashbin, playlist name); templates must keep it out of a case-governed slot.
     pub added_to: fn(usize, &str) -> String,
     pub removed_n: fn(usize) -> String,
     pub removed_from: fn(usize, &str) -> String,
@@ -415,6 +432,8 @@ pub struct Strings {
     pub sc_sec_menu: &'static str,
     pub sc_open_menu: &'static str,
     pub sc_nav_menu: &'static str,
+
+    pub direction: Direction,
 }
 
 impl Strings {
@@ -502,6 +521,13 @@ mod tests {
             for build in [s.sub_play_via, s.sub_download_from, s.sub_on] {
                 assert_ne!(build("YouTube", false), build("YouTube", true), "{lang:?}");
             }
+        }
+    }
+
+    #[test]
+    fn only_arabic_reads_right_to_left() {
+        for lang in Language::ALL {
+            assert_eq!(lang.direction().is_rtl(), lang == Language::Ar, "{lang:?}");
         }
     }
 

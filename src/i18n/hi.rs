@@ -1,4 +1,4 @@
-use super::{with_search_marker, Strings};
+use super::{with_search_marker, Direction, Strings};
 
 const SEARCH_MARKER: &str = "(खोज)";
 
@@ -329,6 +329,7 @@ pub const STRINGS: Strings = Strings {
     sc_sec_menu: "संदर्भ मेनू",
     sc_open_menu: "फ़ोकस किए गए ट्रैक के लिए खोलें",
     sc_nav_menu: "मेनू में घूमें",
+    direction: Direction::Ltr,
 };
 
 fn hi_tracks(n: usize) -> String {

@@ -3,7 +3,7 @@
 
 use iced::{
     alignment,
-    widget::{scrollable, text, text_input, Column, Row},
+    widget::{scrollable, text, text_input, Column},
     Element, Length,
 };
 
@@ -47,6 +47,7 @@ fn provider_row<'a>(
     source: ProviderId,
     finding: bool,
 ) -> Element<'a, Message, AppTheme> {
+    let dir = player.strings.direction;
     let manual_search = manual_search_button(player, provider);
     let header: Element<'a, Message, AppTheme> = match pt {
         Some(_pt) => {
@@ -61,7 +62,7 @@ fn provider_row<'a>(
                 },
             ];
             children.extend(manual_search);
-            Row::with_children(children)
+            dir.row(children)
                 .spacing(theme::SPACING_SM)
                 .align_y(alignment::Vertical::Center)
                 .into()
@@ -78,7 +79,7 @@ fn provider_row<'a>(
                 },
             ];
             children.extend(manual_search);
-            Row::with_children(children)
+            dir.row(children)
                 .spacing(theme::SPACING_SM)
                 .align_y(alignment::Vertical::Center)
                 .into()
@@ -95,25 +96,35 @@ fn provider_row<'a>(
                 .unwrap_or_default();
 
             Column::with_children([
-                disabled_text_input_row(player.strings.lbl_id, &pt.id),
-                disabled_text_input_row(player.strings.lbl_url, &pt.url),
+                disabled_text_input_row(player.strings.direction, player.strings.lbl_id, &pt.id),
+                disabled_text_input_row(player.strings.direction, player.strings.lbl_url, &pt.url),
                 disabled_text_input_row(
+                    player.strings.direction,
                     player.strings.lbl_artist_id,
                     pt.artist_id.as_deref().unwrap_or_default(),
                 ),
-                disabled_text_input_row(player.strings.lbl_duration_secs, &pt.duration.to_string()),
-                Row::with_children([
+                disabled_text_input_row(
+                    player.strings.direction,
+                    player.strings.lbl_duration_secs,
+                    &pt.duration.to_string(),
+                ),
+                dir.row([
                     thumbnail(
                         theme::PLAYBAR_THUMBNAIL_SIZE,
                         player.thumbnail_index.get(provider, &pt.id),
                     ),
-                    disabled_text_input_row(player.strings.lbl_thumbnail, &pt.thumbnail),
+                    disabled_text_input_row(
+                        player.strings.direction,
+                        player.strings.lbl_thumbnail,
+                        &pt.thumbnail,
+                    ),
                 ])
                 .spacing(theme::SPACING_SM)
                 .into(),
-                disabled_text_input_row(player.strings.lbl_album, album),
+                disabled_text_input_row(player.strings.direction, player.strings.lbl_album, album),
             ])
             .spacing(theme::SPACING_XS)
+            .align_x(player.strings.direction.align())
             .into()
         }
         None => text(player.strings.not_linked).style(fg_secondary()).into(),
@@ -121,6 +132,7 @@ fn provider_row<'a>(
 
     Column::with_children([header, body])
         .spacing(theme::SPACING_SM)
+        .align_x(player.strings.direction.align())
         .into()
 }
 
@@ -170,10 +182,12 @@ pub(super) fn view_edit_track<'a>(
         } else {
             Column::with_children(provider_rows)
                 .spacing(theme::SPACING_SM)
+                .align_x(player.strings.direction.align())
                 .into()
         },
     ])
     .spacing(theme::SPACING_SM)
+    .align_x(player.strings.direction.align())
     .into();
 
     let save_btn = dialog_button(player.strings.save)
@@ -185,12 +199,14 @@ pub(super) fn view_edit_track<'a>(
     let body = Column::with_children([
         Column::with_children([
             text_input_row(
+                player.strings.direction,
                 player.strings.lbl_title,
                 &edit.title,
                 player.strings.ph_track_title,
                 |v| Message::EditTrackField(EditTrackField::Title, v),
             ),
             text_input_row(
+                player.strings.direction,
                 player.strings.lbl_artist,
                 &edit.artist,
                 player.strings.ph_track_artist,
@@ -202,17 +218,23 @@ pub(super) fn view_edit_track<'a>(
         providers_block,
     ])
     .spacing(theme::SPACING_MD)
-    .padding(scroll_padding());
+    .padding(scroll_padding())
+    .align_x(player.strings.direction.align());
 
     let dialog = Column::with_children([
         text(player.strings.edit_track)
             .size(theme::TEXT_SIZE_LG)
             .into(),
         scrollable(body).height(Length::Fill).into(),
-        dialog_button_row([cancel_btn.into(), save_btn.into()]).into(),
+        dialog_button_row(
+            player.strings.direction,
+            [cancel_btn.into(), save_btn.into()],
+        )
+        .into(),
     ])
     .spacing(theme::SPACING_MD)
     .padding(theme::SPACING_MD)
+    .align_x(player.strings.direction.align())
     .width(theme::DIALOG_WIDTH_XL)
     .height(player.window_size.height * 0.7);
 
@@ -252,6 +274,7 @@ pub(super) fn view_edit_manual_search<'a>(
     let query = text_input(&placeholder, &manual.query)
         .on_input(Message::EditTrackManualQuery)
         .on_submit(Message::EditTrackManualRun)
+        .align_x(tr.direction.align())
         .padding([theme::SPACING_SM, theme::SPACING_MD])
         .id(edit_manual_search_input_id())
         .width(Length::Fill)
@@ -259,6 +282,7 @@ pub(super) fn view_edit_manual_search<'a>(
     let search_btn = search_button(manual.can_run().then_some(Message::EditTrackManualRun));
 
     let scopes = scope_tab_row(
+        player.strings.direction,
         manual
             .provider
             .track_scopes()
@@ -287,13 +311,14 @@ pub(super) fn view_edit_manual_search<'a>(
             text((tr.manual_search_on)(tr.provider(manual.provider)))
                 .size(theme::TEXT_SIZE_LG)
                 .into(),
-            Row::with_children([query, search_btn.into()])
+            tr.direction
+                .row([query, search_btn.into()])
                 .spacing(theme::SPACING_SM)
                 .align_y(alignment::Vertical::Center)
                 .into(),
             scopes,
             manual_search_results(player, manual),
-            dialog_button_row([cancel_btn.into(), confirm_btn.into()]).into(),
+            dialog_button_row(tr.direction, [cancel_btn.into(), confirm_btn.into()]).into(),
         ])
         .spacing(theme::SPACING_SM)
         .align_x(alignment::Horizontal::Center)

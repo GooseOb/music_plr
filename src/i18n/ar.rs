@@ -1,4 +1,4 @@
-use super::{plural::arabic, with_search_marker, Strings};
+use super::{plural::arabic, with_search_marker, Direction, Strings};
 
 const SEARCH_MARKER: &str = "(بحث)";
 
@@ -327,6 +327,7 @@ pub const STRINGS: Strings = Strings {
     sc_sec_menu: "قائمة السياق",
     sc_open_menu: "فتح للأغنية المحددة",
     sc_nav_menu: "التنقل في القائمة",
+    direction: Direction::Rtl,
 };
 
 fn ar_tracks(n: usize) -> String {

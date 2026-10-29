@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{text, text_input, Container, Id, Row},
+    widget::{text, text_input, Container, Id},
     Element,
 };
 
@@ -22,9 +22,11 @@ pub(super) fn view_track_list_search<'a>(
         None => (player.strings.list_match_pos)(0, fs.matches.len()),
     };
 
+    let dir = player.strings.direction;
     let input = text_input(player.strings.find_in_list, &fs.query)
         .id(TRACK_LIST_SEARCH_ID)
         .on_input(Message::TrackListSearchInput)
+        .align_x(dir.align())
         .padding([theme::SPACING_XS, theme::SPACING_SM]);
 
     let prev = icon_button(icons::CHEVRON_UP_ICON, theme::ICON_SIZE_MD, icon_style_fg())
@@ -39,15 +41,16 @@ pub(super) fn view_track_list_search<'a>(
     let close = icon_button(icons::CLOSE_ICON, theme::ICON_SIZE_MD, icon_style_fg())
         .on_press(Message::TrackListSearchClose);
 
-    let bar = Row::with_children([
-        close.into(),
-        input.into(),
-        text(count).style(fg_secondary()).into(),
-        prev.into(),
-        next.into(),
-    ])
-    .spacing(theme::SPACING_SM)
-    .align_y(alignment::Vertical::Center);
+    let bar = dir
+        .row([
+            close.into(),
+            input.into(),
+            text(count).style(fg_secondary()).into(),
+            prev.into(),
+            next.into(),
+        ])
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center);
 
     Container::new(bar)
         .padding([theme::SPACING_SM, theme::SPACING_MD])

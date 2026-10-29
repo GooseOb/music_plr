@@ -1,4 +1,4 @@
-use super::{plural::two, with_search_marker, Strings};
+use super::{plural::two, with_search_marker, Direction, Strings};
 
 const SEARCH_MARKER: &str = "(búsqueda)";
 
@@ -329,6 +329,7 @@ pub const STRINGS: Strings = Strings {
     sc_sec_menu: "Menú contextual",
     sc_open_menu: "Abrir para la canción enfocada",
     sc_nav_menu: "Navegar por el menú",
+    direction: Direction::Ltr,
 };
 
 fn es_tracks(n: usize) -> String {

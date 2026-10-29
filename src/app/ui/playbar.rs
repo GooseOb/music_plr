@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{slider, text, Column, Container, Row, Space},
+    widget::{slider, text, Column, Container, Space},
     Element, Length,
 };
 
@@ -28,6 +28,7 @@ fn time_text(time: u32) -> Element<'static, Message, AppTheme> {
 
 #[allow(clippy::too_many_lines)]
 pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, AppTheme> {
+    let dir = player.strings.direction;
     let track = player.queue.current();
     let title = track.map_or(player.strings.not_playing, |t| t.title.as_str());
     let artist = track.map_or("", |t| t.artist.as_str());
@@ -61,17 +62,21 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     let total_text = time_text(player.duration as u32);
 
     let controls = Container::new(
-        Row::with_children([
-            icon_button(icons::SKIP_BACK_ICON, theme::ICON_SIZE_MD, icon_style_fg())
-                .padding(theme::SPACING_2XS)
-                .on_press(Message::PreviousTrack)
-                .into(),
+        dir.row([
+            icon_button(
+                dir.mirror(icons::SKIP_BACK_ICON, icons::SKIP_FORWARD_ICON),
+                theme::ICON_SIZE_MD,
+                icon_style_fg(),
+            )
+            .padding(theme::SPACING_2XS)
+            .on_press(Message::PreviousTrack)
+            .into(),
             play_pause_button(player.is_playing)
                 .padding(theme::SPACING_SM)
                 .on_press(Message::TogglePlayPause)
                 .into(),
             icon_button(
-                icons::SKIP_FORWARD_ICON,
+                dir.mirror(icons::SKIP_FORWARD_ICON, icons::SKIP_BACK_ICON),
                 theme::ICON_SIZE_MD,
                 icon_style_fg(),
             )
@@ -122,13 +127,14 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         .on_press(Message::ShowLyrics(player.focused_pane_id));
 
     Container::new(
-        Row::with_children([
+        dir.row([
             Container::new(track_thumb)
                 .width(theme::PLAYBAR_THUMBNAIL_SIZE)
                 .height(theme::PLAYBAR_THUMBNAIL_SIZE)
                 .into(),
             Container::new(track_info)
                 .width(theme::PLAYBAR_TRACK_INFO_WIDTH)
+                .align_x(dir.align())
                 .into(),
             like_btn,
             Container::new(elapsed_text).into(),

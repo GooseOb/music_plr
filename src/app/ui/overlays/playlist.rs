@@ -3,7 +3,7 @@
 
 use iced::{
     alignment,
-    widget::{container, scrollable, text, text_input, Column, Container, MouseArea, Row},
+    widget::{container, scrollable, text, text_input, Column, Container, MouseArea},
     Element, Length,
 };
 
@@ -24,6 +24,7 @@ pub(super) fn view_playlist_jump<'a>(
     player: &'a MusicPlayer,
     jump: &'a crate::app::PlaylistJump,
 ) -> Element<'a, Message, AppTheme> {
+    let dir = player.strings.direction;
     let names: Vec<String> = player
         .playlists
         .playlists
@@ -40,13 +41,14 @@ pub(super) fn view_playlist_jump<'a>(
     };
     let items = filtered.iter().enumerate().map(|(pos, &i)| {
         let pl = &player.playlists.playlists[i];
-        let row = Row::with_children([
-            text(&pl.name).width(Length::Fill).into(),
-            text(pl.tracks.len()).style(fg_secondary()).into(),
-        ])
-        .spacing(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center)
-        .width(Length::Fill);
+        let row = dir
+            .row([
+                text(&pl.name).width(Length::Fill).into(),
+                text(pl.tracks.len()).style(fg_secondary()).into(),
+            ])
+            .spacing(theme::SPACING_SM)
+            .align_y(alignment::Vertical::Center)
+            .width(Length::Fill);
         let padded = Container::new(row).padding([theme::SPACING_SM, theme::SPACING_MD]);
         let highlighted = Container::new(
             MouseArea::new(padded)
@@ -82,6 +84,7 @@ pub(super) fn view_playlist_jump<'a>(
 
     let input = text_input(player.strings.find_in_list, &jump.query)
         .on_input(Message::PlaylistJumpInput)
+        .align_x(player.strings.direction.align())
         .padding(theme::SPACING_SM)
         .id(playlist_jump_input_id())
         .width(Length::Fill);
@@ -122,7 +125,9 @@ pub(super) fn view_delete_confirm(
             text(strings.tracks_wont_be_deleted)
                 .style(fg_secondary())
                 .into(),
-            Row::with_children([cancel_btn.into(), delete_btn.into()])
+            strings
+                .direction
+                .row([cancel_btn.into(), delete_btn.into()])
                 .spacing(theme::SPACING_XL)
                 .align_y(alignment::Vertical::Center)
                 .into(),

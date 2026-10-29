@@ -21,7 +21,7 @@ use crate::{
         },
         Message,
     },
-    i18n::Strings,
+    i18n::{Direction, Strings},
     icons,
     theme::{self, AppTheme},
 };
@@ -42,23 +42,27 @@ pub fn thumbnail(size: f32, thumb: Option<&std::path::PathBuf>) -> Element<'_, M
 }
 
 pub fn inner_row_layout<'a>(
+    dir: Direction,
     leading: Element<'a, Message, AppTheme>,
     thumbnail: Element<'a, Message, AppTheme>,
     title: &'a str,
     subtitle: Element<'a, Message, AppTheme>,
     trailing: Element<'a, Message, AppTheme>,
 ) -> Row<'a, Message, AppTheme> {
-    Row::with_children([
+    let align = dir.align();
+    dir.row([
         leading,
         thumbnail,
         Column::with_children([
             text(title)
                 .size(theme::TEXT_SIZE_MD)
                 .width(Length::Fill)
+                .align_x(align)
                 .into(),
             subtitle,
         ])
         .spacing(theme::SPACING_2XS)
+        .align_x(align)
         .into(),
         trailing,
     ])
@@ -138,7 +142,7 @@ pub fn search_button(on_press: Option<Message>) -> Button<'static, Message, AppT
 
 /// Build a segmented row of scope/provider chips. Each item is
 /// `(label, selected, on_press)`; `pad_x`/`pad_y` set the button padding.
-pub fn scope_tab_row<I, S>(items: I) -> Element<'static, Message, AppTheme>
+pub fn scope_tab_row<I, S>(dir: Direction, items: I) -> Element<'static, Message, AppTheme>
 where
     I: IntoIterator<Item = (S, bool, Message)>,
     S: text::IntoFragment<'static>,
@@ -146,9 +150,10 @@ where
     let tabs = items
         .into_iter()
         .map(|(label, selected, on_press)| scope_button(label, selected).on_press(on_press).into());
-    Row::with_children(tabs)
+    dir.row(tabs)
         .spacing(theme::SPACING_XS)
         .wrap()
+        .align_x(dir.align())
         .into()
 }
 
@@ -234,12 +239,15 @@ pub fn subtitle_artist(
 }
 
 pub fn labeled_input<'a>(
+    dir: Direction,
     label: &'a str,
     value: &str,
     placeholder: &'a str,
     on_input: Option<fn(String) -> Message>,
 ) -> Element<'a, Message, AppTheme> {
-    let mut input = text_input(placeholder, value).padding([theme::SPACING_SM, theme::SPACING_MD]);
+    let mut input = text_input(placeholder, value)
+        .align_x(dir.align())
+        .padding([theme::SPACING_SM, theme::SPACING_MD]);
     if let Some(on_input) = on_input {
         input = input.on_input(on_input);
     }
@@ -250,20 +258,26 @@ pub fn labeled_input<'a>(
         input.into(),
     ])
     .spacing(theme::SPACING_XS)
+    .align_x(dir.align())
     .into()
 }
 
-pub fn disabled_text_input_row<'a>(label: &'a str, value: &str) -> Element<'a, Message, AppTheme> {
-    labeled_input(label, value, "", None::<fn(String) -> Message>)
+pub fn disabled_text_input_row<'a>(
+    dir: Direction,
+    label: &'a str,
+    value: &str,
+) -> Element<'a, Message, AppTheme> {
+    labeled_input(dir, label, value, "", None::<fn(String) -> Message>)
 }
 
 pub fn text_input_row<'a>(
+    dir: Direction,
     label: &'a str,
     value: &str,
     placeholder: &'a str,
     on_input: fn(String) -> Message,
 ) -> Element<'a, Message, AppTheme> {
-    labeled_input(label, value, placeholder, Some(on_input))
+    labeled_input(dir, label, value, placeholder, Some(on_input))
 }
 
 pub fn load_state_tracks<'a>(
@@ -348,9 +362,10 @@ pub fn dialog_button(
 }
 
 pub fn dialog_button_row(
+    dir: Direction,
     buttons: impl IntoIterator<Item = Element<'static, Message, AppTheme>>,
 ) -> Row<'static, Message, AppTheme> {
-    Row::with_children(buttons)
+    dir.row(buttons)
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)
 }

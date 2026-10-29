@@ -2,7 +2,7 @@ use iced::{
     alignment,
     widget::{
         button, container, opaque, scrollable, text, text_input, Button, Column, Container, Id,
-        MouseArea, Row,
+        MouseArea,
     },
     Element, Length, Rectangle,
 };
@@ -60,6 +60,7 @@ pub(super) fn view_search_bar(
     player: &MusicPlayer,
     pane: PaneId,
 ) -> Element<'_, Message, AppTheme> {
+    let dir = player.strings.direction;
     let pane_state = player.pane(pane);
     // Release-only wrapper: press passes through to the input untouched
     // (native focus + cursor placement), release reports the click so the
@@ -74,6 +75,7 @@ pub(super) fn view_search_bar(
         )
         .on_input(move |q| Message::SearchInputChanged(pane, q))
         .on_submit(Message::SearchExecute(pane))
+        .align_x(player.strings.direction.align())
         .padding([theme::SPACING_SM, theme::SPACING_MD])
         .id(search_input_id(pane))
         .width(Length::Fill),
@@ -90,7 +92,8 @@ pub(super) fn view_search_bar(
     )
     .into();
 
-    let controls = Row::with_children([input, search_btn])
+    let controls = dir
+        .row([input, search_btn])
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center);
 
@@ -118,17 +121,13 @@ pub(super) fn view_search_bar(
             },
         ));
 
+    let dir = player.strings.direction;
     let rows = Column::with_children([
         controls.into(),
-        Row::with_children([
-            Container::new(scope_row).align_left(Length::Fill).into(),
-            Container::new(provider_row)
-                .align_right(Length::Fill)
-                .into(),
-        ])
-        .spacing(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center)
-        .into(),
+        dir.row([dir.leading(scope_row), dir.trailing(provider_row)])
+            .spacing(theme::SPACING_SM)
+            .align_y(alignment::Vertical::Center)
+            .into(),
     ])
     .spacing(theme::SPACING_SM);
 
@@ -242,7 +241,14 @@ fn card_row<'a>(
         .size(theme::TEXT_SIZE_SM)
         .style(fg_secondary())
         .into();
-    let main = inner_row_layout(leading.into(), thumb, title, subtitle_el, toggle);
+    let main = inner_row_layout(
+        player.strings.direction,
+        leading.into(),
+        thumb,
+        title,
+        subtitle_el,
+        toggle,
+    );
     let is_hovered = player.drag.is_hovered_card(item);
     let is_dragging_this = matches!(
         player.drag.pressed,
@@ -378,24 +384,26 @@ fn view_track_page<'a>(
         buttons.push(open_in_browser_button(player.strings, url));
     }
 
-    let header = Row::with_children([
-        thumbnail(theme::PAGE_THUMBNAIL_SIZE, spec.thumbnail),
-        Column::with_children([
-            text(spec.title).size(theme::TEXT_SIZE_LG).into(),
-            text(spec.meta)
-                .size(theme::TEXT_SIZE_SM)
-                .style(fg_secondary())
-                .into(),
-            Row::with_children(buttons)
-                .spacing(theme::SPACING_SM)
-                .into(),
+    let dir = player.strings.direction;
+    let align = dir.align();
+    let header = dir
+        .row([
+            thumbnail(theme::PAGE_THUMBNAIL_SIZE, spec.thumbnail),
+            Column::with_children([
+                text(spec.title).size(theme::TEXT_SIZE_LG).into(),
+                text(spec.meta)
+                    .size(theme::TEXT_SIZE_SM)
+                    .style(fg_secondary())
+                    .into(),
+                dir.row(buttons).spacing(theme::SPACING_SM).into(),
+            ])
+            .spacing(theme::SPACING_MD)
+            .align_x(align)
+            .into(),
         ])
+        .align_y(alignment::Vertical::Center)
         .spacing(theme::SPACING_MD)
-        .into(),
-    ])
-    .align_y(alignment::Vertical::Center)
-    .spacing(theme::SPACING_MD)
-    .padding([theme::SPACING_SM, theme::SPACING_XL]);
+        .padding([theme::SPACING_SM, theme::SPACING_XL]);
 
     let track_list =
         match super::shared_components::load_state_tracks(content, player.strings, spec.loading) {
@@ -403,7 +411,7 @@ fn view_track_page<'a>(
             Err(el) => el,
         };
 
-    Column::with_children([header.into(), track_list]).into()
+    Column::with_children([dir.leading(header), track_list]).into()
 }
 
 pub(super) fn view_search_history(
@@ -411,6 +419,7 @@ pub(super) fn view_search_history(
     pane: PaneId,
     input_rect: Rectangle,
 ) -> Element<'_, Message, AppTheme> {
+    let dir = player.strings.direction;
     let p = &player.app_theme.palette;
     let pane_state = player.pane(pane);
 
@@ -418,7 +427,8 @@ pub(super) fn view_search_history(
         Container::new(
             text(player.strings.no_recent_searches)
                 .style(fg_secondary())
-                .width(Length::Fill),
+                .width(Length::Fill)
+                .align_x(player.strings.direction.align()),
         )
         .padding([theme::SPACING_XS, theme::SPACING_MD])
         .into()
@@ -431,17 +441,19 @@ pub(super) fn view_search_history(
                 let is_hovered = player.drag.hovered_search_history() == Some(i);
                 let text_color = if is_hovered { p.fg } else { p.fg_muted };
                 let row = Container::new(
-                    Row::with_children([
+                    dir.row([
                         Button::new(
-                            Row::with_children([
-                                icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_SM)
-                                    .style(icon_color(text_color))
-                                    .into(),
-                                text(q).size(theme::TEXT_SIZE_SM).into(),
-                            ])
-                            .spacing(theme::SPACING_SM)
-                            .padding([theme::SPACING_XS, theme::SPACING_MD])
-                            .align_y(alignment::Vertical::Center),
+                            player.strings.direction.leading(
+                                dir.row([
+                                    icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_SM)
+                                        .style(icon_color(text_color))
+                                        .into(),
+                                    text(q).size(theme::TEXT_SIZE_SM).into(),
+                                ])
+                                .spacing(theme::SPACING_SM)
+                                .padding([theme::SPACING_XS, theme::SPACING_MD])
+                                .align_y(alignment::Vertical::Center),
+                            ),
                         )
                         .width(Length::Fill)
                         .padding(0)

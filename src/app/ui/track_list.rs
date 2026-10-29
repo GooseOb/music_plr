@@ -32,6 +32,7 @@ use crate::{
         update::operation::{ListGeometry, ScrollTarget},
         ViewData,
     },
+    i18n::Direction,
     icons,
     theme::AppTheme,
     types::Track,
@@ -255,6 +256,7 @@ fn track_row_layout_inner<'a>(
     show_plays: bool,
     trashed: bool,
 ) -> Row<'a, Message, AppTheme> {
+    let dir = player.strings.direction;
     let pane = if is_main_pane(pos.pane) {
         pos.pane
     } else {
@@ -333,6 +335,26 @@ fn track_row_layout_inner<'a>(
 
     // Unknown durations (0) render blank rather than "--:--".
     let duration = track.duration();
+    // iced draws a list's scrollbar against its physical right edge, so that
+    // side keeps the wide gutter in both directions; a mirrored row gives it to
+    // the leading cell (which now sits at the right) instead of the duration.
+    let (duration_gutter, row_padding) = match player.strings.direction {
+        Direction::Ltr => (theme::SPACING_2XL, iced::Padding::ZERO),
+        Direction::Rtl => (
+            theme::SPACING_SM,
+            iced::Padding {
+                top: theme::SPACING_XS,
+                right: theme::SPACING_2XL,
+                bottom: theme::SPACING_XS,
+                left: theme::SPACING_SM,
+            },
+        ),
+    };
+    let duration_pad = iced::Padding {
+        right: duration_gutter,
+        left: theme::SPACING_SM,
+        ..iced::Padding::ZERO
+    };
     trailing_children.push(
         Container::new(
             text(if duration > 0 {
@@ -343,12 +365,7 @@ fn track_row_layout_inner<'a>(
             .size(theme::TEXT_SIZE_SM)
             .style(fg_secondary()),
         )
-        .padding(iced::Padding {
-            top: 0.0,
-            right: theme::SPACING_2XL,
-            bottom: 0.0,
-            left: theme::SPACING_SM,
-        })
+        .padding(duration_pad)
         .into(),
     );
 
@@ -360,14 +377,16 @@ fn track_row_layout_inner<'a>(
         artist_id.map(|id| (id.to_string(), track.source)),
     );
 
-    inner_row_layout(
+    let row = inner_row_layout(
+        player.strings.direction,
         leading,
         thumbnail(theme::THUMBNAIL_SIZE, thumb),
         &track.title,
         artist_subtitle,
-        Row::with_children(trailing_children)
+        dir.row(trailing_children)
             .spacing(theme::SPACING_SM)
             .align_y(alignment::Vertical::Center)
             .into(),
-    )
+    );
+    row.padding(row_padding)
 }

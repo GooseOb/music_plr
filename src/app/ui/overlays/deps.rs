@@ -2,7 +2,7 @@
 
 use iced::{
     alignment,
-    widget::{checkbox, scrollable, text, Column, Row, Space},
+    widget::{checkbox, scrollable, text, Column, Space},
     Element,
 };
 
@@ -80,11 +80,12 @@ pub(super) fn view_dependency_dialog<'a>(
         });
     let discard_btn = dialog_button(tr.deps_discard).on_press(Message::DepDismiss);
 
-    children.push(dialog_button_row([discard_btn.into(), install_btn.into()]).into());
+    children.push(dialog_button_row(tr.direction, [discard_btn.into(), install_btn.into()]).into());
 
     let content = Column::with_children(children)
         .spacing(theme::SPACING_MD)
         .padding(theme::SPACING_MD)
+        .align_x(tr.direction.align())
         .width(theme::DIALOG_WIDTH_LG);
 
     view_dialog(content.into(), Message::DepDismiss)
@@ -105,15 +106,16 @@ fn dep_checkbox_row<'a>(
 
     let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::with_capacity(4);
     children.push(
-        Row::with_children([
-            checkbox(checked)
-                .on_toggle(move |_| Message::DepToggle(kind))
-                .into(),
-            text(kind.name()).style(fg_accent()).into(),
-        ])
-        .spacing(theme::SPACING_SM)
-        .align_y(alignment::Vertical::Center)
-        .into(),
+        tr.direction
+            .row([
+                checkbox(checked)
+                    .on_toggle(move |_| Message::DepToggle(kind))
+                    .into(),
+                text(kind.name()).style(fg_accent()).into(),
+            ])
+            .spacing(theme::SPACING_SM)
+            .align_y(alignment::Vertical::Center)
+            .into(),
     );
     children.push(text(dep_desc(tr, kind)).style(fg_secondary()).into());
     if let Some(note) = note {
@@ -122,6 +124,7 @@ fn dep_checkbox_row<'a>(
     children.push(status);
     Column::with_children(children)
         .spacing(theme::SPACING_XS)
+        .align_x(tr.direction.align())
         .into()
 }
 
@@ -139,5 +142,6 @@ fn dep_manual_row<'a>(
         text(note).style(fg_secondary()).into(),
     ])
     .spacing(theme::SPACING_XS)
+    .align_x(player.strings.direction.align())
     .into()
 }

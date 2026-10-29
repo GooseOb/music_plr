@@ -18,10 +18,9 @@ auto-generated compare link below it.
 - Destination in notification text e.g. "Queue: added 5 tracks" instead of "Added 5 tracks to Queue" for languages where case is not nominative.
 - The local provider is translated ("Local files" in English) instead of a hardcoded "Local" in toasts, menus, the Edit popup and the default-provider picker.
 - Failures from search, downloads, artist pages, resolve and Edit Track say what went wrong in your language — network trouble, rate limiting, a sign-in wall, missing content, a missing yt-dlp/Python install, or an unreadable response — instead of showing the provider's raw English message. Unrecognized failures still show that message.
+- Arabic reads right to left: the sidebar moves to the right, every row mirrors (icons lead on the right), text and text inputs align right, chips and labels start from the right edge, list content still clears the scrollbar on the right, page actions hug the block's outer edge, and back/forward, skip and chevron arrows point along the reading direction. Context menus mirror with them — labels sit beside their icon at the reading edge and a submenu opens to the left.
 
 ### Changed
-
-#### Search
 
 - In-list search, the playlist jumper, search history and the AI model filter ignore accents, case and script: "bjork" finds "Björk", "zolc" finds "Żółć", "strasse" finds "Straße", and Latin input finds Cyrillic titles ("kino", "korolev", "kyiv") while Cyrillic input finds Latin ones.
 

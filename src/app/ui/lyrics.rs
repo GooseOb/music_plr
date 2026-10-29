@@ -134,6 +134,7 @@ fn view_custom_editor<'a>(
     pane: PaneId,
     lyrics_state: &'a LyricsState,
 ) -> Element<'a, Message, AppTheme> {
+    let dir = player.strings.direction;
     let editor = iced::widget::text_editor(&lyrics_state.edit_content)
         .on_action(move |a| Message::CustomLyricsEditorAction(pane, a))
         .style(|theme: &AppTheme, _| {
@@ -170,6 +171,7 @@ fn view_custom_editor<'a>(
         Container::new(
             iced::widget::text_input(player.strings.lyrics_name, &lyrics_state.edit_name)
                 .on_input(move |s| Message::CustomLyricsNameChanged(pane, s))
+                .align_x(player.strings.direction.align())
                 .padding([theme::SPACING_SM, theme::SPACING_MD]),
         )
         .padding([0.0, theme::SPACING_XS])
@@ -179,13 +181,14 @@ fn view_custom_editor<'a>(
             .style(fg_secondary())
             .into(),
         Container::new(editor).height(Length::Fill).into(),
-        Row::with_children(buttons)
+        dir.row(buttons)
             .spacing(theme::SPACING_SM)
             .align_y(alignment::Vertical::Center)
             .into(),
     ])
     .spacing(theme::SPACING_MD)
     .padding(theme::SPACING_MD)
+    .align_x(player.strings.direction.align())
     .into()
 }
 
@@ -220,13 +223,14 @@ fn view_translation_row<'a>(
         )
     });
     let row = scope_tab_row_h_scroll(std::iter::once(original).chain(languages));
+    let dir = player.strings.direction;
     Some(
-        Row::with_children([
+        dir.row([
             text(player.strings.lyrics_translations)
                 .size(theme::TEXT_SIZE_SM)
                 .style(fg_secondary())
                 .into(),
-            Container::new(row).align_left(Length::Fill).into(),
+            dir.trailing(row),
         ])
         .spacing(theme::SPACING_SM)
         .padding([0.0, theme::SPACING_SM])
@@ -294,13 +298,11 @@ fn view_bottom_controls<'a>(
             ]),
     );
 
-    Row::with_children([
-        Container::new(provider_row).align_left(Length::Fill).into(),
-        Container::new(picker).align_right(Length::Fill).into(),
-    ])
-    .spacing(theme::SPACING_SM)
-    .padding(theme::SPACING_SM)
-    .align_y(alignment::Vertical::Center)
+    let dir = player.strings.direction;
+    dir.row([dir.leading(provider_row), dir.trailing(picker)])
+        .spacing(theme::SPACING_SM)
+        .padding(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center)
 }
 
 fn view_select_editor(

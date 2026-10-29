@@ -24,6 +24,7 @@ use crate::{
             CONTEXT_MENU_PANEL_ID, CONTEXT_MENU_ROW_ID,
         },
     },
+    i18n::Direction,
     icons,
     providers::ProviderId,
     theme::AppTheme,
@@ -114,6 +115,7 @@ pub(in crate::app::ui) fn view_context_menu<'a>(
             let focused = menu.anchor.hovered == Some(ContextMenuFocus::Item(i));
             let chevron = action.submenu().is_some();
             menu_item(
+                player.strings.direction,
                 label,
                 icon,
                 i,
@@ -128,7 +130,6 @@ pub(in crate::app::ui) fn view_context_menu<'a>(
     let mut row_children: Vec<Element<'_, Message, AppTheme>> =
         vec![main_menu_panel(player, items)];
     let mut anchor_x = pos_x;
-
     if let Some(kind) = menu.open_submenu_kind(&player.stream_cache) {
         let entries = submenu_entries(kind, menu, &player.stream_cache, row_len, player.strings);
         // Skip until the capture task has delivered geometry, so the submenu
@@ -149,8 +150,14 @@ pub(in crate::app::ui) fn view_context_menu<'a>(
             };
 
             let offset = geo.row_offsets.get(parent_index).copied().unwrap_or(0.0);
-            let submenu_left =
-                pos_x + 2.0 * geo.panel.width + theme::SPACING_XS > player.window_size.width;
+            // A submenu opens towards the reading end: right normally, left in
+            // a right-to-left locale, flipping when that side runs out of room.
+            let submenu_left = match player.strings.direction {
+                Direction::Ltr => {
+                    pos_x + 2.0 * geo.panel.width + theme::SPACING_XS > player.window_size.width
+                }
+                Direction::Rtl => pos_x >= geo.panel.width + theme::SPACING_XS,
+            };
             let submenu: Element<'_, Message, AppTheme> = Column::with_children([
                 Space::new().height(offset).into(),
                 menu_panel(player, entries).into(),
@@ -191,7 +198,16 @@ pub(super) fn view_card_menu<'a>(
         .map(|(i, action)| {
             let focused = menu.anchor.hovered == Some(ContextMenuFocus::Item(i));
             let (label, icon) = card_action(*action, saved, player.strings);
-            menu_item(label, icon, i, focused, false, action.to_message(), row_len)
+            menu_item(
+                player.strings.direction,
+                label,
+                icon,
+                i,
+                focused,
+                false,
+                action.to_message(),
+                row_len,
+            )
         })
         .collect();
 
@@ -310,6 +326,7 @@ fn action_label(
 /// triggers the default action). Mouse hover feeds keyboard focus.
 #[allow(clippy::too_many_arguments)]
 fn menu_item<'a>(
+    dir: Direction,
     label: Cow<'a, str>,
     icon: &'static [u8],
     index: usize,
@@ -319,19 +336,22 @@ fn menu_item<'a>(
     row_len: Length,
 ) -> Element<'a, Message, AppTheme> {
     let mut children = vec![
-        icons::icon(icon, theme::ICON_SIZE_SM)
+        icons::icon(icon, theme::ICON_SIZE_MD)
             .style(icon_style_fg_muted())
             .into(),
-        text(label).width(Length::Fill).into(),
+        dir.leading(text(label)),
     ];
     if chevron {
         children.push(
-            icons::icon(icons::CHEVRON_RIGHT_ICON, theme::ICON_SIZE_SM)
-                .style(icon_style_fg_secondary())
-                .into(),
+            icons::icon(
+                dir.mirror(icons::CHEVRON_RIGHT_ICON, icons::CHEVRON_LEFT_ICON),
+                theme::ICON_SIZE_MD,
+            )
+            .style(icon_style_fg_secondary())
+            .into(),
         );
     }
-    let item = context_menu_item(children, focused);
+    let item = context_menu_item(dir, children, focused);
 
     context_menu_button(
         item.id(CONTEXT_MENU_ROW_ID).width(row_len),
@@ -341,11 +361,12 @@ fn menu_item<'a>(
 }
 
 fn context_menu_item<'a>(
+    dir: Direction,
     children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
     focused: bool,
 ) -> Container<'a, Message, AppTheme> {
     Container::new(
-        Row::with_children(children)
+        dir.row(children)
             .spacing(theme::SPACING_SM)
             .padding([theme::SPACING_XS, theme::SPACING_SM])
             .align_y(alignment::Vertical::Center),
@@ -419,11 +440,12 @@ fn submenu_entries<'a>(
             let icon = if by_search { icons::SEARCH_ICON } else { icon };
             let message = kind.entry_message(provider, menu);
             let item = context_menu_item(
+                tr.direction,
                 [
-                    icons::icon(icon, theme::ICON_SIZE_SM)
+                    icons::icon(icon, theme::ICON_SIZE_MD)
                         .style(icon_style_fg_muted())
                         .into(),
-                    text(label).into(),
+                    tr.direction.leading(text(label)),
                 ],
                 focused,
             );

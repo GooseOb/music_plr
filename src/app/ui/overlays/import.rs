@@ -3,7 +3,7 @@
 
 use iced::{
     alignment,
-    widget::{text, text_input, Button, Column, Row},
+    widget::{text, text_input, Button, Column},
     Element,
 };
 
@@ -30,58 +30,68 @@ pub(super) fn view_import_playlist<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let tr = player.strings;
 
-    let method_row = scope_tab_row([
-        (
-            tr.import_method_native,
-            dialog.method == ImportMethod::Native,
-            Message::ImportMethodChanged(ImportMethod::Native),
-        ),
-        (
-            tr.import_method_filelist,
-            dialog.method == ImportMethod::FileList,
-            Message::ImportMethodChanged(ImportMethod::FileList),
-        ),
-        (
-            tr.import_method_csv,
-            dialog.method == ImportMethod::Csv,
-            Message::ImportMethodChanged(ImportMethod::Csv),
-        ),
-    ]);
+    let method_row = scope_tab_row(
+        tr.direction,
+        [
+            (
+                tr.import_method_native,
+                dialog.method == ImportMethod::Native,
+                Message::ImportMethodChanged(ImportMethod::Native),
+            ),
+            (
+                tr.import_method_filelist,
+                dialog.method == ImportMethod::FileList,
+                Message::ImportMethodChanged(ImportMethod::FileList),
+            ),
+            (
+                tr.import_method_csv,
+                dialog.method == ImportMethod::Csv,
+                Message::ImportMethodChanged(ImportMethod::Csv),
+            ),
+        ],
+    );
 
     let content: Element<'_, Message, AppTheme> = match dialog.method {
         ImportMethod::Native => text(tr.import_native_hint).style(fg_secondary()).into(),
         ImportMethod::Csv => {
             let preset_row = text(tr.import_csv_preset).into();
-            let preset_tabs = scope_tab_row([
-                (
-                    tr.import_csv_preset_default,
-                    dialog.csv_preset == CsvPreset::Default,
-                    Message::ImportCsvPresetChanged(CsvPreset::Default),
-                ),
-                (
-                    tr.import_csv_preset_exportify,
-                    dialog.csv_preset == CsvPreset::Exportify,
-                    Message::ImportCsvPresetChanged(CsvPreset::Exportify),
-                ),
-            ]);
+            let preset_tabs = scope_tab_row(
+                tr.direction,
+                [
+                    (
+                        tr.import_csv_preset_default,
+                        dialog.csv_preset == CsvPreset::Default,
+                        Message::ImportCsvPresetChanged(CsvPreset::Default),
+                    ),
+                    (
+                        tr.import_csv_preset_exportify,
+                        dialog.csv_preset == CsvPreset::Exportify,
+                        Message::ImportCsvPresetChanged(CsvPreset::Exportify),
+                    ),
+                ],
+            );
             let mut csv_children: Vec<Element<'_, Message, AppTheme>> = vec![
-                Row::with_children([preset_row, preset_tabs])
+                tr.direction
+                    .row([preset_row, preset_tabs])
                     .spacing(theme::SPACING_SM)
                     .align_y(alignment::Vertical::Center)
                     .into(),
                 text_input_row(
+                    tr.direction,
                     tr.import_csv_name_col,
                     &dialog.csv_name_col,
                     tr.import_csv_name_col,
                     |v| Message::ImportCsvColChanged(ImportCsvField::Name, v),
                 ),
                 text_input_row(
+                    tr.direction,
                     tr.import_csv_artist_col,
                     &dialog.csv_artist_col,
                     tr.import_csv_artist_col,
                     |v| Message::ImportCsvColChanged(ImportCsvField::Artist, v),
                 ),
                 text_input_row(
+                    tr.direction,
                     tr.import_csv_album_col,
                     &dialog.csv_album_col,
                     tr.import_csv_album_col,
@@ -97,12 +107,14 @@ pub(super) fn view_import_playlist<'a>(
             }
             Column::with_children(csv_children)
                 .spacing(theme::SPACING_SM)
+                .align_x(tr.direction.align())
                 .into()
         }
         ImportMethod::FileList => {
             let pattern_rows = dialog.patterns.iter().enumerate().map(|(i, pat)| {
                 let input = text_input(tr.import_pattern_lbl, pat)
                     .on_input(move |v| Message::ImportPatternChanged(i, v))
+                    .align_x(tr.direction.align())
                     .padding(theme::SPACING_SM)
                     .into();
                 let remove = Button::new(
@@ -112,7 +124,8 @@ pub(super) fn view_import_playlist<'a>(
                 .padding(theme::SPACING_XS)
                 .on_press(Message::ImportRemovePattern(i))
                 .into();
-                Row::with_children([input, remove])
+                tr.direction
+                    .row([input, remove])
                     .spacing(theme::SPACING_SM)
                     .align_y(alignment::Vertical::Center)
                     .into()
@@ -123,10 +136,12 @@ pub(super) fn view_import_playlist<'a>(
             Column::with_children([
                 Column::with_children(pattern_rows)
                     .spacing(theme::SPACING_XS)
+                    .align_x(tr.direction.align())
                     .into(),
                 add,
             ])
             .spacing(theme::SPACING_SM)
+            .align_x(tr.direction.align())
             .into()
         }
     };
@@ -137,6 +152,7 @@ pub(super) fn view_import_playlist<'a>(
     ];
     if matches!(dialog.method, ImportMethod::Csv | ImportMethod::FileList) {
         children.push(text_input_row(
+            tr.direction,
             tr.import_playlist_name,
             &dialog.playlist_name,
             "",
@@ -166,7 +182,8 @@ pub(super) fn view_import_playlist<'a>(
     let cancel_btn = dialog_button(tr.cancel).on_press(Message::CloseDialog);
 
     children.push(
-        Row::with_children([cancel_btn.into(), select_btn.into()])
+        tr.direction
+            .row([cancel_btn.into(), select_btn.into()])
             .spacing(theme::SPACING_SM)
             .align_y(alignment::Vertical::Center)
             .into(),
@@ -175,6 +192,7 @@ pub(super) fn view_import_playlist<'a>(
     let dialog_col = Column::with_children(children)
         .spacing(theme::SPACING_MD)
         .padding(theme::SPACING_MD)
+        .align_x(tr.direction.align())
         .width(theme::DIALOG_WIDTH_LG);
 
     view_dialog(dialog_col.into(), Message::CloseDialog)

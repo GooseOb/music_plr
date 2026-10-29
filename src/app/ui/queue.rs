@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{rule, text, Button, Column, Container, Id, Row, Space},
+    widget::{rule, text, Button, Column, Container, Id, Space},
     Element, Length, Padding,
 };
 
@@ -56,7 +56,8 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
 }
 
 fn view_queue_tabs(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    Row::with_children([
+    let dir = player.strings.direction;
+    dir.row([
         queue_tab(player, player.strings.queue, QueueTab::Queue),
         queue_tab(
             player,
@@ -74,22 +75,25 @@ fn queue_tab<'a>(
     label: &'a str,
     queue_tab: QueueTab,
 ) -> Element<'a, Message, AppTheme> {
+    let dir = player.strings.direction;
     let active = player.queue.queue_tab == queue_tab;
 
     Button::new(
-        Row::with_children([
-            icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_SM)
-                .style(icon_style_tab(active))
-                .into(),
-            text(label).into(),
-        ])
-        .spacing(theme::SPACING_SM)
-        .padding([theme::SPACING_SM, theme::SPACING_MD])
-        .align_y(alignment::Vertical::Center)
-        .width(Length::Fill),
+        player.strings.direction.leading(
+            dir.row([
+                icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_SM)
+                    .style(icon_style_tab(active))
+                    .into(),
+                text(label).into(),
+            ])
+            .spacing(theme::SPACING_SM)
+            .padding([theme::SPACING_SM, theme::SPACING_MD])
+            .align_y(alignment::Vertical::Center),
+        ),
     )
     .padding(0)
     .style(button_style_panel_item(active))
+    .width(Length::Fill)
     .on_press(Message::SwitchQueueTab(queue_tab))
     .into()
 }
@@ -124,23 +128,27 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         bottom: theme::SPACING_XS,
         left: theme::SPACING_MD,
     };
+    let dir = player.strings.direction;
     let now_playing_header: Element<'_, Message, AppTheme> = match player
         .now_playing_from
         .as_ref()
         .and_then(|v| now_playing_source_label(&v.kind, player.strings))
     {
-        Some(source) => Row::with_children([
-            section_text(player.strings.now_playing_from),
-            link_button(text(source).size(theme::TEXT_SIZE_XS))
-                .on_press(Message::RevealNowPlaying)
-                .into(),
-        ])
-        .spacing(theme::SPACING_XS)
-        .padding(NOW_PLAYING_PADDING)
-        .align_y(alignment::Vertical::Center)
-        .into(),
+        Some(source) => dir
+            .row([
+                section_text(player.strings.now_playing_from),
+                link_button(text(source).size(theme::TEXT_SIZE_XS))
+                    .on_press(Message::RevealNowPlaying)
+                    .into(),
+            ])
+            .spacing(theme::SPACING_XS)
+            .padding(NOW_PLAYING_PADDING)
+            .align_y(alignment::Vertical::Center)
+            .into(),
         None => Container::new(section_text(player.strings.now_playing))
             .padding(NOW_PLAYING_PADDING)
+            .width(Length::Fill)
+            .align_x(player.strings.direction.align())
             .into(),
     };
 
@@ -162,11 +170,15 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                     .style(fg_secondary()),
             )
             .padding(theme::SPACING_MD)
+            .width(Length::Fill)
+            .align_x(player.strings.direction.align())
             .into()
         };
 
     let up_next_header = Container::new(section_text(player.strings.up_next))
-        .padding([theme::SPACING_SM, theme::SPACING_MD]);
+        .padding([theme::SPACING_SM, theme::SPACING_MD])
+        .width(Length::Fill)
+        .align_x(player.strings.direction.align());
 
     let offset = 1;
     let upcoming = if offset <= player.queue.tracks.len() {
@@ -182,6 +194,8 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                 .style(fg_secondary()),
         )
         .padding(theme::SPACING_MD)
+        .width(Length::Fill)
+        .align_x(player.strings.direction.align())
         .into()
     } else {
         view_track_list(upcoming, player, QUEUE_PANE_ID, offset)
@@ -203,6 +217,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     ])
     .width(Length::Fill)
     .height(Length::Fill)
+    .align_x(player.strings.direction.align())
     .into()
 }
 
