@@ -2,7 +2,7 @@ use std::fmt::{self, Write};
 
 use serde::{Deserialize, Serialize};
 
-use crate::providers::ProviderId;
+use crate::providers::{ErrorKind, ProviderError, ProviderId};
 
 /// Generous upper bound for one submenu label, so `with_search_marker` fills a single buffer.
 const SUBMENU_LABEL_CAPACITY: usize = 96;
@@ -292,6 +292,13 @@ pub struct Strings {
     pub couldnt_load: fn(&str) -> String,
     pub couldnt_load_lyrics: fn(&str) -> String,
     pub search_failed: fn(&str) -> String,
+    pub error_network: &'static str,
+    pub error_rate_limited: &'static str,
+    pub error_denied: &'static str,
+    pub error_unavailable: &'static str,
+    pub error_tool_missing: &'static str,
+    pub error_parse: &'static str,
+    pub error_other: &'static str,
     pub cache_cleared_for: fn(&str) -> String,
     pub ctx_add_to_queue_n: fn(usize) -> String,
     pub ctx_add_to_playlist_n: fn(usize) -> String,
@@ -427,6 +434,30 @@ impl Strings {
             other => other.name(),
         }
     }
+
+    /// Localized sentence for a classified provider failure.
+    pub fn error_summary(&self, kind: ErrorKind) -> &'static str {
+        match kind {
+            ErrorKind::Network => self.error_network,
+            ErrorKind::RateLimited => self.error_rate_limited,
+            ErrorKind::Denied => self.error_denied,
+            ErrorKind::Unavailable => self.error_unavailable,
+            ErrorKind::ToolMissing => self.error_tool_missing,
+            ErrorKind::Parse => self.error_parse,
+            ErrorKind::Other => self.error_other,
+        }
+    }
+
+    /// The reason to show where the surrounding UI already names the failed
+    /// operation ("Search failed: …"): the localized sentence for a recognized
+    /// kind, else the provider's own message, which is the only text that
+    /// names the cause then.
+    pub fn error_reason<'a>(&'a self, error: &'a ProviderError) -> &'a str {
+        match error.kind {
+            ErrorKind::Other if !error.detail.is_empty() => &error.detail,
+            kind => self.error_summary(kind),
+        }
+    }
 }
 
 /// Builds a submenu label in one buffer, appending `marker` when the action falls back to a search.
@@ -472,6 +503,39 @@ mod tests {
                 assert_ne!(build("YouTube", false), build("YouTube", true), "{lang:?}");
             }
         }
+    }
+
+    #[test]
+    fn error_summaries_are_translated() {
+        let english = Language::En.strings();
+        let kinds = [
+            ErrorKind::Network,
+            ErrorKind::RateLimited,
+            ErrorKind::Denied,
+            ErrorKind::Unavailable,
+            ErrorKind::ToolMissing,
+            ErrorKind::Parse,
+            ErrorKind::Other,
+        ];
+        for lang in Language::ALL {
+            let s = lang.strings();
+            for kind in kinds {
+                let summary = s.error_summary(kind);
+                assert!(!summary.trim().is_empty(), "{lang:?} {kind:?}");
+                if lang != Language::En {
+                    assert_ne!(summary, english.error_summary(kind), "{lang:?} {kind:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unknown_failures_keep_the_provider_message() {
+        let s = Language::En.strings();
+        let unknown = ProviderError::from_text("provider SDK did something odd");
+        assert_eq!(s.error_reason(&unknown), "provider SDK did something odd");
+        let known = ProviderError::from_text("ERROR: Video unavailable");
+        assert_eq!(s.error_reason(&known), s.error_unavailable);
     }
 
     #[test]

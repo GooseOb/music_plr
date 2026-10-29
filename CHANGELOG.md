@@ -17,6 +17,7 @@ auto-generated compare link below it.
 - "{n} plays" on tracks is count-aware (e.g. "1 play" instead of "1 plays").
 - Destination in notification text e.g. "Queue: added 5 tracks" instead of "Added 5 tracks to Queue" for languages where case is not nominative.
 - The local provider is translated ("Local files" in English) instead of a hardcoded "Local" in toasts, menus, the Edit popup and the default-provider picker.
+- Failures from search, downloads, artist pages, resolve and Edit Track say what went wrong in your language — network trouble, rate limiting, a sign-in wall, missing content, a missing yt-dlp/Python install, or an unreadable response — instead of showing the provider's raw English message. Unrecognized failures still show that message.
 
 ### Changed
 

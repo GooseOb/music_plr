@@ -13,6 +13,7 @@
 
 mod artist_page;
 mod bandcamp;
+mod error;
 pub(crate) mod lastfm;
 mod musicbrainz;
 mod soundcloud;
@@ -607,10 +608,14 @@ pub use artist_page::{
     ArtistAlbumCard, ArtistDataKind, ArtistHeader, ArtistKindData, ArtistPage, ArtistPageState,
     ArtistSection, ArtistSectionKind, RelatedArtistCard, SectionContent,
 };
+pub use error::{ErrorKind, ProviderError};
 
 /// One artist-page section fetch result: the kind and its data (or error).
 /// See [`spawn_artist_kinds_fetch`].
-pub struct ArtistKindResult(pub ArtistDataKind, pub Result<ArtistKindData, String>);
+pub struct ArtistKindResult(
+    pub ArtistDataKind,
+    pub Result<ArtistKindData, ProviderError>,
+);
 
 /// Fetch each requested kind of `provider`'s artist page on a background
 /// thread, delivering one [`ArtistKindResult`] per kind as soon as its data
@@ -641,11 +646,18 @@ pub fn spawn_artist_kinds_fetch(
                 ProviderId::LastFm => lastfm::fetch_artist_page(&id, kinds),
                 _ => Ok(artist_page::ArtistPage::default()),
             }
-            .map_err(|e| format!("{e:#}"));
+            .map_err(ProviderError::from);
             for &kind in kinds {
                 let data = match &result {
-                    Ok(page) => single_kind_data(page, kind)
-                        .map_or_else(|| Err(format!("No {kind:?} data")), Ok),
+                    Ok(page) => single_kind_data(page, kind).map_or_else(
+                        || {
+                            Err(ProviderError::new(
+                                ErrorKind::Other,
+                                format!("No {kind:?} data"),
+                            ))
+                        },
+                        Ok,
+                    ),
                     Err(e) => Err(e.clone()),
                 };
                 let _ = tx.send(ArtistKindResult(kind, data));

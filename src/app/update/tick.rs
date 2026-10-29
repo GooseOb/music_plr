@@ -4,7 +4,7 @@ use souvlaki::MediaPlayback;
 use tracing::debug;
 
 use super::{
-    error, media_controls, mpsc, spawn_thumbnail_download, BackendResult, MediaControlEvent,
+    error, media_controls, mpsc, spawn_thumbnail_download, warn, BackendResult, MediaControlEvent,
     MediaUpdate, Message, MusicPlayer, Task, PREPEND,
 };
 use crate::{
@@ -401,8 +401,9 @@ impl MusicPlayer {
                 self.process_download_complete(track);
                 Task::none()
             }
-            BackendResult::DownloadError(msg) => {
-                error!("Download error: {}", msg);
+            BackendResult::DownloadError(error) => {
+                error!("Download error: {}", error.detail);
+                let msg = self.strings.error_reason(&error).to_string();
                 self.notify_error(msg);
                 Task::none()
             }
@@ -410,19 +411,21 @@ impl MusicPlayer {
                 self.notify_client_event(event);
                 Task::none()
             }
-            BackendResult::SearchError(rid, msg) => {
-                self.process_search_error(rid, msg);
+            BackendResult::SearchError(rid, error) => {
+                self.process_search_error(rid, &error);
                 Task::none()
             }
             BackendResult::EditTrackProviderResolved(provider, resolved) => {
                 self.apply_edit_track_provider_resolution(provider, resolved);
                 Task::none()
             }
-            BackendResult::EditTrackProviderError(_provider, message) => {
+            BackendResult::EditTrackProviderError(_provider, error) => {
                 if let Some(Dialog::Edit(edit)) = &mut self.dialog {
                     edit.finding = None;
                 }
-                self.notify_error(message);
+                warn!("Edit track lookup failed: {}", error.detail);
+                let msg = self.strings.error_reason(&error).to_string();
+                self.notify_error(msg);
                 Task::none()
             }
             BackendResult::ManualSearchResults { rid, results } => {
@@ -444,10 +447,12 @@ impl MusicPlayer {
                 provider,
                 message,
             } => {
+                warn!("Resolving \"{title}\" failed: {}", message.detail);
+                let reason = self.strings.error_reason(&message).to_string();
                 let msg = (self.strings.failed_resolve_on)(
                     &title,
                     self.strings.provider(provider),
-                    &message,
+                    &reason,
                 );
                 self.notify_error(msg);
                 Task::none()
@@ -519,7 +524,9 @@ impl MusicPlayer {
     /// A failed search/browse/radio fetch: surface the error on the
     /// requesting pane's view only while it is still waiting (never wiping
     /// loaded results), plus a toast.
-    fn process_search_error(&mut self, rid: u64, msg: String) {
+    fn process_search_error(&mut self, rid: u64, error: &crate::providers::ProviderError) {
+        error!("Search request {rid} failed: {}", error.detail);
+        let reason = self.strings.error_reason(error).to_string();
         if let Some((pane, idx)) = self.slot_for_request(rid) {
             let slot = &mut self.pane_mut(pane).nav_history[idx];
             slot.request_id = 0;
@@ -531,12 +538,13 @@ impl MusicPlayer {
                     | ViewKind::Album(_)
                     | ViewKind::PlaylistView(_)
             ) {
-                slot.set_failed(msg.clone());
+                slot.set_failed(reason.clone());
                 if let ViewKind::Search(s) = &mut slot.kind {
                     s.append_in_flight = false;
                 }
             }
         }
+        let msg = (self.strings.search_failed)(&reason);
         self.notify_error(msg);
     }
 

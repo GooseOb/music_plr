@@ -76,7 +76,7 @@ impl MusicPlayer {
                 let _ = tx.send(make_result(tracks));
             }
             Err(e) => {
-                let _ = tx.send(BackendResult::SearchError(rid, e.to_string()));
+                let _ = tx.send(BackendResult::SearchError(rid, e.into()));
             }
         });
     }
@@ -230,7 +230,7 @@ impl MusicPlayer {
             let tracks = match crate::providers::search_more(provider, &query, offset) {
                 Ok(tracks) => tracks,
                 Err(e) => {
-                    let _ = tx.send(BackendResult::SearchError(rid, e.to_string()));
+                    let _ = tx.send(BackendResult::SearchError(rid, e.into()));
                     return;
                 }
             };

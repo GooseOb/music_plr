@@ -203,7 +203,7 @@ impl MusicPlayer {
                 Err(e) => crate::app::BackendResult::ProviderResolveError {
                     title: track.title,
                     provider,
-                    message: e.to_string(),
+                    message: e.into(),
                 },
             });
         });

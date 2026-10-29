@@ -99,13 +99,13 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
 
         thread::spawn(move || {
-            let fail_all = |msg: String| {
+            let fail_all = |error: crate::providers::ProviderError| {
                 for &kind in kinds {
                     let _ = tx.send(BackendResult::ArtistSectionLoaded {
                         rid,
                         provider,
                         kind,
-                        data: Box::new(Err(msg.clone())),
+                        data: Box::new(Err(error.clone())),
                     });
                 }
             };
@@ -123,11 +123,14 @@ impl MusicPlayer {
                         id
                     }
                     Ok(None) => {
-                        fail_all((not_found)(&name, provider_name));
+                        fail_all(crate::providers::ProviderError::new(
+                            crate::providers::ErrorKind::Other,
+                            (not_found)(&name, provider_name),
+                        ));
                         return;
                     }
                     Err(e) => {
-                        fail_all(e.to_string());
+                        fail_all(e.into());
                         return;
                     }
                 },
@@ -227,66 +230,80 @@ impl MusicPlayer {
         rid: u64,
         provider: ProviderId,
         kind: ArtistDataKind,
-        result: Result<ArtistKindData, String>,
+        result: Result<ArtistKindData, crate::providers::ProviderError>,
     ) {
         let Some((pane, idx)) = self.slot_for_request(rid) else {
             return;
+        };
+        let data = match result {
+            Ok(data) => data,
+            Err(error) => {
+                self.fail_artist_section(rid, pane, idx, provider, kind, &error);
+                return;
+            }
         };
         let ViewKind::Artist(entry) = &mut self.pane_mut(pane).nav_history[idx].kind else {
             return;
         };
         let artist_page = &mut entry.page;
-        let succeeded = result.is_ok();
-        match result {
-            Ok(data) => {
-                artist_page
-                    .pages
-                    .entry(provider)
-                    .or_default()
-                    .merge_kind(kind, &data);
-                if let ArtistKindData::Header(header) = &data {
-                    artist_page.merge_header(provider, Some(header));
-                } else {
-                    let section_kind = ArtistSectionKind::ALL
-                        .into_iter()
-                        .find(|k| k.data_kind() == kind);
-                    if let Some(section_kind) = section_kind {
-                        if artist_page.section(section_kind).provider == Some(provider) {
-                            artist_page.section_mut(section_kind).state =
-                                LoadState::Ready(data.to_section_content());
-                            if section_kind == ArtistSectionKind::Popular {
-                                if let ArtistKindData::Popular(tracks) = data {
-                                    let slot = &mut self.pane_mut(pane).nav_history[idx];
-                                    Self::install_popular_tracks(slot, tracks, provider);
-                                }
-                            }
+        artist_page
+            .pages
+            .entry(provider)
+            .or_default()
+            .merge_kind(kind, &data);
+        if let ArtistKindData::Header(header) = &data {
+            artist_page.merge_header(provider, Some(header));
+        } else {
+            let section_kind = ArtistSectionKind::ALL
+                .into_iter()
+                .find(|k| k.data_kind() == kind);
+            if let Some(section_kind) = section_kind {
+                if artist_page.section(section_kind).provider == Some(provider) {
+                    artist_page.section_mut(section_kind).state =
+                        LoadState::Ready(data.to_section_content());
+                    if section_kind == ArtistSectionKind::Popular {
+                        if let ArtistKindData::Popular(tracks) = data {
+                            let slot = &mut self.pane_mut(pane).nav_history[idx];
+                            Self::install_popular_tracks(slot, tracks, provider);
                         }
                     }
                 }
             }
-            Err(ref msg) => {
-                tracing::warn!("artist {kind:?} load failed: {msg}");
-                artist_page.fail_section(provider, kind, msg);
-                if kind == ArtistDataKind::Popular
-                    && artist_page.section(ArtistSectionKind::Popular).provider == Some(provider)
-                    && self.pane(pane).nav_history[idx].content.is_loading()
-                {
-                    self.pane_mut(pane).nav_history[idx].content = LoadState::Failed(msg.clone());
-                }
-                // One logical failure fans out to one message per kind;
-                // surface only the first as a toast.
-                if self.artist_error_dedup != Some((rid, provider)) {
-                    self.artist_error_dedup = Some((rid, provider));
-                    self.notify_error(format!("{}: {msg}", self.strings.provider(provider)));
-                }
-            }
         }
-        if succeeded {
-            if self.artist_error_dedup == Some((rid, provider)) {
-                self.artist_error_dedup = None;
-            }
-            self.finalize_view(pane, idx);
-            self.seed_slot_artist_thumbnails(pane, idx);
+        if self.artist_error_dedup == Some((rid, provider)) {
+            self.artist_error_dedup = None;
+        }
+        self.finalize_view(pane, idx);
+        self.seed_slot_artist_thumbnails(pane, idx);
+    }
+
+    /// Mark the section loading from `provider` as failed. One logical failure
+    /// fans out to one result per kind, so only the first is toasted.
+    fn fail_artist_section(
+        &mut self,
+        rid: u64,
+        pane: PaneId,
+        idx: usize,
+        provider: ProviderId,
+        kind: ArtistDataKind,
+        error: &crate::providers::ProviderError,
+    ) {
+        let reason = self.strings.error_reason(error).to_string();
+        tracing::warn!("artist {kind:?} load failed: {}", error.detail);
+        let ViewKind::Artist(entry) = &mut self.pane_mut(pane).nav_history[idx].kind else {
+            return;
+        };
+        let artist_page = &mut entry.page;
+        artist_page.fail_section(provider, kind, &reason);
+        let popular_failed = kind == ArtistDataKind::Popular
+            && artist_page.section(ArtistSectionKind::Popular).provider == Some(provider);
+        if popular_failed && self.pane(pane).nav_history[idx].content.is_loading() {
+            self.pane_mut(pane).nav_history[idx].content = LoadState::Failed(reason.clone());
+        }
+        if self.artist_error_dedup != Some((rid, provider)) {
+            self.artist_error_dedup = Some((rid, provider));
+            let msg = format!("{}: {reason}", self.strings.provider(provider));
+            self.notify_error(msg);
         }
     }
 

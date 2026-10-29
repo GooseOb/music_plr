@@ -31,11 +31,11 @@ pub enum BackendResult {
     RadioResults(u64, Vec<Track>),
     BrowseResults(u64, Vec<Track>, Option<crate::providers::AlbumMeta>),
     DownloadComplete(Track, String),
-    DownloadError(String),
+    DownloadError(crate::providers::ProviderError),
     /// A `YouTube` player-client race event from a download thread; the tick
     /// loop surfaces it as a toast.
     PlayerClientEvent(crate::providers::ClientEvent),
-    SearchError(u64, String),
+    SearchError(u64, crate::providers::ProviderError),
     ThumbnailDownloaded(ProviderId, String),
     LyricsFetched(
         Result<Lyrics, String>,
@@ -66,7 +66,7 @@ pub enum BackendResult {
         rid: u64,
         provider: ProviderId,
         kind: crate::providers::ArtistDataKind,
-        data: Box<Result<crate::providers::ArtistKindData, String>>,
+        data: Box<Result<crate::providers::ArtistKindData, crate::providers::ProviderError>>,
     },
     LocalFilesPicked(Vec<std::path::PathBuf>),
     /// Playlist import: the user picked a source (single file for Native/CSV,
@@ -97,17 +97,17 @@ pub enum BackendResult {
         /// Track title
         title: String,
         provider: ProviderId,
-        message: String,
+        message: crate::providers::ProviderError,
     },
     EditTrackProviderResolved(ProviderId, Option<Track>),
     /// The Edit Track "Find" action failed to resolve `provider`.
-    EditTrackProviderError(ProviderId, String),
+    EditTrackProviderError(ProviderId, crate::providers::ProviderError),
     /// An Edit Track "Manual search" query finished; the payload is its
     /// track results. It applies to the popup only while it still awaits this
     /// request id, so a superseded query's late reply is dropped.
     ManualSearchResults {
         rid: u64,
-        results: Result<Vec<Track>, String>,
+        results: Result<Vec<Track>, crate::providers::ProviderError>,
     },
     /// A background version-check completed.
     VersionChecked(Result<VersionCheckOutcome, String>),

@@ -44,7 +44,7 @@ impl MusicPlayer {
                     ));
                 }
                 Err(e) => {
-                    let _ = tx.send(BackendResult::DownloadError(e.to_string()));
+                    let _ = tx.send(BackendResult::DownloadError(e.into()));
                 }
             }
         });

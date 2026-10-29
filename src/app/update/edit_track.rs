@@ -69,9 +69,7 @@ impl MusicPlayer {
                 Ok(resolved) => {
                     crate::app::BackendResult::EditTrackProviderResolved(provider, resolved)
                 }
-                Err(e) => {
-                    crate::app::BackendResult::EditTrackProviderError(provider, e.to_string())
-                }
+                Err(e) => crate::app::BackendResult::EditTrackProviderError(provider, e.into()),
             };
             let _ = tx.send(msg);
         });
@@ -174,7 +172,7 @@ impl MusicPlayer {
         thread::spawn(move || {
             let results = match crate::providers::search(provider, &query, scope, 0) {
                 Ok((tracks, _tab)) => Ok(tracks),
-                Err(e) => Err(e.to_string()),
+                Err(e) => Err(e.into()),
             };
             let _ = tx.send(BackendResult::ManualSearchResults { rid, results });
         });
@@ -194,8 +192,9 @@ impl MusicPlayer {
     pub fn apply_manual_search_results(
         &mut self,
         rid: u64,
-        results: Result<Vec<Track>, String>,
+        results: Result<Vec<Track>, crate::providers::ProviderError>,
     ) -> Task<Message> {
+        let results = results.map_err(|e| self.strings.error_reason(&e).to_string());
         let Some(manual) = self.edit_manual_mut() else {
             return Task::none();
         };
@@ -423,7 +422,10 @@ mod tests {
         );
         assert!(p.edit_manual_mut().unwrap().results.is_loading());
 
-        let _ = p.apply_manual_search_results(fresh, Err("no results".into()));
+        let _ = p.apply_manual_search_results(
+            fresh,
+            Err(crate::providers::ProviderError::from_text("no results")),
+        );
         assert!(matches!(
             p.edit_manual_mut().unwrap().results,
             LoadState::Failed(_)

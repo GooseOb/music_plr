@@ -322,11 +322,16 @@ pub fn fetch_artist_kinds(
     kinds: &[crate::providers::ArtistDataKind],
     tx: &std::sync::mpsc::Sender<crate::providers::ArtistKindResult>,
 ) {
-    use crate::providers::{ArtistDataKind as K, ArtistKindData as D, ArtistKindResult};
+    use crate::providers::{
+        ArtistDataKind as K, ArtistKindData as D, ArtistKindResult, ErrorKind, ProviderError,
+    };
     let Ok(parsed) = id.parse::<u64>() else {
         let msg = format!("Invalid SoundCloud id: {id}");
         for &kind in kinds {
-            let _ = tx.send(ArtistKindResult(kind, Err(msg.clone())));
+            let _ = tx.send(ArtistKindResult(
+                kind,
+                Err(ProviderError::new(ErrorKind::Other, msg.clone())),
+            ));
         }
         return;
     };
@@ -335,7 +340,7 @@ pub fn fetch_artist_kinds(
     let client = match block_on_sc(sc_client()) {
         Ok(client) => std::sync::Arc::new(client),
         Err(e) => {
-            let msg = format!("{e:#}");
+            let msg = ProviderError::from_text(format!("{e:#}"));
             for &kind in kinds {
                 let _ = tx.send(ArtistKindResult(kind, Err(msg.clone())));
             }
@@ -355,7 +360,7 @@ pub fn fetch_artist_kinds(
                             let result = $fetch(&client, parsed)
                                 .await
                                 .map(D::$variant)
-                                .map_err(|e| format!("{e:#}"));
+                                .map_err(ProviderError::from);
                             let _ = tx.send(ArtistKindResult(kind, result));
                         }),
                     ));
@@ -372,7 +377,10 @@ pub fn fetch_artist_kinds(
             if handle.await.is_err() {
                 let _ = tx.send(ArtistKindResult(
                     kind,
-                    Err("SoundCloud request failed".to_string()),
+                    Err(ProviderError::new(
+                        ErrorKind::Other,
+                        "SoundCloud request failed",
+                    )),
                 ));
             }
         }
