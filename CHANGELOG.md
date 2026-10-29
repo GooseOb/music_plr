@@ -12,7 +12,8 @@ auto-generated compare link below it.
 
 ### Fixed
 
-- "Translate with AI" now works with non-synced lyrics.
+- "Translate with AI" works with non-synced lyrics.
+- Jump playlist dialog closes when Escape is pressed.
 
 ## [1.3.17] - 2026-10-28
 

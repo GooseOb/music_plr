@@ -408,6 +408,10 @@ impl MusicPlayer {
             S::JumpStep(dir) => self.step_playlist_jump(dir),
             S::JumpEdge(first) => self.move_playlist_jump_to(first),
             S::JumpConfirm { play } => self.confirm_playlist_jump(play),
+            S::Escape => {
+                self.dialog = None;
+                Task::none()
+            }
             _ => Task::none(),
         }
     }
@@ -880,6 +884,21 @@ mod tests {
         let _ = p.update(Message::Shortcut(Shortcut::CycleQueueTab));
         assert!(p.show_queue);
         assert_eq!(p.queue.queue_tab, QueueTab::RecentlyPlayed);
+    }
+
+    #[test]
+    fn escape_closes_playlist_jump() {
+        use crate::app::{Dialog, Shortcut};
+        let mut p = player();
+        let _ = p.update(Message::Shortcut(Shortcut::OpenPlaylistJump));
+        assert!(matches!(p.dialog, Some(Dialog::PlaylistJump(_))));
+        let _ = p.update(Message::Shortcut(Shortcut::Escape));
+        assert!(p.dialog.is_none());
+
+        let _ = p.update(Message::OpenPlaylistAdd(vec![0]));
+        assert!(matches!(p.dialog, Some(Dialog::PlaylistJump(_))));
+        let _ = p.update(Message::Shortcut(Shortcut::Escape));
+        assert!(p.dialog.is_none());
     }
 
     #[test]
