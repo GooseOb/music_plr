@@ -442,6 +442,8 @@ pub(super) fn with_search_marker(label: fmt::Arguments<'_>, search: bool, marker
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
 
     #[test]
@@ -531,6 +533,94 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    const COUNT_PROBES: [u64; 10] = [0, 1, 2, 5, 11, 21, 22, 25, 100, 102];
+
+    type Counted = fn(usize) -> String;
+    type CountedInto = fn(usize, &str) -> String;
+
+    /// How many distinct wordings the message produces once the number itself
+    /// is blanked out, i.e. 1 means the count changes nothing but the digits.
+    fn count_shapes(build: impl Fn(u64) -> String) -> usize {
+        COUNT_PROBES
+            .iter()
+            .map(|&n| build(n).replace(&n.to_string(), "N"))
+            .collect::<BTreeSet<_>>()
+            .len()
+    }
+
+    #[test]
+    fn track_counts_inflect_where_the_language_does() {
+        const INFLECTING: &[Language] = &[
+            Language::Ar,
+            Language::Be,
+            Language::En,
+            Language::Es,
+            Language::Fr,
+            Language::Pl,
+            Language::PtBr,
+            Language::Ru,
+            Language::Uk,
+        ];
+        for &lang in INFLECTING {
+            let s = lang.strings();
+            let builds: [(&str, Counted); 13] = [
+                ("added", s.added),
+                ("removed_n", s.removed_n),
+                ("added_local", s.added_local),
+                ("downloading_n", s.downloading_n),
+                ("ctx_add_to_queue_n", s.ctx_add_to_queue_n),
+                ("ctx_add_to_playlist_n", s.ctx_add_to_playlist_n),
+                ("ctx_download_n", s.ctx_download_n),
+                ("ctx_remove_from_queue_n", s.ctx_remove_from_queue_n),
+                ("ctx_remove_from_playlist_n", s.ctx_remove_from_playlist_n),
+                ("ctx_remove_from_recent_n", s.ctx_remove_from_recent_n),
+                ("ctx_add_to_trashbin_n", s.ctx_add_to_trashbin_n),
+                ("ctx_remove_from_trashbin_n", s.ctx_remove_from_trashbin_n),
+                ("import_playlists_imported", s.import_playlists_imported),
+            ];
+            for (field, build) in builds {
+                assert!(
+                    count_shapes(|n| build(n as usize)) > 1,
+                    "{lang:?}: {field} does not use a plural form"
+                );
+            }
+            let into_builds: [(&str, CountedInto); 3] = [
+                ("added_to", s.added_to),
+                ("removed_from", s.removed_from),
+                ("pasted_into", s.pasted_into),
+            ];
+            for (field, build) in into_builds {
+                assert!(
+                    count_shapes(|n| build(n as usize, "Queue")) > 1,
+                    "{lang:?}: {field} does not use a plural form"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn play_counts_inflect_where_the_language_does() {
+        const INFLECTING: &[Language] = &[
+            Language::Ar,
+            Language::Be,
+            Language::De,
+            Language::En,
+            Language::Es,
+            Language::Fr,
+            Language::Pl,
+            Language::PtBr,
+            Language::Ru,
+            Language::Uk,
+        ];
+        for &lang in INFLECTING {
+            let n_plays = lang.strings().n_plays;
+            assert!(
+                count_shapes(n_plays) > 1,
+                "{lang:?}: n_plays does not use a plural form"
+            );
         }
     }
 }
