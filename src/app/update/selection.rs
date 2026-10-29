@@ -156,6 +156,13 @@ impl MusicPlayer {
         self.get_track_ref_at(pos).cloned()
     }
 
+    pub fn get_tracks_at(&self, indices: &[usize], source: PaneId) -> Vec<Track> {
+        indices
+            .iter()
+            .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
+            .collect()
+    }
+
     /// Collect the tracks at `indices` in the list addressed by `pane`,
     /// skipping any out-of-range entries. Centralizes the per-index lookup
     /// and cloning that callers previously inlined.

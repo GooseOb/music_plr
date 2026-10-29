@@ -176,16 +176,15 @@ impl CaptureBounds {
     }
 
     pub fn with_panes(panes: Vec<PaneId>) -> Self {
-        let mut bounds = Self {
+        let search_input_ids = panes
+            .iter()
+            .map(|&pane| (crate::app::ui::search_input_id(pane), pane))
+            .collect();
+        Self {
             panes,
+            search_input_ids,
             ..Self::default()
-        };
-        for pane in bounds.panes.clone() {
-            bounds
-                .search_input_ids
-                .insert(crate::app::ui::search_input_id(pane), pane);
         }
-        bounds
     }
 
     pub fn track_geo(&self, pane: PaneId) -> Option<&ListGeometry> {

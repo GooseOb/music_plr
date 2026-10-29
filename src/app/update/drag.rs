@@ -298,10 +298,7 @@ impl MusicPlayer {
         // target was resolved during the drag into `drop_target` and is shown
         // by the row highlight, so there is no separate insertion bar.
         if let Some(DropTarget::PlaylistAdd(playlist_idx)) = self.drag.drop_target {
-            let tracks: Vec<Track> = indices
-                .iter()
-                .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
-                .collect();
+            let tracks = self.get_tracks_at(&indices, source);
             let count = self
                 .playlists
                 .insert_tracks_at(playlist_idx, tracks.iter(), PREPEND);
@@ -344,14 +341,9 @@ impl MusicPlayer {
 
     fn copy_to_queue(&mut self, source: PaneId, indices: &[usize], drop_idx: usize) {
         let clamped = drop_idx.min(self.queue.tracks.len());
-        let tracks: Vec<Track> = indices
-            .iter()
-            .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
-            .collect();
+        let tracks = self.get_tracks_at(indices, source);
         let inserted = tracks.len();
-        for (j, track) in tracks.into_iter().enumerate() {
-            self.queue.tracks.insert(clamped + j, track);
-        }
+        self.queue.tracks.splice(clamped..clamped, tracks);
         self.save_session();
         let msg = (self.strings.added_to)(inserted, self.strings.queue);
         self.notify(msg);

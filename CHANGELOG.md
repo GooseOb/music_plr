@@ -14,6 +14,7 @@ auto-generated compare link below it.
 
 - "Translate with AI" works with non-synced lyrics.
 - Jump playlist dialog closes when Escape is pressed.
+- "Add to queue" on empty queue does not crash the app anymore.
 
 ## [1.3.17] - 2026-10-28
 

@@ -365,17 +365,13 @@ impl MusicPlayer {
     }
 
     pub fn handle_add_to_queue(&mut self, pane: PaneId, indices: &[usize]) {
-        let tracks: Vec<Track> = indices
-            .iter()
-            .filter_map(|&i| self.get_track_at(TrackPos::new(i, pane)))
-            .collect();
+        let tracks = self.get_tracks_at(indices, pane);
         if tracks.is_empty() {
             return;
         }
         let inserted = tracks.len();
-        for (j, track) in tracks.into_iter().enumerate() {
-            self.queue.tracks.insert(j + 1, track);
-        }
+        let insert_at = self.queue.tracks.len().min(1);
+        self.queue.tracks.splice(insert_at..insert_at, tracks);
         self.save_session();
         let tr = self.strings;
         self.notify((tr.added_to)(inserted, tr.queue));
