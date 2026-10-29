@@ -8,6 +8,12 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+## [1.3.20] - 2026-10-30
+
+### Fixed
+
+Track row padding
+
 ## [1.3.19] - 2026-10-29
 
 ### Fixed
