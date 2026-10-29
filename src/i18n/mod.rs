@@ -200,6 +200,9 @@ pub struct Strings {
     pub found_on: fn(&str) -> String,
     pub not_linked: &'static str,
     pub providers: &'static str,
+    /// Provider display name for [`ProviderId::Local`]; brand names come from
+    /// [`ProviderId::name`].
+    pub provider_local: &'static str,
     pub no_provider_data: &'static str,
     pub save: &'static str,
     pub cancel: &'static str,
@@ -412,7 +415,16 @@ impl Strings {
         match provider {
             ProviderId::YouTube => self.search_youtube.into(),
             ProviderId::Local => self.search_local.into(),
-            other => (self.search_provider)(other.label()),
+            other => (self.search_provider)(other.name()),
+        }
+    }
+
+    /// Display name for `provider`: brand names are shared across locales,
+    /// `Local` is translated.
+    pub fn provider(&self, provider: ProviderId) -> &'static str {
+        match provider {
+            ProviderId::Local => self.provider_local,
+            other => other.name(),
         }
     }
 }
@@ -461,6 +473,25 @@ mod tests {
     }
 
     #[test]
+    fn provider_names_are_localized() {
+        let english = Language::En.strings();
+        for lang in Language::ALL {
+            let s = lang.strings();
+            for &provider in ProviderId::all() {
+                let name = s.provider(provider);
+                assert!(!name.trim().is_empty(), "{lang:?} {provider:?}");
+                if provider == ProviderId::Local {
+                    if lang != Language::En {
+                        assert_ne!(name, english.provider(provider), "{lang:?}");
+                    }
+                } else {
+                    assert_eq!(name, provider.name(), "{lang:?} {provider:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn with_search_marker_fills_one_buffer() {
         let plain = with_search_marker(
             format_args!("Play via {provider}", provider = "X"),
@@ -492,7 +523,7 @@ mod tests {
             for build in builds {
                 for provider in ProviderId::all() {
                     for search in [false, true] {
-                        let label = build(provider.label(), search);
+                        let label = build(provider.name(), search);
                         assert!(
                             label.len() <= SUBMENU_LABEL_CAPACITY,
                             "{lang:?} {provider:?} search={search}: {label}"

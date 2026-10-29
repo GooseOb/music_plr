@@ -113,6 +113,7 @@ pub const STRINGS: Strings = Strings {
     found_on: |p| format!("{p} पर मिला"),
     not_linked: "लिंक नहीं किया गया",
     providers: "प्रदाता",
+    provider_local: "स्थानीय फ़ाइलें",
     no_provider_data: "इस ट्रैक का कोई प्रदाता डेटा नहीं है।",
     save: "सहेजें",
     cancel: "रद्द करें",

@@ -111,6 +111,7 @@ pub const STRINGS: Strings = Strings {
     found_on: |p| format!("Trouvé sur {p}"),
     not_linked: "Non lié",
     providers: "Fournisseurs",
+    provider_local: "Fichiers locaux",
     no_provider_data: "Cette piste n'a aucune donnée de fournisseur.",
     save: "Enregistrer",
     cancel: "Annuler",

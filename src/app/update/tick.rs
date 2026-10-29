@@ -444,7 +444,11 @@ impl MusicPlayer {
                 provider,
                 message,
             } => {
-                let msg = (self.strings.failed_resolve_on)(&title, provider.label(), &message);
+                let msg = (self.strings.failed_resolve_on)(
+                    &title,
+                    self.strings.provider(provider),
+                    &message,
+                );
                 self.notify_error(msg);
                 Task::none()
             }
@@ -863,7 +867,8 @@ impl MusicPlayer {
                 self.spawn_download_thread_for(provider, original);
             }
         } else {
-            let msg = (self.strings.could_not_find_on)(&original.title, provider.label());
+            let msg =
+                (self.strings.could_not_find_on)(&original.title, self.strings.provider(provider));
             self.notify_error(msg);
         }
     }

@@ -114,6 +114,7 @@ pub const STRINGS: Strings = Strings {
     found_on: |p| format!("Found on {p}"),
     not_linked: "Not linked",
     providers: "Providers",
+    provider_local: "Local files",
     no_provider_data: "This track has no provider data.",
     save: "Save",
     cancel: "Cancel",

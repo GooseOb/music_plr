@@ -125,6 +125,7 @@ pub const STRINGS: Strings = Strings {
     found_on: |p| format!("在 {p} 上找到"),
     not_linked: "未关联",
     providers: "提供方",
+    provider_local: "本地文件",
     no_provider_data: "该曲目没有提供方数据。",
     save: "保存",
     cancel: "取消",

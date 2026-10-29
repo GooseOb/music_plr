@@ -80,7 +80,7 @@ pub const STRINGS: Strings = Strings {
     no_downloaded_tracks: "Няма спампаваных трэкаў",
 
     ctx_play: "Граць",
-    ctx_play_local: "Граць лакальна",
+    ctx_play_local: "Граць лякальна",
     ctx_edit: "Зьмяніць",
     ctx_go_to_artist: "Перайсьці да выканаўцы",
     ctx_add_to_queue: "Дадаць у чаргу",
@@ -116,6 +116,7 @@ pub const STRINGS: Strings = Strings {
     found_on: |p| format!("Знойдзена на {p}"),
     not_linked: "Не прывязана",
     providers: "Крыніцы",
+    provider_local: "Лякальныя файлы",
     no_provider_data: "У гэтага трэка няма даных крыніцы.",
     save: "Захаваць",
     cancel: "Скасаваць",

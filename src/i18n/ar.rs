@@ -111,6 +111,7 @@ pub const STRINGS: Strings = Strings {
     found_on: |p| format!("تم العثور عليها على {p}"),
     not_linked: "غير مرتبطة",
     providers: "المزودون",
+    provider_local: "الملفات المحلية",
     no_provider_data: "لا تحتوي هذه الأغنية على بيانات مزود.",
     save: "حفظ",
     cancel: "إلغاء",

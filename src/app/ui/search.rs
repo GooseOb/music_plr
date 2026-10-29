@@ -100,7 +100,7 @@ pub(super) fn view_search_bar(
             .filter(|p| p.capabilities().search)
             .map(|&provider| {
                 (
-                    provider.label(),
+                    player.strings.provider(provider),
                     pane_state.search_provider == provider,
                     Some(Message::SearchProviderChanged(pane, provider)),
                 )

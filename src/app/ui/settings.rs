@@ -23,7 +23,7 @@ use crate::{
 fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let row = scope_tab_row(ProviderId::defaultable().iter().map(|&provider| {
         (
-            provider.label(),
+            player.strings.provider(provider),
             player.config.default_provider == provider,
             Message::SettingsChanged(SettingsChange::DefaultProvider(provider)),
         )

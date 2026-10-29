@@ -116,6 +116,7 @@ pub const STRINGS: Strings = Strings {
     found_on: |p| format!("Знайдено на {p}"),
     not_linked: "Не прив'язано",
     providers: "Джерела",
+    provider_local: "Локальні файли",
     no_provider_data: "Цей трек не має даних джерела.",
     save: "Зберегти",
     cancel: "Скасувати",

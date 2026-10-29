@@ -414,7 +414,7 @@ fn submenu_entries<'a>(
             let label = if provider == ProviderId::Local {
                 Cow::Borrowed(tr.ctx_play_local)
             } else {
-                Cow::Owned(label_for(provider.label(), by_search))
+                Cow::Owned(label_for(tr.provider(provider), by_search))
             };
             let icon = if by_search { icons::SEARCH_ICON } else { icon };
             let message = kind.entry_message(provider, menu);

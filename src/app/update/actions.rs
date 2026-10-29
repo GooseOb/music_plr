@@ -40,7 +40,7 @@ impl MusicPlayer {
                     downloaded.set_download_path(path);
                     let _ = tx.send(BackendResult::DownloadComplete(
                         downloaded,
-                        provider.label().to_string(),
+                        provider.name().to_string(),
                     ));
                 }
                 Err(e) => {
@@ -951,7 +951,9 @@ impl MusicPlayer {
         };
         if let Some(id) = menu.track.provider_id(provider).map(str::to_string) {
             if self.stream_cache.remove(provider, &id) {
-                self.notify((self.strings.cache_cleared_for)(provider.label()));
+                self.notify((self.strings.cache_cleared_for)(
+                    self.strings.provider(provider),
+                ));
             }
         }
     }

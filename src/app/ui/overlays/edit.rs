@@ -51,7 +51,7 @@ fn provider_row<'a>(
     let header: Element<'a, Message, AppTheme> = match pt {
         Some(_pt) => {
             let mut children: Vec<Element<'a, Message, AppTheme>> = vec![
-                text(provider.label()).into(),
+                text(player.strings.provider(provider)).into(),
                 if provider == source {
                     text(player.strings.current).style(fg_secondary()).into()
                 } else {
@@ -68,7 +68,7 @@ fn provider_row<'a>(
         }
         None if provider.capabilities().search => {
             let mut children: Vec<Element<'a, Message, AppTheme>> = vec![
-                text(provider.label()).into(),
+                text(player.strings.provider(provider)).into(),
                 if finding {
                     text_button(player.strings.finding).into()
                 } else {
@@ -83,7 +83,7 @@ fn provider_row<'a>(
                 .align_y(alignment::Vertical::Center)
                 .into()
         }
-        None => text(provider.label()).into(),
+        None => text(player.strings.provider(provider)).into(),
     };
 
     let body: Element<'a, Message, AppTheme> = match pt {
@@ -143,7 +143,7 @@ pub(super) fn view_edit_track<'a>(
             provider_ids.push(*key);
         }
     }
-    provider_ids.sort_by_key(|p| p.label());
+    provider_ids.sort_by_key(|p| p.name());
 
     let provider_rows: Vec<Element<'_, Message, AppTheme>> = provider_ids
         .iter()
@@ -284,7 +284,7 @@ pub(super) fn view_edit_manual_search<'a>(
 
     view_dialog(
         Column::with_children([
-            text((tr.manual_search_on)(manual.provider.label()))
+            text((tr.manual_search_on)(tr.provider(manual.provider)))
                 .size(theme::TEXT_SIZE_LG)
                 .into(),
             Row::with_children([query, search_btn.into()])

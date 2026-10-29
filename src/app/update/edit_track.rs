@@ -87,6 +87,7 @@ impl MusicPlayer {
     ) {
         let found_on = self.strings.found_on;
         let could_not_find_on = self.strings.could_not_find_on;
+        let provider_name = self.strings.provider(provider);
         {
             let Some(Dialog::Edit(edit)) = &mut self.dialog else {
                 return;
@@ -97,12 +98,12 @@ impl MusicPlayer {
                     edit.original.set_provider(provider, pt.clone());
                 }
             } else {
-                let msg = could_not_find_on(&edit.title, provider.label());
+                let msg = could_not_find_on(&edit.title, provider_name);
                 self.notify_error(msg);
                 return;
             }
         }
-        self.notify(found_on(provider.label()));
+        self.notify(found_on(provider_name));
     }
 
     /// Open the manual-search step for `provider`, seeded with the track's
@@ -256,7 +257,7 @@ impl MusicPlayer {
         edit.source = provider;
         edit.manual = None;
         self.forget_manual_search_list();
-        self.notify((self.strings.found_on)(provider.label()));
+        self.notify((self.strings.found_on)(self.strings.provider(provider)));
     }
 
     /// Drop everything the popup's result list left behind — its keyboard

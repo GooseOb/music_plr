@@ -101,7 +101,7 @@ fn header_provider_picker(
             .into(),
         scope_tab_row(ProviderId::header_providers().iter().map(|&p| {
             (
-                p.label(),
+                tr.provider(p),
                 selected == Some(p),
                 Message::ArtistHeaderProviderChanged(pane, p),
             )
@@ -205,7 +205,7 @@ fn section_header(
 ) -> Element<'static, Message, AppTheme> {
     let picker = scope_tab_row(kind.providers().iter().map(|&provider| {
         (
-            provider.label(),
+            tr.provider(provider),
             selected == Some(provider),
             Message::ArtistSectionProviderChanged(pane, kind, provider),
         )

@@ -227,7 +227,11 @@ impl ProviderId {
         }
     }
 
-    pub fn label(self) -> &'static str {
+    /// Untranslated brand name (and the `Local` placeholder). Never show this
+    /// to the user: display text comes from [`Strings::provider`].
+    ///
+    /// [`Strings::provider`]: crate::i18n::Strings::provider
+    pub fn name(self) -> &'static str {
         match self {
             ProviderId::YouTube => "YouTube",
             ProviderId::SoundCloud => "SoundCloud",

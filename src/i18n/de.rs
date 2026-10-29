@@ -113,6 +113,7 @@ pub const STRINGS: Strings = Strings {
     found_on: |p| format!("Gefunden auf {p}"),
     not_linked: "Nicht verknüpft",
     providers: "Anbieter",
+    provider_local: "Lokale Dateien",
     no_provider_data: "Dieser Titel hat keine Anbieterdaten.",
     save: "Speichern",
     cancel: "Abbrechen",

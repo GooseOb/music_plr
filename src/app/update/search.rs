@@ -122,7 +122,7 @@ impl MusicPlayer {
         if !provider.capabilities().search {
             self.notify(format!(
                 "{}: {}",
-                provider.label(),
+                self.strings.provider(provider),
                 self.strings.deps_not_installed
             ));
             return;
@@ -135,7 +135,7 @@ impl MusicPlayer {
             self.pane_mut(pane).search_scope = provider.supported_scopes()[0];
         }
         self.save_session();
-        self.notify(provider.label().to_string());
+        self.notify(self.strings.provider(provider));
     }
 
     pub fn cycle_search_provider(&mut self, pane: PaneId, dir: isize) {
@@ -304,7 +304,9 @@ impl MusicPlayer {
         artist: bool,
     ) -> Task<Message> {
         if !provider.capabilities().radio {
-            self.notify((self.strings.provider_no_radio)(provider.label()));
+            self.notify((self.strings.provider_no_radio)(
+                self.strings.provider(provider),
+            ));
             return Task::none();
         }
         let artist_id = artist.then(|| track.provider_artist_id(provider)).flatten();
@@ -342,6 +344,7 @@ impl MusicPlayer {
         let seed = track.clone();
         let tx = self.result_tx.clone();
         let not_found = self.strings.could_not_find_on;
+        let provider_name = self.strings.provider(provider);
         let radio_fn: fn(
             crate::providers::ProviderId,
             &str,
@@ -362,7 +365,7 @@ impl MusicPlayer {
                     };
                     match resolved {
                         Some(id) => id,
-                        None => anyhow::bail!((not_found)(&name, provider.label())),
+                        None => anyhow::bail!((not_found)(&name, provider_name)),
                     }
                 } else {
                     id

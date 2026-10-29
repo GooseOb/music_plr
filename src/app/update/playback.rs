@@ -181,7 +181,7 @@ impl MusicPlayer {
     /// Resolve a track's id on `provider` in the background. If `play` is true
     /// the resolved track is streamed; otherwise it is downloaded.
     fn resolve_provider(&mut self, provider: ProviderId, track: Track, pos: TrackPos, play: bool) {
-        let msg = (self.strings.resolving_on)(&track.title, provider.label());
+        let msg = (self.strings.resolving_on)(&track.title, self.strings.provider(provider));
         self.notify(msg);
         let rid = if is_main_pane(pos.pane) && self.panes.contains_key(&pos.pane) {
             self.slot_request_id(pos.pane)
@@ -292,7 +292,7 @@ impl MusicPlayer {
                             id: id.clone(),
                         });
                         let cache_path = StreamCache::path_for(provider, &id);
-                        debug!("Streaming ({}): {}", provider.label(), cache_path.display());
+                        debug!("Streaming ({}): {}", provider.name(), cache_path.display());
                         if provider.uses_ytdlp() {
                             self.audio.play_stream_cache(
                                 &url,

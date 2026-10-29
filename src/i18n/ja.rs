@@ -125,6 +125,7 @@ pub const STRINGS: Strings = Strings {
     found_on: |p| format!("{p} で見つかりました"),
     not_linked: "未リンク",
     providers: "提供元",
+    provider_local: "ローカルファイル",
     no_provider_data: "この曲には提供元データがありません。",
     save: "保存",
     cancel: "キャンセル",

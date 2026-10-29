@@ -95,6 +95,7 @@ impl MusicPlayer {
         };
         let name = name.to_string();
         let not_found = self.strings.could_not_find_on;
+        let provider_name = self.strings.provider(provider);
         let tx = self.result_tx.clone();
 
         thread::spawn(move || {
@@ -122,7 +123,7 @@ impl MusicPlayer {
                         id
                     }
                     Ok(None) => {
-                        fail_all((not_found)(&name, provider.label()));
+                        fail_all((not_found)(&name, provider_name));
                         return;
                     }
                     Err(e) => {
@@ -276,7 +277,7 @@ impl MusicPlayer {
                 // surface only the first as a toast.
                 if self.artist_error_dedup != Some((rid, provider)) {
                     self.artist_error_dedup = Some((rid, provider));
-                    self.notify_error(format!("{}: {msg}", provider.label()));
+                    self.notify_error(format!("{}: {msg}", self.strings.provider(provider)));
                 }
             }
         }
