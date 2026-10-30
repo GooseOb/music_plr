@@ -154,6 +154,10 @@ impl StreamCache {
         self.max_size_bytes = mb * 1024 * 1024;
     }
 
+    pub fn used_bytes(&self) -> u64 {
+        self.current_total
+    }
+
     pub fn contains(&self, provider: ProviderId, id: &str) -> bool {
         self.index.entries.contains_key(&provider.cache_key(id))
             && Self::path_for(provider, id).exists()

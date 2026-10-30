@@ -297,13 +297,23 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         |s| Message::SettingsChanged(SettingsChange::DownloadDir(s)),
     );
 
-    let cache_size = text_input_row(
-        player.strings.direction,
-        player.strings.cache_size_lbl,
-        &format!("{}", cfg.cache_max_size_mb),
-        "1024",
-        |s| Message::SettingsChanged(SettingsChange::CacheMaxSize(s)),
-    );
+    let cache_size = {
+        let row = text_input_row(
+            player.strings.direction,
+            player.strings.cache_size_lbl,
+            &format!("{}", cfg.cache_max_size_mb),
+            "1024",
+            |s| Message::SettingsChanged(SettingsChange::CacheMaxSize(s)),
+        );
+        let used = text((player.strings.cache_used)(&crate::util::format_bytes(
+            player.stream_cache.used_bytes(),
+        )))
+        .style(fg_secondary());
+        Column::with_children([row, used.into()])
+            .spacing(theme::SPACING_XS)
+            .align_x(player.strings.direction.align())
+            .into()
+    };
 
     let hist_visible = text_input_row(
         player.strings.direction,

@@ -20,6 +20,16 @@ pub fn format_count(n: u64) -> String {
     format!("{scaled:.1}{}", UNITS[i].1)
 }
 
+/// Abbreviated byte size for display (binary units, so the numbers line up
+/// with the MB-based cache cap: 1024 MB == "1.0 GB").
+pub fn format_bytes(bytes: u64) -> String {
+    const UNITS: [(u64, &str); 3] = [(1 << 30, "GB"), (1 << 20, "MB"), (1 << 10, "KB")];
+    let Some(&(unit, label)) = UNITS.iter().find(|&&(unit, _)| bytes >= unit) else {
+        return format!("{bytes} B");
+    };
+    format!("{:.1} {label}", bytes as f64 / unit as f64)
+}
+
 pub fn format_duration(secs: u32) -> std::borrow::Cow<'static, str> {
     if secs > 0 {
         format!("{}:{:02}", secs / 60, secs % 60).into()
@@ -369,6 +379,16 @@ mod tests {
         assert_eq!(format_count(949_999_999), "950.0M");
         assert_eq!(format_count(1_000_000_000), "1.0B");
         assert_eq!(format_count(1_234_567_891), "1.2B");
+    }
+
+    #[test]
+    fn format_bytes_units() {
+        assert_eq!(format_bytes(0), "0 B");
+        assert_eq!(format_bytes(512), "512 B");
+        assert_eq!(format_bytes(1024), "1.0 KB");
+        assert_eq!(format_bytes(1024 * 1024), "1.0 MB");
+        assert_eq!(format_bytes(1024 * 1024 * 1024), "1.0 GB");
+        assert_eq!(format_bytes(1536 * 1024), "1.5 MB");
     }
 
     #[test]

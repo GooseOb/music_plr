@@ -146,6 +146,7 @@ pub const STRINGS: Strings = Strings {
     normalize_volume_lbl: "تطبيع مستوى الصوت بين الأغاني",
     download_dir_lbl: "مجلد التنزيل",
     cache_size_lbl: "أقصى حجم لذاكرة البث المؤقتة (ميغابايت)",
+    cache_used: |used| format!("المستخدم: {used}"),
     hist_rows_lbl: "صفوف سجل البحث المعروضة",
     hist_entries_lbl: "مدخلات سجل البحث المحفوظة",
     recent_kept_lbl: "الأغاني التي تم تشغيلها مؤخراً والمحفوظة",

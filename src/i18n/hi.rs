@@ -148,6 +148,7 @@ pub const STRINGS: Strings = Strings {
     normalize_volume_lbl: "ट्रैक्स के बीच वॉल्यूम सामान्य करें",
     download_dir_lbl: "डाउनलोड निर्देशिका",
     cache_size_lbl: "अधिकतम स्ट्रीम कैश आकार (MB)",
+    cache_used: |used| format!("उपयोग में: {used}"),
     hist_rows_lbl: "दिखाई गई खोज इतिहास पंक्तियाँ",
     hist_entries_lbl: "सहेजी गई खोज इतिहास प्रविष्टियाँ",
     recent_kept_lbl: "सहेजे गए हाल ही में चलाए गए ट्रैक",

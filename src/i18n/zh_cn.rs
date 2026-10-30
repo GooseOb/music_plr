@@ -160,6 +160,7 @@ pub const STRINGS: Strings = Strings {
     normalize_volume_lbl: "在各曲目间统一音量",
     download_dir_lbl: "下载目录",
     cache_size_lbl: "流媒体缓存最大大小（MB）",
+    cache_used: |used| format!("已使用：{used}"),
     hist_rows_lbl: "显示的搜索历史行数",
     hist_entries_lbl: "保留的搜索历史条目数",
     recent_kept_lbl: "保留的最近播放曲目数",

@@ -255,6 +255,7 @@ pub struct Strings {
     pub normalize_volume_lbl: &'static str,
     pub download_dir_lbl: &'static str,
     pub cache_size_lbl: &'static str,
+    pub cache_used: fn(&str) -> String,
     pub hist_rows_lbl: &'static str,
     pub hist_entries_lbl: &'static str,
     pub recent_kept_lbl: &'static str,

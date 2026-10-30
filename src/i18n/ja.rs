@@ -160,6 +160,7 @@ pub const STRINGS: Strings = Strings {
     normalize_volume_lbl: "曲間で音量を正規化",
     download_dir_lbl: "ダウンロード先",
     cache_size_lbl: "ストリーミングキャッシュの最大サイズ（MB）",
+    cache_used: |used| format!("使用中: {used}"),
     hist_rows_lbl: "検索履歴の表示行数",
     hist_entries_lbl: "保存する検索履歴件数",
     recent_kept_lbl: "保存する最近再生した曲数",

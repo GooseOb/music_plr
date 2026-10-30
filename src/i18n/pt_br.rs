@@ -146,6 +146,7 @@ pub const STRINGS: Strings = Strings {
     normalize_volume_lbl: "Normalizar o volume entre faixas",
     download_dir_lbl: "Pasta de download",
     cache_size_lbl: "Tamanho máximo do cache de streaming (MB)",
+    cache_used: |used| format!("Em uso: {used}"),
     hist_rows_lbl: "Linhas do histórico de busca exibidas",
     hist_entries_lbl: "Entradas do histórico de busca mantidas",
     recent_kept_lbl: "Faixas reproduzidas recentemente mantidas",

@@ -151,6 +151,7 @@ pub const STRINGS: Strings = Strings {
     normalize_volume_lbl: "Нармалізаваць гучнасьць паміж трэкамі",
     download_dir_lbl: "Папка спамповак",
     cache_size_lbl: "Макс. памер кэша стрымінгу (МБ)",
+    cache_used: |used| format!("Занята: {used}"),
     hist_rows_lbl: "Радкоў гісторыі пошуку паказана",
     hist_entries_lbl: "Захаваных запісаў гісторыі пошуку",
     recent_kept_lbl: "Захаваных нядаўна прайграных трэкаў",
