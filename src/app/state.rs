@@ -308,7 +308,9 @@ impl MusicPlayer {
             }
         }
         crate::app::update::cleanup_stale_update();
-        player.check_for_updates();
+        if player.config.check_updates_on_startup {
+            player.check_for_updates();
+        }
         player
     }
 

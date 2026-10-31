@@ -21,6 +21,7 @@ pub enum SettingsChange {
     TranslationBaseUrl(String),
     TranslationApiKey(String),
     TranslationModel(String),
+    CheckUpdatesOnStartup(bool),
 }
 
 impl MusicPlayer {
@@ -96,6 +97,12 @@ impl MusicPlayer {
                 let model = model.trim().to_string();
                 if !model.is_empty() {
                     self.set_config(|c| c.translation_model = model);
+                }
+            }
+            SettingsChange::CheckUpdatesOnStartup(enabled) => {
+                self.set_config(|c| c.check_updates_on_startup = enabled);
+                if enabled && self.update_status == crate::app::update::UpdateStatus::Unchecked {
+                    self.check_for_updates();
                 }
             }
         }

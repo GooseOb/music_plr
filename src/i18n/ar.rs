@@ -275,6 +275,7 @@ pub const STRINGS: Strings = Strings {
 
     sec_updates: "التحديثات",
     check_for_updates: "تحقق من التحديثات",
+    check_updates_on_startup_lbl: "التحقق من التحديثات عند بدء التشغيل",
     checking_for_updates: "جارٍ التحقق من التحديثات…",
     up_to_date: "محدث",
     current_version: |v| format!("الإصدار {v}"),

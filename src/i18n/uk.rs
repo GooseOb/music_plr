@@ -280,6 +280,7 @@ pub const STRINGS: Strings = Strings {
 
     sec_updates: "Оновлення",
     check_for_updates: "Перевірити оновлення",
+    check_updates_on_startup_lbl: "Перевіряти оновлення під час запуску",
     checking_for_updates: "Перевірка оновлень…",
     up_to_date: "Остання версія",
     current_version: |v| format!("Версія {v}"),

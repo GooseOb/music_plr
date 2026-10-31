@@ -8,11 +8,12 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
-## [Unreleased]
+## [1.4.0] - 2026-10-31
 
 ### Added
 
 - Amount of space used by cache in settings.
+- Checkbox for checking for updates on startup.
 
 ### Changed
 

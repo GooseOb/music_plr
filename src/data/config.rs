@@ -31,6 +31,13 @@ pub struct Config {
     pub translation_language: String,
     #[serde(default = "default_translation_prompt")]
     pub translation_prompt: String,
+    /// Whether the app queries crates.io for a newer release at startup.
+    #[serde(default = "default_true")]
+    pub check_updates_on_startup: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_translation_base_url() -> String {
@@ -63,6 +70,7 @@ impl Default for Config {
             translation_model: default_translation_model(),
             translation_language: String::new(),
             translation_prompt: default_translation_prompt(),
+            check_updates_on_startup: true,
         }
     }
 }
@@ -100,6 +108,7 @@ mod tests {
         assert_eq!(cfg.translation_prompt, crate::translate::DEFAULT_PROMPT);
         assert!(cfg.translation_api_key.is_empty());
         assert!(cfg.translation_language.is_empty());
+        assert!(cfg.check_updates_on_startup);
     }
 
     #[test]
@@ -120,6 +129,7 @@ mod tests {
             translation_model: "gpt-4o-mini".into(),
             translation_language: "Spanish".into(),
             translation_prompt: "translate".into(),
+            check_updates_on_startup: false,
         };
 
         let json = serde_json::to_string(&cfg).unwrap();
@@ -144,5 +154,6 @@ mod tests {
         assert_eq!(cfg.translation_base_url, crate::translate::DEFAULT_BASE_URL);
         assert_eq!(cfg.translation_model, crate::translate::DEFAULT_MODEL);
         assert_eq!(cfg.translation_prompt, crate::translate::DEFAULT_PROMPT);
+        assert!(cfg.check_updates_on_startup);
     }
 }

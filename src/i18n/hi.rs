@@ -277,6 +277,7 @@ pub const STRINGS: Strings = Strings {
 
     sec_updates: "अपडेट",
     check_for_updates: "अपडेट की जाँच करें",
+    check_updates_on_startup_lbl: "शुरू होने पर अपडेट की जाँच करें",
     checking_for_updates: "अपडेट खोजा जा रहा है…",
     up_to_date: "नवीनतम संस्करण",
     current_version: |v| format!("संस्करण {v}"),

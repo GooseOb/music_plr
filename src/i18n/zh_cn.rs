@@ -289,6 +289,7 @@ pub const STRINGS: Strings = Strings {
 
     sec_updates: "更新",
     check_for_updates: "检查更新",
+    check_updates_on_startup_lbl: "启动时检查更新",
     checking_for_updates: "检查更新中…",
     up_to_date: "已是最新",
     current_version: |v| format!("版本 {v}"),

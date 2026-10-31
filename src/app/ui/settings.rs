@@ -180,9 +180,14 @@ fn section<'a>(
 
 fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let tr = &player.strings;
+    let check_on_startup = checkbox(player.config.check_updates_on_startup)
+        .label(tr.check_updates_on_startup_lbl)
+        .on_toggle(|b| Message::SettingsChanged(SettingsChange::CheckUpdatesOnStartup(b)))
+        .spacing(theme::SPACING_MD)
+        .into();
     let status: Element<'_, Message, AppTheme> = match &player.update_status {
-        crate::app::update::UpdateStatus::Unchecked
-        | crate::app::update::UpdateStatus::Checking => {
+        crate::app::update::UpdateStatus::Unchecked => Space::new().into(),
+        crate::app::update::UpdateStatus::Checking => {
             text(tr.checking_for_updates).style(fg_secondary()).into()
         }
         crate::app::update::UpdateStatus::UpToDate => text(tr.up_to_date).style(fg_accent()).into(),
@@ -227,6 +232,7 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         text_button(tr.check_for_updates)
             .on_press(Message::CheckForUpdates)
             .into(),
+        check_on_startup,
         text((tr.current_version)(crate::app::update::APP_VERSION))
             .style(fg_secondary())
             .into(),

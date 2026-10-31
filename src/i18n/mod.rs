@@ -380,6 +380,7 @@ pub struct Strings {
 
     pub sec_updates: &'static str,
     pub check_for_updates: &'static str,
+    pub check_updates_on_startup_lbl: &'static str,
     pub checking_for_updates: &'static str,
     pub up_to_date: &'static str,
     pub current_version: fn(&str) -> String,
