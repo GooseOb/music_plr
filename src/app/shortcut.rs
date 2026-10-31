@@ -101,6 +101,7 @@ pub fn match_main(event: Event, status: Status, _window: window::Id) -> Option<M
     match code {
         Code::KeyF if ctrl && !alt => s(Shortcut::OpenTrackSearch),
         Code::KeyK if ctrl && !alt => s(Shortcut::OpenPlaylistPicker),
+        Code::KeyP if ctrl && !alt => s(Shortcut::OpenPalette),
         Code::Slash if !ctrl && !alt && !shift => s(Shortcut::FocusSearch),
         Code::Slash if !ctrl && !alt && shift => s(Shortcut::OpenPalette),
         Code::F1 if !ctrl && !alt => s(Shortcut::OpenPalette),
@@ -239,5 +240,51 @@ pub fn match_palette(event: Event, status: Status, _window: window::Id) -> Optio
             play: modifiers.shift(),
         }),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use iced::keyboard::{key::Key, Location, Modifiers};
+
+    use super::*;
+
+    fn pressed(code: Code, modifiers: Modifiers) -> Option<Message> {
+        match_main(
+            Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: Key::Character("p".into()),
+                modified_key: Key::Character("p".into()),
+                physical_key: Physical::Code(code),
+                location: Location::Standard,
+                modifiers,
+                text: None,
+                repeat: false,
+            }),
+            Status::Ignored,
+            window::Id::unique(),
+        )
+    }
+
+    #[test]
+    fn ctrl_or_cmd_p_opens_the_full_palette() {
+        for modifiers in [
+            Modifiers::CTRL,
+            Modifiers::CTRL | Modifiers::SHIFT,
+            Modifiers::LOGO,
+            Modifiers::LOGO | Modifiers::SHIFT,
+        ] {
+            assert!(matches!(
+                pressed(Code::KeyP, modifiers),
+                Some(Message::Shortcut(Shortcut::OpenPalette))
+            ));
+        }
+    }
+
+    #[test]
+    fn bare_p_still_plays_the_previous_track() {
+        assert!(matches!(
+            pressed(Code::KeyP, Modifiers::empty()),
+            Some(Message::Shortcut(Shortcut::PrevTrack))
+        ));
     }
 }

@@ -1,4 +1,4 @@
-//! Spotlight-style palette state (`F1` / `?`): fuzzy search over commands,
+//! Spotlight-style palette state (`F1` / `?` / `Ctrl+P`): fuzzy search over commands,
 //! views, saved library entries and playlists.
 //!
 //! The same overlay is the `Ctrl+K` playlist picker (`PaletteMode::Playlists`)
@@ -24,7 +24,7 @@ pub struct PendingAdd {
 }
 
 /// What the palette is being used for. `All` is the command/help surface
-/// (`F1` / `?`), `Playlists` is the `Ctrl+K` picker, and `AddToPlaylist` is
+/// (`F1` / `?` / `Ctrl+P`), `Playlists` is the `Ctrl+K` picker, and `AddToPlaylist` is
 /// the context-menu picker that hands the chosen list back to the caller.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum PaletteMode {

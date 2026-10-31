@@ -1,4 +1,4 @@
-//! The command palette (`F1` / `?`): fuzzy search over commands, views, saved
+//! The command palette (`F1` / `?` / `Ctrl+P`): fuzzy search over commands, views, saved
 //! library entries and playlists. `PaletteMode::Playlists` is the `Ctrl+K`
 //! picker, and `PaletteMode::AddToPlaylist` narrows to the add-to-playlist
 //! picker.
