@@ -14,6 +14,10 @@ auto-generated compare link below it.
 
 - Amount of space used by cache in settings.
 
+### Changed
+
+- Replaced "Keyboard shortcuts" dialog with fuzzy-searched action palette.
+
 ## [1.3.20] - 2026-10-30
 
 ### Fixed

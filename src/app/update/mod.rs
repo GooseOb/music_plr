@@ -25,6 +25,7 @@ mod edit_track;
 mod input;
 mod navigation;
 pub mod operation;
+mod palette;
 mod playback;
 mod playlists;
 mod search;

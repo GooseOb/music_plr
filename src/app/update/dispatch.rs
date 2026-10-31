@@ -368,20 +368,18 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::SaveBrowseAsPlaylist(pane) => self.save_browse_as_playlist(pane),
-            Message::OpenPlaylistJump => self.open_playlist_jump(),
-            Message::PlaylistJumpInput(query) => {
-                if let Some(Dialog::PlaylistJump(jump)) = &mut self.dialog {
-                    jump.query = query;
-                    jump.selected = 0;
-                }
+            Message::OpenPalette => self.open_palette(),
+            Message::PaletteInput(query) => self.palette_input(query),
+            Message::PaletteRun(index) => self.run_palette_row(index, false),
+            Message::PaletteHover(pos) => {
+                self.hover_palette(pos);
                 Task::none()
             }
-            Message::PlaylistJumpOpen(index) => self.submit_playlist_jump(index, false),
-            Message::PlaylistJumpHover(pos) => {
-                self.hover_playlist_jump(pos);
+            Message::PaletteRunPlay(index) => self.run_palette_row(index, true),
+            Message::PaletteViewport(height) => {
+                self.palette_viewport(height);
                 Task::none()
             }
-            Message::PlaylistJumpOpenPlay(index) => self.submit_playlist_jump(index, true),
             Message::NewPlaylistNameChanged(name) => {
                 self.playlist_create_name = name;
                 Task::none()
@@ -893,7 +891,7 @@ impl crate::app::MusicPlayer {
         use crate::app::shortcut;
         match &self.dialog {
             Some(Dialog::ContextMenu(_)) => iced::event::listen_with(shortcut::match_menu),
-            Some(Dialog::PlaylistJump(_)) => iced::event::listen_with(shortcut::match_jump),
+            Some(Dialog::Palette(_)) => iced::event::listen_with(shortcut::match_palette),
             _ => iced::event::listen_with(shortcut::match_main),
         }
     }

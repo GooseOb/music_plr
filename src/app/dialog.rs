@@ -1,13 +1,12 @@
 use super::{
     CardMenuState, ContextMenuState, DependencyDialog, EditTrackState, ImportPlaylistDialog,
-    PlaylistJump, TranslateDialog,
+    Palette, TranslateDialog,
 };
 
 #[derive(Debug, Clone)]
 pub enum Dialog {
     Dependencies(DependencyDialog),
-    PlaylistJump(PlaylistJump),
-    Shortcuts,
+    Palette(Palette),
     DeleteConfirm(usize),
     Edit(EditTrackState),
     Import(ImportPlaylistDialog),

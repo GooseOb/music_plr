@@ -230,11 +230,12 @@ impl MusicPlayer {
             Some(crate::app::Dialog::ContextMenu(m)) if is_main_pane(m.pos.pane) => {
                 Some(m.pos.pane)
             }
-            Some(crate::app::Dialog::PlaylistJump(j)) => j
-                .pending
-                .as_ref()
-                .filter(|p| is_main_pane(p.pane))
-                .map(|p| p.pane),
+            Some(crate::app::Dialog::Palette(p)) => match &p.mode {
+                crate::app::PaletteMode::AddToPlaylist(add) if is_main_pane(add.pane) => {
+                    Some(add.pane)
+                }
+                _ => None,
+            },
             Some(crate::app::Dialog::CardMenu(m)) if is_main_pane(m.pane) => Some(m.pane),
             Some(crate::app::Dialog::Edit(e)) => Some(e.pos.pane),
             Some(crate::app::Dialog::Translate(d)) => Some(d.pane),

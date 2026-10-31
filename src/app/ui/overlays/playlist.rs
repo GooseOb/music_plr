@@ -1,13 +1,14 @@
-//! The Ctrl+K playlist jumper (which doubles as the add-to-playlist picker)
-//! and the delete-playlist confirmation.
+//! Playlist dialogs: the delete confirmation. The playlist picker lives in
+//! [`super::palette`], which the add-to-playlist flow shares with the command
+//! palette.
 
 use iced::{
     alignment,
-    widget::{container, scrollable, text, text_input, Column, Container, MouseArea},
-    Element, Length,
+    widget::{text, Column},
+    Element,
 };
 
-use super::{theme, view_dialog, Message, MusicPlayer};
+use super::{theme, view_dialog, Message};
 use crate::{
     app::ui::{
         shared_components::dialog_button,
@@ -15,98 +16,6 @@ use crate::{
     },
     theme::AppTheme,
 };
-
-pub fn playlist_jump_input_id() -> iced::widget::Id {
-    iced::widget::Id::new("playlist_jump_input")
-}
-
-pub(super) fn view_playlist_jump<'a>(
-    player: &'a MusicPlayer,
-    jump: &'a crate::app::PlaylistJump,
-) -> Element<'a, Message, AppTheme> {
-    let dir = player.strings.direction;
-    let names: Vec<String> = player
-        .playlists
-        .playlists
-        .iter()
-        .map(|p| p.name.clone())
-        .collect();
-    let filtered = jump.filtered(&names);
-    let title: String = match &jump.pending {
-        Some(add) if add.indices.len() > 1 => {
-            (player.strings.ctx_add_to_playlist_n)(add.indices.len())
-        }
-        Some(_) => player.strings.ctx_add_to_playlist.to_string(),
-        None => player.strings.playlists.to_string(),
-    };
-    let items = filtered.iter().enumerate().map(|(pos, &i)| {
-        let pl = &player.playlists.playlists[i];
-        let row = dir
-            .row([
-                text(&pl.name).width(Length::Fill).into(),
-                text(pl.tracks.len()).style(fg_secondary()).into(),
-            ])
-            .spacing(theme::SPACING_SM)
-            .align_y(alignment::Vertical::Center)
-            .width(Length::Fill);
-        let padded = Container::new(row).padding([theme::SPACING_SM, theme::SPACING_MD]);
-        let highlighted = Container::new(
-            MouseArea::new(padded)
-                .on_press(Message::PlaylistJumpOpen(i))
-                .on_enter(Message::PlaylistJumpHover(pos))
-                .interaction(iced::mouse::Interaction::Pointer),
-        )
-        .style(move |theme: &AppTheme| container::Style {
-            background: if pos == jump.selected {
-                Some(theme.palette.bg_current.into())
-            } else {
-                None
-            },
-            border: iced::border::rounded(theme::RADIUS_SM),
-            ..Default::default()
-        });
-        highlighted.into()
-    });
-
-    let list: Element<'_, Message, AppTheme> = if filtered.is_empty() {
-        Container::new(
-            text(player.strings.no_results_found)
-                .style(fg_secondary())
-                .width(Length::Fill),
-        )
-        .padding([theme::SPACING_XS, theme::SPACING_MD])
-        .into()
-    } else {
-        scrollable(Column::with_children(items).spacing(theme::SPACING_XS))
-            .height(Length::Fill)
-            .into()
-    };
-
-    let input = text_input(player.strings.find_in_list, &jump.query)
-        .on_input(Message::PlaylistJumpInput)
-        .align_x(player.strings.direction.align())
-        .padding(theme::SPACING_SM)
-        .id(playlist_jump_input_id())
-        .width(Length::Fill);
-
-    let cancel_btn = dialog_button(player.strings.cancel).on_press(Message::CloseDialog);
-
-    view_dialog(
-        Column::with_children([
-            text(title).size(theme::TEXT_SIZE_LG).into(),
-            input.into(),
-            list,
-            cancel_btn.into(),
-        ])
-        .align_x(alignment::Horizontal::Center)
-        .spacing(theme::SPACING_SM)
-        .width(theme::DIALOG_WIDTH_LG)
-        .height(player.window_size.height * 0.6)
-        .padding(theme::SPACING_MD)
-        .into(),
-        Message::CloseDialog,
-    )
-}
 
 pub(super) fn view_delete_confirm(
     strings: &crate::i18n::Strings,

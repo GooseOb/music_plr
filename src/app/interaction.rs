@@ -644,22 +644,24 @@ impl DragState {
             .is_none_or(|until| Instant::now() >= until)
     }
 
-    pub fn hover_started(&mut self, target: HoverTarget) {
-        if !self.mouse_hover_allowed() {
-            return;
+    /// Claim the hover for the mouse when keyboard navigation isn't owning it
+    /// (or its grace window has passed). Returns whether the report applies.
+    pub fn accept_mouse_hover(&mut self) -> bool {
+        let allowed = self.mouse_hover_allowed();
+        if allowed {
+            self.claim_mouse();
         }
-        self.claim_mouse();
-        if self.hovered.as_ref() != Some(&target) {
+        allowed
+    }
+
+    pub fn hover_started(&mut self, target: HoverTarget) {
+        if self.accept_mouse_hover() && self.hovered.as_ref() != Some(&target) {
             self.set_hovered(target);
         }
     }
 
     pub fn hover_ended(&mut self, target: &HoverTarget) {
-        if !self.mouse_hover_allowed() {
-            return;
-        }
-        self.claim_mouse();
-        if self.hovered.as_ref() == Some(target) {
+        if self.accept_mouse_hover() && self.hovered.as_ref() == Some(target) {
             self.hovered = None;
         }
     }

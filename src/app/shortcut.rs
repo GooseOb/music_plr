@@ -26,9 +26,9 @@ use super::{message::Message, pane::PaneDir};
 #[derive(Debug, Clone, Copy)]
 pub enum Shortcut {
     OpenTrackSearch,
-    OpenPlaylistJump,
+    OpenPalette,
+    OpenPlaylistPicker,
     FocusSearch,
-    OpenShortcuts,
     SplitVertical,
     SplitHorizontal,
     ClosePane,
@@ -69,9 +69,9 @@ pub enum Shortcut {
     MenuDown,
     MenuAcross,
     MenuActivate,
-    JumpStep(isize),
-    JumpEdge(bool),
-    JumpConfirm { play: bool },
+    PaletteStep(isize),
+    PaletteEdge(bool),
+    PaletteConfirm { play: bool },
 }
 
 fn mods(modifiers: Modifiers) -> (bool, bool, bool) {
@@ -100,10 +100,10 @@ pub fn match_main(event: Event, status: Status, _window: window::Id) -> Option<M
     let s = |v: Shortcut| Some(Message::Shortcut(v));
     match code {
         Code::KeyF if ctrl && !alt => s(Shortcut::OpenTrackSearch),
-        Code::KeyK if ctrl && !alt => s(Shortcut::OpenPlaylistJump),
+        Code::KeyK if ctrl && !alt => s(Shortcut::OpenPlaylistPicker),
         Code::Slash if !ctrl && !alt && !shift => s(Shortcut::FocusSearch),
-        Code::Slash if !ctrl && !alt && shift => s(Shortcut::OpenShortcuts),
-        Code::F1 if !ctrl && !alt => s(Shortcut::OpenShortcuts),
+        Code::Slash if !ctrl && !alt && shift => s(Shortcut::OpenPalette),
+        Code::F1 if !ctrl && !alt => s(Shortcut::OpenPalette),
         Code::Backslash if !ctrl && !alt && !shift => s(Shortcut::SplitVertical),
         Code::Backslash if !ctrl && !alt && shift => s(Shortcut::SplitHorizontal),
         Code::KeyW if ctrl && !alt => s(Shortcut::ClosePane),
@@ -209,11 +209,11 @@ pub fn match_menu(event: Event, status: Status, _window: window::Id) -> Option<M
     }
 }
 
-/// Playlist-jump table: ctrl/alt combos are swallowed, shift only steers
-/// Enter into open-and-play. The jump input sets no `on_submit`, so a focused
-/// Enter arrives here with its shift state intact.
+/// Palette table: ctrl/alt combos are swallowed, shift only steers Enter into
+/// run-and-play. The palette input sets no `on_submit`, so a focused Enter
+/// arrives here with its shift state intact.
 #[allow(clippy::needless_pass_by_value)]
-pub fn match_jump(event: Event, status: Status, _window: window::Id) -> Option<Message> {
+pub fn match_palette(event: Event, status: Status, _window: window::Id) -> Option<Message> {
     let Event::Keyboard(iced::keyboard::Event::KeyPressed {
         physical_key: Physical::Code(code),
         modifiers,
@@ -231,11 +231,11 @@ pub fn match_jump(event: Event, status: Status, _window: window::Id) -> Option<M
     let s = |v: Shortcut| Some(Message::Shortcut(v));
     match code {
         Code::Escape => s(Shortcut::Escape),
-        Code::ArrowUp | Code::KeyK => s(Shortcut::JumpStep(-1)),
-        Code::ArrowDown | Code::KeyJ => s(Shortcut::JumpStep(1)),
-        Code::Home => s(Shortcut::JumpEdge(true)),
-        Code::End => s(Shortcut::JumpEdge(false)),
-        Code::Enter => s(Shortcut::JumpConfirm {
+        Code::ArrowUp | Code::KeyK => s(Shortcut::PaletteStep(-1)),
+        Code::ArrowDown | Code::KeyJ => s(Shortcut::PaletteStep(1)),
+        Code::Home => s(Shortcut::PaletteEdge(true)),
+        Code::End => s(Shortcut::PaletteEdge(false)),
+        Code::Enter => s(Shortcut::PaletteConfirm {
             play: modifiers.shift(),
         }),
         _ => None,

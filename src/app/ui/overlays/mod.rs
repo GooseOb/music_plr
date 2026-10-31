@@ -6,8 +6,8 @@ mod deps;
 mod edit;
 mod import;
 mod menus;
+mod palette;
 mod playlist;
-mod shortcuts;
 mod translate;
 
 pub use edit::edit_manual_search_input_id;
@@ -18,15 +18,11 @@ use iced::{
 // `ui::view` pushes the open menu itself; every other overlay goes through
 // `view_dialog_overlay`.
 pub(super) use menus::view_context_menu;
-pub use playlist::playlist_jump_input_id;
+pub use palette::{palette_input_id, palette_list_id};
 
 use self::{
-    deps::view_dependency_dialog,
-    edit::view_edit_track,
-    import::view_import_playlist,
-    menus::view_card_menu,
-    playlist::{view_delete_confirm, view_playlist_jump},
-    shortcuts::view_shortcuts,
+    deps::view_dependency_dialog, edit::view_edit_track, import::view_import_playlist,
+    menus::view_card_menu, palette::view_palette, playlist::view_delete_confirm,
     translate::view_translate_dialog,
 };
 use super::{
@@ -89,8 +85,7 @@ pub(super) fn view_dialog_overlay<'a>(
 ) -> Element<'a, Message, AppTheme> {
     match dialog {
         Dialog::Dependencies(dialog) => view_dependency_dialog(player, dialog),
-        Dialog::PlaylistJump(jump) => view_playlist_jump(player, jump),
-        Dialog::Shortcuts => view_shortcuts(player),
+        Dialog::Palette(palette) => view_palette(player, palette),
         Dialog::DeleteConfirm(_) => view_delete_confirm(player.strings),
         Dialog::Edit(edit) => view_edit_track(player, edit),
         Dialog::Import(dialog) => view_import_playlist(player, dialog),

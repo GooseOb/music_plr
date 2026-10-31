@@ -3,16 +3,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use iced::widget::operation;
-
 use super::{
     Message, MusicPlayer, Task, Track, TrackPos, ViewData, PREPEND, QUEUE_PANE_ID, RECENT_PANE_ID,
 };
 use crate::{
-    app::{
-        pane::PaneId, Dialog, ImportMethod, ImportPlaylistDialog, PendingAdd, PlaylistJump,
-        ViewKind,
-    },
+    app::{pane::PaneId, Dialog, ImportMethod, ImportPlaylistDialog, ViewKind},
     data::JsonStore,
 };
 
@@ -142,80 +137,6 @@ impl MusicPlayer {
         };
         let next = ((cur + dir).rem_euclid(len)) as usize;
         self.handle_select_playlist(next)
-    }
-
-    fn create_playlist_jump(&mut self, value: PlaylistJump) -> Task<Message> {
-        self.dialog = Some(Dialog::PlaylistJump(value));
-        operation::focus::<Message>(crate::app::ui::playlist_jump_input_id())
-    }
-
-    pub fn open_playlist_jump(&mut self) -> Task<Message> {
-        self.create_playlist_jump(PlaylistJump::default())
-    }
-
-    pub fn open_playlist_add(&mut self, pending: PendingAdd) -> Task<Message> {
-        self.create_playlist_jump(PlaylistJump {
-            pending: Some(pending),
-            ..Default::default()
-        })
-    }
-
-    pub(crate) fn playlist_jump_filtered(&self) -> Vec<usize> {
-        let names: Vec<String> = self
-            .playlists
-            .playlists
-            .iter()
-            .map(|p| p.name.clone())
-            .collect();
-        match &self.dialog {
-            Some(Dialog::PlaylistJump(jump)) => jump.filtered(&names),
-            _ => Vec::new(),
-        }
-    }
-
-    pub fn step_playlist_jump(&mut self, dir: isize) -> Task<Message> {
-        let filtered = self.playlist_jump_filtered();
-        if filtered.is_empty() {
-            return Task::none();
-        }
-        if let Some(Dialog::PlaylistJump(jump)) = &mut self.dialog {
-            jump.selected = ((jump.selected.cast_signed() + dir)
-                .rem_euclid(filtered.len().cast_signed()))
-            .cast_unsigned();
-        }
-        Task::none()
-    }
-
-    pub fn confirm_playlist_jump(&mut self, play: bool) -> Task<Message> {
-        let Some(Dialog::PlaylistJump(jump)) = &self.dialog else {
-            return Task::none();
-        };
-        let Some(&index) = self.playlist_jump_filtered().get(jump.selected) else {
-            return Task::none();
-        };
-        self.submit_playlist_jump(index, play)
-    }
-
-    pub fn submit_playlist_jump(&mut self, index: usize, play: bool) -> Task<Message> {
-        let Some(Dialog::PlaylistJump(jump)) = &mut self.dialog else {
-            return Task::none();
-        };
-        if let Some(add) = jump.pending.take() {
-            self.handle_add_to_playlist(add.pane, index, &add.indices);
-            return Task::none();
-        }
-        self.dialog = None;
-        if play {
-            self.handle_open_and_play_playlist(index)
-        } else {
-            self.handle_select_playlist(index)
-        }
-    }
-
-    pub fn hover_playlist_jump(&mut self, pos: usize) {
-        if let Some(Dialog::PlaylistJump(jump)) = &mut self.dialog {
-            jump.selected = pos;
-        }
     }
 
     pub fn handle_select_playlist(&mut self, index: usize) -> Task<Message> {
@@ -835,7 +756,8 @@ mod tests {
     }
 
     #[test]
-    fn jump_confirm_plays_only_with_shift_held() {
+    fn palette_confirm_plays_only_with_shift_held() {
+        use crate::app::{palette::PaletteItem, Dialog};
         let mut p = player_with_playlists(&["A"]);
         // `new_with` restores the real on-disk session queue; drop it so the
         // test starts from an empty queue.
@@ -854,8 +776,20 @@ mod tests {
             None,
         )];
 
-        let _ = p.open_playlist_jump();
-        let _ = p.update(Message::Shortcut(crate::app::Shortcut::JumpConfirm {
+        let select_playlist_row = |p: &mut MusicPlayer| {
+            let pos = p
+                .palette_rows()
+                .iter()
+                .position(|row| row.item == PaletteItem::Playlist(0))
+                .expect("playlist row");
+            if let Some(Dialog::Palette(palette)) = &mut p.dialog {
+                palette.selected = pos;
+            }
+        };
+
+        let _ = p.open_palette();
+        select_playlist_row(&mut p);
+        let _ = p.update(Message::Shortcut(crate::app::Shortcut::PaletteConfirm {
             play: false,
         }));
         assert!(matches!(
@@ -864,30 +798,13 @@ mod tests {
         ));
         assert!(p.queue.tracks.is_empty());
 
-        let _ = p.open_playlist_jump();
-        let _ = p.update(Message::Shortcut(crate::app::Shortcut::JumpConfirm {
+        let _ = p.open_palette();
+        select_playlist_row(&mut p);
+        let _ = p.update(Message::Shortcut(crate::app::Shortcut::PaletteConfirm {
             play: true,
         }));
         assert_eq!(p.queue.tracks.len(), 1);
         assert_eq!(p.queue.tracks[0].title, "Track x");
-    }
-
-    #[test]
-    fn playlist_jump_filters_by_name() {
-        use crate::app::PlaylistJump;
-        let jump = PlaylistJump::default();
-        assert_eq!(
-            jump.filtered(&["A".to_string(), "B".to_string()]),
-            vec![0, 1]
-        );
-        let jump = PlaylistJump {
-            query: "bet".into(),
-            ..Default::default()
-        };
-        assert_eq!(
-            jump.filtered(&["Alpha".to_string(), "Beta".to_string()]),
-            vec![1]
-        );
     }
 
     #[test]

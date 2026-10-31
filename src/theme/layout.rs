@@ -6,6 +6,10 @@
 pub const SIDEBAR_WIDTH: f32 = 300.0;
 pub const SEARCH_PAGE_SIZE: usize = 10;
 pub const ROW_HEIGHT: f32 = 48.0;
+/// Palette rows and group headers are pinned to these heights so the selected
+/// row's scroll offset can be computed instead of measured.
+pub const PALETTE_ROW_HEIGHT: f32 = 36.0;
+pub const PALETTE_HEADER_HEIGHT: f32 = 26.0;
 pub const THUMBNAIL_SIZE: f32 = 36.0;
 pub const QUEUE_MIN_WIDTH: f32 = 240.0;
 pub const DRAG_THRESHOLD: f32 = 4.0;

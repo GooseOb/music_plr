@@ -5,6 +5,7 @@
 //! in `ui`. This file only declares the submodules and re-exports the public
 //! types so callers can keep using `crate::app::*`.
 
+pub mod command;
 mod dependency_dialog;
 mod dialog;
 mod edit_track;
@@ -12,10 +13,9 @@ mod import;
 mod interaction;
 mod lyrics_state;
 mod message;
+pub mod palette;
 pub mod pane;
-mod playlist_picker;
 mod shortcut;
-mod shortcuts;
 mod state;
 mod translate_dialog;
 mod ui;
@@ -29,8 +29,8 @@ pub use import::{CsvPreset, ImportCsvField, ImportMethod, ImportPlaylistDialog};
 pub use interaction::{CardMenuState, ContextMenuState, TrackListSearch};
 pub use lyrics_state::{LyricsState, LyricsViewMode, LyricsViewport};
 pub use message::{BackendResult, EditTrackField, Message};
+pub use palette::{Palette, PaletteMode, PendingAdd};
 pub use pane::{Pane, PaneData, SplitDir, SplitNode};
-pub use playlist_picker::{PendingAdd, PlaylistJump};
 pub use shortcut::Shortcut;
 pub use state::{MusicPlayer, PendingCache, Toast};
 pub use translate_dialog::TranslateDialog;
