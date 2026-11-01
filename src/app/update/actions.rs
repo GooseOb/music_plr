@@ -8,7 +8,7 @@ use crate::{
         dialog::Dialog,
         interaction::{CardMenuState, ContextMenuState, MenuAnchor, TrackPos},
         pane::{is_main_pane, PaneId},
-        update::operation::CaptureContextMenu,
+        update::operation::{CaptureContextMenu, ScrollTarget},
         LyricsViewMode, Message, ViewKind,
     },
     data::library::Card,
@@ -722,15 +722,30 @@ impl MusicPlayer {
     }
 
     /// Convert a cursor point reported inside a track list to absolute window
-    /// coordinates. The scrollable shifts the cursor it hands to its content
-    /// by the scroll offset, so the reported point sits that far below the
-    /// window position; lists scroll vertically only, so only `y` shifts.
+    /// coordinates. Every scrollable above the row shifts the cursor it hands
+    /// to its content by its own offset, so each one comes back off: the list
+    /// itself, plus — on an artist page — the pane's card host, whose page
+    /// scroll carries the popular-tracks list. Lists scroll vertically only,
+    /// so only `y` shifts.
     pub(super) fn window_point(&self, pane: PaneId, point: Point) -> Point {
         let scroll = self
             .bounds
             .list_geo(pane)
             .map_or(0.0, |geo| geo.translation_y);
-        Point::new(point.x, point.y - scroll)
+        Point::new(point.x, point.y - scroll - self.track_host_scroll(pane))
+    }
+
+    /// How far the scrollable that hosts `pane`'s track list is scrolled
+    /// *above* the list. Only an artist page nests its popular-tracks list
+    /// inside the pane's card host; every other view's list is its own page.
+    fn track_host_scroll(&self, pane: PaneId) -> f32 {
+        let nested_in_card_host =
+            is_main_pane(pane) && matches!(self.view_data_in(pane).kind, ViewKind::Artist(_));
+        if nested_in_card_host {
+            self.bounds.scroll_offset(ScrollTarget::Cards(pane))
+        } else {
+            0.0
+        }
     }
 
     /// Close the open menu and hand its state to the caller. `None` when no
@@ -874,7 +889,7 @@ impl MusicPlayer {
     fn track_center_point(&self, pos: TrackPos) -> Option<Point> {
         let TrackPos { index, pane } = pos;
         let geo = self.bounds.list_geo(pane)?;
-        let scroll = geo.translation_y;
+        let scroll = geo.translation_y + self.track_host_scroll(pane);
         let visual_index = index - super::pane_first_index(pane).min(index);
         Some(if let Some(row) = geo.rows.get(visual_index) {
             Point::new(row.x + row.width / 2.0, row.y - scroll + row.height / 2.0)
@@ -1026,6 +1041,42 @@ mod tests {
 
         let unmeasured = p.window_point(QUEUE_PANE_ID, Point::new(10.0, 20.0));
         assert_eq!((unmeasured.x, unmeasured.y), (10.0, 20.0));
+    }
+
+    /// An artist page scrolls as a whole, and its popular-tracks list rides
+    /// inside that page: the row's point arrives shifted by both offsets.
+    #[test]
+    fn a_popular_list_artist_section_subtracts_the_page_scroll() {
+        use crate::data::library::LibraryKind;
+
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        let pane = p.focused_pane_id;
+        p.reset_test_pane(vec![crate::app::ViewData::default()]);
+        p.bounds.cards.insert(
+            pane,
+            ListGeometry {
+                translation_y: 480.0,
+                ..ListGeometry::default()
+            },
+        );
+
+        // Any other view's track list is its own page: the card host offset
+        // belongs to no enclosing scrollable there.
+        let anchored = p.window_point(pane, Point::new(300.0, 900.0));
+        assert_eq!((anchored.x, anchored.y), (300.0, 900.0));
+
+        p.view_data_in_mut(pane).kind = ViewKind::from(&LibraryItem {
+            kind: LibraryKind::Artist,
+            id: "ar1".into(),
+            title: "Artist".into(),
+            thumbnail: String::new(),
+            provider: ProviderId::YouTube,
+            url: String::new(),
+        });
+        // The popular list itself never scrolls, so its own offset is zero.
+        p.bounds.tracks.insert(pane, ListGeometry::default());
+        let anchored = p.window_point(pane, Point::new(300.0, 900.0));
+        assert_eq!((anchored.x, anchored.y), (300.0, 420.0));
     }
 
     /// A card's own view, as the three card hosts build it.
