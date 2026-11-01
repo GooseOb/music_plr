@@ -261,13 +261,6 @@ impl MusicPlayer {
                     self.clear_selection_in(hovered.pane);
                 } else if self.has_selection() {
                     self.clear_selection();
-                } else {
-                    let provider = self.pane(pane).search_provider;
-                    let scope = self.pane(pane).search_scope;
-                    return self.handle_navigate_to(
-                        pane,
-                        ViewData::new_search(String::new(), provider, scope),
-                    );
                 }
                 Task::none()
             }

@@ -8,6 +8,12 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+## [Unreleased]
+
+### Changed
+
+- Escape no longer redirects to the search page.
+
 ## [1.4.1] - 2026-11-01
 
 ### Fixed
