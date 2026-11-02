@@ -305,7 +305,7 @@ impl MusicPlayer {
     ) -> Task<Message> {
         if !provider.capabilities().radio {
             self.notify((self.strings.provider_no_radio)(
-                self.strings.provider(provider),
+                &self.strings.provider(provider),
             ));
             return Task::none();
         }
@@ -365,7 +365,7 @@ impl MusicPlayer {
                     };
                     match resolved {
                         Some(id) => id,
-                        None => anyhow::bail!((not_found)(&name, provider_name)),
+                        None => anyhow::bail!((not_found)(&name, &provider_name)),
                     }
                 } else {
                     id

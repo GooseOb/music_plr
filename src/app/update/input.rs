@@ -1,7 +1,7 @@
 use iced::widget::operation;
 
 use super::{
-    is_main_pane, pane_first_index, Message, MusicPlayer, Task, Track, TrackPos, ViewData,
+    is_main_pane, pane_first_index, Message, MusicPlayer, Task, Track, TrackPos,
     MANUAL_SEARCH_PANE_ID, QUEUE_PANE_ID, RECENT_PANE_ID,
 };
 use crate::{
@@ -777,6 +777,7 @@ impl MusicPlayer {
 mod tests {
     use super::*;
     use crate::{
+        app::ViewData,
         data::config,
         providers::{ProviderId, SearchScope},
     };

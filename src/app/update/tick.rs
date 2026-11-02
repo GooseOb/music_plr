@@ -451,7 +451,7 @@ impl MusicPlayer {
                 let reason = self.strings.error_reason(&message).to_string();
                 let msg = (self.strings.failed_resolve_on)(
                     &title,
-                    self.strings.provider(provider),
+                    &self.strings.provider(provider),
                     &reason,
                 );
                 self.notify_error(msg);
@@ -496,6 +496,10 @@ impl MusicPlayer {
             }
             BackendResult::TranslationModelsError(message) => {
                 self.process_translation_models_error(&message);
+                Task::none()
+            }
+            BackendResult::CustomProviderTested { rid, result } => {
+                self.process_custom_provider_tested(rid, result);
                 Task::none()
             }
             BackendResult::ImportPathsPicked { method, paths } => {
@@ -876,7 +880,7 @@ impl MusicPlayer {
             }
         } else {
             let msg =
-                (self.strings.could_not_find_on)(&original.title, self.strings.provider(provider));
+                (self.strings.could_not_find_on)(&original.title, &self.strings.provider(provider));
             self.notify_error(msg);
         }
     }

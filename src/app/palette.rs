@@ -201,7 +201,7 @@ impl Palette {
                     rows.push(PaletteRow {
                         item: PaletteItem::Library(index),
                         label: item.title.clone(),
-                        detail: Some(strings.provider(item.provider).to_string()),
+                        detail: Some(strings.provider(item.provider).into_owned()),
                         group: PaletteGroup::Library,
                     });
                 }

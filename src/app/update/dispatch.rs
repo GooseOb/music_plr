@@ -556,6 +556,38 @@ impl crate::app::MusicPlayer {
                 self.handle_settings_reset_defaults();
                 Task::none()
             }
+            Message::CustomProviderAdd => {
+                self.handle_custom_provider_add();
+                Task::none()
+            }
+            Message::CustomProviderEdit(id) => {
+                self.handle_custom_provider_edit(id);
+                Task::none()
+            }
+            Message::CustomProviderField(field, value) => {
+                self.handle_custom_provider_field(field, value);
+                Task::none()
+            }
+            Message::CustomProviderKindChanged(kind) => {
+                self.handle_custom_provider_kind(kind);
+                Task::none()
+            }
+            Message::CustomProviderTest => {
+                self.handle_custom_provider_test();
+                Task::none()
+            }
+            Message::CustomProviderSave => {
+                self.handle_custom_provider_save();
+                Task::none()
+            }
+            Message::CustomProviderCancel => {
+                self.handle_custom_provider_cancel();
+                Task::none()
+            }
+            Message::CustomProviderDelete(id) => {
+                self.handle_custom_provider_delete(id);
+                Task::none()
+            }
             Message::ContextMenuPlayTrack(pos) => {
                 self.close_context_menu();
                 self.handle_play_track(pos);

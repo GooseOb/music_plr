@@ -3,6 +3,7 @@
 use iced::{Point, Rectangle};
 
 use super::{
+    custom_provider::CustomProviderField,
     pane::{is_main_pane, PaneId},
     shortcut::Shortcut,
     ViewData,
@@ -16,7 +17,7 @@ use crate::{
         },
         CsvPreset, ImportCsvField, ImportMethod, ViewKind,
     },
-    data::library,
+    data::{custom_providers::CustomProviderKind, library},
     deps::DepKind,
     lyrics::Lyrics,
     media_controls::MediaControlEvent,
@@ -129,6 +130,12 @@ pub enum BackendResult {
     },
     TranslationModels(Vec<String>),
     TranslationModelsError(String),
+    /// A Settings custom-provider "test connection" probe finished for the
+    /// form holding `rid`.
+    CustomProviderTested {
+        rid: u64,
+        result: Result<String, String>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -271,6 +278,14 @@ pub enum Message {
 
     SettingsChanged(crate::app::update::SettingsChange),
     SettingsResetDefaults,
+    CustomProviderAdd,
+    CustomProviderEdit(u64),
+    CustomProviderField(CustomProviderField, String),
+    CustomProviderKindChanged(CustomProviderKind),
+    CustomProviderTest,
+    CustomProviderSave,
+    CustomProviderCancel,
+    CustomProviderDelete(u64),
 
     ContextMenuPlayTrack(TrackPos),
     ContextMenuHover(Option<ContextMenuFocus>),

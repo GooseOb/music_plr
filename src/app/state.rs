@@ -11,6 +11,7 @@ use iced::{futures::SinkExt, Task};
 
 use crate::{
     app::{
+        custom_provider::CustomProviderForm,
         dependency_dialog::{DepOpState, DependencyDialog},
         dialog::Dialog,
         interaction::{DragState, TrackListSearch, TrackPos},
@@ -22,9 +23,9 @@ use crate::{
     },
     audio::AudioPlayer,
     data::{
-        cache::StreamCache, config::Config, downloads::DownloadRegistry, library::LibraryStore,
-        playlists::PlaylistStore, search_history::SearchHistory, thumbnails::ThumbnailIndex,
-        JsonStore,
+        cache::StreamCache, config::Config, custom_providers::CustomProviderStore,
+        downloads::DownloadRegistry, library::LibraryStore, playlists::PlaylistStore,
+        search_history::SearchHistory, thumbnails::ThumbnailIndex, JsonStore,
     },
     i18n::Strings,
     load_state::LoadState,
@@ -52,6 +53,8 @@ pub struct PendingCache {
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
     pub config: Config,
+    pub custom_providers: CustomProviderStore,
+    pub custom_provider_form: Option<CustomProviderForm>,
     pub strings: &'static Strings,
     /// Tiled main-view panes. Each pane owns its navigation history,
     /// search-bar state, and lyrics overlay; `split_root` arranges them and
@@ -215,6 +218,8 @@ impl MusicPlayer {
         let (media_event_tx, media_event_rx) = mpsc::channel();
         crate::deps::set_cookie_browser(config.cookie_browser.clone());
 
+        let custom_providers = CustomProviderStore::load();
+        crate::data::custom_providers::set_registry(&custom_providers.providers);
         let strings = config.language.strings();
         let app_theme = AppTheme::new(&Palette::from(config.theme_kind));
         let missing_deps = crate::deps::detect_missing();
@@ -233,6 +238,8 @@ impl MusicPlayer {
             pending_normalization_id: None,
             lyrics_provider: LyricsProvider::default(),
             config,
+            custom_providers,
+            custom_provider_form: None,
             panes,
             split_root: SplitNode::Leaf(0),
             focused_pane_id: 0,
@@ -299,6 +306,7 @@ impl MusicPlayer {
         #[cfg(not(target_os = "windows"))]
         player.init_media_controls(None);
         player.restore_session();
+        player.reconcile_custom_provider_refs();
         player.resume_playback();
         for item in &player.library.items {
             if !item.thumbnail.is_empty() {

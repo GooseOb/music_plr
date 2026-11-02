@@ -6,6 +6,7 @@
 //! types so callers can keep using `crate::app::*`.
 
 pub mod command;
+mod custom_provider;
 mod dependency_dialog;
 mod dialog;
 mod edit_track;
@@ -22,6 +23,7 @@ mod ui;
 mod update;
 mod view_data;
 
+pub use custom_provider::{CustomProviderField, CustomProviderForm};
 pub use dependency_dialog::DependencyDialog;
 pub use dialog::Dialog;
 pub use edit_track::{EditManualSearch, EditTrackState};

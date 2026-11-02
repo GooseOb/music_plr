@@ -86,7 +86,7 @@ fn provider_dir(provider: ProviderId) -> PathBuf {
 /// directories to slug-named ones (`youtube/`). Merges when both exist and
 /// ignores failures: the cache is regenerable.
 fn migrate_legacy_dirs() {
-    for &provider in ProviderId::all() {
+    for &provider in ProviderId::builtin_all() {
         let legacy = cache_dir().join(format!("{provider:?}"));
         let current = provider_dir(provider);
         if legacy == current || !legacy.exists() {
@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn keys_round_trip_per_provider() {
-        for &provider in ProviderId::all() {
+        for provider in ProviderId::all() {
             let (parsed, id) = parse_key(&provider.cache_key("abc123"));
             assert_eq!(parsed, provider);
             assert_eq!(id, "abc123");
@@ -287,7 +287,7 @@ mod tests {
                 "Local",
             ]
             .into_iter()
-            .find(|p| ProviderId::from_legacy_key(p) == Some(*provider)) else {
+            .find(|p| ProviderId::from_legacy_key(p) == Some(provider)) else {
                 continue;
             };
             let (migrated, changed) = migrate_index_keys(HashMap::from([(
@@ -341,11 +341,12 @@ mod tests {
 
     #[test]
     fn provider_dirs_use_slugs() {
-        for &provider in ProviderId::all() {
+        for provider in ProviderId::all() {
+            let slug = provider.slug();
             let dir = provider_dir(provider);
             assert_eq!(
                 dir.file_name().and_then(|n| n.to_str()),
-                Some(provider.slug())
+                Some(slug.as_str())
             );
         }
     }

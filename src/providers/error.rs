@@ -98,6 +98,9 @@ fn classify_error(err: &anyhow::Error) -> ErrorKind {
             _ => ErrorKind::Other,
         };
     }
+    if let Some(subsonic) = err.downcast_ref::<opensubsonic::Error>() {
+        return super::subsonic::error_kind(subsonic);
+    }
     if err.downcast_ref::<serde_json::Error>().is_some() {
         return ErrorKind::Parse;
     }

@@ -14,6 +14,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 pub mod cache;
 pub mod config;
+pub mod custom_providers;
 pub mod downloads;
 pub mod library;
 pub mod lyrics_cache;

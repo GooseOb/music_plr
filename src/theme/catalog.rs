@@ -187,6 +187,67 @@ impl widget::slider::Catalog for AppTheme {
     }
 }
 
+impl widget::overlay::menu::Catalog for AppTheme {
+    type Class<'a> = widget::overlay::menu::StyleFn<'a, AppTheme>;
+
+    fn default<'a>() -> <Self as widget::overlay::menu::Catalog>::Class<'a> {
+        Box::new(|theme| {
+            let p = &theme.palette;
+            widget::overlay::menu::Style {
+                background: p.bg_secondary.into(),
+                border: iced::border::rounded(RADIUS_MD).color(p.fg_muted).width(1),
+                text_color: p.fg,
+                selected_text_color: p.fg_on_accent,
+                selected_background: p.accent.into(),
+                shadow: iced::Shadow {
+                    color: Color::BLACK.scale_alpha(0.7),
+                    offset: iced::Vector::new(0.0, 2.0),
+                    blur_radius: 8.0,
+                },
+            }
+        })
+    }
+
+    fn style(
+        &self,
+        class: &<Self as widget::overlay::menu::Catalog>::Class<'_>,
+    ) -> widget::overlay::menu::Style {
+        class(self)
+    }
+}
+
+impl widget::pick_list::Catalog for AppTheme {
+    type Class<'a> = widget::pick_list::StyleFn<'a, AppTheme>;
+
+    fn default<'a>() -> <Self as widget::pick_list::Catalog>::Class<'a> {
+        Box::new(|theme, status| {
+            let p = &theme.palette;
+            let border_color = match status {
+                widget::pick_list::Status::Active => Color::TRANSPARENT,
+                widget::pick_list::Status::Hovered => p.fg_muted,
+                widget::pick_list::Status::Opened { .. } => p.accent,
+            };
+            widget::pick_list::Style {
+                text_color: p.fg,
+                placeholder_color: p.fg_muted,
+                handle_color: p.fg_secondary,
+                background: p.bg_tertiary.into(),
+                border: iced::border::rounded(RADIUS_MD)
+                    .color(border_color)
+                    .width(1),
+            }
+        })
+    }
+
+    fn style(
+        &self,
+        class: &<Self as widget::pick_list::Catalog>::Class<'_>,
+        status: widget::pick_list::Status,
+    ) -> widget::pick_list::Style {
+        class(self, status)
+    }
+}
+
 impl widget::text_input::Catalog for AppTheme {
     type Class<'a> = widget::text_input::StyleFn<'a, AppTheme>;
 

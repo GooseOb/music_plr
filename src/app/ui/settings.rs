@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{checkbox, scrollable, text, text_input, Column, Container, Space},
+    widget::{checkbox, pick_list, scrollable, text, text_input, Column, Container, Space},
     Element, Length,
 };
 
@@ -10,10 +10,12 @@ use super::{
 };
 use crate::{
     app::{
+        custom_provider::{ConnectionTest, CustomProviderField, CustomProviderForm},
         dependency_dialog::dep_desc,
         ui::styles::{fg_accent, fg_secondary},
         update::SettingsChange,
     },
+    data::custom_providers::CustomProviderKind,
     deps::DepKind,
     i18n::Language,
     providers::ProviderId,
@@ -277,6 +279,165 @@ fn theme_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .into()
 }
 
+fn custom_providers_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let tr = &player.strings;
+    let dir = tr.direction;
+    let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
+
+    if player.custom_providers.providers.is_empty() {
+        children.push(text(tr.custom_provider_none).style(fg_secondary()).into());
+    }
+    for provider in &player.custom_providers.providers {
+        let info = Column::with_children([
+            text(&provider.name).style(fg_accent()).into(),
+            text(format!(
+                "{} · {}",
+                provider.kind_label(),
+                provider.server_url
+            ))
+            .style(fg_secondary())
+            .into(),
+        ])
+        .spacing(theme::SPACING_2XS)
+        .width(Length::Fill)
+        .align_x(dir.align());
+        let actions = dir
+            .row([
+                text_button(tr.ctx_edit)
+                    .on_press(Message::CustomProviderEdit(provider.id))
+                    .into(),
+                text_button(tr.delete)
+                    .on_press(Message::CustomProviderDelete(provider.id))
+                    .into(),
+            ])
+            .spacing(theme::SPACING_XS);
+        children.push(
+            dir.row([info.into(), actions.into()])
+                .spacing(theme::SPACING_MD)
+                .align_y(alignment::Vertical::Center)
+                .into(),
+        );
+    }
+
+    if let Some(form) = &player.custom_provider_form {
+        children.push(custom_provider_form(player, form));
+    } else {
+        children.push(
+            text_button(tr.custom_provider_add)
+                .on_press(Message::CustomProviderAdd)
+                .into(),
+        );
+    }
+
+    Column::with_children(children)
+        .spacing(theme::SPACING_MD)
+        .align_x(dir.align())
+        .into()
+}
+
+fn custom_provider_form<'a>(
+    player: &'a MusicPlayer,
+    form: &'a CustomProviderForm,
+) -> Element<'a, Message, AppTheme> {
+    let tr = &player.strings;
+    let dir = tr.direction;
+    let title = if form.id.is_some() {
+        tr.ctx_edit
+    } else {
+        tr.custom_provider_add
+    };
+    let name = text_input_row(dir, tr.custom_provider_name_lbl, &form.name, "", |value| {
+        Message::CustomProviderField(CustomProviderField::Name, value)
+    });
+    let kind = Column::with_children([
+        Container::new(text(tr.custom_provider_type_lbl))
+            .padding([0.0, theme::SPACING_XS])
+            .into(),
+        pick_list(
+            CustomProviderKind::ALL,
+            Some(form.kind),
+            Message::CustomProviderKindChanged,
+        )
+        .padding([theme::SPACING_SM, theme::SPACING_MD])
+        .width(Length::Fill)
+        .into(),
+    ])
+    .spacing(theme::SPACING_XS)
+    .align_x(dir.align());
+    let server_url = text_input_row(
+        dir,
+        tr.custom_provider_url_lbl,
+        &form.server_url,
+        "https://music.example.com",
+        |value| Message::CustomProviderField(CustomProviderField::ServerUrl, value),
+    );
+    let username = text_input_row(
+        dir,
+        tr.custom_provider_username_lbl,
+        &form.username,
+        "",
+        |value| Message::CustomProviderField(CustomProviderField::Username, value),
+    );
+    let password = Column::with_children([
+        Container::new(text(tr.custom_provider_password_lbl))
+            .padding([0.0, theme::SPACING_XS])
+            .into(),
+        text_input("", &form.password)
+            .secure(true)
+            .align_x(dir.align())
+            .on_input(|value| Message::CustomProviderField(CustomProviderField::Password, value))
+            .padding([theme::SPACING_SM, theme::SPACING_MD])
+            .into(),
+    ])
+    .spacing(theme::SPACING_XS)
+    .align_x(dir.align());
+
+    let testing = matches!(form.test, ConnectionTest::Testing);
+    let actions = dir
+        .row([
+            text_button(tr.custom_provider_test)
+                .on_press_maybe((!testing).then_some(Message::CustomProviderTest))
+                .into(),
+            text_button(tr.save)
+                .on_press(Message::CustomProviderSave)
+                .into(),
+            text_button(tr.cancel)
+                .on_press(Message::CustomProviderCancel)
+                .into(),
+        ])
+        .spacing(theme::SPACING_XS);
+
+    let status: Element<'a, Message, AppTheme> = match &form.test {
+        ConnectionTest::Idle => Space::new().into(),
+        ConnectionTest::Testing => text(tr.custom_provider_testing)
+            .style(fg_secondary())
+            .into(),
+        ConnectionTest::Ok(detail) => text((tr.custom_provider_test_ok)(detail))
+            .style(fg_accent())
+            .into(),
+        ConnectionTest::Failed(error) => text((tr.custom_provider_test_failed)(error))
+            .style(fg_secondary())
+            .into(),
+    };
+
+    Column::with_children([
+        text(title)
+            .size(theme::TEXT_SIZE_LG)
+            .style(fg_accent())
+            .into(),
+        name,
+        kind.into(),
+        server_url,
+        username,
+        password.into(),
+        actions.into(),
+        status,
+    ])
+    .spacing(theme::SPACING_SM)
+    .align_x(dir.align())
+    .into()
+}
+
 #[allow(clippy::too_many_lines)]
 pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let cfg = &player.config;
@@ -355,6 +516,11 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
                 default_provider_section(player),
                 cookie_browser_section(player),
             ],
+        ),
+        section(
+            player.strings.direction,
+            player.strings.sec_providers,
+            [custom_providers_section(player)],
         ),
         section(
             player.strings.direction,

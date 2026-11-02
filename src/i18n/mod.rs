@@ -1,4 +1,7 @@
-use std::fmt::{self, Write};
+use std::{
+    borrow::Cow,
+    fmt::{self, Write},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -261,6 +264,22 @@ pub struct Strings {
     pub recent_kept_lbl: &'static str,
     pub reset_defaults: &'static str,
 
+    pub sec_providers: &'static str,
+    pub custom_provider_none: &'static str,
+    pub custom_provider_add: &'static str,
+    pub custom_provider_name_lbl: &'static str,
+    pub custom_provider_type_lbl: &'static str,
+    pub custom_provider_url_lbl: &'static str,
+    pub custom_provider_username_lbl: &'static str,
+    pub custom_provider_password_lbl: &'static str,
+    pub custom_provider_test: &'static str,
+    pub custom_provider_testing: &'static str,
+    pub custom_provider_test_ok: fn(&str) -> String,
+    pub custom_provider_test_failed: fn(&str) -> String,
+    pub custom_provider_required: &'static str,
+    pub custom_provider_saved: &'static str,
+    pub custom_provider_deleted: &'static str,
+
     pub find_in_list: &'static str,
     pub scope_songs: &'static str,
     pub scope_videos: &'static str,
@@ -437,15 +456,15 @@ impl Strings {
         match provider {
             ProviderId::YouTube => self.search_youtube.into(),
             ProviderId::Local => self.search_local.into(),
-            other => (self.search_provider)(other.name()),
+            other => (self.search_provider)(&other.name()),
         }
     }
 
     /// Display name for `provider`: brand names are shared across locales,
-    /// `Local` is translated.
-    pub fn provider(&self, provider: ProviderId) -> &'static str {
+    /// `Local` is translated, and custom providers keep their configured name.
+    pub fn provider(&self, provider: ProviderId) -> Cow<'static, str> {
         match provider {
-            ProviderId::Local => self.provider_local,
+            ProviderId::Local => Cow::Borrowed(self.provider_local),
             other => other.name(),
         }
     }
@@ -565,7 +584,7 @@ mod tests {
         let english = Language::En.strings();
         for lang in Language::ALL {
             let s = lang.strings();
-            for &provider in ProviderId::all() {
+            for provider in ProviderId::all() {
                 let name = s.provider(provider);
                 assert!(!name.trim().is_empty(), "{lang:?} {provider:?}");
                 if provider == ProviderId::Local {
@@ -611,7 +630,7 @@ mod tests {
             for build in builds {
                 for provider in ProviderId::all() {
                     for search in [false, true] {
-                        let label = build(provider.name(), search);
+                        let label = build(&provider.name(), search);
                         assert!(
                             label.len() <= SUBMENU_LABEL_CAPACITY,
                             "{lang:?} {provider:?} search={search}: {label}"

@@ -149,7 +149,7 @@ pub(super) fn view_edit_track<'a>(
     // List every searchable provider plus any extra provider the track
     // already carries an identity for (e.g. Local for imported files), so
     // unresolved providers show a "Find" action next to them.
-    let mut provider_ids: Vec<ProviderId> = ProviderId::searchable().to_vec();
+    let mut provider_ids: Vec<ProviderId> = ProviderId::searchable();
     for key in edit.original.providers.keys() {
         if !provider_ids.contains(key) {
             provider_ids.push(*key);
@@ -308,7 +308,7 @@ pub(super) fn view_edit_manual_search<'a>(
 
     view_dialog(
         Column::with_children([
-            text((tr.manual_search_on)(tr.provider(manual.provider)))
+            text((tr.manual_search_on)(&tr.provider(manual.provider)))
                 .size(theme::TEXT_SIZE_LG)
                 .into(),
             tr.direction

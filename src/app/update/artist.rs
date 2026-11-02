@@ -67,7 +67,7 @@ impl MusicPlayer {
         // Companion headers (e.g. SoundCloud followers or a Last.fm bio on
         // a YouTube artist page) — one cheap header-only request per other
         // header-capable provider, so the header picker switches request-free.
-        for &provider in ProviderId::header_providers() {
+        for provider in ProviderId::header_providers() {
             if provider != source {
                 self.load_artist_page(pane, rid, name, provider, &[ArtistDataKind::Header]);
             }
@@ -125,7 +125,7 @@ impl MusicPlayer {
                     Ok(None) => {
                         fail_all(crate::providers::ProviderError::new(
                             crate::providers::ErrorKind::Other,
-                            (not_found)(&name, provider_name),
+                            (not_found)(&name, &provider_name),
                         ));
                         return;
                     }

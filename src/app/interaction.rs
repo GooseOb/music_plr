@@ -133,19 +133,17 @@ impl SubmenuKind {
     /// stream-capable provider.
     pub fn available(self, track: &Track) -> bool {
         use crate::providers::ProviderId;
-        let any = |list: &'static [ProviderId], cap: fn(ProviderId) -> bool| {
-            list.iter().copied().any(cap)
-        };
+        let any = |list: &[ProviderId], cap: fn(ProviderId) -> bool| list.iter().copied().any(cap);
         match self {
             SubmenuKind::Play => {
                 track.local_path().is_some()
-                    || any(ProviderId::searchable(), |p| p.capabilities().stream)
+                    || any(&ProviderId::searchable(), |p| p.capabilities().stream)
             }
-            SubmenuKind::Download => any(ProviderId::defaultable(), |p| p.capabilities().download),
+            SubmenuKind::Download => any(&ProviderId::defaultable(), |p| p.capabilities().download),
             SubmenuKind::SongRadio | SubmenuKind::ArtistRadio => {
-                any(ProviderId::searchable(), |p| p.capabilities().radio)
+                any(&ProviderId::searchable(), |p| p.capabilities().radio)
             }
-            SubmenuKind::GoToArtist => any(ProviderId::searchable(), |p| p.capabilities().search),
+            SubmenuKind::GoToArtist => any(&ProviderId::searchable(), |p| p.capabilities().search),
             SubmenuKind::ClearCache => track.providers.keys().any(|p| *p != ProviderId::Local),
         }
     }

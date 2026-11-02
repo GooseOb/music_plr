@@ -10,9 +10,17 @@ auto-generated compare link below it.
 
 ## [Unreleased]
 
+### Added
+
+- Custom providers for Subsonic-compatible servers (Navidrome, Airsonic, Gonic): add, edit, test, and delete them in Settings, then use them for search, playback, downloads, album and playlist browsing, and artist pages.
+
 ### Changed
 
 - Escape no longer redirects to the search page.
+
+### Fixed
+
+- The first play of an uncached stream now starts even when its download finishes before playback is initialized.
 
 ## [1.4.1] - 2026-11-01
 

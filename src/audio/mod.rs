@@ -335,9 +335,11 @@ impl AudioPlayer {
                         .is_none_or(|w| !w.load(Ordering::Acquire));
 
                     if child_done && copy_done {
+                        let mut download_ok = true;
                         if let Some(exit) = ytdlp.as_mut().and_then(|p| p.try_wait().ok().flatten())
                         {
                             if !exit.success() {
+                                download_ok = false;
                                 let error_msg =
                                     ytdlp_stderr
                                         .as_ref()
@@ -405,6 +407,25 @@ impl AudioPlayer {
                         // streaming state. Playback (already started above)
                         // continues independently of `stream_active`.
                         stream_active = false;
+                        // A growing file can be undecodable until its header
+                        // is whole, so retry once from the finished file;
+                        // otherwise the first play of such a track stays
+                        // silent until the user starts it again from cache.
+                        if download_ok && output.is_none() {
+                            if let Some(path) = playback_file.as_ref() {
+                                let ready = std::fs::metadata(path).is_ok_and(|m| m.len() > 8192);
+                                if ready {
+                                    output = Self::start_source(
+                                        path,
+                                        None,
+                                        expected_duration,
+                                        &state_clone,
+                                        pending_gain,
+                                        &mut output_stream,
+                                    );
+                                }
+                            }
+                        }
                         if let Ok(mut st) = state_clone.lock() {
                             st.cache_ready = true;
                         }
