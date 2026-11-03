@@ -394,10 +394,6 @@ pub fn fetch_artist_page(
 
     if let Some(artist) = &artist {
         if ArtistDataKind::Header.wanted(kinds) {
-            let mut stats = Vec::new();
-            if let Some(count) = artist.album_count {
-                stats.push(("Albums".to_string(), count.to_string()));
-            }
             let image = if artist.cover_art.is_some() {
                 cover_url(&client, artist.cover_art.as_deref())
             } else {
@@ -412,7 +408,7 @@ pub fn fetch_artist_page(
             };
             page.header = Some(ArtistHeader {
                 image,
-                stats,
+                stats: Vec::new(),
                 description: info
                     .as_ref()
                     .and_then(|info| info.biography.clone())

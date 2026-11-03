@@ -732,13 +732,6 @@ pub fn fetch_artist_page(
 
     if let Some(details) = &details {
         if wants_header {
-            let mut stats = Vec::new();
-            if let Some(count) = details.album_count.filter(|count| *count > 0) {
-                stats.push(("Albums".to_string(), count.to_string()));
-            }
-            if let Some(count) = details.song_count.filter(|count| *count > 0) {
-                stats.push(("Songs".to_string(), count.to_string()));
-            }
             let mut image = if has_primary_image(details) {
                 image_url_for_id(&config, &session, &details.id)
             } else {
@@ -751,7 +744,7 @@ pub fn fetch_artist_page(
             }
             page.header = Some(ArtistHeader {
                 image,
-                stats,
+                stats: Vec::new(),
                 description: details.overview.clone().unwrap_or_default(),
             });
         }
