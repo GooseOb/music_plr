@@ -26,6 +26,15 @@ use crate::{
 
 const PAGE_SIZE: usize = 10;
 const THUMB_SIZE: u32 = 300;
+/// Artwork size for the artist page header, which is drawn as a page hero
+/// rather than as a card thumbnail.
+const HEADER_SIZE: u32 = 800;
+/// Server-side page size while walking a full album/playlist. Jellyfin caps
+/// `Limit`, so a list longer than one page needs the `StartIndex` loop.
+const CONTENT_PAGE: usize = 500;
+/// Defensive ceiling for a content walk, so a server that ignores
+/// `StartIndex` (and replays page one forever) cannot spin here.
+const MAX_CONTENT_ITEMS: usize = 20_000;
 const RADIO_SIZE: usize = 50;
 const FIELDS: &str = "Album,AlbumId,AlbumArtist,AlbumArtists,Artists,ArtistItems,RunTimeTicks,PrimaryImageAspectRatio,ProductionYear,ChildCount,Overview,UserData,AlbumCount,SongCount,RecursiveItemCount";
 
@@ -236,10 +245,72 @@ fn fetch_items(
     Ok(get_json::<ItemQueryResult>(config, session, &path)?.items)
 }
 
+/// Every item matching a query, walked page by page. Album contents use this:
+/// they render as one scrollable list, so a `Limit`-capped single request would
+/// silently drop everything past it.
+fn fetch_all_items(
+    config: &CustomProvider,
+    session: &Session,
+    include_types: &str,
+    search_term: &str,
+    extra: &[(&str, &str)],
+) -> Result<Vec<ItemDto>> {
+    let mut items = Vec::new();
+    loop {
+        let page = fetch_items(
+            config,
+            session,
+            include_types,
+            search_term,
+            items.len(),
+            CONTENT_PAGE,
+            extra,
+        )?;
+        let received = page.len();
+        items.extend(page);
+        if received < CONTENT_PAGE || items.len() >= MAX_CONTENT_ITEMS {
+            return Ok(items);
+        }
+    }
+}
+
+/// Every track of a playlist, walked page by page (see [`fetch_all_items`]).
+fn fetch_playlist_items(
+    config: &CustomProvider,
+    session: &Session,
+    playlist_id: &str,
+) -> Result<Vec<ItemDto>> {
+    let mut items = Vec::new();
+    loop {
+        let path = format!(
+            "/Playlists/{}/Items?userId={}&Limit={CONTENT_PAGE}&StartIndex={}&Fields={}",
+            urlencode(playlist_id),
+            urlencode(&session.user_id),
+            items.len(),
+            urlencode(FIELDS),
+        );
+        let page = get_json::<ItemQueryResult>(config, session, &path)?.items;
+        let received = page.len();
+        items.extend(page);
+        if received < CONTENT_PAGE || items.len() >= MAX_CONTENT_ITEMS {
+            return Ok(items);
+        }
+    }
+}
+
 fn image_url_for_id(config: &CustomProvider, session: &Session, id: &str) -> String {
+    image_url_for_id_sized(config, session, id, THUMB_SIZE)
+}
+
+fn image_url_for_id_sized(
+    config: &CustomProvider,
+    session: &Session,
+    id: &str,
+    size: u32,
+) -> String {
     let token = urlencode(&session.token);
     format!(
-        "{}/Items/{}/Images/Primary?maxHeight={THUMB_SIZE}&quality=90&ApiKey={token}&api_key={token}",
+        "{}/Items/{}/Images/Primary?maxHeight={size}&quality=90&ApiKey={token}&api_key={token}",
         base_url(config),
         urlencode(id),
     )
@@ -252,6 +323,16 @@ fn has_primary_image(item: &ItemDto) -> bool {
 }
 
 fn image_url(config: &CustomProvider, session: &Session, item: &ItemDto) -> String {
+    image_url_with_size(config, session, item, THUMB_SIZE)
+}
+
+/// The item's own artwork, or its album's when the item carries none.
+fn image_url_with_size(
+    config: &CustomProvider,
+    session: &Session,
+    item: &ItemDto,
+    size: u32,
+) -> String {
     let id = if has_primary_image(item) {
         Some(item.id.as_str())
     } else if item.album_primary_image_tag.is_some() {
@@ -259,7 +340,9 @@ fn image_url(config: &CustomProvider, session: &Session, item: &ItemDto) -> Stri
     } else {
         None
     };
-    id.map_or_else(String::new, |id| image_url_for_id(config, session, id))
+    id.map_or_else(String::new, |id| {
+        image_url_for_id_sized(config, session, id, size)
+    })
 }
 
 fn stream_url(config: &CustomProvider, session: &Session, id: &str) -> String {
@@ -392,6 +475,73 @@ fn playlist_card(config: &CustomProvider, session: &Session, item: &ItemDto) -> 
     }
 }
 
+/// Playlist cards with an artwork fallback: a Jellyfin playlist usually owns no
+/// image of its own, so it borrows its first track's (which itself falls back to
+/// the album's). Only the cards still missing art cost a request, and they run
+/// in parallel, so a page of them adds one round-trip instead of one per card.
+fn playlist_cards(config: &CustomProvider, session: &Session, items: &[ItemDto]) -> Vec<CardData> {
+    let mut cards: Vec<CardData> = items
+        .iter()
+        .map(|item| playlist_card(config, session, item))
+        .collect();
+    let missing: Vec<usize> = cards
+        .iter()
+        .enumerate()
+        .filter(|(_, card)| card.thumbnail.is_empty())
+        .map(|(index, _)| index)
+        .collect();
+    if missing.is_empty() {
+        return cards;
+    }
+
+    let found: Vec<(usize, String)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = missing
+            .iter()
+            .map(|&index| {
+                let id = items[index].id.clone();
+                scope.spawn(move || {
+                    (
+                        index,
+                        first_track_image(config, session, &id).unwrap_or_default(),
+                    )
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .filter_map(|handle| handle.join().ok())
+            .collect()
+    });
+    for (index, thumbnail) in found {
+        if thumbnail.is_empty() {
+            continue;
+        }
+        if let Some(card) = cards.get_mut(index) {
+            card.thumbnail = thumbnail;
+        }
+    }
+    cards
+}
+
+fn first_track_image(
+    config: &CustomProvider,
+    session: &Session,
+    playlist_id: &str,
+) -> Result<String> {
+    let path = format!(
+        "/Playlists/{}/Items?userId={}&Limit=1&Fields={}",
+        urlencode(playlist_id),
+        urlencode(&session.user_id),
+        urlencode(FIELDS),
+    );
+    let result: ItemQueryResult = get_json(config, session, &path)?;
+    Ok(result
+        .items
+        .first()
+        .map(|item| image_url(config, session, item))
+        .unwrap_or_default())
+}
+
 /// Search songs, artists, albums or playlists. A blank query browses recent
 /// songs or the server's newest albums, depending on the scope.
 pub fn search(
@@ -478,12 +628,7 @@ pub fn search(
             )?;
             Ok((
                 Vec::new(),
-                SearchTab::Playlists(
-                    items
-                        .iter()
-                        .map(|item| playlist_card(&config, &session, item))
-                        .collect(),
-                ),
+                SearchTab::Playlists(playlist_cards(&config, &session, &items)),
             ))
         }
         SearchScope::Videos => Ok((Vec::new(), SearchTab::Videos)),
@@ -525,13 +670,11 @@ pub fn browse(
                     urlencode(FIELDS),
                 ),
             )?;
-            let items = fetch_items(
+            let items = fetch_all_items(
                 &config,
                 &session,
                 "Audio",
                 "",
-                0,
-                500,
                 &[
                     ("ParentId", id),
                     ("SortBy", "ParentIndexNumber,IndexNumber"),
@@ -558,16 +701,9 @@ pub fn browse(
             ))
         }
         "playlist" => {
-            let path = format!(
-                "/Playlists/{}/Items?userId={}&Limit=500&Fields={}",
-                urlencode(id),
-                urlencode(&session.user_id),
-                urlencode(FIELDS),
-            );
-            let result: ItemQueryResult = get_json(&config, &session, &path)?;
+            let items = fetch_playlist_items(&config, &session, id)?;
             Ok((
-                result
-                    .items
+                items
                     .iter()
                     .map(|item| track_from_item(provider, &config, &session, item))
                     .collect(),
@@ -732,14 +868,10 @@ pub fn fetch_artist_page(
 
     if let Some(details) = &details {
         if wants_header {
-            let mut image = if has_primary_image(details) {
-                image_url_for_id(&config, &session, &details.id)
-            } else {
-                String::new()
-            };
+            let mut image = image_url_with_size(&config, &session, details, HEADER_SIZE);
             if image.is_empty() {
                 if let Some(album) = albums.as_ref().and_then(|albums| albums.first()) {
-                    image = image_url(&config, &session, album);
+                    image = image_url_with_size(&config, &session, album, HEADER_SIZE);
                 }
             }
             page.header = Some(ArtistHeader {
@@ -790,18 +922,19 @@ pub fn fetch_artist_page(
             .collect();
     }
     if ArtistDataKind::Playlists.wanted(kinds) {
-        page.playlists = fetch_items(
+        page.playlists = playlist_cards(
             &config,
             &session,
-            "Playlist",
-            "",
-            0,
-            20,
-            &[("SortBy", "SortName")],
-        )?
-        .iter()
-        .map(|item| playlist_card(&config, &session, item))
-        .collect();
+            &fetch_items(
+                &config,
+                &session,
+                "Playlist",
+                "",
+                0,
+                20,
+                &[("SortBy", "SortName")],
+            )?,
+        );
     }
     if ArtistDataKind::Related.wanted(kinds) {
         let path = format!(

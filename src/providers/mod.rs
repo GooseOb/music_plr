@@ -432,6 +432,19 @@ impl ProviderId {
             .collect()
     }
 
+    /// Whether a card tab can page past its first page. Backends whose artist/
+    /// album/playlist results come from a one-shot call (`YouTube`'s ytmusicapi
+    /// helper, Bandcamp's single search page) answer later pages empty instead.
+    pub fn pages_cards(self) -> bool {
+        matches!(
+            self,
+            ProviderId::SoundCloud
+                | ProviderId::MusicBrainz
+                | ProviderId::LastFm
+                | ProviderId::Custom(_, _)
+        )
+    }
+
     /// Whether this provider streams/ downloads via yt-dlp (`YouTube`,
     /// `SoundCloud`) rather than a direct HTTP file URL.
     pub fn uses_ytdlp(self) -> bool {
@@ -618,6 +631,18 @@ impl SearchTab {
             }
         }
     }
+
+    /// Append the next page of card results. A page of a different kind (a
+    /// provider that answered a card query with tracks) is dropped, so the
+    /// visible tab always stays a single coherent list.
+    pub fn append_cards(&mut self, page: Self) {
+        match (self, page) {
+            (SearchTab::Artists(items), SearchTab::Artists(more))
+            | (SearchTab::Albums(items), SearchTab::Albums(more))
+            | (SearchTab::Playlists(items), SearchTab::Playlists(more)) => items.extend(more),
+            _ => {}
+        }
+    }
 }
 
 /// Provider-scoped search entry point. Dispatches to the per-provider backend
@@ -642,20 +667,40 @@ pub fn search(
     }
 }
 
-/// Pagination for the active search, mirroring [`search`].
-pub fn search_more(provider: ProviderId, query: &str, offset: usize) -> Result<Vec<Track>> {
-    match provider {
-        ProviderId::YouTube => youtube::search_more(query, offset),
-        ProviderId::SoundCloud => Ok(soundcloud::search_more(query, offset)),
-        ProviderId::MusicBrainz => Ok(musicbrainz::search_more(query, offset)),
-        ProviderId::Bandcamp => bandcamp::search_more(query, offset),
-        ProviderId::LastFm => lastfm::search_more(query, offset),
-        ProviderId::Custom(kind, _) => match kind {
-            CustomProviderKind::Subsonic => subsonic::search_more(provider, query, offset),
-            CustomProviderKind::Jellyfin => jellyfin::search_more(provider, query, offset),
-        },
-        ProviderId::Local => Ok(Vec::new()),
+/// Pagination for the active search, mirroring [`search`]. The track tabs use
+/// each backend's own append path (`YouTube` goes back to yt-dlp,
+/// Bandcamp/Last.fm re-run their paged track search), while a card tab is just
+/// the next page of the same scope: every provider that offers artist/album/
+/// playlist results already takes an offset there. `YouTube`'s card tabs come
+/// from ytmusicapi, which serves one page only, so it answers with an empty
+/// page and the tab is marked exhausted.
+pub fn search_more(
+    provider: ProviderId,
+    query: &str,
+    scope: SearchScope,
+    offset: usize,
+) -> Result<(Vec<Track>, SearchTab)> {
+    if !matches!(scope, SearchScope::Songs | SearchScope::Videos) {
+        return match provider {
+            ProviderId::YouTube | ProviderId::Local => {
+                Ok((Vec::new(), SearchTab::from_scope(scope)))
+            }
+            _ => search(provider, query, scope, offset),
+        };
     }
+    let tracks = match provider {
+        ProviderId::YouTube => youtube::search_more(query, offset)?,
+        ProviderId::SoundCloud => soundcloud::search_more(query, offset),
+        ProviderId::MusicBrainz => musicbrainz::search_more(query, offset),
+        ProviderId::Bandcamp => bandcamp::search_more(query, offset)?,
+        ProviderId::LastFm => lastfm::search_more(query, offset)?,
+        ProviderId::Custom(kind, _) => match kind {
+            CustomProviderKind::Subsonic => subsonic::search_more(provider, query, offset)?,
+            CustomProviderKind::Jellyfin => jellyfin::search_more(provider, query, offset)?,
+        },
+        ProviderId::Local => Vec::new(),
+    };
+    Ok((tracks, SearchTab::from_scope(scope)))
 }
 
 /// Drill down into a card (artist/album/playlist) for `provider`. Returns the
@@ -974,5 +1019,51 @@ mod tests {
         assert_eq!(ProviderId::Bandcamp.artist_page_url("12345"), None);
         assert_eq!(ProviderId::Local.artist_page_url("12345"), None);
         assert_eq!(ProviderId::YouTube.artist_page_url(""), None);
+    }
+
+    fn card(id: &str) -> CardData {
+        CardData {
+            id: id.into(),
+            title: id.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_card_page_only_extends_its_own_tab() {
+        let mut tab = SearchTab::Artists(vec![card("a")]);
+        tab.append_cards(SearchTab::Artists(vec![card("b")]));
+        assert_eq!(tab.card_count(), Some(2));
+
+        // A page of another kind cannot land in this list.
+        tab.append_cards(SearchTab::Albums(vec![card("c")]));
+        tab.append_cards(SearchTab::Songs);
+        assert_eq!(tab.card_count(), Some(2));
+        assert!(matches!(tab, SearchTab::Artists(_)));
+    }
+
+    #[test]
+    fn card_pagination_is_limited_to_backends_that_can_offset_it() {
+        for p in [
+            ProviderId::SoundCloud,
+            ProviderId::MusicBrainz,
+            ProviderId::LastFm,
+            ProviderId::Custom(CustomProviderKind::Subsonic, 1),
+            ProviderId::Custom(CustomProviderKind::Jellyfin, 1),
+        ] {
+            assert!(p.pages_cards(), "{p:?}");
+        }
+        for p in [ProviderId::YouTube, ProviderId::Bandcamp, ProviderId::Local] {
+            assert!(!p.pages_cards(), "{p:?}");
+        }
+
+        // YouTube's card tabs come from a one-shot ytmusicapi call, so asking
+        // for another page answers empty (which terminates the paging) without
+        // reaching yt-dlp.
+        let (tracks, tab) =
+            search_more(ProviderId::YouTube, "night drive", SearchScope::Artists, 10).unwrap();
+        assert!(tracks.is_empty());
+        assert_eq!(tab.card_count(), Some(0));
+        assert_eq!(tab.scope(), SearchScope::Artists);
     }
 }

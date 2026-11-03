@@ -83,9 +83,11 @@ pub(super) fn view_artist<'a>(
 }
 
 /// Thumbnail cache key for the artist header image, namespaced by the
-/// provider supplying it so switching providers swaps the picture.
+/// provider supplying it so switching providers swaps the picture. The `large`
+/// marker keeps the full-size header art from being served by an older
+/// small-thumbnail cache entry.
 pub(crate) fn header_thumb_key(id: &str) -> String {
-    format!("artist-header:{id}")
+    format!("artist-header:large:{id}")
 }
 
 /// Provider picker for the header block (thumbnail / description source).

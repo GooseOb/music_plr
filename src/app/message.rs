@@ -28,7 +28,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum BackendResult {
     SearchResults(u64, Vec<Track>, crate::providers::SearchTab),
-    SearchResultsAppend(u64, Vec<Track>),
+    SearchResultsAppend(u64, Vec<Track>, crate::providers::SearchTab),
     RadioResults(u64, Vec<Track>),
     BrowseResults(u64, Vec<Track>, Option<crate::providers::AlbumMeta>),
     DownloadComplete(Track, String),

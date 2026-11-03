@@ -206,13 +206,20 @@ impl MusicPlayer {
         let ViewKind::Search(search) = &vd.kind else {
             return;
         };
-        let count = match &vd.content {
-            LoadState::Ready(tracks) => tracks.len(),
-            _ => return,
+        // Track tabs page by appending to the loaded track list; card tabs page
+        // by appending to the tab's own card list.
+        let count = if search.tab.is_track_tab() {
+            match &vd.content {
+                LoadState::Ready(tracks) => tracks.len(),
+                _ => return,
+            }
+        } else {
+            search.tab.card_count().unwrap_or(0)
         };
         if search.exhausted || count == 0 || search.append_in_flight {
             return;
         }
+        let scope = search.tab.scope();
 
         // Append targets the slot that issued the original search. The id was
         // zeroed when the initial results landed, so mint a fresh one.
@@ -227,14 +234,15 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
 
         thread::spawn(move || {
-            let tracks = match crate::providers::search_more(provider, &query, offset) {
-                Ok(tracks) => tracks,
+            let (tracks, tab) = match crate::providers::search_more(provider, &query, scope, offset)
+            {
+                Ok(results) => results,
                 Err(e) => {
                     let _ = tx.send(BackendResult::SearchError(rid, e.into()));
                     return;
                 }
             };
-            let _ = tx.send(BackendResult::SearchResultsAppend(rid, tracks));
+            let _ = tx.send(BackendResult::SearchResultsAppend(rid, tracks, tab));
         });
     }
 
@@ -462,6 +470,58 @@ mod tests {
             SearchScope::Songs,
         )]);
         p
+    }
+
+    fn cards(ids: &[&str]) -> crate::providers::SearchTab {
+        crate::providers::SearchTab::Artists(
+            ids.iter()
+                .map(|id| crate::providers::CardData {
+                    id: (*id).into(),
+                    title: (*id).into(),
+                    ..Default::default()
+                })
+                .collect(),
+        )
+    }
+
+    /// A full page of card results leaves "Load More" available, and the next
+    /// page extends the same tab in place (then a short page ends it).
+    #[test]
+    fn card_results_page_into_the_artist_tab() {
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        p.reset_test_pane(vec![ViewData::new_search(
+            "kind of blue".into(),
+            ProviderId::SoundCloud,
+            SearchScope::Artists,
+        )]);
+        let pane = p.focused_pane_id;
+        let rid = p.request_ids.next();
+        p.view_data_mut().request_id = rid;
+        let _ = p.process_result(BackendResult::SearchResults(
+            rid,
+            Vec::new(),
+            cards(&["a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"]),
+        ));
+
+        let ViewKind::Search(search) = &p.view_data().kind else {
+            panic!("expected a search view");
+        };
+        assert_eq!(search.tab.card_count(), Some(10));
+        assert!(!search.exhausted, "a full card page keeps Load More");
+
+        let rid = p.slot_request_id(pane);
+        let _ = p.process_result(BackendResult::SearchResultsAppend(
+            rid,
+            Vec::new(),
+            cards(&["a10"]),
+        ));
+
+        let ViewKind::Search(search) = &p.view_data().kind else {
+            panic!("expected a search view");
+        };
+        assert_eq!(search.tab.card_count(), Some(11), "page appended in place");
+        assert!(search.exhausted, "a short page ends the search");
+        assert!(!search.append_in_flight);
     }
 
     #[test]

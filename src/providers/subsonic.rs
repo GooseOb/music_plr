@@ -23,6 +23,10 @@ use crate::{
 
 const PAGE_SIZE: i32 = 10;
 const THUMB_SIZE: i32 = 300;
+/// Artwork size for the artist header, which is drawn as a page hero rather
+/// than as a card thumbnail.
+const HEADER_SIZE: i32 = 800;
+const TOP_SONGS_SIZE: i32 = 50;
 const RADIO_SIZE: i32 = 50;
 
 fn configured(provider: ProviderId) -> Result<CustomProvider> {
@@ -60,8 +64,12 @@ fn stream_url(client: &Client, id: &str) -> String {
 }
 
 fn cover_url(client: &Client, cover_art: Option<&str>) -> String {
+    cover_url_sized(client, cover_art, THUMB_SIZE)
+}
+
+fn cover_url_sized(client: &Client, cover_art: Option<&str>, size: i32) -> String {
     cover_art
-        .and_then(|id| client.cover_art_url(id, Some(THUMB_SIZE)).ok())
+        .and_then(|id| client.cover_art_url(id, Some(size)).ok())
         .map(|url| url.to_string())
         .unwrap_or_default()
 }
@@ -322,6 +330,27 @@ pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<Track>> 
         .map(|song| track_from_child(provider, &client, song)))
 }
 
+/// The artist's most-played songs. `getTopSongs` matches on the artist *name*,
+/// so two artists sharing one get their plays mixed together; keep only the
+/// songs the server attributes to this artist id. A server that reports no
+/// artist id on songs (older ones) can't be told apart, so it answers as before.
+fn top_songs(provider: ProviderId, client: &Client, id: &str, name: &str) -> Result<Vec<Track>> {
+    let songs = block_on(client.get_top_songs(name, Some(TOP_SONGS_SIZE)))?;
+    let identifies_artists = songs.iter().any(|song| song.artist_id.is_some());
+    let chosen: Vec<&opensubsonic::data::Child> = if identifies_artists {
+        songs
+            .iter()
+            .filter(|song| song.artist_id.as_deref() == Some(id))
+            .collect()
+    } else {
+        songs.iter().collect()
+    };
+    Ok(chosen
+        .into_iter()
+        .map(|song| track_from_child(provider, client, song))
+        .collect())
+}
+
 fn similar_songs(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     let config = configured(provider)?;
     let client = make_client(&config)?;
@@ -395,7 +424,7 @@ pub fn fetch_artist_page(
     if let Some(artist) = &artist {
         if ArtistDataKind::Header.wanted(kinds) {
             let image = if artist.cover_art.is_some() {
-                cover_url(&client, artist.cover_art.as_deref())
+                cover_url_sized(&client, artist.cover_art.as_deref(), HEADER_SIZE)
             } else {
                 info.as_ref()
                     .and_then(|info| {
@@ -416,10 +445,7 @@ pub fn fetch_artist_page(
             });
         }
         if ArtistDataKind::Popular.wanted(kinds) {
-            page.popular = block_on(client.get_top_songs(&artist.name, Some(50)))?
-                .iter()
-                .map(|song| track_from_child(provider, &client, song))
-                .collect();
+            page.popular = top_songs(provider, &client, id, &artist.name)?;
         }
         if ArtistDataKind::Albums.wanted(kinds) {
             page.albums = artist

@@ -161,28 +161,36 @@ fn view_search_track_tab<'a>(
     search: &SearchData,
     results: &'a [Track],
 ) -> Element<'a, Message, AppTheme> {
-    let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
-
     if results.is_empty() {
-        children.push(empty_state(player.strings.no_tracks_found));
+        empty_state(player.strings.no_tracks_found)
     } else {
+        let mut children = Vec::with_capacity(2);
         children.push(view_track_list(results, player, pane, 0));
 
         if !search.exhausted {
-            let btn = Button::new(text(if search.append_in_flight {
-                player.strings.loading
-            } else {
-                player.strings.load_more
-            }))
-            .padding(theme::SPACING_SM)
-            .width(Length::Fill)
-            .on_press_maybe((!search.append_in_flight).then_some(Message::SearchLoadMore(pane)));
-
-            children.push(Container::new(btn).padding(theme::SPACING_SM).into());
+            children.push(load_more_button(player, pane, search.append_in_flight));
         }
+        Column::with_children(children).into()
     }
+}
 
-    Column::with_children(children).into()
+/// "Load More" for either result kind: a full-width button that appends the
+/// next page to whatever the tab lists (tracks or cards).
+fn load_more_button<'a>(
+    player: &MusicPlayer,
+    pane: PaneId,
+    in_flight: bool,
+) -> Element<'a, Message, AppTheme> {
+    let btn = Button::new(text(if in_flight {
+        player.strings.loading
+    } else {
+        player.strings.load_more
+    }))
+    .padding(theme::SPACING_SM)
+    .width(Length::Fill)
+    .on_press_maybe((!in_flight).then_some(Message::SearchLoadMore(pane)));
+
+    Container::new(btn).padding(theme::SPACING_SM).into()
 }
 
 /// An Artists/Albums/Playlists tab: the concrete card list, filling the page.
@@ -210,7 +218,12 @@ fn view_search_card_tab<'a>(
         card_row(player, pane, i, &c.title, &c.subtitle, &item)
     });
 
-    super::card_scrollable(pane, Column::with_children(cards)).into()
+    let mut children: Vec<Element<'_, Message, AppTheme>> = cards.collect();
+    if !search.exhausted {
+        children.push(load_more_button(player, pane, search.append_in_flight));
+    }
+
+    super::card_scrollable(pane, Column::with_children(children)).into()
 }
 
 /// A single drill-down card row. The main area is a `MouseArea` so the

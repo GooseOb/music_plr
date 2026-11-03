@@ -313,8 +313,11 @@ impl MusicPlayer {
                     tab.card_count().unwrap_or(0)
                 };
                 // A blank query is a one-shot browse (charts/trending) with no
-                // pagination, so it is always exhausted.
-                s.exhausted = s.query.trim().is_empty() || count < crate::theme::SEARCH_PAGE_SIZE;
+                // pagination, so it is always exhausted; so is a card tab whose
+                // provider only ever serves one page of cards.
+                s.exhausted = s.query.trim().is_empty()
+                    || count < crate::theme::SEARCH_PAGE_SIZE
+                    || (!tab.is_track_tab() && !s.provider.pages_cards());
                 s.tab = tab;
                 self.install_results(pane, idx, tracks);
                 // Snapshot the completed search for the sidebar "Search" item.
@@ -364,8 +367,8 @@ impl MusicPlayer {
                 self.process_search_results(rid, tracks, tab);
                 Task::none()
             }
-            BackendResult::SearchResultsAppend(rid, tracks) => {
-                self.process_search_results_append(rid, tracks);
+            BackendResult::SearchResultsAppend(rid, tracks, tab) => {
+                self.process_search_results_append(rid, tracks, tab);
                 Task::none()
             }
             BackendResult::BrowseResults(rid, tracks, meta) => {
@@ -780,18 +783,30 @@ impl MusicPlayer {
     }
 
     /// Append the next page of search results to the view that asked for it.
-    fn process_search_results_append(&mut self, rid: u64, tracks: Vec<Track>) {
-        let exhausted = tracks.len() < crate::theme::SEARCH_PAGE_SIZE;
+    fn process_search_results_append(&mut self, rid: u64, tracks: Vec<Track>, tab: SearchTab) {
+        // Both kinds page by at most one page at a time, so a short page (or an
+        // empty one) means the search has nothing left.
+        let page = if tab.is_track_tab() {
+            tracks.len()
+        } else {
+            tab.card_count().unwrap_or(0)
+        };
+        let exhausted = page < crate::theme::SEARCH_PAGE_SIZE;
         if let Some((pane, idx)) = self.slot_for_request(rid) {
             {
                 let slot = &mut self.pane_mut(pane).nav_history[idx];
-                if let Some(existing) = slot.tracks_mut() {
-                    existing.extend(tracks);
+                if tab.is_track_tab() {
+                    if let Some(existing) = slot.tracks_mut() {
+                        existing.extend(tracks);
+                    }
                 }
                 if let ViewKind::Search(s) = &mut slot.kind {
+                    s.tab.append_cards(tab);
                     s.exhausted = exhausted;
                     s.append_in_flight = false;
                 }
+                // New cards carry thumbnails the last seeding pass never saw.
+                slot.thumbnails_seeded = false;
                 slot.request_id = 0;
             }
             if self

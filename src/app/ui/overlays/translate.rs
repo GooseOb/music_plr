@@ -27,16 +27,6 @@ pub(super) fn view_translate_dialog<'a>(
         .into();
     let prompt = iced::widget::text_editor(&dialog.prompt)
         .on_action(Message::TranslatePromptAction)
-        // .style(|theme: &AppTheme, _| {
-        //     let p = &theme.palette;
-        //     iced::widget::text_editor::Style {
-        //         background: Color::TRANSPARENT.into(),
-        //         border: iced::Border::default(),
-        //         placeholder: Color::TRANSPARENT,
-        //         value: p.fg_secondary,
-        //         selection: p.accent.scale_alpha(0.4),
-        //     }
-        // })
         .padding(theme::SPACING_SM)
         .height(Length::Fixed(180.0))
         .into();
