@@ -408,11 +408,7 @@ impl ArtistSectionKind {
             ],
             Self::Playlists => vec![ProviderId::YouTube, ProviderId::SoundCloud],
         };
-        providers.extend(
-            crate::data::custom_providers::all()
-                .into_iter()
-                .map(|p| ProviderId::Subsonic(p.id)),
-        );
+        providers.extend(crate::data::custom_providers::all_provider_ids());
         providers
     }
 }

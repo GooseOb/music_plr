@@ -1,6 +1,6 @@
 use iced::{
     alignment,
-    widget::{checkbox, pick_list, scrollable, text, text_input, Column, Container, Space},
+    widget::{checkbox, scrollable, text, text_input, Column, Container, Space},
     Element, Length,
 };
 
@@ -350,19 +350,19 @@ fn custom_provider_form<'a>(
         Message::CustomProviderField(CustomProviderField::Name, value)
     });
     let kind = Column::with_children([
-        Container::new(text(tr.custom_provider_type_lbl))
-            .padding([0.0, theme::SPACING_XS])
-            .into(),
-        pick_list(
-            CustomProviderKind::ALL,
-            Some(form.kind),
-            Message::CustomProviderKindChanged,
-        )
-        .padding([theme::SPACING_SM, theme::SPACING_MD])
-        .width(Length::Fill)
-        .into(),
+        text(tr.custom_provider_type_lbl).into(),
+        scope_tab_row(
+            dir,
+            CustomProviderKind::ALL.iter().map(|&kind| {
+                (
+                    kind.label(),
+                    form.kind == kind,
+                    Message::CustomProviderKindChanged(kind),
+                )
+            }),
+        ),
     ])
-    .spacing(theme::SPACING_XS)
+    .spacing(theme::SPACING_SM)
     .align_x(dir.align());
     let server_url = text_input_row(
         dir,

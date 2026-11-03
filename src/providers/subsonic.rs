@@ -1,6 +1,7 @@
 //! Subsonic / `OpenSubsonic` backend for user-configured servers
 //! (`Navidrome`, `Airsonic`, `Gonic`, …). Every custom provider is one
-//! `ProviderId::Subsonic(id)` entry backed by [`custom_providers`].
+//! `ProviderId::Custom(CustomProviderKind::Subsonic, id)` entry backed by
+//! [`custom_providers`].
 
 use std::{io::Write as _, time::Duration};
 
@@ -11,7 +12,7 @@ use opensubsonic::{
 };
 
 use crate::{
-    data::custom_providers::{self, CustomProvider},
+    data::custom_providers::{self, CustomProvider, CustomProviderKind},
     providers::{
         download_file_path, shared_runtime, AlbumMeta, ArtistAlbumCard, ArtistDataKind,
         ArtistHeader, ArtistPage, CardData, ErrorKind, ProviderId, RelatedArtistCard, SearchScope,
@@ -22,12 +23,15 @@ use crate::{
 
 const PAGE_SIZE: i32 = 10;
 const THUMB_SIZE: i32 = 300;
+const RADIO_SIZE: i32 = 50;
 
 fn configured(provider: ProviderId) -> Result<CustomProvider> {
-    let ProviderId::Subsonic(id) = provider else {
+    let ProviderId::Custom(CustomProviderKind::Subsonic, id) = provider else {
         anyhow::bail!("not a custom Subsonic provider");
     };
-    custom_providers::get(id).with_context(|| format!("Subsonic provider {id} is not configured"))
+    custom_providers::get(id)
+        .filter(|config| config.kind == CustomProviderKind::Subsonic)
+        .with_context(|| format!("Subsonic provider {id} is not configured"))
 }
 
 fn make_client(provider: &CustomProvider) -> Result<Client> {
@@ -318,6 +322,23 @@ pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<Track>> 
         .map(|song| track_from_child(provider, &client, song)))
 }
 
+fn similar_songs(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
+    let config = configured(provider)?;
+    let client = make_client(&config)?;
+    Ok(block_on(client.get_similar_songs2(id, Some(RADIO_SIZE)))?
+        .iter()
+        .map(|song| track_from_child(provider, &client, song))
+        .collect())
+}
+
+pub fn radio_song(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
+    similar_songs(provider, id)
+}
+
+pub fn radio_artist(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
+    similar_songs(provider, id)
+}
+
 pub fn download(
     provider: ProviderId,
     track: &Track,
@@ -494,8 +515,8 @@ mod tests {
     fn custom_tracks_keep_the_subsonic_identity() {
         // The conversion itself is exercised by the server-facing paths; this
         // pins the provider ids that make cache keys unique per server.
-        let provider = ProviderId::Subsonic(9);
-        assert_eq!(provider.slug(), "subsonic-9");
+        let provider = ProviderId::Custom(CustomProviderKind::Subsonic, 9);
+        assert_eq!(provider.slug().as_ref(), "subsonic-9");
         assert_eq!(ProviderId::from_slug("subsonic-9"), Some(provider));
     }
 
@@ -505,7 +526,7 @@ mod tests {
             let json = serde_json::to_string(&provider).unwrap();
             assert_eq!(serde_json::from_str::<ProviderId>(&json).unwrap(), provider);
         }
-        let provider = ProviderId::Subsonic(42);
+        let provider = ProviderId::Custom(CustomProviderKind::Subsonic, 42);
         assert_eq!(serde_json::to_string(&provider).unwrap(), "\"subsonic-42\"");
         assert_eq!(
             serde_json::from_str::<ProviderId>("\"subsonic-42\"").unwrap(),

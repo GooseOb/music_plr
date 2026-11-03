@@ -7,7 +7,7 @@ fn thumbnails_dir() -> PathBuf {
 }
 
 fn provider_dir(provider: ProviderId) -> PathBuf {
-    thumbnails_dir().join(provider.slug())
+    thumbnails_dir().join(provider.slug().as_ref())
 }
 
 fn encode_segment(id: &str) -> String {

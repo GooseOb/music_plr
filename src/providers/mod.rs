@@ -14,6 +14,7 @@
 mod artist_page;
 mod bandcamp;
 mod error;
+mod jellyfin;
 pub(crate) mod lastfm;
 mod musicbrainz;
 mod soundcloud;
@@ -33,7 +34,7 @@ use std::{
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::types::Track;
+use crate::{data::custom_providers::CustomProviderKind, types::Track};
 
 /// Drain a child pipe to completion, returning what was read. Run it on a
 /// helper thread while polling `try_wait` so a chatty child can't deadlock
@@ -167,9 +168,9 @@ pub enum ProviderId {
     Bandcamp,
     LastFm,
     Local,
-    /// A user-configured provider; the id indexes
-    /// [`custom_providers`](crate::data::custom_providers).
-    Subsonic(u64),
+    /// A user-configured provider; the kind names its backend and the id
+    /// indexes [`custom_providers`](crate::data::custom_providers).
+    Custom(CustomProviderKind, u64),
 }
 
 impl Serialize for ProviderId {
@@ -201,25 +202,25 @@ impl ProviderId {
     /// Directory name for this provider's cached files (thumbnails, stream
     /// cache) and the prefix of its persisted keys. Lowercase ASCII, safe to
     /// use as a path segment.
-    pub fn slug(self) -> String {
+    pub fn slug(self) -> Cow<'static, str> {
         match self {
-            ProviderId::YouTube => "youtube".to_string(),
-            ProviderId::SoundCloud => "soundcloud".to_string(),
-            ProviderId::MusicBrainz => "musicbrainz".to_string(),
-            ProviderId::Bandcamp => "bandcamp".to_string(),
-            ProviderId::LastFm => "lastfm".to_string(),
-            ProviderId::Local => "local".to_string(),
-            ProviderId::Subsonic(id) => format!("subsonic-{id}"),
+            ProviderId::YouTube => Cow::Borrowed("youtube"),
+            ProviderId::SoundCloud => Cow::Borrowed("soundcloud"),
+            ProviderId::MusicBrainz => Cow::Borrowed("musicbrainz"),
+            ProviderId::Bandcamp => Cow::Borrowed("bandcamp"),
+            ProviderId::LastFm => Cow::Borrowed("lastfm"),
+            ProviderId::Local => Cow::Borrowed("local"),
+            ProviderId::Custom(kind, id) => Cow::Owned(format!("{}-{id}", kind.slug())),
         }
     }
 
     /// Key used for `ProviderId` in serialized maps and settings. Built-in
     /// providers keep their historical variant names so existing files parse,
-    /// while custom providers get a stable `subsonic-<id>` slug.
+    /// while custom providers get a stable `<kind>-<id>` slug.
     fn serde_key(self) -> String {
         match self {
             ProviderId::LastFm => "LastFm".to_string(),
-            ProviderId::Subsonic(id) => format!("subsonic-{id}"),
+            ProviderId::Custom(_, _) => self.slug().into_owned(),
             other => other.name().into_owned(),
         }
     }
@@ -233,10 +234,13 @@ impl ProviderId {
             "bandcamp" => Some(ProviderId::Bandcamp),
             "lastfm" => Some(ProviderId::LastFm),
             "local" => Some(ProviderId::Local),
-            _ => slug
-                .strip_prefix("subsonic-")
-                .and_then(|id| id.parse().ok())
-                .map(ProviderId::Subsonic),
+            _ => {
+                let (kind, id) = slug.rsplit_once('-')?;
+                Some(ProviderId::Custom(
+                    CustomProviderKind::from_slug(kind)?,
+                    id.parse().ok()?,
+                ))
+            }
         }
     }
 
@@ -274,8 +278,8 @@ impl ProviderId {
             ProviderId::Bandcamp => Cow::Borrowed("Bandcamp"),
             ProviderId::LastFm => Cow::Borrowed("Last.fm"),
             ProviderId::Local => Cow::Borrowed("Local"),
-            ProviderId::Subsonic(id) => crate::data::custom_providers::display_name(id)
-                .map_or_else(|| Cow::Borrowed("Subsonic"), Cow::Owned),
+            ProviderId::Custom(kind, id) => crate::data::custom_providers::display_name(kind, id)
+                .map_or_else(|| Cow::Borrowed(kind.label()), Cow::Owned),
         }
     }
 
@@ -292,52 +296,41 @@ impl ProviderId {
         ]
     }
 
+    fn with_custom(mut providers: Vec<ProviderId>) -> Vec<ProviderId> {
+        providers.extend(crate::data::custom_providers::all_provider_ids());
+        providers
+    }
+
     /// Every provider, including `Local` and the registered custom ones.
     /// Prefer the narrower lists ([`searchable`](ProviderId::searchable),
     /// [`defaultable`](ProviderId::defaultable),
     /// [`header_providers`](ProviderId::header_providers)) when only capable
     /// providers make sense.
     pub fn all() -> Vec<ProviderId> {
-        let mut providers = Self::builtin_all().to_vec();
-        providers.extend(
-            crate::data::custom_providers::all()
-                .into_iter()
-                .map(|p| ProviderId::Subsonic(p.id)),
-        );
-        providers
+        Self::with_custom(Self::builtin_all().to_vec())
     }
 
     /// All providers that appear in the search provider picker (excludes
     /// `Local`, which is not a remote search source).
     pub fn searchable() -> Vec<ProviderId> {
-        let mut providers: Vec<ProviderId> = Self::builtin_all()
-            .iter()
-            .copied()
-            .filter(|p| *p != ProviderId::Local)
-            .collect();
-        providers.extend(
-            crate::data::custom_providers::all()
-                .into_iter()
-                .map(|p| ProviderId::Subsonic(p.id)),
-        );
-        providers
+        Self::with_custom(
+            Self::builtin_all()
+                .iter()
+                .copied()
+                .filter(|p| *p != ProviderId::Local)
+                .collect(),
+        )
     }
 
     /// Providers eligible to be the default provider: must support both
     /// streaming and downloading (search-only `MusicBrainz`/`LastFm` and
     /// `Local` are excluded).
     pub fn defaultable() -> Vec<ProviderId> {
-        let mut providers = vec![
+        Self::with_custom(vec![
             ProviderId::YouTube,
             ProviderId::SoundCloud,
             ProviderId::Bandcamp,
-        ];
-        providers.extend(
-            crate::data::custom_providers::all()
-                .into_iter()
-                .map(|p| ProviderId::Subsonic(p.id)),
-        );
-        providers
+        ])
     }
 
     /// Providers that can serve an artist-page header worth displaying
@@ -345,18 +338,12 @@ impl ProviderId {
     /// and pre-fetched as companions by `open_artist`. `MusicBrainz` is
     /// excluded: its header is stats-only with no picture.
     pub fn header_providers() -> Vec<ProviderId> {
-        let mut providers = vec![
+        Self::with_custom(vec![
             ProviderId::YouTube,
             ProviderId::SoundCloud,
             ProviderId::Bandcamp,
             ProviderId::LastFm,
-        ];
-        providers.extend(
-            crate::data::custom_providers::all()
-                .into_iter()
-                .map(|p| ProviderId::Subsonic(p.id)),
-        );
-        providers
+        ])
     }
 
     pub fn capabilities(self) -> ProviderCaps {
@@ -400,13 +387,13 @@ impl ProviderId {
                 download: false,
                 radio: false,
             },
-            ProviderId::Subsonic(id) => {
-                let configured = crate::data::custom_providers::contains(id);
+            ProviderId::Custom(kind, id) => {
+                let configured = crate::data::custom_providers::contains(kind, id);
                 ProviderCaps {
                     search: configured,
                     stream: configured,
                     download: configured,
-                    radio: false,
+                    radio: configured,
                 }
             }
         }
@@ -418,7 +405,7 @@ impl ProviderId {
     pub fn supported_scopes(self) -> &'static [SearchScope] {
         match self {
             ProviderId::YouTube => SearchScope::all(),
-            ProviderId::SoundCloud | ProviderId::Subsonic(_) => &[
+            ProviderId::SoundCloud | ProviderId::Custom(_, _) => &[
                 SearchScope::Songs,
                 SearchScope::Artists,
                 SearchScope::Albums,
@@ -454,7 +441,7 @@ impl ProviderId {
     /// Whether this provider is a user-configured backend (as opposed to a
     /// built-in source or `Local`).
     pub fn is_custom(self) -> bool {
-        matches!(self, ProviderId::Subsonic(_))
+        matches!(self, ProviderId::Custom(_, _))
     }
 
     /// The public web page for the artist this provider identifies by `id`.
@@ -480,7 +467,7 @@ impl ProviderId {
             ProviderId::SoundCloud
             | ProviderId::Bandcamp
             | ProviderId::Local
-            | ProviderId::Subsonic(_) => None,
+            | ProviderId::Custom(_, _) => None,
         }
     }
 
@@ -504,7 +491,7 @@ impl ProviderId {
             | ProviderId::Bandcamp
             | ProviderId::LastFm
             | ProviderId::Local
-            | ProviderId::Subsonic(_) => None,
+            | ProviderId::Custom(_, _) => None,
         }
     }
 
@@ -524,8 +511,8 @@ impl ProviderId {
             }
             // Bandcamp's `url` is a direct MP3 and its page slug is not
             // derivable from the numeric track id; `Local` has no web page.
-            // A Subsonic `url` is the token-authenticated stream endpoint.
-            ProviderId::Bandcamp | ProviderId::Local | ProviderId::Subsonic(_) => None,
+            // A custom provider's `url` is a token-authenticated stream endpoint.
+            ProviderId::Bandcamp | ProviderId::Local | ProviderId::Custom(_, _) => None,
         }
     }
 }
@@ -647,7 +634,10 @@ pub fn search(
         ProviderId::MusicBrainz => Ok(musicbrainz::search(query, scope, offset)),
         ProviderId::Bandcamp => bandcamp::search(query, scope, offset),
         ProviderId::LastFm => lastfm::search(query, scope, offset),
-        ProviderId::Subsonic(_) => subsonic::search(provider, query, scope, offset),
+        ProviderId::Custom(kind, _) => match kind {
+            CustomProviderKind::Subsonic => subsonic::search(provider, query, scope, offset),
+            CustomProviderKind::Jellyfin => jellyfin::search(provider, query, scope, offset),
+        },
         ProviderId::Local => Ok((Vec::new(), SearchTab::Songs)),
     }
 }
@@ -660,7 +650,10 @@ pub fn search_more(provider: ProviderId, query: &str, offset: usize) -> Result<V
         ProviderId::MusicBrainz => Ok(musicbrainz::search_more(query, offset)),
         ProviderId::Bandcamp => bandcamp::search_more(query, offset),
         ProviderId::LastFm => lastfm::search_more(query, offset),
-        ProviderId::Subsonic(_) => subsonic::search_more(provider, query, offset),
+        ProviderId::Custom(kind, _) => match kind {
+            CustomProviderKind::Subsonic => subsonic::search_more(provider, query, offset),
+            CustomProviderKind::Jellyfin => jellyfin::search_more(provider, query, offset),
+        },
         ProviderId::Local => Ok(Vec::new()),
     }
 }
@@ -687,7 +680,10 @@ pub fn browse(
         ProviderId::MusicBrainz => Ok((musicbrainz::browse(id, kind)?, None)),
         ProviderId::Bandcamp => bandcamp::browse(id, kind),
         ProviderId::LastFm => lastfm::browse(id, kind),
-        ProviderId::Subsonic(_) => subsonic::browse(provider, id, kind),
+        ProviderId::Custom(custom_kind, _) => match custom_kind {
+            CustomProviderKind::Subsonic => subsonic::browse(provider, id, kind),
+            CustomProviderKind::Jellyfin => jellyfin::browse(provider, id, kind),
+        },
         ProviderId::Local => Ok((Vec::new(), None)),
     }
 }
@@ -732,7 +728,14 @@ pub fn spawn_artist_kinds_fetch(
                 ProviderId::MusicBrainz => musicbrainz::fetch_artist_page(&id, kinds),
                 ProviderId::Bandcamp => bandcamp::fetch_artist_page(&id, kinds),
                 ProviderId::LastFm => lastfm::fetch_artist_page(&id, kinds),
-                ProviderId::Subsonic(_) => subsonic::fetch_artist_page(provider, &id, kinds),
+                ProviderId::Custom(kind, _) => match kind {
+                    CustomProviderKind::Subsonic => {
+                        subsonic::fetch_artist_page(provider, &id, kinds)
+                    }
+                    CustomProviderKind::Jellyfin => {
+                        jellyfin::fetch_artist_page(provider, &id, kinds)
+                    }
+                },
                 _ => Ok(artist_page::ArtistPage::default()),
             }
             .map_err(ProviderError::from);
@@ -786,8 +789,16 @@ fn single_kind_data(page: &ArtistPage, kind: ArtistDataKind) -> Option<ArtistKin
 
 /// Probe a candidate custom-provider configuration without saving it. Used by
 /// the Settings form's "Test connection" button.
-pub fn test_custom_provider(server_url: &str, username: &str, password: &str) -> Result<String> {
-    subsonic::test_connection(server_url, username, password)
+pub fn test_custom_provider(
+    kind: CustomProviderKind,
+    server_url: &str,
+    username: &str,
+    password: &str,
+) -> Result<String> {
+    match kind {
+        CustomProviderKind::Subsonic => subsonic::test_connection(server_url, username, password),
+        CustomProviderKind::Jellyfin => jellyfin::test_connection(server_url, username, password),
+    }
 }
 
 /// Resolve an artist name to that provider's artist id (used to lazily open
@@ -800,33 +811,38 @@ pub fn resolve_artist_id(provider: ProviderId, name: &str) -> Result<Option<Stri
         ProviderId::MusicBrainz => musicbrainz::resolve_artist_id(name),
         ProviderId::Bandcamp => bandcamp::resolve_artist_id(name),
         ProviderId::LastFm => lastfm::resolve_artist_id(name),
-        ProviderId::Subsonic(_) => subsonic::resolve_artist_id(provider, name),
+        ProviderId::Custom(kind, _) => match kind {
+            CustomProviderKind::Subsonic => subsonic::resolve_artist_id(provider, name),
+            CustomProviderKind::Jellyfin => jellyfin::resolve_artist_id(provider, name),
+        },
         ProviderId::Local => Ok(None),
     }
 }
 
-/// Build a song radio from a provider id (`YouTube` only supports similarity).
+/// Build a song radio from a provider id.
 pub fn radio_song(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     match provider {
         ProviderId::YouTube => youtube::radio_song(id),
         ProviderId::LastFm => lastfm::radio_song(id),
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => subsonic::radio_song(provider, id),
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => jellyfin::radio_song(provider, id),
         ProviderId::SoundCloud
         | ProviderId::MusicBrainz
         | ProviderId::Bandcamp
-        | ProviderId::Subsonic(_)
         | ProviderId::Local => Ok(Vec::new()),
     }
 }
 
-/// Build an artist radio from a provider browse id (`YouTube` only).
+/// Build an artist radio from a provider browse id.
 pub fn radio_artist(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     match provider {
         ProviderId::YouTube => youtube::radio_artist(id),
         ProviderId::LastFm => lastfm::radio_artist(id),
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => subsonic::radio_artist(provider, id),
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => jellyfin::radio_artist(provider, id),
         ProviderId::SoundCloud
         | ProviderId::MusicBrainz
         | ProviderId::Bandcamp
-        | ProviderId::Subsonic(_)
         | ProviderId::Local => Ok(Vec::new()),
     }
 }
@@ -844,7 +860,10 @@ pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<Track>> 
         ProviderId::MusicBrainz => musicbrainz::resolve_id(track),
         ProviderId::Bandcamp => bandcamp::resolve_id(track),
         ProviderId::LastFm => lastfm::resolve_id(track),
-        ProviderId::Subsonic(_) => subsonic::resolve_id(provider, track),
+        ProviderId::Custom(kind, _) => match kind {
+            CustomProviderKind::Subsonic => subsonic::resolve_id(provider, track),
+            CustomProviderKind::Jellyfin => jellyfin::resolve_id(provider, track),
+        },
         ProviderId::Local => Ok(None),
     }
 }
@@ -877,7 +896,10 @@ pub fn download(
         }
         ProviderId::SoundCloud => soundcloud::download(track, download_dir),
         ProviderId::Bandcamp => bandcamp::download(track, download_dir),
-        ProviderId::Subsonic(_) => subsonic::download(provider, track, download_dir),
+        ProviderId::Custom(kind, _) => match kind {
+            CustomProviderKind::Subsonic => subsonic::download(provider, track, download_dir),
+            CustomProviderKind::Jellyfin => jellyfin::download(provider, track, download_dir),
+        },
         _ => anyhow::bail!("provider does not support downloading"),
     }
 }

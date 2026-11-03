@@ -200,6 +200,7 @@ impl MusicPlayer {
             self.notify_error(self.strings.custom_provider_required);
             return;
         }
+        let kind = form.kind;
         let server_url = form.server_url.trim().to_string();
         let username = form.username.trim().to_string();
         let password = form.password.clone();
@@ -209,11 +210,12 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         let strings = self.strings;
         std::thread::spawn(move || {
-            let result = crate::providers::test_custom_provider(&server_url, &username, &password)
-                .map_err(|error| {
-                    let error = crate::providers::ProviderError::from(error);
-                    strings.error_reason(&error).to_string()
-                });
+            let result =
+                crate::providers::test_custom_provider(kind, &server_url, &username, &password)
+                    .map_err(|error| {
+                        let error = crate::providers::ProviderError::from(error);
+                        strings.error_reason(&error).to_string()
+                    });
             let _ = tx.send(BackendResult::CustomProviderTested { rid, result });
         });
     }

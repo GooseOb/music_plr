@@ -6,22 +6,39 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::JsonStore;
+use crate::providers::ProviderId;
 
 /// Backend a custom provider talks to.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
 pub enum CustomProviderKind {
     #[default]
     Subsonic,
+    Jellyfin,
 }
 
 impl CustomProviderKind {
-    pub const ALL: &'static [Self] = &[Self::Subsonic];
+    pub const ALL: &'static [Self] = &[Self::Subsonic, Self::Jellyfin];
 
     /// Untranslated backend name; the API type is a brand, like provider names.
     pub const fn label(self) -> &'static str {
         match self {
             Self::Subsonic => "Subsonic",
+            Self::Jellyfin => "Jellyfin",
         }
+    }
+
+    /// Lowercase key used in provider slugs, cache keys and saved files.
+    pub const fn slug(self) -> &'static str {
+        match self {
+            Self::Subsonic => "subsonic",
+            Self::Jellyfin => "jellyfin",
+        }
+    }
+
+    pub fn from_slug(slug: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|kind| kind.slug() == slug)
     }
 }
 
@@ -120,20 +137,26 @@ pub fn set_registry(providers: &[CustomProvider]) {
     *write() = providers.to_vec();
 }
 
-pub fn all() -> Vec<CustomProvider> {
-    read().clone()
+pub fn all_provider_ids() -> Vec<ProviderId> {
+    read()
+        .iter()
+        .map(|p| ProviderId::Custom(p.kind, p.id))
+        .collect()
+}
+
+pub fn contains(kind: CustomProviderKind, id: u64) -> bool {
+    read().iter().any(|p| p.kind == kind && p.id == id)
+}
+
+pub fn display_name(kind: CustomProviderKind, id: u64) -> Option<String> {
+    read()
+        .iter()
+        .find(|p| p.kind == kind && p.id == id)
+        .map(|p| p.name.clone())
 }
 
 pub fn get(id: u64) -> Option<CustomProvider> {
     read().iter().find(|p| p.id == id).cloned()
-}
-
-pub fn contains(id: u64) -> bool {
-    read().iter().any(|p| p.id == id)
-}
-
-pub fn display_name(id: u64) -> Option<String> {
-    read().iter().find(|p| p.id == id).map(|p| p.name.clone())
 }
 
 #[cfg(test)]
@@ -201,5 +224,12 @@ mod tests {
         store.upsert(edited);
         assert_eq!(store.providers.len(), 1);
         assert_eq!(store.providers[0].name, "Studio");
+    }
+
+    #[test]
+    fn kind_slugs_round_trip() {
+        for &kind in CustomProviderKind::ALL {
+            assert_eq!(CustomProviderKind::from_slug(kind.slug()), Some(kind));
+        }
     }
 }

@@ -79,7 +79,7 @@ fn cache_dir() -> PathBuf {
 }
 
 fn provider_dir(provider: ProviderId) -> PathBuf {
-    cache_dir().join(provider.slug())
+    cache_dir().join(provider.slug().as_ref())
 }
 
 /// One-time move from pre-slug (`Debug`-named, e.g. `YouTube/`) cache
@@ -346,7 +346,7 @@ mod tests {
             let dir = provider_dir(provider);
             assert_eq!(
                 dir.file_name().and_then(|n| n.to_str()),
-                Some(slug.as_str())
+                Some(slug.as_ref())
             );
         }
     }
