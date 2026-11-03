@@ -360,6 +360,16 @@ pub fn reorder_tracks<T: Clone>(
     remapped
 }
 
+/// Drop the removed `indices` from a sorted `selection` and shift the rest
+/// down, so a selection survives a batch removal from a list the caller edits
+/// in place (server playlists, which are not store-backed).
+pub fn remap_removed_indices(selection: &mut Vec<usize>, indices: &[usize]) {
+    selection.retain(|index| indices.binary_search(index).is_err());
+    for index in selection.iter_mut() {
+        *index -= indices.iter().filter(|&&removed| removed < *index).count();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,6 +510,21 @@ mod tests {
         let mut v = vec![0, 1, 2, 3, 4];
         assert_eq!(remove_at(&mut v, &[3, 0, 3, 99]), 2);
         assert_eq!(v, vec![1, 2, 4]);
+    }
+
+    #[test]
+    fn remap_removed_indices_drops_and_shifts() {
+        let mut selection = vec![0, 1, 3, 5];
+        remap_removed_indices(&mut selection, &[1, 2]);
+        assert_eq!(selection, [0, 1, 3]);
+
+        let mut selection = vec![2];
+        remap_removed_indices(&mut selection, &[2]);
+        assert!(selection.is_empty());
+
+        let mut selection = vec![0, 4];
+        remap_removed_indices(&mut selection, &[]);
+        assert_eq!(selection, [0, 4]);
     }
 
     #[test]

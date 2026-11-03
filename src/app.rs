@@ -34,6 +34,6 @@ pub use message::{BackendResult, EditTrackField, Message, ServerPlaylistChange};
 pub use palette::{Palette, PaletteMode, PendingAdd};
 pub use pane::{Pane, PaneData, SplitDir, SplitNode};
 pub use shortcut::Shortcut;
-pub use state::{MusicPlayer, PendingCache, Toast};
+pub use state::{MusicPlayer, PendingCache, ServerPlaylistUndo, ServerPlaylistViewUndo, Toast};
 pub use translate_dialog::TranslateDialog;
 pub use view_data::{RadioData, ViewData, ViewKind};

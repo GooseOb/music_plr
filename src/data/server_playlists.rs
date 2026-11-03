@@ -144,6 +144,19 @@ impl ServerPlaylistStore {
         }
     }
 
+    /// Put a row back exactly where it was, for a rolled-back write.
+    pub fn restore(&mut self, entry: ServerPlaylistEntry) {
+        match self
+            .entries
+            .iter_mut()
+            .find(|e| e.provider == entry.provider && e.id == entry.id)
+        {
+            Some(existing) => *existing = entry,
+            None => self.entries.push(entry),
+        }
+        self.save();
+    }
+
     /// Shift a row's cached track count by `delta`, so the sidebar agrees with
     /// a write that just landed instead of waiting for the next listing (the
     /// open views refetch and correct it to the server's own number anyway).

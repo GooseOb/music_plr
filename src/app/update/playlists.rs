@@ -366,6 +366,11 @@ impl MusicPlayer {
             }
             _ => return Vec::new(),
         };
+        // Snapshot before anything moves, so a rejected write can put the page
+        // (rows and selection) back the way it was.
+        if let ReorderTarget::Server(playlist) = &target {
+            self.begin_playlist_write(playlist);
+        }
         let selection = std::mem::take(&mut self.view_data_in_mut(pane).selection);
         match target {
             ReorderTarget::Local(index) => {
@@ -380,6 +385,7 @@ impl MusicPlayer {
             }
             ReorderTarget::Server(playlist) => {
                 let Some(tracks) = self.view_data_in_mut(pane).tracks_mut() else {
+                    self.server_playlist_undo.remove(&playlist);
                     return Vec::new();
                 };
                 let new_positions =

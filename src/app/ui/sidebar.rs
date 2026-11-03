@@ -137,7 +137,7 @@ fn server_playlist_row<'a>(
     // A write in flight (add/remove) is shown in place of the track count: the
     // server is the source of truth, so the count is stale until it lands.
     let trailing: Element<'a, Message, AppTheme> =
-        if player.server_playlist_writes.contains(&target) {
+        if player.server_playlist_writes.contains_key(&target) {
             icons::icon(icons::REFRESH_ICON, theme::ICON_SIZE_SM)
                 .style(icon_style_fg_muted())
                 .into()
