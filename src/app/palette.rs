@@ -123,6 +123,8 @@ pub enum PaletteItem {
     View(PaletteView),
     Library(usize),
     Playlist(usize),
+    /// Index into [`MusicPlayer::server_playlist_rows`].
+    ServerPlaylist(usize),
 }
 
 impl PaletteItem {
@@ -133,7 +135,7 @@ impl PaletteItem {
         match self {
             Self::Command(id) => Some(id.message(player)),
             Self::View(view) => Some(view.message(player.focused_pane_id)),
-            Self::Library(_) | Self::Playlist(_) => None,
+            Self::Library(_) | Self::Playlist(_) | Self::ServerPlaylist(_) => None,
         }
     }
 }
@@ -219,6 +221,21 @@ impl Palette {
             }
         }
 
+        for (index, (provider, entry)) in player.server_playlist_rows().into_iter().enumerate() {
+            if needle.matches(&entry.name) {
+                rows.push(PaletteRow {
+                    item: PaletteItem::ServerPlaylist(index),
+                    label: entry.name.clone(),
+                    detail: Some(format!(
+                        "{} \u{00b7} {}",
+                        entry.track_count,
+                        strings.provider(provider)
+                    )),
+                    group: PaletteGroup::Playlists,
+                });
+            }
+        }
+
         rows
     }
 
@@ -278,6 +295,7 @@ mod tests {
 
     fn player() -> MusicPlayer {
         let mut p = MusicPlayer::new_with(config::Config::default());
+        p.server_playlists.entries.clear();
         p.playlists.playlists = vec![
             Playlist {
                 name: "Chill".into(),

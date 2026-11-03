@@ -30,6 +30,7 @@ mod playback;
 mod playlists;
 mod search;
 mod selection;
+mod server_playlists;
 mod session;
 pub mod settings;
 pub use settings::SettingsChange;

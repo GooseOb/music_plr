@@ -198,6 +198,7 @@ pub const STRINGS: Strings = Strings {
     added_to: |n, to| format!("{to}: تمت إضافة {}", ar_tracks(n)),
     removed_n: |n| format!("تمت إزالة {}", ar_tracks(n)),
     removed_from: |n, from| format!("{from}: تمت إزالة {}", ar_tracks(n)),
+    skipped_not_on_server: |n| format!("تم تخطي {} (غير موجودة على هذا الخادم)", ar_tracks(n)),
     pasted_into: |n, into| format!("{into}: تم لصق {}", ar_tracks(n)),
     saved_title: |t| format!("تم حفظ \"{t}\" في المكتبة"),
     playlist_created: |n| format!("تم إنشاء قائمة التشغيل \"{n}\""),

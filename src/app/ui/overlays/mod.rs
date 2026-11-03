@@ -21,8 +21,12 @@ pub(super) use menus::view_context_menu;
 pub use palette::{palette_input_id, palette_list_id};
 
 use self::{
-    deps::view_dependency_dialog, edit::view_edit_track, import::view_import_playlist,
-    menus::view_card_menu, palette::view_palette, playlist::view_delete_confirm,
+    deps::view_dependency_dialog,
+    edit::view_edit_track,
+    import::view_import_playlist,
+    menus::view_card_menu,
+    palette::view_palette,
+    playlist::{view_delete_confirm, view_server_playlist_delete, view_server_playlist_name},
     translate::view_translate_dialog,
 };
 use super::{
@@ -87,6 +91,8 @@ pub(super) fn view_dialog_overlay<'a>(
         Dialog::Dependencies(dialog) => view_dependency_dialog(player, dialog),
         Dialog::Palette(palette) => view_palette(player, palette),
         Dialog::DeleteConfirm(_) => view_delete_confirm(player.strings),
+        Dialog::ServerPlaylistName(dialog) => view_server_playlist_name(player, dialog),
+        Dialog::ServerPlaylistDelete(dialog) => view_server_playlist_delete(player, dialog),
         Dialog::Edit(edit) => view_edit_track(player, edit),
         Dialog::Import(dialog) => view_import_playlist(player, dialog),
         Dialog::Translate(dialog) => view_translate_dialog(player, dialog),

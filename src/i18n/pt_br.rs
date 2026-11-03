@@ -198,6 +198,7 @@ pub const STRINGS: Strings = Strings {
     added_to: |n, to| format!("{to}: {} adicionadas", pt_tracks(n)),
     removed_n: |n| format!("Removidas {}", pt_tracks(n)),
     removed_from: |n, from| format!("{from}: {} removidas", pt_tracks(n)),
+    skipped_not_on_server: |n| format!("Ignoradas: {} (não estão neste servidor)", pt_tracks(n)),
     pasted_into: |n, into| format!("{into}: {} coladas", pt_tracks(n)),
     saved_title: |t| format!("Salva \"{t}\" na biblioteca"),
     playlist_created: |n| format!("Playlist \"{n}\" criada"),

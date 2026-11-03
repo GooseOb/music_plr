@@ -714,6 +714,45 @@ pub struct AlbumMeta {
     pub thumbnail: String,
 }
 
+/// One playlist that lives on a user-configured server, as the server's own
+/// playlist list reports it. The contents are fetched separately through
+/// [`browse`], so this stays a small, cacheable index entry.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServerPlaylist {
+    pub id: String,
+    pub name: String,
+    pub track_count: usize,
+}
+
+/// Outcome of writing tracks into a server playlist. `skipped` counts the
+/// tracks that carry no id on that server (they stay untouched), so the UI can
+/// report honestly instead of pretending everything landed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PlaylistWrite {
+    pub added: usize,
+    pub skipped: usize,
+}
+
+/// Whether this provider has server-side playlists the app can list and edit.
+pub fn playlists_supported(provider: ProviderId) -> bool {
+    provider.is_custom()
+}
+
+/// The ids that address `tracks` on `provider`, plus how many tracks had none.
+/// Playlists are written by server id, so a track that was never resolved to
+/// this server cannot be added to one of its playlists.
+pub(crate) fn playlist_track_ids(provider: ProviderId, tracks: &[Track]) -> (Vec<String>, usize) {
+    let mut ids = Vec::with_capacity(tracks.len());
+    let mut skipped = 0;
+    for track in tracks {
+        match track.provider_id(provider) {
+            Some(id) if !id.is_empty() => ids.push(id.to_string()),
+            _ => skipped += 1,
+        }
+    }
+    (ids, skipped)
+}
+
 pub fn browse(
     provider: ProviderId,
     id: &str,
@@ -730,6 +769,101 @@ pub fn browse(
             CustomProviderKind::Jellyfin => jellyfin::browse(provider, id, kind),
         },
         ProviderId::Local => Ok((Vec::new(), None)),
+    }
+}
+
+/// Every playlist on `provider`'s server (empty for providers without one).
+pub fn list_playlists(provider: ProviderId) -> Result<Vec<ServerPlaylist>> {
+    match provider {
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => subsonic::list_playlists(provider),
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => jellyfin::list_playlists(provider),
+        _ => Ok(Vec::new()),
+    }
+}
+
+pub fn add_to_playlist(
+    provider: ProviderId,
+    playlist_id: &str,
+    tracks: &[Track],
+) -> Result<PlaylistWrite> {
+    match provider {
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::add_to_playlist(provider, playlist_id, tracks)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::add_to_playlist(provider, playlist_id, tracks)
+        }
+        _ => anyhow::bail!("provider does not support playlists"),
+    }
+}
+
+pub fn remove_from_playlist(
+    provider: ProviderId,
+    playlist_id: &str,
+    positions: &[usize],
+) -> Result<usize> {
+    match provider {
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::remove_from_playlist(provider, playlist_id, positions)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::remove_from_playlist(provider, playlist_id, positions)
+        }
+        _ => anyhow::bail!("provider does not support playlists"),
+    }
+}
+
+/// Rewrite `playlist_id` so its tracks are in the order of `tracks` (which must
+/// be the playlist's current contents in the wanted order).
+pub fn reorder_playlist(provider: ProviderId, playlist_id: &str, tracks: &[Track]) -> Result<()> {
+    match provider {
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::reorder_playlist(provider, playlist_id, tracks)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::reorder_playlist(provider, playlist_id, tracks)
+        }
+        _ => anyhow::bail!("provider does not support playlists"),
+    }
+}
+
+pub fn create_playlist(
+    provider: ProviderId,
+    name: &str,
+    tracks: &[Track],
+) -> Result<ServerPlaylist> {
+    match provider {
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::create_playlist(provider, name, tracks)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::create_playlist(provider, name, tracks)
+        }
+        _ => anyhow::bail!("provider does not support playlists"),
+    }
+}
+
+pub fn rename_playlist(provider: ProviderId, playlist_id: &str, name: &str) -> Result<()> {
+    match provider {
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::rename_playlist(provider, playlist_id, name)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::rename_playlist(provider, playlist_id, name)
+        }
+        _ => anyhow::bail!("provider does not support playlists"),
+    }
+}
+
+pub fn delete_playlist(provider: ProviderId, playlist_id: &str) -> Result<()> {
+    match provider {
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::delete_playlist(provider, playlist_id)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::delete_playlist(provider, playlist_id)
+        }
+        _ => anyhow::bail!("provider does not support playlists"),
     }
 }
 

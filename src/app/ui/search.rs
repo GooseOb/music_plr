@@ -24,7 +24,9 @@ use crate::{
         pane::PaneId,
         ui::{
             overlays::pos_absolute,
-            shared_components::{open_in_browser_button, scope_tab_row_h_scroll},
+            shared_components::{
+                icon_button_delete, open_in_browser_button, scope_tab_row_h_scroll,
+            },
         },
         update::operation::ScrollTarget,
         view_data::SearchData,
@@ -337,6 +339,57 @@ pub(super) fn view_browse<'a>(
         [toggle_bookmark_button(saved)
             .on_press(Message::ToggleLibrarySave(item))
             .into()],
+    )
+}
+
+/// A playlist that lives on a user-configured server: the same header as a
+/// browse page plus the server-side actions (refresh, rename, delete). Its
+/// contents are always the server's, so refresh is the way to pick up edits
+/// made elsewhere.
+pub(super) fn view_server_playlist<'a>(
+    player: &'a MusicPlayer,
+    pane: PaneId,
+    reference: &'a crate::app::view_data::PlaylistRef,
+) -> Element<'a, Message, AppTheme> {
+    let tr = player.strings;
+    let target = crate::data::server_playlists::ServerPlaylistId {
+        provider: reference.provider,
+        id: reference.id.clone(),
+    };
+    let busy = player.server_playlist_writes.contains(&target);
+    let refresh = icon_button(
+        icons::REFRESH_ICON,
+        theme::ICON_SIZE_MD,
+        icon_style_fg_secondary(),
+    )
+    .on_press_maybe((!busy).then_some(Message::RefreshServerPlaylistView(pane)));
+    let rename = icon_button(
+        icons::EDIT_ICON,
+        theme::ICON_SIZE_MD,
+        icon_style_fg_secondary(),
+    )
+    .on_press(Message::OpenRenameServerPlaylist(
+        target.clone(),
+        reference.name.clone(),
+    ));
+    let delete = icon_button_delete().on_press(Message::ShowDeleteServerPlaylist(
+        target,
+        reference.name.clone(),
+    ));
+
+    view_track_page(
+        player,
+        pane,
+        TrackPage {
+            thumbnail: player
+                .thumbnail_index
+                .get(reference.provider, &reference.thumbnail),
+            title: &reference.name,
+            meta: tr.provider(reference.provider),
+            loading: tr.loading,
+        },
+        None,
+        [refresh.into(), rename.into(), delete.into()],
     )
 }
 

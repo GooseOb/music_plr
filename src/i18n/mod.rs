@@ -310,6 +310,7 @@ pub struct Strings {
     pub added_to: fn(usize, &str) -> String,
     pub removed_n: fn(usize) -> String,
     pub removed_from: fn(usize, &str) -> String,
+    pub skipped_not_on_server: fn(usize) -> String,
     pub pasted_into: fn(usize, &str) -> String,
     pub saved_title: fn(&str) -> String,
     pub playlist_created: fn(&str) -> String,

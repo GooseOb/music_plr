@@ -5,14 +5,15 @@ use iced::{
 };
 
 use super::{
-    styles::{
-        button_style_danger, fg_secondary, icon_style_fg, icon_style_fg_muted,
-        icon_style_fg_secondary,
-    },
+    styles::{fg_secondary, icon_style_fg_muted, icon_style_fg_secondary},
     theme, view_track_list, Message, MusicPlayer,
 };
 use crate::{
-    app::{pane::PaneId, ui::shared_components::empty_state, view_data::PlaylistEntry},
+    app::{
+        pane::PaneId,
+        ui::shared_components::{empty_state, icon_button_delete},
+        view_data::PlaylistEntry,
+    },
     icons,
     load_state::LoadState,
     theme::AppTheme,
@@ -38,7 +39,7 @@ pub(super) fn view_playlist<'a>(
                 .into(),
             Button::new(
                 dir.row([
-                    icons::icon(icons::FOLDER_ICON, theme::ICON_SIZE_SM)
+                    icons::icon(icons::FOLDER_ICON, theme::ICON_SIZE_MD)
                         .style(icon_style_fg_secondary())
                         .into(),
                     text(player.strings.add_local)
@@ -48,19 +49,12 @@ pub(super) fn view_playlist<'a>(
                 .spacing(theme::SPACING_SM)
                 .align_y(alignment::Vertical::Center),
             )
-            .padding(theme::SPACING_SM)
-            .height(theme::BUTTON_HEIGHT)
+            .padding([theme::SPACING_XS, theme::SPACING_SM])
             .on_press(Message::AddLocalMusic)
             .into(),
-            Button::new(
-                icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_SM).style(icon_style_fg()),
-            )
-            .padding(theme::SPACING_SM)
-            .height(theme::BUTTON_HEIGHT)
-            .width(theme::BUTTON_HEIGHT)
-            .style(button_style_danger())
-            .on_press(Message::ShowDeleteConfirm(entry.index))
-            .into(),
+            icon_button_delete()
+                .on_press(Message::ShowDeleteConfirm(entry.index))
+                .into(),
         ])
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)

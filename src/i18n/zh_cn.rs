@@ -212,6 +212,7 @@ pub const STRINGS: Strings = Strings {
     added_to: |n, to| format!("已添加 {} 到 {to}", zh_tracks(n)),
     removed_n: |n| format!("已移除 {}", zh_tracks(n)),
     removed_from: |n, from| format!("已从 {from} 移除 {}", zh_tracks(n)),
+    skipped_not_on_server: |n| format!("已跳过 {}（不在该服务器上）", zh_tracks(n)),
     pasted_into: |n, into| format!("已粘贴 {} 到 {into}", zh_tracks(n)),
     saved_title: |t| format!("已将“{t}”保存到媒体库"),
     playlist_created: |n| format!("已创建播放列表“{n}”"),

@@ -25,6 +25,7 @@ pub const PAUSE_ICON: &[u8] = include_bytes!("../icons/pause.svg");
 pub const PLAY_ICON: &[u8] = include_bytes!("../icons/play.svg");
 pub const QUEUE_ICON: &[u8] = include_bytes!("../icons/queue.svg");
 pub const RADIO_ICON: &[u8] = include_bytes!("../icons/radio.svg");
+pub const REFRESH_ICON: &[u8] = include_bytes!("../icons/refresh.svg");
 pub const REPEAT_ICON: &[u8] = include_bytes!("../icons/repeat.svg");
 pub const SEARCH_ICON: &[u8] = include_bytes!("../icons/search.svg");
 pub const SETTINGS_ICON: &[u8] = include_bytes!("../icons/settings.svg");

@@ -8,8 +8,16 @@ use super::{
 };
 use crate::{
     app::{pane::PaneId, Dialog, ImportMethod, ImportPlaylistDialog, ViewKind},
-    data::JsonStore,
+    data::{server_playlists::ServerPlaylistId, JsonStore},
+    providers,
 };
+
+/// Which list a reorder applies to: a local playlist's stored tracks, or the
+/// tracks of a playlist that lives on a server.
+enum ReorderTarget {
+    Local(usize),
+    Server(ServerPlaylistId),
+}
 
 impl MusicPlayer {
     pub(crate) fn navigate_to_playlist(&mut self, index: usize) -> Task<Message> {
@@ -297,13 +305,22 @@ impl MusicPlayer {
     }
 
     pub fn handle_remove_from_playlist_batch(&mut self, pane: PaneId, indices: &[usize]) {
-        let ViewKind::Playlist(p) = &self.view_data_in(pane).kind else {
-            return;
-        };
-        let removed = self.playlists.remove_tracks_at(p.index, indices);
-        let msg = (self.strings.removed_n)(removed);
-        self.notify(msg);
-        self.clear_selection_if_touched_in(pane, indices);
+        match &self.view_data_in(pane).kind {
+            ViewKind::Playlist(p) => {
+                let removed = self.playlists.remove_tracks_at(p.index, indices);
+                let msg = (self.strings.removed_n)(removed);
+                self.notify(msg);
+                self.clear_selection_if_touched_in(pane, indices);
+            }
+            // A server playlist is written on the server; the rows disappear
+            // when the refetch lands, so nothing is removed locally.
+            ViewKind::PlaylistView(reference)
+                if crate::providers::playlists_supported(reference.provider) =>
+            {
+                self.remove_from_server_playlist(pane, indices);
+            }
+            _ => {}
+        }
     }
 
     pub fn handle_add_to_trashbin(&mut self, pane: PaneId, indices: &[usize]) {
@@ -337,19 +354,41 @@ impl MusicPlayer {
         drop_idx: usize,
         indices: &[usize],
     ) -> Vec<usize> {
-        let sp = match &self.view_data_in(pane).kind {
-            ViewKind::Playlist(p) => p.index,
+        let target = match &self.view_data_in(pane).kind {
+            ViewKind::Playlist(p) => ReorderTarget::Local(p.index),
+            ViewKind::PlaylistView(reference)
+                if providers::playlists_supported(reference.provider) =>
+            {
+                ReorderTarget::Server(ServerPlaylistId {
+                    provider: reference.provider,
+                    id: reference.id.clone(),
+                })
+            }
             _ => return Vec::new(),
         };
         let selection = std::mem::take(&mut self.view_data_in_mut(pane).selection);
-        let new_positions = crate::util::reorder_tracks(
-            &mut self.playlists.playlists[sp].tracks,
-            drop_idx,
-            indices,
-            selection,
-        );
-        self.playlists.save();
-        new_positions
+        match target {
+            ReorderTarget::Local(index) => {
+                let new_positions = crate::util::reorder_tracks(
+                    &mut self.playlists.playlists[index].tracks,
+                    drop_idx,
+                    indices,
+                    selection,
+                );
+                self.playlists.save();
+                new_positions
+            }
+            ReorderTarget::Server(playlist) => {
+                let Some(tracks) = self.view_data_in_mut(pane).tracks_mut() else {
+                    return Vec::new();
+                };
+                let new_positions =
+                    crate::util::reorder_tracks(tracks, drop_idx, indices, selection);
+                let order = tracks.clone();
+                self.reorder_server_playlist(playlist, order);
+                new_positions
+            }
+        }
     }
 
     fn resolve_selected_indices(&self) -> Option<(PaneId, Vec<usize>)> {
@@ -420,7 +459,12 @@ impl MusicPlayer {
         }
         let indices: Vec<usize> = self.view_data_mut().selection.clone();
 
-        if matches!(self.view_data_mut().kind, ViewKind::Playlist(_)) {
+        if matches!(self.view_data_mut().kind, ViewKind::Playlist(_))
+            || matches!(
+                &self.view_data().kind,
+                ViewKind::PlaylistView(r) if crate::providers::playlists_supported(r.provider)
+            )
+        {
             self.handle_remove_from_playlist_batch(self.focused_pane_id, &indices);
         } else if matches!(self.view_data().kind, ViewKind::Trashbin) {
             self.handle_remove_from_trashbin(self.focused_pane_id, &indices);
@@ -451,10 +495,12 @@ impl MusicPlayer {
             QUEUE_PANE_ID => self.handle_remove_from_queue_batch(&indices),
             RECENT_PANE_ID => self.handle_remove_from_recent_batch(&indices),
             _ => {
-                if !matches!(
-                    self.view_data_in(pane).kind,
-                    ViewKind::Playlist(_) | ViewKind::Downloads | ViewKind::Trashbin
-                ) {
+                let removable = match &self.view_data_in(pane).kind {
+                    ViewKind::Playlist(_) | ViewKind::Downloads | ViewKind::Trashbin => true,
+                    ViewKind::PlaylistView(r) => crate::providers::playlists_supported(r.provider),
+                    _ => false,
+                };
+                if !removable {
                     return;
                 }
                 if self.selection_in(pane).is_empty() {
@@ -663,6 +709,7 @@ mod tests {
 
     fn player_with_playlists(names: &[&str]) -> MusicPlayer {
         let mut p = MusicPlayer::new_with(config::Config::default());
+        p.server_playlists.entries.clear();
         p.playlists.playlists.clear();
         for n in names {
             p.playlists.create(n);
@@ -879,6 +926,41 @@ mod tests {
                 name: "B".into(),
             })
         );
+    }
+
+    #[test]
+    fn reordering_a_server_playlist_view_moves_its_rows() {
+        let mut p = player_with_playlists(&["A"]);
+        let provider = ProviderId::Custom(
+            crate::data::custom_providers::CustomProviderKind::Subsonic,
+            9,
+        );
+        let mut view = ViewData {
+            kind: ViewKind::PlaylistView(crate::app::view_data::PlaylistRef {
+                id: "pl".into(),
+                name: "Server".into(),
+                provider,
+                thumbnail: String::new(),
+                url: String::new(),
+            }),
+            ..Default::default()
+        };
+        view.set_tracks(vec![track("a"), track("b"), track("c")]);
+        p.reset_test_pane(vec![view]);
+        let pane = p.focused_pane_id;
+        p.view_data_in_mut(pane).selection = vec![0];
+
+        // Drag the first row past the last one.
+        let positions = p.handle_reorder_tracks_selected(pane, 3, &[0]);
+
+        let titles: Vec<&str> = p
+            .view_data_in(pane)
+            .tracks()
+            .iter()
+            .map(|t| t.title.as_str())
+            .collect();
+        assert_eq!(titles, ["Track b", "Track c", "Track a"]);
+        assert_eq!(positions, [2]);
     }
 
     #[test]

@@ -20,6 +20,7 @@ pub mod library;
 pub mod lyrics_cache;
 pub mod playlists;
 pub mod search_history;
+pub mod server_playlists;
 pub mod session;
 pub mod thumbnails;
 pub mod trashbin;

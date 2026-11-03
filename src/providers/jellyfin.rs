@@ -18,7 +18,8 @@ use crate::{
     data::custom_providers::{self, CustomProvider, CustomProviderKind},
     providers::{
         download_file_path, http_agent, AlbumMeta, ArtistAlbumCard, ArtistDataKind, ArtistHeader,
-        ArtistPage, CardData, ProviderId, RelatedArtistCard, SearchScope, SearchTab,
+        ArtistPage, CardData, PlaylistWrite, ProviderId, RelatedArtistCard, SearchScope, SearchTab,
+        ServerPlaylist,
     },
     types::{Track, TrackAlbum},
     util::urlencode,
@@ -89,6 +90,10 @@ struct ItemDto {
     song_count: Option<u32>,
     album_count: Option<u32>,
     overview: Option<String>,
+    /// Playlist-entry id, present only on items returned by
+    /// `/Playlists/{id}/Items`. Removing or moving a playlist entry needs this
+    /// id, not the song's.
+    playlist_item_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -107,6 +112,12 @@ struct UserData {
 #[serde(rename_all = "PascalCase", default)]
 struct ItemQueryResult {
     items: Vec<ItemDto>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "PascalCase", default)]
+struct PlaylistCreationResult {
+    id: Option<String>,
 }
 
 fn configured(provider: ProviderId) -> Result<CustomProvider> {
@@ -203,6 +214,44 @@ fn get_json<T: serde::de::DeserializeOwned>(
         .body_mut()
         .read_json()
         .with_context(|| format!("Jellyfin response from {url} was unreadable"))
+}
+
+fn post_json<T: serde::de::DeserializeOwned>(
+    config: &CustomProvider,
+    session: &Session,
+    path: &str,
+) -> Result<T> {
+    let url = format!("{}{path}", base_url(config));
+    let mut response = http_agent()
+        .post(&url)
+        .header("Authorization", &token_header(session))
+        .header("Accept", "application/json")
+        .send_empty()
+        .with_context(|| format!("request to {url} failed"))?;
+    response
+        .body_mut()
+        .read_json()
+        .with_context(|| format!("Jellyfin response from {url} was unreadable"))
+}
+
+fn post_empty(config: &CustomProvider, session: &Session, path: &str) -> Result<()> {
+    let url = format!("{}{path}", base_url(config));
+    http_agent()
+        .post(&url)
+        .header("Authorization", &token_header(session))
+        .send_empty()
+        .with_context(|| format!("request to {url} failed"))?;
+    Ok(())
+}
+
+fn delete_resource(config: &CustomProvider, session: &Session, path: &str) -> Result<()> {
+    let url = format!("{}{path}", base_url(config));
+    http_agent()
+        .delete(&url)
+        .header("Authorization", &token_header(session))
+        .call()
+        .with_context(|| format!("request to {url} failed"))?;
+    Ok(())
 }
 
 fn item_query(
@@ -714,6 +763,233 @@ pub fn browse(
     }
 }
 
+/// Every playlist on the server, for the sidebar index. `ChildCount` is the
+/// server's own count, so the row needs no contents fetch.
+pub fn list_playlists(provider: ProviderId) -> Result<Vec<ServerPlaylist>> {
+    let config = configured(provider)?;
+    let session = session(&config)?;
+    let items = fetch_all_items(&config, &session, "Playlist", "", &[])?;
+    Ok(items
+        .iter()
+        .map(|item| ServerPlaylist {
+            id: item.id.clone(),
+            name: item.name.clone(),
+            track_count: item.child_count.unwrap_or(0) as usize,
+        })
+        .collect())
+}
+
+/// Append tracks to an existing playlist. Tracks that carry no id on this
+/// server are reported as skipped rather than silently dropped.
+pub fn add_to_playlist(
+    provider: ProviderId,
+    playlist_id: &str,
+    tracks: &[Track],
+) -> Result<PlaylistWrite> {
+    let (ids, skipped) = super::playlist_track_ids(provider, tracks);
+    if ids.is_empty() {
+        return Ok(PlaylistWrite { added: 0, skipped });
+    }
+    let config = configured(provider)?;
+    let session = session(&config)?;
+    let path = format!(
+        "/Playlists/{}/Items?ids={}&userId={}",
+        urlencode(playlist_id),
+        urlencode(&ids.join(",")),
+        urlencode(&session.user_id),
+    );
+    post_empty(&config, &session, &path)?;
+    Ok(PlaylistWrite {
+        added: ids.len(),
+        skipped,
+    })
+}
+
+/// Remove the entries at `positions` (0-based, as the caller last saw them).
+/// The playlist is refetched first: removal addresses playlist *entry* ids,
+/// which only that response carries.
+pub fn remove_from_playlist(
+    provider: ProviderId,
+    playlist_id: &str,
+    positions: &[usize],
+) -> Result<usize> {
+    let config = configured(provider)?;
+    let session = session(&config)?;
+    let items = fetch_playlist_items(&config, &session, playlist_id)?;
+    let mut entry_ids: Vec<&str> = positions
+        .iter()
+        .filter_map(|&position| items.get(position))
+        .filter_map(|item| item.playlist_item_id.as_deref())
+        .collect();
+    entry_ids.sort_unstable();
+    entry_ids.dedup();
+    if entry_ids.is_empty() {
+        return Ok(0);
+    }
+    let removed = entry_ids.len();
+    let path = format!(
+        "/Playlists/{}/Items?entryIds={}",
+        urlencode(playlist_id),
+        urlencode(&entry_ids.join(",")),
+    );
+    delete_resource(&config, &session, &path)?;
+    Ok(removed)
+}
+
+/// Rewrite the playlist's entry order. Jellyfin moves one entry per call, so
+/// the entries already in place are left alone and only the ones that have to
+/// change positions are moved (see [`move_plan`]).
+pub fn reorder_playlist(provider: ProviderId, playlist_id: &str, tracks: &[Track]) -> Result<()> {
+    let (ids, skipped) = super::playlist_track_ids(provider, tracks);
+    if skipped > 0 {
+        anyhow::bail!("the playlist has tracks that are not on this server");
+    }
+    let config = configured(provider)?;
+    let session = session(&config)?;
+    let items = fetch_playlist_items(&config, &session, playlist_id)?;
+    let entries: Vec<(&str, &str)> = items
+        .iter()
+        .filter_map(|item| {
+            let entry = item.playlist_item_id.as_deref()?;
+            Some((entry, item.id.as_str()))
+        })
+        .collect();
+    anyhow::ensure!(
+        entries.len() == ids.len(),
+        "the playlist changed on the server"
+    );
+    // A track can appear twice in a playlist, so each wanted id claims a
+    // distinct entry: the earliest one holding it that is still free.
+    let mut claimed = vec![false; entries.len()];
+    let mut order: Vec<&str> = Vec::with_capacity(ids.len());
+    for id in &ids {
+        let position = entries
+            .iter()
+            .enumerate()
+            .find(|(index, (_, track))| !claimed[*index] && *track == id)
+            .map(|(index, _)| index)
+            .context("the playlist changed on the server")?;
+        claimed[position] = true;
+        order.push(entries[position].0);
+    }
+    let current: Vec<&str> = entries.iter().map(|(entry, _)| *entry).collect();
+    for index in move_plan(&current, &order) {
+        move_playlist_entry(&config, &session, playlist_id, order[index], index)?;
+    }
+    Ok(())
+}
+
+/// The moves that turn `current` into `order`, as indices into `order`: each
+/// listed entry is moved to that index. Walking left to right settles every
+/// position before touching the next (the server removes then inserts, which
+/// leaves the already-settled rows untouched), so only entries whose position
+/// is really wrong cost a call.
+fn move_plan(current: &[&str], order: &[&str]) -> Vec<usize> {
+    let mut simulated: Vec<&str> = current.to_vec();
+    let mut moves = Vec::new();
+    for (index, entry) in order.iter().enumerate() {
+        if simulated.get(index) == Some(entry) {
+            continue;
+        }
+        let Some(position) = simulated.iter().position(|e| e == entry) else {
+            continue;
+        };
+        moves.push(index);
+        let entry = simulated.remove(position);
+        simulated.insert(index, entry);
+    }
+    moves
+}
+
+fn move_playlist_entry(
+    config: &CustomProvider,
+    session: &Session,
+    playlist_id: &str,
+    entry_id: &str,
+    index: usize,
+) -> Result<()> {
+    post_empty(
+        config,
+        session,
+        &format!(
+            "/Playlists/{}/Items/{}/Move/{index}",
+            urlencode(playlist_id),
+            urlencode(entry_id),
+        ),
+    )
+}
+
+pub fn create_playlist(
+    provider: ProviderId,
+    name: &str,
+    tracks: &[Track],
+) -> Result<ServerPlaylist> {
+    let (ids, _skipped) = super::playlist_track_ids(provider, tracks);
+    let config = configured(provider)?;
+    let session = session(&config)?;
+    let mut path = format!(
+        "/Playlists?name={}&userId={}&mediaType=Audio",
+        urlencode(name),
+        urlencode(&session.user_id),
+    );
+    if !ids.is_empty() {
+        path.push_str("&ids=");
+        path.push_str(&urlencode(&ids.join(",")));
+    }
+    let created: PlaylistCreationResult = post_json(&config, &session, &path)?;
+    let id = created
+        .id
+        .filter(|id| !id.is_empty())
+        .context("Jellyfin did not return the new playlist id")?;
+    Ok(ServerPlaylist {
+        id,
+        name: name.to_string(),
+        track_count: ids.len(),
+    })
+}
+
+pub fn rename_playlist(provider: ProviderId, playlist_id: &str, name: &str) -> Result<()> {
+    let config = configured(provider)?;
+    let session = session(&config)?;
+    // The item update endpoint replaces the whole DTO, so read the current one
+    // and change just the name instead of posting our partial view of it.
+    let mut item: serde_json::Value = get_json(
+        &config,
+        &session,
+        &format!(
+            "/Items/{}?userId={}&Fields={}",
+            urlencode(playlist_id),
+            urlencode(&session.user_id),
+            urlencode(FIELDS),
+        ),
+    )?;
+    let object = item
+        .as_object_mut()
+        .context("Jellyfin playlist details were not an object")?;
+    object.insert(
+        "Name".to_string(),
+        serde_json::Value::String(name.to_string()),
+    );
+    let url = format!("{}/Items/{}", base_url(&config), urlencode(playlist_id));
+    http_agent()
+        .post(&url)
+        .header("Authorization", &token_header(&session))
+        .header("Content-Type", "application/json")
+        .send_json(item)
+        .with_context(|| format!("request to {url} failed"))?;
+    Ok(())
+}
+
+pub fn delete_playlist(provider: ProviderId, playlist_id: &str) -> Result<()> {
+    let config = configured(provider)?;
+    let session = session(&config)?;
+    delete_resource(
+        &config,
+        &session,
+        &format!("/Items/{}", urlencode(playlist_id)),
+    )
+}
+
 pub fn resolve_artist_id(provider: ProviderId, name: &str) -> Result<Option<String>> {
     let config = configured(provider)?;
     let session = session(&config)?;
@@ -1026,5 +1302,43 @@ mod tests {
         assert_eq!(provider.slug().as_ref(), "jellyfin-7");
         assert_eq!(ProviderId::from_slug("jellyfin-7"), Some(provider));
         assert_eq!(serde_json::to_string(&provider).unwrap(), "\"jellyfin-7\"");
+    }
+
+    fn applied(current: &[&str], order: &[&str]) -> Vec<String> {
+        let mut simulated: Vec<&str> = current.to_vec();
+        for index in move_plan(current, order) {
+            let position = simulated
+                .iter()
+                .position(|e| *e == order[index])
+                .expect("planned entry is present");
+            let moved = simulated.remove(position);
+            simulated.insert(index, moved);
+        }
+        simulated.into_iter().map(str::to_string).collect()
+    }
+
+    #[test]
+    fn move_plan_reaches_the_wanted_order() {
+        let cases: [(&[&str], &[&str]); 5] = [
+            (&["a", "b", "c"], &["c", "b", "a"]),
+            (&["a", "b", "c", "d", "e"], &["a", "c", "e", "b", "d"]),
+            (&["a", "b", "c", "d", "e"], &["d", "e", "a", "b", "c"]),
+            (
+                &["a", "b", "c", "d", "e", "f"],
+                &["a", "c", "b", "e", "d", "f"],
+            ),
+            (&["a", "b", "c"], &["a", "b", "c"]),
+        ];
+        for (current, order) in cases {
+            let want: Vec<String> = order.iter().map(std::string::ToString::to_string).collect();
+            assert_eq!(applied(current, order), want, "current {current:?}");
+        }
+    }
+
+    #[test]
+    fn move_plan_leaves_matching_entries_alone() {
+        assert!(move_plan(&["a", "b", "c"], &["a", "b", "c"]).is_empty());
+        assert_eq!(move_plan(&["a", "b", "c"], &["b", "c", "a"]), [0, 1]);
+        assert_eq!(move_plan(&["a", "b", "c"], &["b", "a", "c"]), [0]);
     }
 }

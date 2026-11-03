@@ -415,6 +415,7 @@ impl MusicPlayer {
                 Task::none()
             }
             BackendResult::SearchError(rid, error) => {
+                self.play_after_browse.remove(&rid);
                 self.process_search_error(rid, &error);
                 Task::none()
             }
@@ -504,6 +505,13 @@ impl MusicPlayer {
             BackendResult::CustomProviderTested { rid, result } => {
                 self.process_custom_provider_tested(rid, result);
                 Task::none()
+            }
+            BackendResult::ServerPlaylists { provider, result } => {
+                self.apply_server_playlists(provider, result);
+                Task::none()
+            }
+            BackendResult::ServerPlaylistWritten { target, result } => {
+                self.apply_server_playlist_write(&target, result)
             }
             BackendResult::ImportPathsPicked { method, paths } => {
                 if paths.is_empty() {
@@ -826,11 +834,33 @@ impl MusicPlayer {
         tracks: Vec<Track>,
         meta: Option<crate::providers::AlbumMeta>,
     ) {
-        if let Some((pane, idx)) = self.slot_for_request(rid) {
-            self.install_results(pane, idx, tracks);
-            if let Some(meta) = meta {
-                self.apply_album_meta(pane, idx, meta);
+        let play = self.play_after_browse.remove(&rid);
+        let Some((pane, idx)) = self.slot_for_request(rid) else {
+            return;
+        };
+        // A server playlist's stored count is refreshed from the fetched list,
+        // so the sidebar row agrees with what the page shows.
+        let server_playlist = match &self.pane(pane).nav_history[idx].kind {
+            ViewKind::PlaylistView(reference)
+                if crate::providers::playlists_supported(reference.provider) =>
+            {
+                Some(crate::data::server_playlists::ServerPlaylistId {
+                    provider: reference.provider,
+                    id: reference.id.clone(),
+                })
             }
+            _ => None,
+        };
+        let count = tracks.len();
+        self.install_results(pane, idx, tracks);
+        if let Some(target) = server_playlist {
+            self.server_playlists.set_count(&target, count);
+        }
+        if let Some(meta) = meta {
+            self.apply_album_meta(pane, idx, meta);
+        }
+        if play && count > 0 {
+            self.handle_play_track(crate::app::interaction::TrackPos::new(0, pane));
         }
     }
 

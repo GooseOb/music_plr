@@ -155,23 +155,26 @@ impl MusicPlayer {
         self.custom_provider_form = None;
     }
 
-    pub fn handle_custom_provider_save(&mut self) {
+    pub fn handle_custom_provider_save(&mut self) -> iced::Task<super::Message> {
         let Some(form) = self.custom_provider_form.take() else {
-            return;
+            return iced::Task::none();
         };
         if form.validated().is_none() {
             self.custom_provider_form = Some(form);
             self.notify_error(self.strings.custom_provider_required);
-            return;
+            return iced::Task::none();
         }
         let id = form
             .id
             .unwrap_or_else(|| self.custom_providers.allocate_id());
+        let kind = form.kind;
         self.custom_providers.upsert(form.into_provider(id));
         self.custom_providers.save();
         custom_providers::set_registry(&self.custom_providers.providers);
         self.reconcile_custom_provider_refs();
         self.notify(self.strings.custom_provider_saved);
+        // A fresh server's playlists belong in the sidebar right away.
+        self.refresh_server_playlists(Some(crate::providers::ProviderId::Custom(kind, id)))
     }
 
     pub fn handle_custom_provider_delete(&mut self, id: u64) {
@@ -187,6 +190,11 @@ impl MusicPlayer {
         {
             self.custom_provider_form = None;
         }
+        // Its playlists went away with the server, and its id is never reused.
+        self.server_playlists
+            .entries
+            .retain(|entry| !matches!(entry.provider, crate::providers::ProviderId::Custom(_, pid) if pid == id));
+        self.server_playlists.save();
         self.reconcile_custom_provider_refs();
         self.notify(self.strings.custom_provider_deleted);
     }

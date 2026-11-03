@@ -17,6 +17,7 @@ use crate::{
         library::{Card, LibraryItem, LibraryKind},
         JsonStore,
     },
+    providers,
 };
 
 impl MusicPlayer {
@@ -54,15 +55,18 @@ impl MusicPlayer {
 
         if self.drag.drag_active {
             match pressed {
-                Pressed::Track(pos) => self.handle_track_drop(pos),
+                Pressed::Track(pos) => {
+                    nav_task = self.handle_track_drop(pos);
+                }
                 Pressed::Card(item, _) => {
                     if let Some(target) = self
                         .card_drop_target(self.bounds.get_containing(self.drag.cursor_pos).as_ref())
                     {
-                        nav_task = self.handle_card_drop(item, target);
+                        nav_task = self.handle_card_drop(item, &target);
                     }
                 }
                 Pressed::Playlist(_) => self.handle_playlist_drop(),
+                Pressed::ServerPlaylist(_) => {}
             }
         } else {
             match pressed {
@@ -78,6 +82,11 @@ impl MusicPlayer {
                 // library card opens on a plain click).
                 Pressed::Playlist(i) => {
                     nav_task = self.handle_select_playlist(i);
+                }
+                Pressed::ServerPlaylist(target) => {
+                    let name = self.server_playlist_name(&target);
+                    nav_task =
+                        self.open_server_playlist(self.focused_pane_id, target, &name, false);
                 }
             }
         }
@@ -105,6 +114,7 @@ impl MusicPlayer {
             Pressed::Playlist(from) => {
                 self.drag.drop_target = self.resolve_playlist_drop(*from, containing.as_ref());
             }
+            Pressed::ServerPlaylist(_) => self.drag.drop_target = None,
         }
 
         let Some((target, geo)) = containing else {
@@ -163,9 +173,21 @@ impl MusicPlayer {
             let idx = nearest_row_index(&geo.rows, cursor_y).filter(|&idx| idx < count)?;
             return Some(DropTarget::PlaylistAdd(idx));
         }
+        if *list == ContainingList::ServerPlaylists {
+            let rows = self.server_playlist_rows();
+            let cursor_y = self.drag.cursor_pos.y + geo.translation_y;
+            let idx = nearest_row_index(&geo.rows, cursor_y).filter(|&idx| idx < rows.len())?;
+            return Some(DropTarget::ServerPlaylist(rows[idx].1.target()));
+        }
         let pane = list.track_target()?;
-        // Only local playlists and queue can be dropped onto
-        if is_main_pane(pane) && !matches!(&self.view_data_in(pane).kind, ViewKind::Playlist(_)) {
+        // Only local playlists, server playlists and the queue are reorderable
+        // in place; other views would drop the rows on the floor.
+        let reorderable = match &self.view_data_in(pane).kind {
+            ViewKind::Playlist(_) => true,
+            ViewKind::PlaylistView(reference) => providers::playlists_supported(reference.provider),
+            _ => false,
+        };
+        if is_main_pane(pane) && !reorderable {
             return None;
         }
         let drop_idx = self.compute_drop_idx(pane);
@@ -243,10 +265,10 @@ impl MusicPlayer {
     pub fn drop_indicator_rect(&self) -> Option<iced::Rectangle> {
         // Resolve to the targeted geometry and the 0-based insertion index
         // within its captured rows.
-        let (geo, rel) = match self.drag.drop_target {
-            Some(DropTarget::Playlist(i)) => (self.bounds.sidebar.as_ref()?, i),
-            Some(DropTarget::Library(i)) => (self.bounds.library.as_ref()?, i),
-            Some(DropTarget::PlaylistReorder { to, .. }) => (self.bounds.sidebar.as_ref()?, to),
+        let (geo, rel) = match &self.drag.drop_target {
+            Some(DropTarget::Playlist(i)) => (self.bounds.sidebar.as_ref()?, *i),
+            Some(DropTarget::Library(i)) => (self.bounds.library.as_ref()?, *i),
+            Some(DropTarget::PlaylistReorder { to, .. }) => (self.bounds.sidebar.as_ref()?, *to),
             Some(DropTarget::Track(pos)) => {
                 if pos.pane == RECENT_PANE_ID {
                     return None;
@@ -258,10 +280,10 @@ impl MusicPlayer {
                 };
                 (geo, pos.index.saturating_sub(pane_first_index(pos.pane)))
             }
-            // A track dropped on the playlist list highlights the target row
-            // (handled in the sidebar view) rather than drawing an insertion
-            // line, so it produces no indicator rect.
-            Some(DropTarget::PlaylistAdd(_)) | None => return None,
+            // A track dropped on a playlist row (local or server) highlights
+            // that row (handled in the sidebar view) rather than drawing an
+            // insertion line, so it produces no indicator rect.
+            Some(DropTarget::PlaylistAdd(_) | DropTarget::ServerPlaylist(_)) | None => return None,
         };
 
         // Virtualized (queue/active) lists leave `geo.rows` empty, so their
@@ -290,14 +312,22 @@ impl MusicPlayer {
         })
     }
 
-    pub fn handle_track_drop(&mut self, pos: TrackPos) {
+    pub fn handle_track_drop(&mut self, pos: TrackPos) -> Task<Message> {
         let source = pos.pane;
         let indices = self.dragged_indices(source).to_vec();
+
+        // Dropped on the server-playlist sidebar: append to the playlist on
+        // its server. The write is a background call, so the row's highlight
+        // (not an insertion bar) is the whole drop feedback.
+        if let Some(DropTarget::ServerPlaylist(target)) = self.drag.drop_target.clone() {
+            let tracks = self.get_tracks_at(&indices, source);
+            return self.add_tracks_to_server_playlist(target, tracks);
+        }
 
         // Dropped on the playlist sidebar: add to that playlist (prepend). The
         // target was resolved during the drag into `drop_target` and is shown
         // by the row highlight, so there is no separate insertion bar.
-        if let Some(DropTarget::PlaylistAdd(playlist_idx)) = self.drag.drop_target {
+        if let Some(DropTarget::PlaylistAdd(playlist_idx)) = self.drag.drop_target.clone() {
             let tracks = self.get_tracks_at(&indices, source);
             let count = self
                 .playlists
@@ -305,11 +335,11 @@ impl MusicPlayer {
             let name = &self.playlists.playlists[playlist_idx].name;
             let msg = (self.strings.added_to)(count, name);
             self.notify(msg);
-            return;
+            return Task::none();
         }
 
-        let Some(DropTarget::Track(drop)) = self.drag.drop_target else {
-            return;
+        let Some(DropTarget::Track(drop)) = self.drag.drop_target.clone() else {
+            return Task::none();
         };
         let drop_idx = drop.index;
 
@@ -323,6 +353,7 @@ impl MusicPlayer {
         } else if is_main_pane(drop.pane) {
             self.copy_from_queue(drop.pane, source, &indices, drop_idx);
         }
+        Task::none()
     }
 
     pub fn dragged_indices(&self, pane: PaneId) -> &[usize] {
@@ -439,7 +470,7 @@ impl MusicPlayer {
     /// `Playlist` view selection is remapped so the same playlist stays
     /// selected after its index changes.
     pub fn handle_playlist_drop(&mut self) {
-        let Some(DropTarget::PlaylistReorder { from, to }) = self.drag.drop_target else {
+        let Some(DropTarget::PlaylistReorder { from, to }) = self.drag.drop_target.clone() else {
             return;
         };
         if from >= self.playlists.playlists.len() || to > self.playlists.playlists.len() {
@@ -469,9 +500,9 @@ impl MusicPlayer {
         self.notify(self.strings.reordered_playlist);
     }
 
-    fn handle_card_drop(&mut self, item: Card, target: DropTarget) -> Task<Message> {
+    fn handle_card_drop(&mut self, item: Card, target: &DropTarget) -> Task<Message> {
         match target {
-            DropTarget::Playlist(idx) => self.create_playlist_from_card(&item, idx),
+            DropTarget::Playlist(idx) => self.create_playlist_from_card(&item, *idx),
             DropTarget::Library(idx) => {
                 if self.library.contains(item.kind, &item.id) {
                     if let Some(from) = self
@@ -482,12 +513,12 @@ impl MusicPlayer {
                     {
                         // Adjust for the removed row so the indicator position
                         // maps to the post-removal list.
-                        let to = if idx > from { idx - 1 } else { idx };
+                        let to = if *idx > from { *idx - 1 } else { *idx };
                         self.library.move_item(from, to);
                     }
                 } else {
                     let msg = (self.strings.saved_title)(&item.title);
-                    self.library.insert(item, idx);
+                    self.library.insert(item, *idx);
                     self.notify(msg);
                 }
                 Task::none()

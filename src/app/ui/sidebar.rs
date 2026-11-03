@@ -5,7 +5,7 @@ use iced::{
 };
 
 use super::{
-    shared_components::{thumbnail, toggle_bookmark_button},
+    shared_components::{icon_button, thumbnail, toggle_bookmark_button},
     styles::{
         bg_secondary, button_style_list_item, button_style_nav, button_style_panel_item,
         button_style_primary, fg_secondary, icon_color, icon_style_fg_muted, icon_style_primary,
@@ -16,11 +16,12 @@ use crate::{
     app::{
         interaction::{CardTarget, DropTarget, HoverTarget, Pressed, PressedDrag},
         ui::styles::{fg_tab, icon_style_accent_dimmed, icon_style_fg_secondary, icon_style_tab},
-        update::operation::ScrollTarget,
+        update::operation::{ScrollTarget, SIDEBAR_SERVER_PLAYLISTS_LIST_ID},
         ViewData, ViewKind,
     },
-    data::library::Card,
+    data::{library::Card, server_playlists::ServerPlaylistEntry},
     icons,
+    providers::ProviderId,
     theme::AppTheme,
 };
 
@@ -101,6 +102,123 @@ fn playlist_row<'a>(
     .on_enter(Message::HoverStart(HoverTarget::Playlist(index)))
     .on_exit(Message::HoverEnd(HoverTarget::Playlist(index)))
     .into()
+}
+
+fn server_playlist_row<'a>(
+    player: &'a MusicPlayer,
+    entry: &'a ServerPlaylistEntry,
+) -> Element<'a, Message, AppTheme> {
+    let dir = player.strings.direction;
+    let p = &player.app_theme.palette;
+    let target = entry.target();
+    let is_active = matches!(
+        &player.view_data().kind,
+        ViewKind::PlaylistView(r) if r.provider == target.provider && r.id == target.id
+    );
+    let is_dragged_over = matches!(
+        &player.drag.drop_target,
+        Some(DropTarget::ServerPlaylist(t)) if *t == target
+    );
+    let is_dragging_this = matches!(
+        &player.drag.pressed,
+        Some(PressedDrag { what: Pressed::ServerPlaylist(t), .. }) if *t == target
+    );
+    let is_hovered = player.drag.hovered_server_playlist() == Some(&target);
+    let interacting = is_active || is_dragged_over || is_hovered;
+    let background = if is_dragged_over || is_dragging_this {
+        Some(p.bg_current.into())
+    } else if is_active {
+        Some(p.bg_current.scale_alpha(0.7).into())
+    } else if is_hovered {
+        Some(p.bg_hover.scale_alpha(0.7).into())
+    } else {
+        None
+    };
+    // A write in flight (add/remove) is shown in place of the track count: the
+    // server is the source of truth, so the count is stale until it lands.
+    let trailing: Element<'a, Message, AppTheme> =
+        if player.server_playlist_writes.contains(&target) {
+            icons::icon(icons::REFRESH_ICON, theme::ICON_SIZE_SM)
+                .style(icon_style_fg_muted())
+                .into()
+        } else {
+            text(entry.track_count).style(fg_secondary()).into()
+        };
+
+    MouseArea::new(shared_row(
+        dir,
+        [
+            icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_MD)
+                .style(icon_style_tab(interacting))
+                .into(),
+            text(&entry.name).style(fg_tab(interacting)).into(),
+            dir.trailing(trailing),
+        ],
+        background,
+        is_dragging_this,
+    ))
+    .interaction(player.drag.clickable_cursor_interaction())
+    .on_press(Message::DragPress(Pressed::ServerPlaylist(target.clone())))
+    .on_double_click(Message::OpenAndPlayServerPlaylist(
+        target.clone(),
+        entry.name.clone(),
+    ))
+    .on_enter(Message::HoverStart(HoverTarget::ServerPlaylist(
+        target.clone(),
+    )))
+    .on_exit(Message::HoverEnd(HoverTarget::ServerPlaylist(target)))
+    .into()
+}
+
+/// A server's group header: its brand name, a "new playlist" button and a
+/// refresh button. It carries no widget id on purpose — the captured row
+/// indices of the server list must map onto
+/// [`MusicPlayer::server_playlist_rows`] one-to-one, so only rows are id'd.
+fn server_group_header(
+    player: &MusicPlayer,
+    provider: ProviderId,
+) -> Element<'_, Message, AppTheme> {
+    let dir = player.strings.direction;
+    let busy = player.server_playlists_requested.contains(&provider);
+
+    let header = dir
+        .row([
+            icons::icon(icons::CACHE_ICON, theme::ICON_SIZE_MD)
+                .style(icon_style_fg_muted())
+                .into(),
+            text(player.strings.provider(provider))
+                .style(fg_secondary())
+                .into(),
+            dir.trailing(
+                dir.row([
+                    icon_button(
+                        icons::ADD_ICON,
+                        theme::ICON_SIZE_SM,
+                        icon_style_fg_secondary(),
+                    )
+                    .on_press(Message::OpenNewServerPlaylist(provider))
+                    .into(),
+                    icon_button(
+                        icons::REFRESH_ICON,
+                        theme::ICON_SIZE_SM,
+                        icon_style_fg_muted(),
+                    )
+                    .on_press_maybe(
+                        (!busy).then_some(Message::RefreshServerPlaylists(Some(provider))),
+                    )
+                    .into(),
+                ])
+                .spacing(theme::SPACING_XS)
+                .align_y(alignment::Vertical::Center),
+            ),
+        ])
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center);
+
+    Container::new(header)
+        .padding([theme::SPACING_XS, theme::SPACING_MD])
+        .width(Length::Fill)
+        .into()
 }
 
 fn library_row<'a>(
@@ -208,9 +326,9 @@ fn nav_icon_button(
         )
         .center(Length::Fill),
     )
-    .padding(theme::SPACING_XS)
+    .padding(theme::SPACING_2XS)
     .style(button_style_nav(can))
-    .height(theme::BUTTON_HEIGHT)
+    .height(Length::Shrink)
     .on_press_maybe(if can { Some(on_press) } else { None })
     .into()
 }
@@ -301,6 +419,26 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .enumerate()
         .map(|(i, item)| library_row(player, item, i));
 
+    // One flat row space for every server playlist: provider headers are
+    // un-id'd containers, so the captured row indices match
+    // `server_playlist_rows()` exactly.
+    let server_playlist_rows: Vec<Element<'_, Message, AppTheme>> = {
+        let mut rows = Vec::new();
+        let mut index = 0;
+        for provider in MusicPlayer::server_playlist_providers() {
+            rows.push(server_group_header(player, provider));
+            for entry in player.server_playlists.for_provider(provider) {
+                rows.push(
+                    Container::new(server_playlist_row(player, entry))
+                        .width(Length::Fill)
+                        .id(iced::widget::Id::from(format!("sidebar_spl:{index}")))
+                        .into(),
+                );
+                index += 1;
+            }
+        }
+        rows
+    };
     let library_section: Element<'_, Message, AppTheme> = if player.library.items.is_empty() {
         library_collapsed(player.strings.direction, player.strings.nothing_saved_yet)
     } else if player.library_expanded {
@@ -389,6 +527,21 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     .padding(theme::SPACING_XS)
     .into();
 
+    let server_playlist_section: Element<'_, Message, AppTheme> = if server_playlist_rows.is_empty()
+    {
+        widget::Space::new().into()
+    } else {
+        Column::with_children([
+            widget::rule::horizontal(1).into(),
+            scrollable(Column::with_children(server_playlist_rows).spacing(theme::SPACING_XS))
+                .id(SIDEBAR_SERVER_PLAYLISTS_LIST_ID)
+                .height(Length::FillPortion(2))
+                .into(),
+        ])
+        .spacing(theme::SPACING_XS)
+        .into()
+    };
+
     let stack = Stack::with_children([
         Container::new(icons::icon(icons::LOGO_ICON, 200.0).style(icon_style_accent_dimmed()))
             .center(Length::Fill)
@@ -405,6 +558,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
                 .id(iced::widget::Id::new("sidebar_playlist_list"))
                 .height(Length::FillPortion(2))
                 .into(),
+            server_playlist_section,
             import_btn,
             widget::rule::horizontal(1).into(),
             library_header,

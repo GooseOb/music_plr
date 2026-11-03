@@ -8,15 +8,15 @@ use std::{io::Write as _, time::Duration};
 use anyhow::{Context, Result};
 use opensubsonic::{
     AlbumListOptions, AlbumListType, Auth, Client, RandomSongsOptions, Search3Options,
-    StreamOptions,
+    StreamOptions, UpdatePlaylistOptions,
 };
 
 use crate::{
     data::custom_providers::{self, CustomProvider, CustomProviderKind},
     providers::{
         download_file_path, shared_runtime, AlbumMeta, ArtistAlbumCard, ArtistDataKind,
-        ArtistHeader, ArtistPage, CardData, ErrorKind, ProviderId, RelatedArtistCard, SearchScope,
-        SearchTab,
+        ArtistHeader, ArtistPage, CardData, ErrorKind, PlaylistWrite, ProviderId,
+        RelatedArtistCard, SearchScope, SearchTab, ServerPlaylist,
     },
     types::{Track, TrackAlbum},
 };
@@ -310,6 +310,115 @@ pub fn browse(
         }
         _ => Ok((Vec::new(), None)),
     }
+}
+
+/// Every playlist on the server, for the sidebar index. `songCount` is the
+/// server's own count, so the row needs no contents fetch.
+pub fn list_playlists(provider: ProviderId) -> Result<Vec<ServerPlaylist>> {
+    let config = configured(provider)?;
+    let client = make_client(&config)?;
+    Ok(block_on(client.get_playlists(None))?
+        .into_iter()
+        .map(|playlist| ServerPlaylist {
+            id: playlist.id,
+            name: playlist.name,
+            track_count: playlist.song_count.unwrap_or(0).max(0) as usize,
+        })
+        .collect())
+}
+
+/// Append tracks to an existing playlist. Tracks that carry no id on this
+/// server are reported as skipped rather than silently dropped.
+pub fn add_to_playlist(
+    provider: ProviderId,
+    playlist_id: &str,
+    tracks: &[Track],
+) -> Result<PlaylistWrite> {
+    let (ids, skipped) = super::playlist_track_ids(provider, tracks);
+    if ids.is_empty() {
+        return Ok(PlaylistWrite { added: 0, skipped });
+    }
+    let config = configured(provider)?;
+    let client = make_client(&config)?;
+    let options = UpdatePlaylistOptions::new().add_songs(ids.clone());
+    block_on(client.update_playlist(playlist_id, &options))?;
+    Ok(PlaylistWrite {
+        added: ids.len(),
+        skipped,
+    })
+}
+
+/// Remove the entries at `positions` (0-based, as the caller last saw them).
+/// The playlist is refetched first so the indexes match the server's current
+/// order, and they are sent descending so each removal cannot shift a lower
+/// one that has not been applied yet.
+pub fn remove_from_playlist(
+    provider: ProviderId,
+    playlist_id: &str,
+    positions: &[usize],
+) -> Result<usize> {
+    let config = configured(provider)?;
+    let client = make_client(&config)?;
+    let playlist = block_on(client.get_playlist(playlist_id))?;
+    let mut indexes: Vec<i32> = positions
+        .iter()
+        .filter(|&&position| position < playlist.entry.len())
+        .filter_map(|&position| i32::try_from(position).ok())
+        .collect();
+    indexes.sort_unstable_by(|a, b| b.cmp(a));
+    indexes.dedup();
+    if indexes.is_empty() {
+        return Ok(0);
+    }
+    let removed = indexes.len();
+    let options = UpdatePlaylistOptions::new().remove_indexes(indexes);
+    block_on(client.update_playlist(playlist_id, &options))?;
+    Ok(removed)
+}
+
+/// Rewrite the playlist's song order. Subsonic has no move endpoint: passing
+/// the wanted song ids to `createPlaylist` alongside the playlist id replaces
+/// the whole song list, which is its only ordering primitive.
+pub fn reorder_playlist(provider: ProviderId, playlist_id: &str, tracks: &[Track]) -> Result<()> {
+    let (ids, skipped) = super::playlist_track_ids(provider, tracks);
+    if skipped > 0 {
+        anyhow::bail!("the playlist has tracks that are not on this server");
+    }
+    let config = configured(provider)?;
+    let client = make_client(&config)?;
+    let song_ids: Vec<&str> = ids.iter().map(String::as_str).collect();
+    block_on(client.create_playlist(Some(playlist_id), None, &song_ids))?;
+    Ok(())
+}
+
+pub fn create_playlist(
+    provider: ProviderId,
+    name: &str,
+    tracks: &[Track],
+) -> Result<ServerPlaylist> {
+    let (ids, _skipped) = super::playlist_track_ids(provider, tracks);
+    let config = configured(provider)?;
+    let client = make_client(&config)?;
+    let song_ids: Vec<&str> = ids.iter().map(String::as_str).collect();
+    let created = block_on(client.create_playlist(None, Some(name), &song_ids))?;
+    Ok(ServerPlaylist {
+        id: created.id,
+        name: created.name,
+        track_count: created.entry.len(),
+    })
+}
+
+pub fn rename_playlist(provider: ProviderId, playlist_id: &str, name: &str) -> Result<()> {
+    let config = configured(provider)?;
+    let client = make_client(&config)?;
+    let options = UpdatePlaylistOptions::new().name(name);
+    block_on(client.update_playlist(playlist_id, &options))
+}
+
+pub fn delete_playlist(provider: ProviderId, playlist_id: &str) -> Result<()> {
+    let config = configured(provider)?;
+    let client = make_client(&config)?;
+    block_on(client.delete_playlist(playlist_id))
 }
 
 pub fn resolve_artist_id(provider: ProviderId, name: &str) -> Result<Option<String>> {

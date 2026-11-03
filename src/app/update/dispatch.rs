@@ -430,6 +430,38 @@ impl crate::app::MusicPlayer {
                 self.dialog = Some(Dialog::Import(ImportPlaylistDialog::default()));
                 Task::none()
             }
+            Message::RefreshServerPlaylists(provider) => self.refresh_server_playlists(provider),
+            Message::OpenServerPlaylist(target, name) => {
+                let pane = self.focused_pane_id;
+                self.dialog = None;
+                self.open_server_playlist(pane, target, &name, false)
+            }
+            Message::OpenAndPlayServerPlaylist(target, name) => {
+                let pane = self.focused_pane_id;
+                self.dialog = None;
+                self.open_server_playlist(pane, target, &name, true)
+            }
+            Message::RefreshServerPlaylistView(pane) => self.refresh_open_server_playlist(pane),
+            Message::OpenNewServerPlaylist(provider) => {
+                self.open_new_server_playlist(provider);
+                Task::none()
+            }
+            Message::OpenRenameServerPlaylist(target, name) => {
+                self.open_rename_server_playlist(&target, &name);
+                Task::none()
+            }
+            Message::ServerPlaylistNameChanged(name) => {
+                if let Some(Dialog::ServerPlaylistName(dialog)) = &mut self.dialog {
+                    dialog.name = name;
+                }
+                Task::none()
+            }
+            Message::SubmitServerPlaylistName => self.submit_server_playlist_name(),
+            Message::ShowDeleteServerPlaylist(target, name) => {
+                self.open_delete_server_playlist(target, &name);
+                Task::none()
+            }
+            Message::ConfirmDeleteServerPlaylist => self.confirm_delete_server_playlist(),
             Message::ImportMethodChanged(method) => {
                 if let Some(Dialog::Import(dialog)) = &mut self.dialog {
                     dialog.method = method;
@@ -576,10 +608,7 @@ impl crate::app::MusicPlayer {
                 self.handle_custom_provider_test();
                 Task::none()
             }
-            Message::CustomProviderSave => {
-                self.handle_custom_provider_save();
-                Task::none()
-            }
+            Message::CustomProviderSave => self.handle_custom_provider_save(),
             Message::CustomProviderCancel => {
                 self.handle_custom_provider_cancel();
                 Task::none()

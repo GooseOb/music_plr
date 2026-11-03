@@ -519,13 +519,18 @@ impl CardTarget {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DropTarget {
     Track(TrackPos),
     Playlist(usize),
     Library(usize),
     PlaylistAdd(usize),
-    PlaylistReorder { from: usize, to: usize },
+    PlaylistReorder {
+        from: usize,
+        to: usize,
+    },
+    /// A row of the sidebar's server-playlist list.
+    ServerPlaylist(crate::data::server_playlists::ServerPlaylistId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -533,6 +538,7 @@ pub enum HoverTarget {
     Track(TrackPos),
     Card(Card),
     Playlist(usize),
+    ServerPlaylist(crate::data::server_playlists::ServerPlaylistId),
     SearchHistory(usize),
 }
 
@@ -543,6 +549,7 @@ pub enum Pressed {
     /// `None` for sidebar library rows (which target the focused pane).
     Card(Card, Option<PaneId>),
     Playlist(usize),
+    ServerPlaylist(crate::data::server_playlists::ServerPlaylistId),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -734,6 +741,16 @@ impl DragState {
     pub fn hovered_playlist(&self) -> Option<usize> {
         match self.hovered {
             Some(HoverTarget::Playlist(i)) => Some(i),
+            _ => None,
+        }
+    }
+
+    /// The hovered server-playlist row, if any.
+    pub fn hovered_server_playlist(
+        &self,
+    ) -> Option<&crate::data::server_playlists::ServerPlaylistId> {
+        match &self.hovered {
+            Some(HoverTarget::ServerPlaylist(target)) => Some(target),
             _ => None,
         }
     }

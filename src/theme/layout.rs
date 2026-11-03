@@ -47,7 +47,6 @@ pub const TEXT_SIZE_MD: u32 = 15;
 pub const TEXT_SIZE_LG: u32 = 18;
 pub const TEXT_SIZE_XL: u32 = 22;
 
-pub const BUTTON_HEIGHT: f32 = 28.0;
 pub const QUEUE_BTN_WIDTH: f32 = 36.0;
 pub const VOLUME_SLIDER_WIDTH: f32 = 80.0;
 pub const PLAYBAR_TRACK_INFO_WIDTH: f32 = 164.0;

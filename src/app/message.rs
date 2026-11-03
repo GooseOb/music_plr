@@ -136,6 +136,39 @@ pub enum BackendResult {
         rid: u64,
         result: Result<String, String>,
     },
+    /// A provider's server-playlist index finished loading. `Err` keeps the
+    /// cached rows and only stops the request, so a transient failure doesn't
+    /// blank the sidebar.
+    ServerPlaylists {
+        provider: ProviderId,
+        result: Result<Vec<crate::providers::ServerPlaylist>, crate::providers::ProviderError>,
+    },
+    /// A write on a server playlist finished.
+    ServerPlaylistWritten {
+        target: crate::data::server_playlists::ServerPlaylistId,
+        result: Result<ServerPlaylistChange, crate::providers::ProviderError>,
+    },
+}
+
+/// What a server-playlist write asked the server to do, so the tick handler
+/// can update the cached index and report the outcome.
+#[derive(Debug, Clone)]
+pub enum ServerPlaylistChange {
+    /// Tracks were appended; `skipped` counts those without an id on the
+    /// server.
+    Added {
+        added: usize,
+        skipped: usize,
+    },
+    Removed(usize),
+    /// The playlist's tracks were put in a new order.
+    Reordered,
+    Created {
+        id: String,
+        name: String,
+    },
+    Renamed(String),
+    Deleted,
 }
 
 #[derive(Debug, Clone)]
@@ -221,6 +254,23 @@ pub enum Message {
     ShowDeleteConfirm(usize),
     ConfirmDeletePlaylist,
     OpenAndPlayPlaylist(usize),
+
+    /// Reload one server's playlist index (`None`: every configured server).
+    RefreshServerPlaylists(Option<ProviderId>),
+    /// Open a playlist that lives on a server; the contents are fetched.
+    OpenServerPlaylist(crate::data::server_playlists::ServerPlaylistId, String),
+    /// Same, and start playing once the fetched tracks arrive.
+    OpenAndPlayServerPlaylist(crate::data::server_playlists::ServerPlaylistId, String),
+    /// Refetch the server playlist the pane is showing.
+    RefreshServerPlaylistView(PaneId),
+    /// Open the create-playlist dialog for one server.
+    OpenNewServerPlaylist(ProviderId),
+    /// Open the rename dialog for a server playlist.
+    OpenRenameServerPlaylist(crate::data::server_playlists::ServerPlaylistId, String),
+    ServerPlaylistNameChanged(String),
+    SubmitServerPlaylistName,
+    ShowDeleteServerPlaylist(crate::data::server_playlists::ServerPlaylistId, String),
+    ConfirmDeleteServerPlaylist,
 
     OpenImportPlaylist,
     ImportMethodChanged(ImportMethod),

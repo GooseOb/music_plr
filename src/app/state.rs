@@ -97,6 +97,18 @@ pub struct MusicPlayer {
 
     pub thumbnail_index: ThumbnailIndex,
     pub playlists: PlaylistStore,
+    /// Index of the playlists that live on user-configured servers. Contents
+    /// are always fetched through the provider, so nothing here goes stale.
+    pub server_playlists: crate::data::server_playlists::ServerPlaylistStore,
+    /// Providers whose playlist index was requested and hasn't answered yet,
+    /// so a boot refresh and a manual one don't double up.
+    pub server_playlists_requested: std::collections::HashSet<ProviderId>,
+    /// Server playlists with a write in flight, for the row's busy marker.
+    pub server_playlist_writes:
+        std::collections::HashSet<crate::data::server_playlists::ServerPlaylistId>,
+    /// Browse request ids whose installed tracks should start playing (a
+    /// server playlist opened with a double click).
+    pub play_after_browse: std::collections::HashSet<u64>,
     pub trashbin: crate::data::trashbin::TrashStore,
     pub playlist_create_name: String,
     /// Exclusive overlay dialog. Only one can be visible at a time; the view
@@ -182,6 +194,7 @@ impl MusicPlayer {
         let boot = Task::batch([
             CaptureBounds::with_panes(player.pane_ids()).into(),
             player.take_media_bridge(),
+            Task::done(Message::RefreshServerPlaylists(None)),
         ]);
         (player, boot)
     }
@@ -213,6 +226,7 @@ impl MusicPlayer {
         ))
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn new_with(config: Config) -> Self {
         let (result_tx, result_rx) = mpsc::channel();
         let (media_event_tx, media_event_rx) = mpsc::channel();
@@ -256,6 +270,10 @@ impl MusicPlayer {
             artist_error_dedup: None,
             track_loading: false,
             playlists: PlaylistStore::load(),
+            server_playlists: crate::data::server_playlists::ServerPlaylistStore::load(),
+            server_playlists_requested: std::collections::HashSet::new(),
+            server_playlist_writes: std::collections::HashSet::new(),
+            play_after_browse: std::collections::HashSet::new(),
             trashbin: crate::data::trashbin::TrashStore::load(),
             playlist_create_name: String::new(),
             show_queue: false,

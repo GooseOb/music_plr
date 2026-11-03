@@ -200,6 +200,7 @@ pub const STRINGS: Strings = Strings {
     added_to: |n, to| format!("{to} में {} जोड़े गए", hi_tracks(n)),
     removed_n: |n| format!("हटाए गए {}", hi_tracks(n)),
     removed_from: |n, from| format!("{from} से {} हटाए गए", hi_tracks(n)),
+    skipped_not_on_server: |n| format!("{} छोड़े गए (इस सर्वर पर नहीं हैं)", hi_tracks(n)),
     pasted_into: |n, into| format!("{into} में {} चिपकाए गए", hi_tracks(n)),
     saved_title: |t| format!("\"{t}\" को लाइब्रेरी में सहेजा गया"),
     playlist_created: |n| format!("प्लेलिस्ट \"{n}\" बनाई गई"),

@@ -201,6 +201,7 @@ pub const STRINGS: Strings = Strings {
     added_to: |n, to| format!("Added {} to {to}", en_tracks(n)),
     removed_n: |n| format!("Removed {}", en_tracks(n)),
     removed_from: |n, from| format!("Removed {} from {from}", en_tracks(n)),
+    skipped_not_on_server: |n| format!("Skipped {} (not on this server)", en_tracks(n)),
     pasted_into: |n, into| format!("Pasted {} into {into}", en_tracks(n)),
     saved_title: |t| format!("Saved \"{t}\" to library"),
     playlist_created: |n| format!("Playlist \"{n}\" created"),

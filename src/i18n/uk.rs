@@ -203,6 +203,7 @@ pub const STRINGS: Strings = Strings {
     added_to: |n, to| format!("{to}: додано {}", uk_tracks(n)),
     removed_n: |n| format!("Видалено: {}", uk_tracks(n)),
     removed_from: |n, from| format!("{from}: видалено {}", uk_tracks(n)),
+    skipped_not_on_server: |n| format!("Пропущено: {} (немає на цьому сервері)", uk_tracks(n)),
     pasted_into: |n, into| format!("{into}: вставлено {}", uk_tracks(n)),
     saved_title: |t| format!("«{t}» збережено до бібліотеки"),
     playlist_created: |n| format!("Плейлист «{n}» створено"),

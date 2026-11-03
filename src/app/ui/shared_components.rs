@@ -17,7 +17,9 @@ use crate::{
         pane::PaneId,
         ui::{
             spinner::spinner,
-            styles::{button_style_playbar, icon_style_playbar_button},
+            styles::{
+                button_style_danger, button_style_playbar, icon_style_fg, icon_style_playbar_button,
+            },
         },
         Message,
     },
@@ -379,7 +381,12 @@ pub fn icon_button(
     size: f32,
     color: impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static,
 ) -> Button<'static, Message, AppTheme> {
-    Button::new(icons::icon(icon_data, size).style(color)).padding(theme::SPACING_XS)
+    Button::new(icons::icon(icon_data, size).style(color)).padding(theme::SPACING_2XS)
+}
+
+pub fn icon_button_delete() -> Button<'static, Message, AppTheme> {
+    icon_button(icons::DELETE_ICON, theme::ICON_SIZE_MD, icon_style_fg())
+        .style(button_style_danger())
 }
 
 pub fn link_button<'a>(

@@ -212,6 +212,7 @@ pub const STRINGS: Strings = Strings {
     added_to: |n, to| format!("{} を {to} に追加", ja_tracks(n)),
     removed_n: |n| format!("{} を削除", ja_tracks(n)),
     removed_from: |n, from| format!("{} を {from} から削除", ja_tracks(n)),
+    skipped_not_on_server: |n| format!("{} をスキップ（このサーバーにありません）", ja_tracks(n)),
     pasted_into: |n, into| format!("{} を {into} に貼り付け", ja_tracks(n)),
     saved_title: |t| format!("「{t}」をライブラリに保存しました"),
     playlist_created: |n| format!("プレイリスト「{n}」を作成しました"),

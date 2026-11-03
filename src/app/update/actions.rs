@@ -693,8 +693,12 @@ impl MusicPlayer {
             return Task::none();
         };
         let TrackPos { index, pane } = pos;
-        let in_playlist =
-            is_main_pane(pane) && matches!(self.view_data_in(pane).kind, ViewKind::Playlist(_));
+        let in_playlist = is_main_pane(pane)
+            && match &self.view_data_in(pane).kind {
+                ViewKind::Playlist(_) => true,
+                ViewKind::PlaylistView(r) => crate::providers::playlists_supported(r.provider),
+                _ => false,
+            };
 
         let sel = self.selection_in(pane);
         let target_indices = if sel.binary_search(&index).is_ok() {

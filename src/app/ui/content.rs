@@ -38,7 +38,11 @@ pub(super) fn view_main_content(
                 browse_meta(&r.badge, &r.date),
             ),
             ViewKind::PlaylistView(r) => {
-                search::view_browse(player, pane, r.provider, &r.name, &r.id, "".into())
+                if crate::providers::playlists_supported(r.provider) {
+                    search::view_server_playlist(player, pane, r)
+                } else {
+                    search::view_browse(player, pane, r.provider, &r.name, &r.id, "".into())
+                }
             }
             ViewKind::Playlist(entry) => playlist::view_playlist(player, pane, entry),
             ViewKind::Downloads => playlist::view_downloads(player, pane),

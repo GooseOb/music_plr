@@ -15,8 +15,8 @@
 //! `bounds` into that list's `ListGeometry.rows`. Because a scrollable's rows
 //! are visited contiguously right after its own `scrollable` callback, the
 //! `current` flag is correctly scoped — and the only id'd `Container`s in the
-//! tree are list rows (sidebar playlist, library, and search-history rows), so
-//! nothing else is captured. The track/queue/recent lists are virtualized and
+//! tree are list rows (sidebar playlist, sidebar server playlists, library, and
+//! search-history rows), so nothing else is captured. The track/queue/recent lists are virtualized and
 //! uniform-height, so they use `ROW_HEIGHT` for drop math instead and don't
 //! need `rows`.
 //! The global search `text_input` (id `SEARCH_INPUT_ID`) is captured via the
@@ -53,6 +53,7 @@ pub struct ListGeometry {
 }
 
 pub const SIDEBAR_LIST_ID: Id = Id::new("sidebar_playlist_list");
+pub const SIDEBAR_SERVER_PLAYLISTS_LIST_ID: Id = Id::new("sidebar_server_playlist_list");
 pub const LIBRARY_LIST_ID: Id = Id::new("sidebar_library_list");
 
 /// Which scrollable a scroll belongs to. The inverse of [`CaptureBounds`]'s
@@ -77,6 +78,8 @@ pub enum ScrollTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Slot {
     Sidebar,
+    /// The sidebar's server-playlist rows (one list, grouped by provider).
+    ServerPlaylists,
     Library,
     Queue,
     Recent,
@@ -112,6 +115,7 @@ pub enum ContainingList {
     Recent,
     Track(PaneId),
     Sidebar,
+    ServerPlaylists,
     Library,
 }
 
@@ -124,7 +128,9 @@ impl ContainingList {
             ContainingList::Queue => Some(QUEUE_PANE_ID),
             ContainingList::Track(pane) => Some(pane),
             ContainingList::Recent => Some(RECENT_PANE_ID),
-            ContainingList::Sidebar | ContainingList::Library => None,
+            ContainingList::Sidebar | ContainingList::ServerPlaylists | ContainingList::Library => {
+                None
+            }
         }
     }
 }
@@ -132,6 +138,7 @@ impl ContainingList {
 #[derive(Default, Clone, Debug)]
 pub struct CaptureBounds {
     pub sidebar: Option<ListGeometry>,
+    pub server_playlists: Option<ListGeometry>,
     pub library: Option<ListGeometry>,
     pub queue: Option<ListGeometry>,
     /// The Edit popup's manual-search list, captured while that popup is open.
@@ -159,8 +166,8 @@ pub struct CaptureBounds {
     panes: Vec<PaneId>,
     /// Cached id→pane map for search inputs, so `text_input` is O(1).
     search_input_ids: HashMap<Id, PaneId>,
-    /// The list whose rows are being visited right now — only the two lists
-    /// with measured rows (`Sidebar`/`Library`) collect containers.
+    /// The list whose rows are being visited right now — only the lists with
+    /// measured rows (`Sidebar`/`ServerPlaylists`/`Library`) collect containers.
     current: Option<Slot>,
 }
 
@@ -241,6 +248,7 @@ impl CaptureBounds {
             Slot::ManualSearch => self.manual_search.as_mut(),
             Slot::Library => self.library.as_mut(),
             Slot::Sidebar => self.sidebar.as_mut(),
+            Slot::ServerPlaylists => self.server_playlists.as_mut(),
         };
         if let Some(g) = geo {
             g.translation_y = translation.y;
@@ -263,6 +271,9 @@ impl CaptureBounds {
     fn slot(&self, id: &Id) -> Option<Slot> {
         if *id == SIDEBAR_LIST_ID {
             return Some(Slot::Sidebar);
+        }
+        if *id == SIDEBAR_SERVER_PLAYLISTS_LIST_ID {
+            return Some(Slot::ServerPlaylists);
         }
         if *id == LIBRARY_LIST_ID {
             return Some(Slot::Library);
@@ -296,6 +307,9 @@ impl CaptureBounds {
     fn ensure_geometry(&mut self, slot: Slot) -> &mut ListGeometry {
         match slot {
             Slot::Sidebar => self.sidebar.get_or_insert_with(ListGeometry::default),
+            Slot::ServerPlaylists => self
+                .server_playlists
+                .get_or_insert_with(ListGeometry::default),
             Slot::Library => self.library.get_or_insert_with(ListGeometry::default),
             Slot::Queue => self.queue.get_or_insert_with(ListGeometry::default),
             Slot::Recent => self.recent.get_or_insert_with(ListGeometry::default),
@@ -309,6 +323,7 @@ impl CaptureBounds {
     fn geometry(&self, slot: Slot) -> Option<&ListGeometry> {
         match slot {
             Slot::Sidebar => self.sidebar.as_ref(),
+            Slot::ServerPlaylists => self.server_playlists.as_ref(),
             Slot::Library => self.library.as_ref(),
             Slot::Queue => self.queue.as_ref(),
             Slot::Recent => self.recent.as_ref(),
@@ -342,6 +357,11 @@ impl CaptureBounds {
                 return Some((ContainingList::Sidebar, g));
             }
         }
+        if let Some(g) = &self.server_playlists {
+            if g.bounds.contains(point) {
+                return Some((ContainingList::ServerPlaylists, g));
+            }
+        }
         if let Some(g) = &self.library {
             if g.bounds.contains(point) {
                 return Some((ContainingList::Library, g));
@@ -368,8 +388,10 @@ impl Operation<Message> for CaptureBounds {
             self.current = None;
             return;
         };
-        // Only the two lists with measured rows (sidebar/library) collect containers.
-        self.current = matches!(slot, Slot::Sidebar | Slot::Library).then_some(slot);
+        // Only the lists with measured rows (sidebar/server playlists/library)
+        // collect containers.
+        self.current =
+            matches!(slot, Slot::Sidebar | Slot::ServerPlaylists | Slot::Library).then_some(slot);
         match slot {
             // A shelf is horizontal-only: it has no geometry of its own.
             Slot::CardRow(pane, section) => {
@@ -386,7 +408,8 @@ impl Operation<Message> for CaptureBounds {
     }
 
     fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
-        let Some(slot @ (Slot::Sidebar | Slot::Library)) = self.current else {
+        let Some(slot @ (Slot::Sidebar | Slot::ServerPlaylists | Slot::Library)) = self.current
+        else {
             return;
         };
         if id.is_some() {

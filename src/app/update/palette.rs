@@ -135,11 +135,24 @@ impl MusicPlayer {
             return Task::none();
         };
         if let PaletteMode::AddToPlaylist(add) = palette.mode.clone() {
-            let PaletteItem::Playlist(playlist) = row.item else {
-                return Task::none();
-            };
+            let item = row.item;
             self.dialog = None;
-            self.handle_add_to_playlist(add.pane, playlist, &add.indices);
+            match item {
+                PaletteItem::Playlist(playlist) => {
+                    self.handle_add_to_playlist(add.pane, playlist, &add.indices);
+                }
+                PaletteItem::ServerPlaylist(index) => {
+                    if let Some(entry) = self
+                        .server_playlist_rows()
+                        .get(index)
+                        .map(|(_, entry)| entry.target())
+                    {
+                        let tracks = self.tracks_at_indices(add.pane, &add.indices);
+                        return self.add_tracks_to_server_playlist(entry, tracks);
+                    }
+                }
+                _ => {}
+            }
             return Task::none();
         }
 
@@ -151,6 +164,18 @@ impl MusicPlayer {
                 } else {
                     self.handle_select_playlist(playlist)
                 }
+            }
+            PaletteItem::ServerPlaylist(index) => {
+                let Some((target, name)) = self
+                    .server_playlist_rows()
+                    .get(index)
+                    .map(|(_, entry)| (entry.target(), entry.name.clone()))
+                else {
+                    return Task::none();
+                };
+                self.dialog = None;
+                let pane = self.focused_pane_id;
+                self.open_server_playlist(pane, target, &name, play)
             }
             PaletteItem::Library(index) => {
                 let Some(item) = self.library.items.get(index).cloned() else {
