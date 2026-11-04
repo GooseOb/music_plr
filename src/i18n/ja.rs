@@ -8,6 +8,18 @@ pub const STRINGS: Strings = Strings {
     nothing_saved_yet: "まだ保存されていません",
     new_playlist_name: "新しいプレイリスト名",
 
+    home: "ホーム",
+    quick_picks: "クイックピック",
+    new_releases: "新着リリース",
+    trending_now: "トレンド",
+    top_artists: "トップアーティスト",
+    artists: "アーティスト",
+    for_you: "あなた向け",
+    discover: "発見",
+    recently_added: "最近追加された",
+    most_played: "再生回数が多い曲",
+    starred: "お気に入り",
+
     queue: "キュー",
     recently_played: "最近再生した曲",
     now_playing_from: "再生中（元：",

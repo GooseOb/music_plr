@@ -16,6 +16,7 @@ pub mod cache;
 pub mod config;
 pub mod custom_providers;
 pub mod downloads;
+pub mod home_cache;
 pub mod library;
 pub mod lyrics_cache;
 pub mod playlists;

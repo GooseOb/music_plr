@@ -12,6 +12,7 @@ use crate::{
 pub(crate) mod artist;
 mod content;
 mod direction;
+mod home;
 pub(crate) mod lyrics;
 mod overlays;
 mod playbar;
@@ -35,8 +36,9 @@ pub use search::{search_history_list_id, search_input_id};
 pub use track_list::track_list_id;
 use track_list::view_track_list;
 
-/// Id of a pane's card-hosting scrollable: the card tab of a search view, or
-/// an artist page. A pane renders either a track list or cards, never both, so
+/// Id of a pane's card-hosting scrollable: the card tab of a search view, an
+/// artist page or the Home feed. A pane renders either a track list or cards,
+/// never both, so
 /// one id per pane serves both card hosts; it is captured only for its scroll
 /// offset (card right-clicks), never for drop hit-testing.
 pub fn card_list_id(pane: PaneId) -> Id {
@@ -48,12 +50,12 @@ pub fn card_list_id(pane: PaneId) -> Id {
 /// virtual pane id having to be a real pane.
 pub const MANUAL_SEARCH_LIST_ID: Id = Id::new("edit_manual_search_list");
 
-/// Id of an artist page's horizontal card shelf (one section's row). Keyed by
-/// pane *and* section: every section lays its shelf out on each pass, so one id
+/// Id of a horizontal card shelf (an artist page's section row, a Home rail).
+/// Keyed by pane *and* rail: every shelf lays itself out on each pass, so one id
 /// per pane would collide — and the card menu needs each shelf's own horizontal
 /// offset to un-shift a right-click.
-pub fn card_row_id(pane: PaneId, section: crate::providers::ArtistSectionKind) -> Id {
-    Id::from(format!("card_row:{pane}:{}", section as usize))
+pub fn card_row_id(pane: PaneId, rail: crate::app::update::operation::RailKey) -> Id {
+    Id::from(format!("card_row:{pane}:{}", rail.slug()))
 }
 
 /// The message a scrollable reports when it moves to `offset`.

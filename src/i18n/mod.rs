@@ -124,6 +124,18 @@ pub struct Strings {
     pub nothing_saved_yet: &'static str,
     pub new_playlist_name: &'static str,
 
+    pub home: &'static str,
+    pub quick_picks: &'static str,
+    pub new_releases: &'static str,
+    pub trending_now: &'static str,
+    pub top_artists: &'static str,
+    pub artists: &'static str,
+    pub for_you: &'static str,
+    pub discover: &'static str,
+    pub recently_added: &'static str,
+    pub most_played: &'static str,
+    pub starred: &'static str,
+
     pub queue: &'static str,
     pub recently_played: &'static str,
     pub now_playing_from: &'static str,

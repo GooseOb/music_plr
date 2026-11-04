@@ -506,6 +506,87 @@ fn album_card(config: &CustomProvider, session: &Session, item: &ItemDto) -> Car
     }
 }
 
+/// Home rows: the server's recently added, recently played, most played and
+/// favourite albums, a random album sample, and its artists. A failing list
+/// just drops its row.
+pub fn home_sections(provider: ProviderId) -> Result<Vec<crate::providers::HomeSection>> {
+    let config = configured(provider)?;
+    let session = session(&config)?;
+    let mut rows = Vec::new();
+    for (kind, extra) in [
+        (
+            crate::providers::HomeSectionKind::RecentlyAdded,
+            &[("SortBy", "DateCreated"), ("SortOrder", "Descending")][..],
+        ),
+        (
+            crate::providers::HomeSectionKind::RecentlyPlayed,
+            &[
+                ("Filters", "IsPlayed"),
+                ("SortBy", "DatePlayed"),
+                ("SortOrder", "Descending"),
+            ][..],
+        ),
+        (
+            crate::providers::HomeSectionKind::MostPlayed,
+            &[
+                ("SortBy", "PlayCount"),
+                ("SortOrder", "Descending"),
+                ("Filters", "IsPlayed"),
+            ][..],
+        ),
+        (
+            crate::providers::HomeSectionKind::Starred,
+            &[("Filters", "IsFavorite")][..],
+        ),
+        (
+            crate::providers::HomeSectionKind::Discover,
+            &[("SortBy", "Random")][..],
+        ),
+    ] {
+        let Ok(items) = fetch_items(&config, &session, "MusicAlbum", "", 0, 20, extra) else {
+            continue;
+        };
+        let cards = items
+            .iter()
+            .map(|item| {
+                crate::providers::HomeCard::new(
+                    crate::data::library::LibraryKind::Album,
+                    provider,
+                    album_card(&config, &session, item),
+                )
+            })
+            .collect();
+        rows.push((kind, crate::providers::HomeSectionData::Cards(cards)));
+    }
+
+    let Ok(artists) = fetch_items(
+        &config,
+        &session,
+        "MusicArtist",
+        "",
+        0,
+        20,
+        &[("SortBy", "Random")],
+    ) else {
+        return Ok(super::home::provider_sections(provider, rows));
+    };
+    let cards = artists
+        .iter()
+        .map(|item| {
+            crate::providers::HomeCard::new(
+                crate::data::library::LibraryKind::Artist,
+                provider,
+                artist_card(&config, &session, item),
+            )
+        })
+        .collect();
+    rows.push((
+        crate::providers::HomeSectionKind::Artists,
+        crate::providers::HomeSectionData::Cards(cards),
+    ));
+    Ok(super::home::provider_sections(provider, rows))
+}
+
 fn playlist_card(config: &CustomProvider, session: &Session, item: &ItemDto) -> CardData {
     CardData {
         id: item.id.clone(),

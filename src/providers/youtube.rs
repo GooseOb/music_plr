@@ -224,6 +224,97 @@ pub fn browse(id: &str, kind: &str) -> Result<(Vec<Track>, Option<crate::provide
     }
 }
 
+/// Raw JSON shape of the python helper's `home` mode.
+#[derive(Deserialize)]
+struct YtHomeOutput {
+    #[serde(default)]
+    sections: Vec<YtHomeSectionRaw>,
+}
+
+#[derive(Deserialize)]
+struct YtHomeSectionRaw {
+    key: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    tracks: Vec<YouTubeVideo>,
+    #[serde(default)]
+    cards: Vec<YtHomeCardRaw>,
+}
+
+#[derive(Deserialize)]
+struct YtHomeCardRaw {
+    kind: String,
+    id: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    subtitle: String,
+    #[serde(default)]
+    thumbnail: String,
+    #[serde(default)]
+    url: String,
+    #[serde(default)]
+    badge: String,
+    #[serde(default)]
+    date: String,
+}
+
+/// Fetch `YouTube Music`'s home feed rows (quick picks, recommendations, new
+/// releases, trending) through the python helper.
+pub fn home_sections() -> Result<Vec<crate::providers::HomeSection>> {
+    use crate::providers::{
+        HomeCard, HomeSection, HomeSectionData, HomeSectionKey, HomeSectionKind,
+    };
+
+    let stdout = run_python("home", &[])?;
+    let raw: YtHomeOutput =
+        serde_json::from_str(&stdout).context("Failed to parse ytmusicapi home output")?;
+    let mut sections = Vec::new();
+    for section in raw.sections {
+        let Some(kind) = HomeSectionKind::from_key(&section.key) else {
+            continue;
+        };
+        let data = if section.tracks.is_empty() {
+            let cards: Vec<HomeCard> = section
+                .cards
+                .into_iter()
+                .filter_map(|card| {
+                    let kind = match card.kind.as_str() {
+                        "album" => crate::data::library::LibraryKind::Album,
+                        "artist" => crate::data::library::LibraryKind::Artist,
+                        "playlist" => crate::data::library::LibraryKind::Playlist,
+                        _ => return None,
+                    };
+                    (!card.id.is_empty()).then_some(HomeCard {
+                        kind,
+                        provider: ProviderId::YouTube,
+                        id: card.id,
+                        title: card.title,
+                        subtitle: card.subtitle,
+                        thumbnail: card.thumbnail,
+                        url: card.url,
+                        badge: card.badge,
+                        date: card.date,
+                    })
+                })
+                .collect();
+            if cards.is_empty() {
+                continue;
+            }
+            HomeSectionData::Cards(cards)
+        } else {
+            HomeSectionData::Tracks(section.tracks.into_iter().map(Track::from).collect())
+        };
+        sections.push(HomeSection::new(
+            HomeSectionKey::new(ProviderId::YouTube, kind),
+            section.title,
+            data,
+        ));
+    }
+    Ok(sections)
+}
+
 /// Raw JSON shape returned by the python helper's `artist_page` mode. The
 /// card lists deserialize straight into the shared provider types.
 #[derive(Deserialize, Default)]

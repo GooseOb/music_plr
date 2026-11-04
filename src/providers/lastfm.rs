@@ -526,6 +526,41 @@ fn popular_from_top(id: &str) -> Vec<Track> {
         .collect()
 }
 
+/// Home row: the chart's top artists as artist cards. Last.fm tracks are
+/// metadata-only, so a track row here would be a dead end on play; artists
+/// open a real page (and play through whichever provider streams them).
+pub fn home_sections() -> Result<Vec<crate::providers::HomeSection>> {
+    let value = get("chart.getTopArtists", &[("limit", "24")])?;
+    let mut cards = Vec::new();
+    for artist in collect(&["artists", "artist"], &value) {
+        let name = str_field(artist, "name");
+        if name.is_empty() {
+            continue;
+        }
+        cards.push(crate::providers::HomeCard {
+            kind: crate::data::library::LibraryKind::Artist,
+            provider: ProviderId::LastFm,
+            id: name.clone(),
+            title: name,
+            subtitle: String::new(),
+            thumbnail: image_url(artist),
+            url: str_field(artist, "url"),
+            badge: String::new(),
+            date: String::new(),
+        });
+        if cards.len() >= 24 {
+            break;
+        }
+    }
+    Ok(super::home::provider_sections(
+        ProviderId::LastFm,
+        [(
+            super::home::HomeSectionKind::TopArtists,
+            super::home::HomeSectionData::Cards(cards),
+        )],
+    ))
+}
+
 pub fn fetch_artist_page(
     id: &str,
     kinds: &[crate::providers::ArtistDataKind],

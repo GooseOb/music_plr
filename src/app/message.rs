@@ -148,6 +148,12 @@ pub enum BackendResult {
         target: crate::data::server_playlists::ServerPlaylistId,
         result: Result<ServerPlaylistChange, crate::providers::ProviderError>,
     },
+    /// One provider's home feed rows finished fetching (or failed).
+    HomeLoaded {
+        rid: u64,
+        provider: ProviderId,
+        result: Result<Vec<crate::providers::HomeSection>, crate::providers::ProviderError>,
+    },
 }
 
 /// What a server-playlist write asked the server to do, so the tick handler
@@ -212,6 +218,14 @@ pub enum Message {
     SearchHistorySelected(PaneId, usize),
     DeleteSearchHistory(PaneId, usize),
     Browse(PaneId, ViewKind, ProviderId),
+    /// Re-run the Home feed's provider fetches (cache still paints first).
+    HomeRefresh(PaneId),
+    /// Play a track from a home rail (recent, downloads or a provider row).
+    PlayHomeTrack {
+        pane: PaneId,
+        source: crate::app::HomeTrackSource,
+        index: usize,
+    },
     OpenArtist {
         pane: PaneId,
         id: String,
@@ -362,9 +376,9 @@ pub enum Message {
         /// on the same page (and every other entry reads the card's identity
         /// off it).
         target: ViewKind,
-        /// The artist-page shelf the card sits in, when it has one (that one
-        /// scrolls sideways).
-        row: Option<crate::providers::ArtistSectionKind>,
+        /// The card shelf the card sits in, when it has one (artist-page
+        /// section or Home rail — that one scrolls sideways).
+        rail: Option<crate::app::update::operation::RailKey>,
         point: Point,
     },
     CardMenuOpen,
@@ -437,6 +451,8 @@ impl Message {
             | Message::DeleteCustomLyrics(pane)
             | Message::OpenTranslateDialog(pane)
             | Message::NavigateTo(pane, _)
+            | Message::HomeRefresh(pane)
+            | Message::PlayHomeTrack { pane, .. }
             | Message::SaveBrowseAsPlaylist(pane)
             | Message::NavigateBack(pane)
             | Message::NavigateForward(pane)
@@ -547,7 +563,10 @@ mod tests {
             },
             scrolled(ScrollTarget::Tracks(pane)),
             scrolled(ScrollTarget::Cards(pane)),
-            scrolled(ScrollTarget::CardRow(pane, ArtistSectionKind::Albums)),
+            scrolled(ScrollTarget::CardRow(
+                pane,
+                crate::app::update::operation::RailKey::Artist(ArtistSectionKind::Albums),
+            )),
             Message::LyricsScrolled {
                 pane,
                 translation_y: 0.0,
@@ -570,7 +589,7 @@ mod tests {
                 host: ScrollTarget::Cards(pane),
                 pane,
                 target: ViewKind::Downloads,
-                row: None,
+                rail: None,
                 point: Point::ORIGIN,
             },
         ];

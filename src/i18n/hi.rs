@@ -10,6 +10,18 @@ pub const STRINGS: Strings = Strings {
     nothing_saved_yet: "अभी तक कुछ सहेजा नहीं गया",
     new_playlist_name: "नई प्लेलिस्ट का नाम",
 
+    home: "होम",
+    quick_picks: "तेज़ चयन",
+    new_releases: "नई रिलीज़",
+    trending_now: "ट्रेंडिंग",
+    top_artists: "शीर्ष कलाकार",
+    artists: "कलाकार",
+    for_you: "आपके लिए",
+    discover: "खोजें",
+    recently_added: "हाल में जोड़े गए",
+    most_played: "सबसे अधिक बजाए गए",
+    starred: "पसंदीदा",
+
     queue: "कतार",
     recently_played: "हाल ही में चलाए गए",
     now_playing_from: "अभी चल रहा है से",

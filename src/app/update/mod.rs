@@ -22,6 +22,7 @@ mod artist;
 mod dispatch;
 mod drag;
 mod edit_track;
+mod home;
 mod input;
 mod navigation;
 pub mod operation;

@@ -70,6 +70,7 @@ impl PaletteGroup {
 /// The sidebar destinations, offered by name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaletteView {
+    Home,
     Search,
     Downloads,
     Trashbin,
@@ -77,7 +78,8 @@ pub enum PaletteView {
 }
 
 impl PaletteView {
-    pub const ALL: [PaletteView; 4] = [
+    pub const ALL: [PaletteView; 5] = [
+        PaletteView::Home,
         PaletteView::Search,
         PaletteView::Downloads,
         PaletteView::Trashbin,
@@ -86,6 +88,7 @@ impl PaletteView {
 
     pub fn label(self, strings: &Strings) -> &'static str {
         match self {
+            Self::Home => strings.home,
             Self::Search => strings.search,
             Self::Downloads => strings.downloads,
             Self::Trashbin => strings.trashbin,
@@ -96,6 +99,7 @@ impl PaletteView {
     /// Untranslated synonyms, matched in addition to the localized label.
     pub fn keywords(self) -> &'static str {
         match self {
+            Self::Home => "home start landing feed discovery",
             Self::Search => "search find browse",
             Self::Downloads => "downloads offline saved",
             Self::Trashbin => "trash bin deleted removed",
@@ -107,6 +111,7 @@ impl PaletteView {
         match self {
             // The sidebar button's message: restore the last search view, or
             // run the blank-query browse until one exists.
+            Self::Home => Message::NavigateTo(pane, ViewData::new_home()),
             Self::Search => Message::SidebarSearch,
             Self::Downloads => Message::NavigateTo(pane, ViewData::new_downloads(Vec::new())),
             Self::Trashbin => Message::NavigateTo(pane, ViewData::new_trashbin()),

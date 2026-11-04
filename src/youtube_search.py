@@ -53,12 +53,13 @@ def _yt():
     return YTMusic()
 
 
-def _charts_items(scope, limit=20):
+def _charts_items(scope, limit=20, yt=None, depth=None):
     """Global charts for blank searches: the top music-video chart playlist for
     the Songs/Videos scopes, chart artists for Artists, nothing for Albums and
     Playlists. The Songs/Videos charts fetch is a one-shot page (no pagination),
     so it over-fetches to give the browse some depth."""
-    yt = _yt()
+    if yt is None:
+        yt = _yt()
     try:
         charts = yt.get_charts("ZZ")
     except Exception:
@@ -70,7 +71,7 @@ def _charts_items(scope, limit=20):
         pid = vids[0].get("playlistId") or ""
         if not pid:
             return []
-        want = max(limit, 60)
+        want = max(limit, depth or 60)
         try:
             pl = yt.get_playlist(pid, limit=want)
         except Exception:
@@ -106,6 +107,153 @@ def _charts_items(scope, limit=20):
                 break
         return out
     return []
+
+
+def _home_normalize(c):
+    """Flatten the two shapes ytmusicapi returns for home shelf entries.
+
+    Parsed items already carry `title`/`thumbnails` plus a `videoId`,
+    `playlistId` or `browseId`; raw `musicTwoRowItemRenderer`s carry runs and a
+    navigation endpoint instead. Both come out with `title`, `subtitle`,
+    `thumbnails` and one id."""
+    ren = c.get("musicTwoRowItemRenderer")
+    if ren is None:
+        if not c.get("title"):
+            return None
+        out = dict(c)
+        out.setdefault("subtitle", "")
+        return out
+    nav = ren.get("navigationEndpoint") or {}
+    thumbnail = ((ren.get("thumbnailRenderer") or {}).get("musicThumbnailRenderer")
+                 or {}).get("thumbnail") or {}
+    out = {
+        "title": _runs_text(ren.get("title")),
+        "subtitle": _runs_text(ren.get("subtitle")),
+        "thumbnails": thumbnail.get("thumbnails") or [],
+    }
+    watch = nav.get("watchEndpoint") or {}
+    if watch.get("videoId"):
+        out["videoId"] = watch["videoId"]
+        return out
+    browse = nav.get("browseEndpoint") or {}
+    bid = browse.get("browseId") or ""
+    page = (browse.get("browseEndpointContextMusicConfig") or {}).get("pageType") or ""
+    if "PLAYLIST" in page:
+        out["playlistId"] = bid
+    elif "ALBUM" in page and "AUDIOBOOK" not in page:
+        out["browseId"] = bid
+    elif "ARTIST" in page:
+        out["browseId"] = bid
+        out["subscribers"] = out["subtitle"]
+    else:
+        return None
+    return out
+
+
+def _home_card_item(raw):
+    """Map one home/explore shelf entry to a navigable card.
+
+    Home shelves carry no `resultType`: songs are identified by `videoId`,
+    playlists by a `VL…`/`RD…`/`OLAK…` id (playlistId or browseId), albums by
+    an `MPRE…` browseId and artists by a `UC…` channel id, so the kind comes
+    from the id itself."""
+    c = _home_normalize(raw)
+    if not c or c.get("videoId"):
+        return None
+    title = c.get("title", "") or ""
+    if not title:
+        return None
+    thumbs = c.get("thumbnails") or []
+    thumb = thumbs[-1].get("url", "") if thumbs else ""
+    subtitle = c.get("subtitle", "") or ""
+    pid = c.get("playlistId") or ""
+    bid = c.get("browseId") or ""
+    if pid or bid.startswith(("VL", "RD", "OLAK")):
+        cid = pid or bid
+        return {
+            "kind": "playlist", "id": cid, "title": title,
+            "subtitle": subtitle or c.get("description", "") or "",
+            "thumbnail": thumb,
+            "url": f"https://music.youtube.com/playlist?list={cid}",
+            "badge": "", "date": "",
+        }
+    if bid.startswith("UC"):
+        return {
+            "kind": "artist", "id": bid, "title": title,
+            "subtitle": c.get("subscribers", "") or subtitle,
+            "thumbnail": thumb,
+            "url": f"https://music.youtube.com/channel/{bid}",
+            "badge": "", "date": "",
+        }
+    if bid:
+        artist = ", ".join(
+            a.get("name", "") for a in c.get("artists") or [] if isinstance(a, dict)
+        )
+        return {
+            "kind": "album", "id": bid, "title": title,
+            "subtitle": artist or subtitle, "thumbnail": thumb,
+            "url": f"https://music.youtube.com/browse/{bid}",
+            "badge": str(c.get("year") or ""), "date": "",
+        }
+    return None
+
+
+def home(limit=20):
+    """Build the Home feed's YouTube rows: quick picks (the first all-song
+    shelf), one recommendation shelf, new releases and a trending row — the
+    second song shelf when there is one, else the charts. Shelves that fail
+    just go missing; the Rust side keeps whatever else arrived."""
+    yt = _yt()
+    try:
+        home_rows = yt.get_home(limit=10)
+    except Exception:
+        home_rows = []
+
+    song_rows = []
+    card_rows = []
+    for row in home_rows:
+        title = row.get("title", "") or ""
+        entries = [n for n in (_home_normalize(c) for c in row.get("contents") or []) if n]
+        songs = [e for e in entries if e.get("videoId")]
+        if len(songs) >= 5:
+            song_rows.append((title, songs))
+            continue
+        cards = [i for i in (_home_card_item(e) for e in entries) if i]
+        if len(cards) >= 4:
+            card_rows.append((title, cards))
+
+    sections = []
+    if song_rows:
+        picks = [i for i in (result_to_item(c, "song") for c in song_rows[0][1]) if i]
+        if picks:
+            sections.append({"key": "quick_picks", "title": "", "tracks": picks[:limit]})
+    if card_rows:
+        title, cards = card_rows[0]
+        sections.append({"key": "for_you", "title": title, "cards": cards[:limit]})
+    if len(song_rows) > 1:
+        title, songs = song_rows[1]
+        items = [i for i in (result_to_item(c, "song") for c in songs) if i]
+        if items:
+            sections.append({"key": "trending", "title": title, "tracks": items[:limit]})
+
+    try:
+        explore = yt.get_explore()
+    except Exception:
+        explore = {}
+    releases = [i for i in (_home_card_item(c) for c in explore.get("new_releases") or []) if i]
+    if releases:
+        sections.append({
+            "key": "new_releases", "title": "", "cards": releases[:limit],
+        })
+
+    if not any(section["key"] == "trending" for section in sections):
+        trending = _charts_items("songs", limit, yt, depth=limit)
+        if trending:
+            sections.append({
+                "key": "trending", "title": "", "tracks": trending[:limit],
+            })
+
+    return {"sections": sections}
 
 
 def search(query, scope="all", limit=20):
@@ -701,6 +849,9 @@ def main():
     if cmd == "artist_page":
         bid = sys.argv[2] if len(sys.argv) > 2 else ""
         print(json.dumps(artist_page(bid)))
+        return
+    if cmd == "home":
+        print(json.dumps(home()))
         return
     if cmd == "watch":
         # watch <videoId|''> <playlistId|''> [limit]

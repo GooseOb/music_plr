@@ -284,7 +284,7 @@ fn library_row<'a>(
             host: ScrollTarget::Library,
             pane: player.focused_pane_id,
             target: item.as_ref().into(),
-            row: None,
+            rail: None,
         },
         CardTarget::into_message,
     )
@@ -363,6 +363,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         .padding([theme::SPACING_MD, theme::SPACING_XL]);
 
     let nav_items: Vec<Element<'_, Message, AppTheme>> = vec![
+        sidebar_nav_item(player.strings.home, ViewData::new_home(), player, None),
         sidebar_nav_item(
             player.strings.search,
             ViewData::new_search(
@@ -592,6 +593,7 @@ fn sidebar_nav_item<'a>(
         player.focused_pane().view_data().same_kind(&target)
     };
     let icon_name: &[u8] = match target.kind {
+        ViewKind::Home(_) => icons::HOME_ICON,
         ViewKind::Search { .. } => icons::SEARCH_ICON,
         ViewKind::Downloads => icons::DOWNLOAD_ICON,
         ViewKind::Trashbin => icons::DELETE_ICON,

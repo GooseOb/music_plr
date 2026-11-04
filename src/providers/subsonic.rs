@@ -119,6 +119,113 @@ fn album_card(client: &Client, album: &opensubsonic::data::AlbumId3) -> CardData
     }
 }
 
+fn album_list(client: &Client, list_type: AlbumListType) -> Vec<opensubsonic::data::AlbumId3> {
+    let options = AlbumListOptions::new().size(20);
+    block_on(client.get_album_list2(list_type, &options)).unwrap_or_default()
+}
+
+fn album_cards(
+    client: &Client,
+    provider: ProviderId,
+    albums: &[opensubsonic::data::AlbumId3],
+) -> Vec<crate::providers::HomeCard> {
+    albums
+        .iter()
+        .map(|album| {
+            crate::providers::HomeCard::new(
+                crate::data::library::LibraryKind::Album,
+                provider,
+                album_card(client, album),
+            )
+        })
+        .collect()
+}
+
+/// A time-seeded shuffle, so a large library's artist row shows a different
+/// slice on every refresh without pulling in an RNG dependency.
+fn shuffle<T>(items: &mut [T]) {
+    let mut state = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0x9E37_79B9_7F4A_7C15, |elapsed| elapsed.as_nanos() as u64)
+        | 1;
+    for index in (1..items.len()).rev() {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        let swap_with = (state % (index as u64 + 1)) as usize;
+        items.swap(index, swap_with);
+    }
+}
+
+/// Artist cards from the server's artist index, in a shuffled order so the row
+/// isn't permanently stuck on the first page of an alphabetical list.
+fn artist_cards(client: &Client, provider: ProviderId) -> Vec<crate::providers::HomeCard> {
+    let Ok(artists) = block_on(client.get_artists(None)) else {
+        return Vec::new();
+    };
+    let mut artists: Vec<opensubsonic::data::ArtistId3> = artists
+        .index
+        .into_iter()
+        .flat_map(|index| index.artist)
+        .collect();
+    shuffle(&mut artists);
+    artists
+        .iter()
+        .take(20)
+        .map(|artist| {
+            crate::providers::HomeCard::new(
+                crate::data::library::LibraryKind::Artist,
+                provider,
+                artist_card(client, artist),
+            )
+        })
+        .collect()
+}
+
+/// Home rows: the server's newest, recently played, most played and starred
+/// album lists, a random album sample and its artist index. One failing list
+/// just drops that row.
+pub fn home_sections(provider: ProviderId) -> Result<Vec<crate::providers::HomeSection>> {
+    let config = configured(provider)?;
+    let client = make_client(&config)?;
+    let mut rows = Vec::new();
+    for (kind, list_type) in [
+        (
+            crate::providers::HomeSectionKind::RecentlyAdded,
+            AlbumListType::Newest,
+        ),
+        (
+            crate::providers::HomeSectionKind::RecentlyPlayed,
+            AlbumListType::Recent,
+        ),
+        (
+            crate::providers::HomeSectionKind::MostPlayed,
+            AlbumListType::Frequent,
+        ),
+        (
+            crate::providers::HomeSectionKind::Starred,
+            AlbumListType::Starred,
+        ),
+    ] {
+        let albums = album_list(&client, list_type);
+        rows.push((
+            kind,
+            crate::providers::HomeSectionData::Cards(album_cards(&client, provider, &albums)),
+        ));
+    }
+
+    let random = album_list(&client, AlbumListType::Random);
+    rows.push((
+        crate::providers::HomeSectionKind::Discover,
+        crate::providers::HomeSectionData::Cards(album_cards(&client, provider, &random)),
+    ));
+    rows.push((
+        crate::providers::HomeSectionKind::Artists,
+        crate::providers::HomeSectionData::Cards(artist_cards(&client, provider)),
+    ));
+    Ok(super::home::provider_sections(provider, rows))
+}
+
 fn playlist_card(client: &Client, playlist: &opensubsonic::data::Playlist) -> CardData {
     CardData {
         id: playlist.id.clone(),

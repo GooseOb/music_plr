@@ -26,7 +26,7 @@ impl Default for SessionState {
         Self {
             panes: vec![PaneData {
                 id: 0,
-                nav_history: vec![ViewData::default()],
+                nav_history: vec![ViewData::new_home()],
                 nav_history_pos: 0,
                 search_query: String::new(),
                 search_scope: crate::providers::SearchScope::Songs,
@@ -141,7 +141,7 @@ mod tests {
         let state = SessionState::default();
         assert!(matches!(
             state.panes[0].nav_history[0].kind,
-            ViewKind::Search { .. }
+            ViewKind::Home(_)
         ));
         assert!(state.queue.tracks.is_empty());
         assert!(!state.show_queue);

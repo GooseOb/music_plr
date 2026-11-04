@@ -112,6 +112,9 @@ pub struct MusicPlayer {
     pub artist_error_dedup: Option<(u64, ProviderId)>,
 
     pub thumbnail_index: ThumbnailIndex,
+    /// Cached home-feed rows, painted immediately on open and refreshed in
+    /// the background.
+    pub home_cache: crate::data::home_cache::HomeCache,
     pub playlists: PlaylistStore,
     /// Index of the playlists that live on user-configured servers. Contents
     /// are always fetched through the provider, so nothing here goes stale.
@@ -214,6 +217,7 @@ impl Default for MusicPlayer {
 impl MusicPlayer {
     pub fn new() -> (Self, Task<Message>) {
         let mut player = Self::default();
+        player.start_home_fetches();
         let boot = Task::batch([
             CaptureBounds::with_panes(player.pane_ids()).into(),
             player.take_media_bridge(),
@@ -310,6 +314,7 @@ impl MusicPlayer {
             show_queue: false,
             repeat: false,
             thumbnail_index: ThumbnailIndex::load(),
+            home_cache: crate::data::home_cache::HomeCache::load(),
             dialog: (!missing_deps.is_empty())
                 .then(|| Dialog::Dependencies(DependencyDialog::new(missing_deps, found_deps))),
             library: LibraryStore::load(),

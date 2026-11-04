@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use super::home::HomeData;
 use crate::{
     data::library::{CardRef, LibraryItem, LibraryKind},
     load_state::LoadState,
@@ -137,6 +138,7 @@ impl From<RadioDataCompat> for RadioData {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ViewKind {
+    Home(HomeData),
     Search(SearchData),
     SongRadio(RadioData),
     ArtistRadio(RadioData),
@@ -301,12 +303,23 @@ impl ViewData {
             }
             (ViewKind::Downloads, ViewKind::Downloads)
             | (ViewKind::Trashbin, ViewKind::Trashbin)
-            | (ViewKind::Settings, ViewKind::Settings) => true,
+            | (ViewKind::Settings, ViewKind::Settings)
+            | (ViewKind::Home(_), ViewKind::Home(_)) => true,
             _ => false,
         }
     }
 
     // ── constructors ─────────────────────────────────────────────
+
+    /// Create a `Home` view. The provider rows and quick picks are filled by
+    /// the home fetcher (cache first, then a background refresh).
+    pub fn new_home() -> Self {
+        Self {
+            kind: ViewKind::Home(HomeData::default()),
+            content: LoadState::Loading,
+            ..Default::default()
+        }
+    }
 
     /// Create a fresh `Search` view for `query` on `provider` at the given
     /// `scope`.

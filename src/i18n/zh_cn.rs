@@ -8,6 +8,18 @@ pub const STRINGS: Strings = Strings {
     nothing_saved_yet: "还没有保存任何内容",
     new_playlist_name: "新播放列表名称",
 
+    home: "首页",
+    quick_picks: "快速选择",
+    new_releases: "新发行",
+    trending_now: "趋势",
+    top_artists: "热门艺人",
+    artists: "艺术家",
+    for_you: "为你推荐",
+    discover: "发现",
+    recently_added: "最近添加",
+    most_played: "最常播放",
+    starred: "收藏",
+
     queue: "播放队列",
     recently_played: "最近播放",
     now_playing_from: "正在播放来自",

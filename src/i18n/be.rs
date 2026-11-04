@@ -13,6 +13,18 @@ pub const STRINGS: Strings = Strings {
     nothing_saved_yet: "Пакуль нічога не захавана",
     new_playlist_name: "Назва новага плэйліста",
 
+    home: "Галоўная",
+    quick_picks: "Хуткі выбар",
+    new_releases: "Навінкі",
+    trending_now: "У трэндзе",
+    top_artists: "Найлепшыя выканаўцы",
+    artists: "Выканаўцы",
+    for_you: "Для вас",
+    discover: "Адкрыцці",
+    recently_added: "Нядаўна дададзеныя",
+    most_played: "Найчасцей",
+    starred: "Выбранае",
+
     queue: "Чарга",
     recently_played: "Нядаўнія",
     now_playing_from: "Зараз грае з",

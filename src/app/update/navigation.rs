@@ -40,16 +40,22 @@ impl MusicPlayer {
         // Scroll position is stored relative to the main track_list scrollable.
         // (Queue view uses a different Id and is not navigated via history.)
         let y = data.scroll;
+        let home = matches!(data.kind, ViewKind::Home(_));
         *self.view_data_in_mut(pane) = data;
+        if home {
+            self.bounds.forget_home_rails(pane);
+        }
         self.sync_search_query(pane);
         self.sync_search_scope(pane);
         self.sync_search_provider(pane);
         self.sync_downloads_view(pane);
+        let home_task = self.start_home(pane, false);
 
         iced::widget::operation::scroll_to::<Message>(
             track_list_id(pane),
             iced::widget::operation::AbsoluteOffset { x: 0.0, y },
         )
+        .chain(home_task)
     }
 
     pub(super) fn sync_downloads_view(&mut self, pane: PaneId) {
@@ -68,6 +74,12 @@ impl MusicPlayer {
         // Showing content in a pane focuses it (click-to-focus for drill-downs,
         // search, radio, and playlist jumps).
         self.focused_pane_id = pane;
+        // A Home page rebuilds its rails from the top, so offsets remembered
+        // from the last visit are dropped rather than misplacing the next
+        // card menu.
+        if matches!(data.kind, ViewKind::Home(_)) {
+            self.bounds.forget_home_rails(pane);
+        }
         let p = self.pane_mut(pane);
         p.nav_history.truncate(p.nav_history_pos + 1);
         p.nav_history.push(data);
@@ -100,7 +112,8 @@ impl MusicPlayer {
 
         self.seed_active_view_thumbnails(pane);
         self.save_session();
-        nav_task
+        let home_task = self.start_home(pane, false);
+        nav_task.chain(home_task)
     }
 
     pub fn handle_navigate_back(&mut self, pane: PaneId) -> Task<Message> {

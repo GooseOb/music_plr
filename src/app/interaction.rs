@@ -502,9 +502,9 @@ pub struct CardTarget {
     pub pane: PaneId,
     /// The exact view the card's click opens.
     pub target: super::view_data::ViewKind,
-    /// The artist-page shelf inside `host`, when the card sits in one (the
-    /// shelf scrolls sideways, so it shifts the cursor too).
-    pub row: Option<crate::providers::ArtistSectionKind>,
+    /// The sideways-scrolling shelf inside `host`, when the card sits in one
+    /// (an artist-page section or a Home rail, which shift the cursor too).
+    pub rail: Option<crate::app::update::operation::RailKey>,
 }
 
 impl CardTarget {
@@ -513,7 +513,7 @@ impl CardTarget {
             host: self.host,
             pane: self.pane,
             target: self.target,
-            row: self.row,
+            rail: self.rail,
             point,
         }
     }

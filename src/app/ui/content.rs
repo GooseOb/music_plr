@@ -1,7 +1,8 @@
 use iced::widget::{Column, Space};
 
 use super::{
-    artist, lyrics, playlist, search, settings, track_list_search, Element, Message, MusicPlayer,
+    artist, home, lyrics, playlist, search, settings, track_list_search, Element, Message,
+    MusicPlayer,
 };
 use crate::{
     app::{pane::PaneId, ui::search::browse_meta, ViewKind},
@@ -21,6 +22,7 @@ pub(super) fn view_main_content(
         lyrics::view_lyrics(player, pane, lyrics_state)
     } else {
         match &player.view_data_in(pane).kind {
+            ViewKind::Home(_) => home::view_home(player, pane),
             ViewKind::Search(s) => search::view_search(player, pane, s),
             ViewKind::SongRadio(data) => {
                 search::view_radio(player, pane, data, player.strings.song_radio)

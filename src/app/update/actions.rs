@@ -825,18 +825,18 @@ impl MusicPlayer {
     /// Convert a cursor point reported inside a card list to absolute window
     /// coordinates, like [`window_point`](Self::window_point): a scrollable
     /// hands its content a cursor shifted by the *whole* translation vector, so
-    /// both axes may need undoing. `row` names the artist-page shelf the card
-    /// sits in, which scrolls sideways on top of the host's vertical offset.
+    /// both axes may need undoing. `rail` names the card shelf the card sits in,
+    /// which scrolls sideways on top of the host's vertical offset.
     pub(super) fn card_window_point(
         &self,
         host: super::operation::ScrollTarget,
-        row: Option<crate::providers::ArtistSectionKind>,
+        rail: Option<super::operation::RailKey>,
         point: Point,
     ) -> Point {
         let vertical = self.bounds.scroll_offset(host);
-        let horizontal = match (host, row) {
-            (super::operation::ScrollTarget::Cards(pane), Some(section)) => {
-                self.bounds.card_row_scroll(pane, section)
+        let horizontal = match (host, rail) {
+            (super::operation::ScrollTarget::Cards(pane), Some(rail)) => {
+                self.bounds.rail_scroll(pane, rail)
             }
             _ => 0.0,
         };
@@ -1024,7 +1024,10 @@ impl MusicPlayer {
 mod tests {
     use super::*;
     use crate::{
-        app::{pane::QUEUE_PANE_ID, update::operation::ListGeometry},
+        app::{
+            pane::QUEUE_PANE_ID,
+            update::operation::{ListGeometry, RailKey},
+        },
         data::{config, library::LibraryItem},
         providers::ArtistSectionKind,
     };
@@ -1106,7 +1109,7 @@ mod tests {
             host: ScrollTarget::Cards(pane),
             pane,
             target: album_view(),
-            row: None,
+            rail: None,
             point: Point::new(10.0, 20.0),
         });
 
@@ -1176,10 +1179,10 @@ mod tests {
         // shelf's x offset and the page's y offset come off.
         p.bounds
             .card_rows
-            .insert((pane, ArtistSectionKind::Albums), 210.0);
+            .insert((pane, RailKey::Artist(ArtistSectionKind::Albums)), 210.0);
         let anchored = p.card_window_point(
             ScrollTarget::Cards(pane),
-            Some(ArtistSectionKind::Albums),
+            Some(RailKey::Artist(ArtistSectionKind::Albums)),
             Point::new(300.0, 500.0),
         );
         assert_eq!((anchored.x, anchored.y), (90.0, 380.0));
@@ -1197,7 +1200,7 @@ mod tests {
         });
         let sidebar = p.card_window_point(
             ScrollTarget::Library,
-            Some(ArtistSectionKind::Related),
+            Some(RailKey::Artist(ArtistSectionKind::Related)),
             Point::new(30.0, 300.0),
         );
         assert_eq!((sidebar.x, sidebar.y), (30.0, 260.0));

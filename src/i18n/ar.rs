@@ -10,6 +10,18 @@ pub const STRINGS: Strings = Strings {
     nothing_saved_yet: "لا يوجد ما تم حفظه بعد",
     new_playlist_name: "اسم قائمة التشغيل الجديدة",
 
+    home: "الرئيسية",
+    quick_picks: "اختيارات سريعة",
+    new_releases: "إصدارات جديدة",
+    trending_now: "الرائج الآن",
+    top_artists: "أبرز الفنانين",
+    artists: "الفنانون",
+    for_you: "لك",
+    discover: "استكشف",
+    recently_added: "أضيفت مؤخرًا",
+    most_played: "الأكثر تشغيلًا",
+    starred: "المفضلة",
+
     queue: "قائمة الانتظار",
     recently_played: "تم تشغيلها مؤخراً",
     now_playing_from: "يتم تشغيله من",

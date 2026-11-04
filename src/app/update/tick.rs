@@ -44,6 +44,7 @@ impl MusicPlayer {
         self.expire_notification();
         // Reconcile currently visible thumbnails: queue any missing ones for
         // download and flush the queue to a background thread.
+        self.seed_home_row_thumbnails();
         self.update_thumbnails();
 
         let s = self.audio.get_state();
@@ -196,6 +197,11 @@ impl MusicPlayer {
                     }
                 }
             }
+            ViewKind::Home(home) => {
+                for section in &home.sections {
+                    section.data.seed_thumbnails(index);
+                }
+            }
             _ => {}
         }
         view.thumbnails_seeded = true;
@@ -206,6 +212,62 @@ impl MusicPlayer {
             return;
         };
         self.seed_view_thumbnails(pane, pos);
+    }
+
+    /// Home's rows are drawn straight from their stores and from the fetched
+    /// sections, so their artwork is seeded here every tick (the per-view pass
+    /// only runs when the view changes, and these rows move under it).
+    fn seed_home_row_thumbnails(&mut self) {
+        if !self
+            .pane_ids_unsorted()
+            .into_iter()
+            .any(|pane| matches!(self.view_data_in(pane).kind, ViewKind::Home(_)))
+        {
+            return;
+        }
+        for track in &self.queue.recently_played {
+            if !track.thumbnail().is_empty() {
+                self.thumbnail_index
+                    .ensure(track.source, track.primary_id(), track.thumbnail());
+            }
+        }
+        for track in self.download_registry.tracks() {
+            if !track.thumbnail().is_empty() {
+                self.thumbnail_index
+                    .ensure(track.source, track.primary_id(), track.thumbnail());
+            }
+        }
+        for item in &self.library.items {
+            self.thumbnail_index
+                .ensure(item.provider, &item.id, &item.thumbnail);
+        }
+        for playlist in &self.playlists.playlists {
+            if let Some(track) = playlist.tracks.first() {
+                if !track.thumbnail().is_empty() {
+                    self.thumbnail_index.ensure(
+                        track.source,
+                        track.primary_id(),
+                        track.thumbnail(),
+                    );
+                }
+            }
+        }
+        for pane in self.pane_ids_unsorted() {
+            let Some(view) = self
+                .panes
+                .get(&pane)
+                .and_then(|pane| pane.nav_history.get(pane.nav_history_pos))
+            else {
+                continue;
+            };
+            if let ViewKind::Home(home) = &view.kind {
+                let mut index = std::mem::take(&mut self.thumbnail_index);
+                for section in &home.sections {
+                    section.data.seed_thumbnails(&mut index);
+                }
+                self.thumbnail_index = index;
+            }
+        }
     }
 
     fn update_thumbnails(&mut self) {
@@ -513,6 +575,11 @@ impl MusicPlayer {
             BackendResult::ServerPlaylistWritten { target, result } => {
                 self.apply_server_playlist_write(&target, result)
             }
+            BackendResult::HomeLoaded {
+                rid,
+                provider,
+                result,
+            } => self.handle_home_loaded(rid, provider, result),
             BackendResult::ImportPathsPicked { method, paths } => {
                 if paths.is_empty() {
                     Task::none()

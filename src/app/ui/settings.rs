@@ -5,7 +5,9 @@ use iced::{
 };
 
 use super::{
-    shared_components::{dep_install_status, scope_tab_row, text_button, text_input_row},
+    shared_components::{
+        dep_install_status, scope_tab_row, section_label, text_button, text_input_row,
+    },
     Message, MusicPlayer,
 };
 use crate::{
@@ -166,10 +168,7 @@ fn section<'a>(
     children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
     Column::with_children([
-        text(label)
-            .size(theme::TEXT_SIZE_LG)
-            .style(fg_accent())
-            .into(),
+        section_label(dir, label),
         Column::with_children(children)
             .spacing(theme::SPACING_SM)
             .align_x(dir.align())

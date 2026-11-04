@@ -216,6 +216,107 @@ pub fn search_more(query: &str, offset: usize) -> Result<Vec<Track>> {
     Ok(search(query, SearchScope::Songs, offset)?.0)
 }
 
+/// Home row: Bandcamp's "new releases" discover shelf.
+pub fn home_sections() -> Result<Vec<crate::providers::HomeSection>> {
+    let cards = discover_new(20)?;
+    Ok(super::home::provider_sections(
+        ProviderId::Bandcamp,
+        [(
+            super::home::HomeSectionKind::NewReleases,
+            super::home::HomeSectionData::Cards(cards),
+        )],
+    ))
+}
+
+fn discover_new(limit: usize) -> Result<Vec<crate::providers::HomeCard>> {
+    let body = super::http_agent()
+        .get("https://bandcamp.com/api/discover/3/get_web?g=all&s=new&p=0&gn=0&f=all")
+        .header("User-Agent", "goosemusic/0.1")
+        .call()
+        .context("Bandcamp discover request failed")?
+        .body_mut()
+        .read_to_string()
+        .context("Bandcamp discover response unreadable")?;
+    let value: serde_json::Value =
+        serde_json::from_str(&body).context("Bandcamp discover response invalid")?;
+    let mut cards = Vec::new();
+    for item in value
+        .get("items")
+        .and_then(|items| items.as_array())
+        .into_iter()
+        .flatten()
+    {
+        let item_type = item
+            .get("type")
+            .and_then(|t| t.as_str())
+            .unwrap_or_default();
+        if item_type != "a" {
+            continue;
+        }
+        let (Some(band_id), Some(album_id)) = (
+            item.get("band_id").and_then(serde_json::Value::as_u64),
+            item.get("id").and_then(serde_json::Value::as_u64),
+        ) else {
+            continue;
+        };
+        // Discover lists entries as "album — artist": `primary_text` is the
+        // release title, `secondary_text` the band (the order the site's own
+        // tiles use, verified against an album page's `og:title`).
+        let Some(title) = text_field(item, "primary_text") else {
+            continue;
+        };
+        let artist = text_field(item, "secondary_text");
+        let thumbnail = item
+            .get("art_id")
+            .and_then(serde_json::Value::as_u64)
+            .map(|art| format!("https://f4.bcbits.com/img/a{art:010}_4.jpg"))
+            .unwrap_or_default();
+        cards.push(crate::providers::HomeCard {
+            kind: crate::data::library::LibraryKind::Album,
+            provider: ProviderId::Bandcamp,
+            id: format!("{band_id}:{album_id}:a"),
+            title,
+            subtitle: artist.unwrap_or_default(),
+            thumbnail,
+            url: album_page_url(item).unwrap_or_default(),
+            badge: String::new(),
+            date: text_field(item, "publish_date").unwrap_or_default(),
+        });
+        if cards.len() >= limit {
+            break;
+        }
+    }
+    Ok(cards)
+}
+
+/// The release's public page, rebuilt from the discover entry's `url_hints`
+/// (a custom domain wins over the band's `*.bandcamp.com` subdomain).
+fn album_page_url(item: &serde_json::Value) -> Option<String> {
+    let hints = item.get("url_hints")?;
+    let slug = hints.get("slug").and_then(|v| v.as_str())?;
+    let host = hints
+        .get("custom_domain")
+        .and_then(|v| v.as_str())
+        .filter(|domain| !domain.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            hints
+                .get("subdomain")
+                .and_then(|v| v.as_str())
+                .map(|sub| format!("{sub}.bandcamp.com"))
+        })?;
+    Some(format!("https://{host}/album/{slug}"))
+}
+
+fn text_field(value: &serde_json::Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
 pub fn browse(id: &str, kind: &str) -> Result<(Vec<Track>, Option<AlbumMeta>)> {
     if kind == "artist" {
         let artist = fetch_artist(id)?;

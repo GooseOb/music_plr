@@ -148,6 +148,7 @@ fn header_button(
 
 fn pane_title(player: &MusicPlayer, pane: PaneId) -> &str {
     match &player.view_data_in(pane).kind {
+        ViewKind::Home(_) => player.strings.home,
         ViewKind::Search(s) if s.query.is_empty() => player.strings.search,
         ViewKind::Search(s) => &s.query,
         ViewKind::SongRadio(data) | ViewKind::ArtistRadio(data) => &data.title,

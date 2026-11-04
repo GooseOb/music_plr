@@ -10,6 +10,18 @@ pub const STRINGS: Strings = Strings {
     nothing_saved_yet: "Nada salvo ainda",
     new_playlist_name: "Nome da nova playlist",
 
+    home: "Início",
+    quick_picks: "Escolhas rápidas",
+    new_releases: "Lançamentos",
+    trending_now: "Em alta",
+    top_artists: "Principais artistas",
+    artists: "Artistas",
+    for_you: "Para você",
+    discover: "Descobrir",
+    recently_added: "Adicionados recentemente",
+    most_played: "Mais ouvidos",
+    starred: "Favoritos",
+
     queue: "Fila",
     recently_played: "Reproduzidas recentemente",
     now_playing_from: "Tocando de",

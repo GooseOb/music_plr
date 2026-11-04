@@ -274,6 +274,15 @@ impl crate::app::MusicPlayer {
                 self.handle_search_provider_changed(pane, provider)
             }
             Message::Browse(pane, kind, provider) => self.handle_browse(pane, &kind, provider),
+            Message::HomeRefresh(pane) => self.start_home(pane, true),
+            Message::PlayHomeTrack {
+                pane,
+                source,
+                index,
+            } => {
+                self.handle_play_home_track(pane, source, index);
+                Task::none()
+            }
             Message::OpenArtist {
                 pane,
                 id,
@@ -325,10 +334,10 @@ impl crate::app::MusicPlayer {
                 host,
                 pane,
                 target,
-                row,
+                rail,
                 point,
             } => {
-                let point = self.card_window_point(host, row, point);
+                let point = self.card_window_point(host, rail, point);
                 self.show_card_menu_at(pane, target, point)
             }
             Message::PlayTrackAt(pos) => {

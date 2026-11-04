@@ -281,7 +281,7 @@ fn card_row<'a>(
             pane,
             // The menu's "Open" lands on exactly what a click opens.
             target: item.as_ref().into(),
-            row: None,
+            rail: None,
         },
         CardTarget::into_message,
     );

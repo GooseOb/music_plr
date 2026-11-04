@@ -14,6 +14,7 @@
 mod artist_page;
 mod bandcamp;
 mod error;
+pub(crate) mod home;
 mod jellyfin;
 pub(crate) mod lastfm;
 mod musicbrainz;
@@ -908,6 +909,10 @@ pub use artist_page::{
     ArtistSection, ArtistSectionKind, RelatedArtistCard, SectionContent,
 };
 pub use error::{ErrorKind, ProviderError};
+pub use home::{
+    fetch_home, home_providers, sort_sections, HomeCard, HomeSection, HomeSectionData,
+    HomeSectionKey, HomeSectionKind,
+};
 
 /// One artist-page section fetch result: the kind and its data (or error).
 /// See [`spawn_artist_kinds_fetch`].

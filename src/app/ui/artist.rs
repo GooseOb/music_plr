@@ -1,33 +1,28 @@
 use iced::{
     alignment,
-    widget::{scrollable, text, Button, Column, Container, MouseArea, Row},
+    widget::{text, Button, Column, Container},
     Element, Length,
 };
 
 use super::{
     shared_components::{
-        empty_state, loading_state, open_in_browser_button, scope_tab_row, thumbnail,
-        toggle_bookmark_button,
+        art_card, card_rail, empty_state, loading_state, open_in_browser_button, scope_tab_row,
+        thumbnail, toggle_bookmark_button,
     },
     styles::{fg_accent, fg_secondary},
     view_track_list, Message, MusicPlayer,
 };
 use crate::{
     app::{
-        interaction::{CardTarget, HoverTarget, Pressed},
         pane::PaneId,
-        update::operation::ScrollTarget,
+        update::operation::RailKey,
         view_data::{AlbumRef, PlaylistRef},
         ViewKind,
     },
-    data::library::Card,
     load_state::LoadState,
     providers::{ArtistSection, ArtistSectionKind, ProviderId, SectionContent},
     theme::{self, AppTheme},
 };
-
-const CARD_WIDTH: f32 = 140.0;
-const CARD_IMAGE_SIZE: f32 = 120.0;
 
 /// The artist page: header (picture, name, stats), then one section per row,
 /// each with its own "Provided by" provider picker.
@@ -267,7 +262,14 @@ fn cards<'a>(
                     provider,
                     url: c.url.clone(),
                 });
-                h_card(player, pane, target, &c.title, &subtitle, row)
+                art_card(
+                    player,
+                    pane,
+                    target,
+                    &c.title,
+                    &subtitle,
+                    RailKey::Artist(row),
+                )
             })
             .collect(),
         SectionContent::Playlists(v) => v
@@ -280,7 +282,7 @@ fn cards<'a>(
                     provider,
                     url: c.url.clone(),
                 });
-                h_card(player, pane, target, &c.title, "", row)
+                art_card(player, pane, target, &c.title, "", RailKey::Artist(row))
             })
             .collect(),
         SectionContent::Related(v) => v
@@ -294,7 +296,7 @@ fn cards<'a>(
                     thumbnail: r.thumbnail.clone(),
                     page: Box::new(crate::providers::ArtistPageState::new(provider, &r.id)),
                 });
-                h_card(player, pane, target, &r.name, &r.stat, row)
+                art_card(player, pane, target, &r.name, &r.stat, RailKey::Artist(row))
             })
             .collect(),
         SectionContent::Tracks(_) => Vec::new(),
@@ -372,9 +374,7 @@ fn section_body<'a>(
     )
 }
 
-/// A horizontal row of square art cards (pic on top, text below). The shelf's
-/// id tags the scrollable so its horizontal offset is captured for the cards'
-/// menus.
+/// A horizontal row of square art cards, or the section's empty state.
 fn h_scroll_cards<'a, I>(
     cards: I,
     tr: &'a crate::i18n::Strings,
@@ -388,91 +388,5 @@ where
     if row.is_empty() {
         return empty_state(tr.nothing_here);
     }
-    scrollable(
-        Row::with_children(row)
-            .spacing(theme::SPACING_MD)
-            .padding([theme::SPACING_SM, theme::SPACING_XL]),
-    )
-    .id(super::card_row_id(pane, section))
-    .direction(scrollable::Direction::Horizontal(
-        scrollable::Scrollbar::new(),
-    ))
-    // Report the horizontal offset as it changes: the capture pass only runs on
-    // navigation, results and resize, and a card's right-click point arrives
-    // shifted by this offset.
-    .on_scroll(move |vp| {
-        super::scrolled(ScrollTarget::CardRow(pane, section), vp.absolute_offset())
-    })
-    .into()
-}
-
-/// One square art card: picture with title/date underneath. Clicking drills
-/// into `target`; right-clicking opens the card menu for it.
-fn h_card<'a>(
-    player: &'a MusicPlayer,
-    pane: PaneId,
-    target: ViewKind,
-    title: &'a str,
-    subtitle: &str,
-    row: ArtistSectionKind,
-) -> Element<'a, Message, AppTheme> {
-    let card = target
-        .card_ref()
-        .expect("an artist page only renders cards for artist/album/playlist views");
-    let item = Card::new(target.library_item().expect("artist page card"));
-    let is_hovered = player.drag.is_hovered_card(&item);
-    let is_dragging_this = matches!(
-        player.drag.pressed,
-        Some(crate::app::interaction::PressedDrag {
-            what: Pressed::Card(ref c, _),
-            ..
-        }) if c == &item
-    );
-    let hot = is_hovered || is_dragging_this;
-    let thumb_path = player.thumbnail_index.get(card.provider, card.id);
-    let image = Container::new(thumbnail(CARD_IMAGE_SIZE, thumb_path)).height(CARD_IMAGE_SIZE);
-    let mut body = vec![
-        image.into(),
-        text(title)
-            .size(theme::TEXT_SIZE_SM)
-            .width(CARD_WIDTH)
-            .wrapping(text::Wrapping::Word)
-            .style(move |t: &AppTheme| iced::widget::text::Style {
-                color: Some(if hot {
-                    t.palette.fg
-                } else {
-                    t.palette.fg_secondary
-                }),
-            })
-            .into(),
-    ];
-    let trimmed_subtitle = subtitle.trim();
-    if !trimmed_subtitle.is_empty() {
-        body.push(
-            text(trimmed_subtitle.to_string())
-                .size(theme::TEXT_SIZE_XS)
-                .style(fg_secondary())
-                .into(),
-        );
-    }
-    let area = MouseArea::new(
-        Container::new(Column::with_children(body).spacing(theme::SPACING_2XS))
-            .padding(theme::SPACING_2XS)
-            .width(CARD_WIDTH),
-    )
-    .interaction(player.drag.clickable_cursor_interaction())
-    .on_press(Message::DragPress(Pressed::Card(item.clone(), Some(pane))))
-    .on_enter(Message::HoverStart(HoverTarget::Card(item.clone())))
-    .on_exit(Message::HoverEnd(HoverTarget::Card(item)));
-    super::right_click::RightClickArea::new(
-        area,
-        CardTarget {
-            host: ScrollTarget::Cards(pane),
-            pane,
-            target,
-            row: Some(row),
-        },
-        CardTarget::into_message,
-    )
-    .into()
+    card_rail(pane, RailKey::Artist(section), row)
 }

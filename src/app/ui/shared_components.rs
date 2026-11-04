@@ -2,7 +2,7 @@ use iced::{
     alignment,
     widget::{
         container, image, scrollable, svg, text, text_input, Button, Column, Container, Id,
-        ProgressBar, Row,
+        MouseArea, ProgressBar, Row,
     },
     Color, Element, Length,
 };
@@ -14,6 +14,7 @@ use super::styles::{
 use crate::{
     app::{
         dependency_dialog::DepOpState,
+        interaction::{CardTarget, HoverTarget, Pressed},
         pane::PaneId,
         ui::{
             spinner::spinner,
@@ -21,8 +22,10 @@ use crate::{
                 button_style_danger, button_style_playbar, icon_style_fg, icon_style_playbar_button,
             },
         },
-        Message,
+        update::operation::{RailKey, ScrollTarget},
+        Message, ViewKind,
     },
+    data::library::Card,
     i18n::{Direction, Strings},
     icons,
     theme::{self, AppTheme},
@@ -41,6 +44,16 @@ pub fn thumbnail(size: f32, thumb: Option<&std::path::PathBuf>) -> Element<'_, M
             .style(icon_style_fg_muted())
             .into()
     }
+}
+
+/// A section heading, shared by the settings groups and the Home feed's
+/// provider blocks: accent-colored and one step above body text, aligned to the
+/// reading start so a right-to-left locale puts it on the right.
+pub fn section_label<'a>(
+    dir: Direction,
+    label: impl text::IntoFragment<'a>,
+) -> Element<'a, Message, AppTheme> {
+    dir.leading(text(label).size(theme::TEXT_SIZE_LG).style(fg_accent()))
 }
 
 pub fn inner_row_layout<'a>(
@@ -407,4 +420,142 @@ pub fn playbar_toggle_button(
     .style(button_style_playbar(active))
     .width(theme::QUEUE_BTN_WIDTH)
     .height(theme::QUEUE_BTN_WIDTH)
+}
+
+/// Width of one square art card and of its picture, shared by every card shelf
+/// (an artist page's sections, the Home feed's rails).
+pub const CARD_WIDTH: f32 = 140.0;
+pub const CARD_IMAGE_SIZE: f32 = 120.0;
+
+/// A horizontal shelf of cards: the row in a sideways scrollable that reports
+/// its own offset, so a card's right-click can be mapped back to window
+/// coordinates. Callers decide what an empty rail draws.
+pub fn card_rail<'a, I>(pane: PaneId, rail: RailKey, cards: I) -> Element<'a, Message, AppTheme>
+where
+    I: IntoIterator<Item = Element<'a, Message, AppTheme>>,
+{
+    scrollable(
+        Row::with_children(cards)
+            .spacing(theme::SPACING_MD)
+            .padding([theme::SPACING_SM, theme::SPACING_XL]),
+    )
+    .id(super::card_row_id(pane, rail))
+    .direction(scrollable::Direction::Horizontal(
+        scrollable::Scrollbar::new(),
+    ))
+    .on_scroll(move |vp| super::scrolled(ScrollTarget::CardRow(pane, rail), vp.absolute_offset()))
+    .into()
+}
+
+/// One square art card on a shelf: picture with title and subtitle underneath.
+/// It is a full drag-and-drop citizen — a press starts a card drag (onto a
+/// playlist, the library or the queue), a plain click opens `target` and a
+/// right-click opens the card menu — and hovering recolours its title.
+pub fn art_card<'a>(
+    player: &'a super::MusicPlayer,
+    pane: PaneId,
+    target: ViewKind,
+    title: &'a str,
+    subtitle: &str,
+    rail: RailKey,
+) -> Element<'a, Message, AppTheme> {
+    let card = target
+        .card_ref()
+        .expect("a card shelf only renders artist, album and playlist cards");
+    let item = Card::new(
+        target
+            .library_item()
+            .expect("a card shelf only renders artist, album and playlist cards"),
+    );
+    let is_hovered = player.drag.is_hovered_card(&item);
+    let is_dragging_this = matches!(
+        player.drag.pressed,
+        Some(crate::app::interaction::PressedDrag {
+            what: Pressed::Card(ref c, _),
+            ..
+        }) if c == &item
+    );
+    let hot = is_hovered || is_dragging_this;
+    let thumb_path = player.thumbnail_index.get(card.provider, card.id);
+    let image = Container::new(thumbnail(CARD_IMAGE_SIZE, thumb_path)).height(CARD_IMAGE_SIZE);
+    let mut body = vec![
+        image.into(),
+        text(title)
+            .size(theme::TEXT_SIZE_SM)
+            .width(CARD_WIDTH)
+            .wrapping(text::Wrapping::Word)
+            .style(move |t: &AppTheme| iced::widget::text::Style {
+                color: Some(if hot {
+                    t.palette.fg
+                } else {
+                    t.palette.fg_secondary
+                }),
+            })
+            .into(),
+    ];
+    let trimmed_subtitle = subtitle.trim();
+    if !trimmed_subtitle.is_empty() {
+        body.push(
+            text(trimmed_subtitle.to_string())
+                .size(theme::TEXT_SIZE_XS)
+                .style(fg_secondary())
+                .into(),
+        );
+    }
+    let area = MouseArea::new(
+        Container::new(Column::with_children(body).spacing(theme::SPACING_2XS))
+            .padding(theme::SPACING_2XS)
+            .width(CARD_WIDTH),
+    )
+    .interaction(player.drag.clickable_cursor_interaction())
+    .on_press(Message::DragPress(Pressed::Card(item.clone(), Some(pane))))
+    .on_enter(Message::HoverStart(HoverTarget::Card(item.clone())))
+    .on_exit(Message::HoverEnd(HoverTarget::Card(item)));
+    super::right_click::RightClickArea::new(
+        area,
+        CardTarget {
+            host: ScrollTarget::Cards(pane),
+            pane,
+            target,
+            rail: Some(rail),
+        },
+        CardTarget::into_message,
+    )
+    .into()
+}
+
+/// A tile that only carries a click: the same shape as [`art_card`] for things
+/// with no card identity of their own (a track, a local playlist), so it has
+/// neither a drag nor a menu.
+pub fn click_card<'a>(
+    image: Element<'a, Message, AppTheme>,
+    title: &'a str,
+    subtitle: &str,
+    message: Message,
+) -> Element<'a, Message, AppTheme> {
+    let mut body = vec![
+        image,
+        text(title)
+            .size(theme::TEXT_SIZE_SM)
+            .width(CARD_WIDTH)
+            .wrapping(text::Wrapping::Word)
+            .into(),
+    ];
+    let trimmed_subtitle = subtitle.trim();
+    if !trimmed_subtitle.is_empty() {
+        body.push(
+            text(trimmed_subtitle.to_string())
+                .size(theme::TEXT_SIZE_XS)
+                .style(fg_secondary())
+                .into(),
+        );
+    }
+    MouseArea::new(
+        Container::new(Column::with_children(body).spacing(theme::SPACING_2XS))
+            .padding(theme::SPACING_2XS)
+            .width(CARD_WIDTH),
+    )
+    .on_press(message)
+    .interaction(iced::mouse::Interaction::Pointer)
+    .into()
 }

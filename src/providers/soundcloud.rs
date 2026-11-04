@@ -107,10 +107,13 @@ where
         .map_err(|e| anyhow::anyhow!("SoundCloud API error: {e:?}"))
 }
 
+/// The `client_id` scraped once per process, reused for search, browse and the
+/// chart endpoint.
+static CLIENT_ID: OnceLock<String> = OnceLock::new();
+
 /// A ready `SoundCloudClient`. The `client_id` scrape happens once per process
 /// and is reused afterwards instead of re-scraping on every search/browse.
 async fn sc_client() -> rsoundcloud::ClientResult<SoundCloudClient> {
-    static CLIENT_ID: OnceLock<String> = OnceLock::new();
     if let Some(id) = CLIENT_ID.get() {
         return SoundCloudClient::new(Some(id.clone()), None).await;
     }
@@ -121,6 +124,102 @@ async fn sc_client() -> rsoundcloud::ClientResult<SoundCloudClient> {
         }
         Err(_) => SoundCloudClient::default().await,
     }
+}
+
+/// Home row: the trending chart, which `rsoundcloud` doesn't wrap.
+pub fn home_sections() -> Result<Vec<crate::providers::HomeSection>> {
+    let tracks = trending_tracks(20)?;
+    Ok(super::home::provider_sections(
+        ProviderId::SoundCloud,
+        [(
+            super::home::HomeSectionKind::Trending,
+            super::home::HomeSectionData::Tracks(tracks),
+        )],
+    ))
+}
+
+fn trending_tracks(limit: usize) -> Result<Vec<Track>> {
+    // Populates `CLIENT_ID` on first use (this is the same scrape a search
+    // would do).
+    let _ = block_on_sc(async { sc_client().await });
+    let client_id = CLIENT_ID
+        .get()
+        .cloned()
+        .context("SoundCloud client id unavailable")?;
+    let url = format!(
+        "https://api-v2.soundcloud.com/charts?kind=trending&genre=soundcloud:genres:all-music&client_id={client_id}&limit={limit}&offset=0"
+    );
+    let body = super::http_agent()
+        .get(&url)
+        .header("User-Agent", "goosemusic/0.1")
+        .call()
+        .context("SoundCloud charts request failed")?
+        .body_mut()
+        .read_to_string()
+        .context("SoundCloud charts response unreadable")?;
+    let value: serde_json::Value =
+        serde_json::from_str(&body).context("SoundCloud charts response invalid")?;
+    let mut out = Vec::new();
+    for entry in value
+        .get("collection")
+        .and_then(|c| c.as_array())
+        .into_iter()
+        .flatten()
+    {
+        if let Some(track) = entry.get("track").and_then(chart_track) {
+            out.push(track);
+        }
+        if out.len() >= limit {
+            break;
+        }
+    }
+    Ok(out)
+}
+
+fn chart_track(track: &serde_json::Value) -> Option<Track> {
+    let id = track.get("id")?.as_u64()?;
+    let title = track
+        .get("title")
+        .and_then(|s| s.as_str())
+        .unwrap_or_default();
+    if title.is_empty() {
+        return None;
+    }
+    let artist = track
+        .get("user")
+        .and_then(|u| u.get("username"))
+        .and_then(|s| s.as_str())
+        .unwrap_or_default();
+    let permalink = track
+        .get("permalink_url")
+        .and_then(|s| s.as_str())
+        .unwrap_or_default();
+    let duration = track
+        .get("duration")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0)
+        / 1000;
+    let thumbnail = track
+        .get("artwork_url")
+        .and_then(|s| s.as_str())
+        .map(|s| s.replace("-large", "-t300x300"))
+        .unwrap_or_default();
+    let plays = track
+        .get("playback_count")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+    Some(Track::from_provider_with_count(
+        ProviderId::SoundCloud,
+        id.to_string(),
+        permalink.to_string(),
+        title.to_string(),
+        artist.to_string(),
+        duration as u32,
+        thumbnail,
+        None,
+        None,
+        plays,
+    ))
 }
 
 fn search_page(offset: usize) -> CollectionParams {

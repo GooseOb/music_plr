@@ -66,8 +66,9 @@ pub enum ScrollTarget {
     Tracks(PaneId),
     /// A pane's card host: its search card tab or artist page.
     Cards(PaneId),
-    /// One shelf of an artist page, scrolled sideways.
-    CardRow(PaneId, crate::providers::ArtistSectionKind),
+    /// One card shelf, scrolled sideways: an artist-page section or a Home
+    /// rail. Only the horizontal offset matters.
+    CardRow(PaneId, RailKey),
     /// The sidebar's saved-library list.
     Library,
 }
@@ -88,7 +89,26 @@ enum Slot {
     Tracks(PaneId),
     Cards(PaneId),
     /// Only a horizontal offset — a shelf has no rows of its own to capture.
-    CardRow(PaneId, crate::providers::ArtistSectionKind),
+    CardRow(PaneId, RailKey),
+}
+
+/// Which sideways-scrolling shelf a card sits in. Home rails are addressed by
+/// their stable [`HomeRailId`], so a refresh that reorders the page cannot hand
+/// one rail's offset to another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RailKey {
+    Artist(crate::providers::ArtistSectionKind),
+    Home(crate::app::home::HomeRailId),
+}
+
+impl RailKey {
+    /// Stable fragment of the shelf's scrollable id (see `ui::card_row_id`).
+    pub fn slug(self) -> String {
+        match self {
+            RailKey::Artist(section) => format!("artist:{}", section as usize),
+            RailKey::Home(rail) => format!("home:{}", rail.slug()),
+        }
+    }
 }
 
 impl From<ScrollTarget> for Slot {
@@ -145,15 +165,16 @@ pub struct CaptureBounds {
     pub manual_search: Option<ListGeometry>,
     pub tracks: HashMap<PaneId, ListGeometry>,
     /// Scroll offsets of the per-pane scrollables that host cards (a search
-    /// card tab, an artist page). Kept apart from `tracks` because card rows
+    /// card tab, an artist page, the Home feed). Kept apart from `tracks`
+    /// because card rows
     /// are not drop targets and never take part in hit-testing — only in
     /// converting a card right-click to window coordinates.
     pub cards: HashMap<PaneId, ListGeometry>,
-    /// Horizontal scroll offsets of artist-page card shelves, keyed by pane *and*
-    /// section (every section lays its shelf out on each pass, so one key per
-    /// pane would collide). A card right-click inside a shelf is reported with
-    /// the cursor shifted by this offset, so the menu has to undo it.
-    pub card_rows: HashMap<(PaneId, crate::providers::ArtistSectionKind), f32>,
+    /// Horizontal scroll offsets of card shelves, keyed by pane *and* rail
+    /// (every shelf reports its own, so one key per pane would collide). A card
+    /// right-click inside a shelf is reported with the cursor shifted by this
+    /// offset, so the menu has to undo it.
+    pub card_rows: HashMap<(PaneId, RailKey), f32>,
     pub recent: Option<ListGeometry>,
     /// Captured separately by [`CaptureSearchHistoryRows`] (see that struct).
     pub search_history: HashMap<PaneId, ListGeometry>,
@@ -209,20 +230,16 @@ impl CaptureBounds {
         }
     }
 
-    /// How far an artist page's card shelf is scrolled sideways.
-    pub fn card_row_scroll(
-        &self,
-        pane: PaneId,
-        section: crate::providers::ArtistSectionKind,
-    ) -> f32 {
-        self.card_rows.get(&(pane, section)).copied().unwrap_or(0.0)
+    /// How far a card shelf is scrolled sideways.
+    pub fn rail_scroll(&self, pane: PaneId, rail: RailKey) -> f32 {
+        self.card_rows.get(&(pane, rail)).copied().unwrap_or(0.0)
     }
 
     /// How far a scrollable is scrolled along its own axis, for turning a
     /// reported cursor point back into a window position.
     pub fn scroll_offset(&self, target: ScrollTarget) -> f32 {
         match target {
-            ScrollTarget::CardRow(pane, section) => self.card_row_scroll(pane, section),
+            ScrollTarget::CardRow(pane, rail) => self.rail_scroll(pane, rail),
             _ => self
                 .geometry(Slot::from(target))
                 .map_or(0.0, |g| g.translation_y),
@@ -237,8 +254,8 @@ impl CaptureBounds {
         // off captured bounds and the library list is a drop target, so those
         // are only ever updated in place.
         let geo = match Slot::from(target) {
-            Slot::CardRow(pane, section) => {
-                self.card_rows.insert((pane, section), translation.x);
+            Slot::CardRow(pane, rail) => {
+                self.card_rows.insert((pane, rail), translation.x);
                 None
             }
             Slot::Cards(pane) => Some(self.cards.entry(pane).or_default()),
@@ -265,6 +282,14 @@ impl CaptureBounds {
         self.search_inputs.remove(&pane);
         self.search_input_ids.retain(|_, p| *p != pane);
         self.card_rows.retain(|(p, _), _| *p != pane);
+    }
+
+    /// Drop the captured sideways offsets of a pane's Home rails, called when a
+    /// Home view is installed: its scrollables are rebuilt from the top, so a
+    /// remembered offset would only misplace the next card menu.
+    pub fn forget_home_rails(&mut self, pane: PaneId) {
+        self.card_rows
+            .retain(|(p, rail), _| *p != pane || !matches!(rail, RailKey::Home(_)));
     }
 
     /// The slot an id'd scrollable belongs to, if it is one we capture.
@@ -295,8 +320,8 @@ impl CaptureBounds {
             } else {
                 crate::providers::ArtistSectionKind::ALL
                     .into_iter()
-                    .find(|section| *id == card_row_id(pane, *section))
-                    .map(|section| Slot::CardRow(pane, section))
+                    .find(|section| *id == card_row_id(pane, RailKey::Artist(*section)))
+                    .map(|section| Slot::CardRow(pane, RailKey::Artist(section)))
             }
         })
     }
@@ -394,8 +419,8 @@ impl Operation<Message> for CaptureBounds {
             matches!(slot, Slot::Sidebar | Slot::ServerPlaylists | Slot::Library).then_some(slot);
         match slot {
             // A shelf is horizontal-only: it has no geometry of its own.
-            Slot::CardRow(pane, section) => {
-                self.card_rows.insert((pane, section), translation.x);
+            Slot::CardRow(pane, rail) => {
+                self.card_rows.insert((pane, rail), translation.x);
             }
             _ => {
                 *self.ensure_geometry(slot) = ListGeometry {
@@ -570,25 +595,62 @@ mod tests {
         // Distinct per pane *and* section: every section lays its shelf out on
         // each pass, so one key per pane would make one shelf's offset land on
         // another's cards.
+        let albums = RailKey::Artist(ArtistSectionKind::Albums);
+        let related = RailKey::Artist(ArtistSectionKind::Related);
+        assert_ne!(card_row_id(pane, albums), card_row_id(pane, related));
+        assert_ne!(card_row_id(pane, albums), card_row_id(4, albums));
+
+        bounds.card_rows.insert((pane, albums), 140.0);
+        assert_eq!(bounds.rail_scroll(pane, albums), 140.0);
+        assert_eq!(bounds.rail_scroll(pane, related), 0.0);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn home_rails_are_keyed_by_identity_not_position() {
+        use crate::{
+            app::home::HomeRailId,
+            providers::{HomeSectionKey, HomeSectionKind, ProviderId},
+        };
+
+        let pane = 3;
+        let discover = HomeRailId::Section(HomeSectionKey::new(
+            ProviderId::YouTube,
+            HomeSectionKind::NewReleases,
+        ));
+        let artists = HomeRailId::Section(HomeSectionKey::new(
+            ProviderId::YouTube,
+            HomeSectionKind::Artists,
+        ));
         assert_ne!(
-            card_row_id(pane, ArtistSectionKind::Albums),
-            card_row_id(pane, ArtistSectionKind::Related)
+            card_row_id(pane, RailKey::Home(discover)),
+            card_row_id(pane, RailKey::Home(artists))
         );
         assert_ne!(
-            card_row_id(pane, ArtistSectionKind::Albums),
-            card_row_id(4, ArtistSectionKind::Albums)
+            card_row_id(pane, RailKey::Home(discover)),
+            card_row_id(pane, RailKey::Artist(ArtistSectionKind::Albums))
         );
 
+        // Home rails report their offset from `on_scroll`, never from the
+        // capture pass (their ids aren't enumerable), so `slot` leaves them be.
+        let bounds = CaptureBounds::with_panes(vec![pane]);
+        assert_eq!(
+            bounds.slot(&card_row_id(pane, RailKey::Home(discover))),
+            None
+        );
+
+        let mut bounds = CaptureBounds::with_panes(vec![pane]);
         bounds
             .card_rows
-            .insert((pane, ArtistSectionKind::Albums), 140.0);
+            .insert((pane, RailKey::Home(discover)), 80.0);
+        bounds
+            .card_rows
+            .insert((pane, RailKey::Artist(ArtistSectionKind::Albums)), 20.0);
+        bounds.forget_home_rails(pane);
+        assert_eq!(bounds.rail_scroll(pane, RailKey::Home(discover)), 0.0);
         assert_eq!(
-            bounds.card_row_scroll(pane, ArtistSectionKind::Albums),
-            140.0
-        );
-        assert_eq!(
-            bounds.card_row_scroll(pane, ArtistSectionKind::Related),
-            0.0
+            bounds.rail_scroll(pane, RailKey::Artist(ArtistSectionKind::Albums)),
+            20.0
         );
     }
 
@@ -597,15 +659,15 @@ mod tests {
         let bounds = CaptureBounds::with_panes(vec![3]);
         assert_eq!(bounds.slot(&card_list_id(3)), Some(Slot::Cards(3)));
         assert_eq!(
-            bounds.slot(&card_row_id(3, ArtistSectionKind::Albums)),
-            Some(Slot::CardRow(3, ArtistSectionKind::Albums))
+            bounds.slot(&card_row_id(3, RailKey::Artist(ArtistSectionKind::Albums))),
+            Some(Slot::CardRow(3, RailKey::Artist(ArtistSectionKind::Albums)))
         );
         assert_eq!(bounds.slot(&track_list_id(3)), Some(Slot::Tracks(3)));
         // A closed pane's ids stop being captured, so its shelves stop feeding
         // the pass.
         assert_eq!(bounds.slot(&card_list_id(9)), None);
         assert_eq!(
-            bounds.slot(&card_row_id(9, ArtistSectionKind::Albums)),
+            bounds.slot(&card_row_id(9, RailKey::Artist(ArtistSectionKind::Albums))),
             None
         );
     }
@@ -618,7 +680,7 @@ mod tests {
         bounds.tracks.insert(pane, ListGeometry::default());
         bounds
             .card_rows
-            .insert((pane, ArtistSectionKind::Albums), 10.0);
+            .insert((pane, RailKey::Artist(ArtistSectionKind::Albums)), 10.0);
         bounds.search_history.insert(pane, ListGeometry::default());
         bounds.search_inputs.insert(pane, Rectangle::default());
 

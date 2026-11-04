@@ -14,6 +14,7 @@ auto-generated compare link below it.
 
 - Custom providers for Subsonic-compatible servers (Navidrome, Airsonic, Gonic) and Jellyfin: add, edit, test, and delete them in Settings, then use them for search, playback, downloads, radio, album and playlist browsing, and artist pages.
 - Providers can be disabled in Settings.
+- Home page.
 
 ### Changed
 
