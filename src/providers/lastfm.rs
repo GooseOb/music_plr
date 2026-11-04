@@ -233,6 +233,39 @@ fn artist_art(artist: &str) -> Option<String> {
     result
 }
 
+/// The artwork an artist is shown with: the API's own image when it has one,
+/// else its top album's cover. Last.fm serves the same star placeholder for
+/// every artist (its API carries no artist images at all), so without the
+/// fallback every artist card and header would draw the music-note icon.
+fn artist_thumbnail(artist: &serde_json::Value) -> String {
+    let image = image_url(artist);
+    if !image.is_empty() {
+        return image;
+    }
+    let name = str_field(artist, "name");
+    if name.is_empty() {
+        return String::new();
+    }
+    artist_art(&name).unwrap_or_default()
+}
+
+/// `artist_thumbnail` for a whole row (a chart, a search page, a related-artist
+/// shelf). Each fallback is its own request, so they run together instead of
+/// one after another.
+fn artist_thumbnails(artists: &[serde_json::Value]) -> Vec<String> {
+    std::thread::scope(|scope| {
+        // Spawn every fallback before joining any: `spawn` plus `join` in one
+        // iterator would run the requests one after another.
+        artists
+            .iter()
+            .map(|artist| scope.spawn(move || artist_thumbnail(artist)))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|handle| handle.join().unwrap_or_default())
+            .collect()
+    })
+}
+
 fn enrich_parallel(
     tracks: Vec<Track>,
     art_for: impl Fn(&Track) -> Option<String> + Sync,
@@ -287,14 +320,16 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
                 "artist.search",
                 &[("artist", query), ("limit", &limit), ("page", &page)],
             )?;
-            let cards = collect(&["results", "artistmatches", "artist"], &v)
+            let artists = collect(&["results", "artistmatches", "artist"], &v);
+            let cards = artists
                 .iter()
-                .map(|a| CardData {
+                .zip(artist_thumbnails(artists))
+                .map(|(a, thumbnail)| CardData {
                     url: str_field(a, "url"),
                     id: str_field(a, "name"),
                     title: str_field(a, "name"),
                     subtitle: String::new(),
-                    thumbnail: image_url(a),
+                    thumbnail,
                 })
                 .collect();
             Ok((Vec::new(), SearchTab::Artists(cards)))
@@ -489,7 +524,7 @@ fn header_from_info(artist: &serde_json::Value) -> ArtistHeader {
         .unwrap_or_default()
         .to_string();
     ArtistHeader {
-        image: image_url(artist),
+        image: artist_thumbnail(artist),
         stats,
         description: bio,
     }
@@ -528,30 +563,32 @@ fn popular_from_top(id: &str) -> Vec<Track> {
 
 /// Home row: the chart's top artists as artist cards. Last.fm tracks are
 /// metadata-only, so a track row here would be a dead end on play; artists
-/// open a real page (and play through whichever provider streams them).
+/// open a real page (and play through whichever provider streams them). The
+/// chart carries no artist images (only the shared placeholder), so each card
+/// takes the artist's top album cover — the same stand-in Last.fm tracks use.
 pub fn home_sections() -> Result<Vec<crate::providers::HomeSection>> {
     let value = get("chart.getTopArtists", &[("limit", "24")])?;
-    let mut cards = Vec::new();
-    for artist in collect(&["artists", "artist"], &value) {
-        let name = str_field(artist, "name");
-        if name.is_empty() {
-            continue;
-        }
-        cards.push(crate::providers::HomeCard {
-            kind: crate::data::library::LibraryKind::Artist,
-            provider: ProviderId::LastFm,
-            id: name.clone(),
-            title: name,
-            subtitle: String::new(),
-            thumbnail: image_url(artist),
-            url: str_field(artist, "url"),
-            badge: String::new(),
-            date: String::new(),
-        });
-        if cards.len() >= 24 {
-            break;
-        }
-    }
+    let artists = collect(&["artists", "artist"], &value);
+    let cards = artists
+        .iter()
+        .zip(artist_thumbnails(artists))
+        .filter(|(artist, _)| !str_field(artist, "name").is_empty())
+        .take(24)
+        .map(|(artist, thumbnail)| {
+            let name = str_field(artist, "name");
+            crate::providers::HomeCard {
+                kind: crate::data::library::LibraryKind::Artist,
+                provider: ProviderId::LastFm,
+                id: name.clone(),
+                title: name,
+                subtitle: String::new(),
+                thumbnail,
+                url: str_field(artist, "url"),
+                badge: String::new(),
+                date: String::new(),
+            }
+        })
+        .collect();
     Ok(super::home::provider_sections(
         ProviderId::LastFm,
         [(
@@ -578,15 +615,17 @@ pub fn fetch_artist_page(
             page.header = Some(header_from_info(&artist));
         }
         if K::Related.wanted(kinds) {
-            page.related = collect(&["similar", "artist"], &artist)
+            let related = collect(&["similar", "artist"], &artist);
+            let related = &related[..related.len().min(10)];
+            page.related = related
                 .iter()
-                .take(10)
-                .map(|a| RelatedArtistCard {
+                .zip(artist_thumbnails(related))
+                .map(|(a, thumbnail)| RelatedArtistCard {
                     url: str_field(a, "url"),
                     id: str_field(a, "name"),
                     name: str_field(a, "name"),
                     stat: String::new(),
-                    thumbnail: image_url(a),
+                    thumbnail,
                 })
                 .collect();
         }
@@ -795,6 +834,42 @@ mod tests {
             ]
         });
         assert_eq!(image_url(&v), "");
+    }
+
+    #[test]
+    fn artist_thumbnail_prefers_the_api_image() {
+        let v = serde_json::json!({
+            "name": "Radiohead",
+            "image": [
+                {"#text": "https://lastfm-img.freetls.fastly.net/i/u/34s/a.png", "size": "small"},
+                {"#text": "https://lastfm-img.freetls.fastly.net/i/u/300x300/a.png", "size": "extralarge"},
+            ],
+        });
+        assert_eq!(
+            artist_thumbnail(&v),
+            "https://lastfm-img.freetls.fastly.net/i/u/300x300/a.png"
+        );
+    }
+
+    #[test]
+    fn a_nameless_placeholder_artist_has_no_thumbnail() {
+        let v = serde_json::json!({
+            "name": "",
+            "image": [
+                {"#text": "https://lastfm-img.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png", "size": "extralarge"},
+            ],
+        });
+        assert_eq!(artist_thumbnail(&v), "");
+    }
+
+    #[test]
+    fn artist_thumbnails_keep_the_row_order() {
+        let artists = [
+            serde_json::json!({"name": "A", "image": [{"#text": "a.png", "size": "large"}]}),
+            serde_json::json!({"name": "", "image": []}),
+            serde_json::json!({"name": "C", "image": [{"#text": "c.png", "size": "large"}]}),
+        ];
+        assert_eq!(artist_thumbnails(&artists), ["a.png", "", "c.png"]);
     }
 
     #[test]
