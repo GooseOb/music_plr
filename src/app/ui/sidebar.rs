@@ -180,6 +180,11 @@ fn server_group_header(
 ) -> Element<'_, Message, AppTheme> {
     let dir = player.strings.direction;
     let busy = player.server_playlists_requested.contains(&provider);
+    let is_drop_target = matches!(
+        player.drag.drop_target,
+        Some(DropTarget::ServerPlaylistCreate(p)) if p == provider
+    );
+    let radius = theme::RADIUS_MD;
 
     let header = dir
         .row([
@@ -218,6 +223,11 @@ fn server_group_header(
     Container::new(header)
         .padding([theme::SPACING_XS, theme::SPACING_MD])
         .width(Length::Fill)
+        .style(move |theme: &AppTheme| iced::widget::container::Style {
+            background: is_drop_target.then(|| theme.palette.bg_current.into()),
+            border: iced::border::rounded(radius),
+            ..Default::default()
+        })
         .into()
 }
 

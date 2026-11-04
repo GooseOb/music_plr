@@ -531,6 +531,10 @@ pub enum DropTarget {
     },
     /// A row of the sidebar's server-playlist list.
     ServerPlaylist(crate::data::server_playlists::ServerPlaylistId),
+    /// The server-playlist list itself, as a place to create a playlist on
+    /// that server from a dropped card (mirroring how a card dropped on the
+    /// local playlist list becomes a local playlist).
+    ServerPlaylistCreate(crate::providers::ProviderId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

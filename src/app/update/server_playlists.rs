@@ -15,7 +15,10 @@ use crate::{
         pane::PaneId, Dialog, ServerPlaylistChange, ServerPlaylistNameDialog, ServerPlaylistUndo,
         ServerPlaylistViewUndo, ViewKind,
     },
-    data::server_playlists::{ServerPlaylistEntry, ServerPlaylistId},
+    data::{
+        library::{Card, LibraryItem, LibraryKind},
+        server_playlists::{ServerPlaylistEntry, ServerPlaylistId},
+    },
     load_state::LoadState,
     providers::{self, ProviderError, ProviderId, ServerPlaylist},
     types::Track,
@@ -52,6 +55,20 @@ impl MusicPlayer {
             .get(target)
             .map(|entry| entry.name.clone())
             .unwrap_or_default()
+    }
+
+    /// A server-playlist row as a card, so dragging it onto the local
+    /// playlist list goes through the same "a dropped card becomes a
+    /// playlist" path every other card uses.
+    pub(crate) fn server_playlist_card(&self, target: &ServerPlaylistId) -> Card {
+        std::sync::Arc::new(LibraryItem {
+            kind: LibraryKind::Playlist,
+            id: target.id.clone(),
+            title: self.server_playlist_name(target),
+            thumbnail: String::new(),
+            provider: target.provider,
+            url: String::new(),
+        })
     }
 
     /// Reload one server's playlist index, or every configured server's.
@@ -197,6 +214,31 @@ impl MusicPlayer {
             providers::reorder_playlist(provider, &playlist_id, &tracks)?;
             Ok(ServerPlaylistChange::Reordered)
         });
+    }
+
+    /// Save a card as a new playlist on `provider`. The server needs the track
+    /// ids, so the card's contents are browsed first and the playlist is
+    /// created with them; like the dialog's create, the row only appears once
+    /// the server has the playlist (a new id exists only afterwards).
+    pub fn create_server_playlist_from_card(&mut self, item: &LibraryItem, provider: ProviderId) {
+        let name = item.title.clone();
+        let id = item.id.clone();
+        let kind = item.kind.browse_kind();
+        self.spawn_playlist_write(
+            ServerPlaylistId {
+                provider,
+                id: String::new(),
+            },
+            move || {
+                let (tracks, _) = providers::browse(provider, &id, kind)?;
+                let created = providers::create_playlist(provider, &name, &tracks)?;
+                Ok(ServerPlaylistChange::Created {
+                    id: created.id,
+                    name: created.name,
+                    track_count: created.track_count,
+                })
+            },
+        );
     }
 
     /// Remove the rows at `indices` from the server playlist the pane shows.
@@ -383,6 +425,7 @@ impl MusicPlayer {
                     .map(|created| ServerPlaylistChange::Created {
                         id: created.id,
                         name: created.name,
+                        track_count: created.track_count,
                     })
                     .map_err(ProviderError::from);
                 let _ = tx.send(BackendResult::ServerPlaylistWritten {
@@ -478,15 +521,20 @@ impl MusicPlayer {
                 self.notify(self.strings.reordered_playlist);
                 Task::none()
             }
-            ServerPlaylistChange::Created { id, name } => {
+            ServerPlaylistChange::Created {
+                id,
+                name,
+                track_count,
+            } => {
                 self.server_playlists.insert(ServerPlaylistEntry {
                     provider: target.provider,
                     id,
                     name: name.clone(),
-                    track_count: 0,
+                    track_count,
                 });
                 self.notify((self.strings.playlist_created)(&name));
-                Task::none()
+                // A new row was added to the measured sidebar list.
+                self.capture_bounds_task()
             }
             ServerPlaylistChange::Renamed(new_name) => {
                 self.server_playlists.rename(target, &new_name);
@@ -656,6 +704,51 @@ mod tests {
         assert_eq!(count(&p), Some(1));
         assert_eq!(p.view_data().selection, [0]);
         assert!(!p.server_playlist_undo.contains_key(&target()));
+    }
+
+    #[test]
+    fn a_dropped_server_playlist_becomes_a_local_playlist() {
+        use crate::app::interaction::{DropTarget, Pressed, PressedDrag};
+
+        let mut p = player_with_playlist(&["a"]);
+        p.playlists.playlists.clear();
+        p.drag.pressed = Some(PressedDrag {
+            what: Pressed::ServerPlaylist(target()),
+            origin: iced::Point::ORIGIN,
+        });
+        p.drag.drag_active = true;
+        p.drag.drop_target = Some(DropTarget::Playlist(0));
+
+        let _ = p.handle_left_release();
+
+        // The tracks arrive from the server afterwards, exactly like a card
+        // dropped on the local list: the playlist exists first, then fills.
+        assert_eq!(p.playlists.playlists.len(), 1);
+        assert_eq!(p.playlists.playlists[0].name, "Server");
+        assert!(p.playlists.playlists[0].tracks.is_empty());
+    }
+
+    #[test]
+    fn a_created_playlist_lands_in_the_index_with_its_count() {
+        let mut p = player_with_playlist(&["a"]);
+        let created = ServerPlaylistId {
+            provider: provider(),
+            id: String::new(),
+        };
+        let _ = p.apply_server_playlist_write(
+            &created,
+            Ok(crate::app::ServerPlaylistChange::Created {
+                id: "new".into(),
+                name: "New".into(),
+                track_count: 7,
+            }),
+        );
+
+        let entry = p.server_playlists.get(&ServerPlaylistId {
+            provider: provider(),
+            id: "new".into(),
+        });
+        assert_eq!(entry.map(|entry| entry.track_count), Some(7));
     }
 
     #[test]

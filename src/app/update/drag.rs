@@ -14,7 +14,8 @@ use crate::{
         ViewKind,
     },
     data::{
-        library::{Card, LibraryItem, LibraryKind},
+        library::{Card, LibraryItem},
+        server_playlists::ServerPlaylistId,
         JsonStore,
     },
     providers,
@@ -59,14 +60,20 @@ impl MusicPlayer {
                     nav_task = self.handle_track_drop(pos);
                 }
                 Pressed::Card(item, _) => {
-                    if let Some(target) = self
-                        .card_drop_target(self.bounds.get_containing(self.drag.cursor_pos).as_ref())
-                    {
+                    if let Some(target) = self.card_drop_target(
+                        &item,
+                        self.bounds.get_containing(self.drag.cursor_pos).as_ref(),
+                    ) {
                         nav_task = self.handle_card_drop(item, &target);
                     }
                 }
                 Pressed::Playlist(_) => self.handle_playlist_drop(),
-                Pressed::ServerPlaylist(_) => {}
+                Pressed::ServerPlaylist(target) => {
+                    if let Some(DropTarget::Playlist(insert_at)) = self.drag.drop_target.clone() {
+                        let card = self.server_playlist_card(&target);
+                        nav_task = self.handle_card_drop(card, &DropTarget::Playlist(insert_at));
+                    }
+                }
             }
         } else {
             match pressed {
@@ -105,8 +112,8 @@ impl MusicPlayer {
         let containing = self.bounds.get_containing(self.drag.cursor_pos);
 
         match pressed {
-            Pressed::Card(_, _) => {
-                self.drag.drop_target = self.card_drop_target(containing.as_ref());
+            Pressed::Card(item, _) => {
+                self.drag.drop_target = self.card_drop_target(item, containing.as_ref());
             }
             Pressed::Track(_) => {
                 self.drag.drop_target = self.resolve_track_drop(containing.as_ref());
@@ -114,7 +121,9 @@ impl MusicPlayer {
             Pressed::Playlist(from) => {
                 self.drag.drop_target = self.resolve_playlist_drop(*from, containing.as_ref());
             }
-            Pressed::ServerPlaylist(_) => self.drag.drop_target = None,
+            Pressed::ServerPlaylist(_) => {
+                self.drag.drop_target = self.resolve_server_playlist_drop(containing.as_ref());
+            }
         }
 
         let Some((target, geo)) = containing else {
@@ -162,6 +171,23 @@ impl MusicPlayer {
         Some(DropTarget::PlaylistReorder { from, to })
     }
 
+    /// Resolve a server-playlist row dragged over the sidebar. A server
+    /// playlist behaves like a card here: dropping it on the local playlist
+    /// list creates a local playlist with its tracks, at the drop position.
+    fn resolve_server_playlist_drop(
+        &self,
+        containing: Option<&(ContainingList, &ListGeometry)>,
+    ) -> Option<DropTarget> {
+        let (list, geo) = containing?;
+        if *list != ContainingList::Sidebar {
+            return None;
+        }
+        let count = self.playlists.playlists.len();
+        Some(DropTarget::Playlist(
+            self.sidebar_insertion_index(geo, count),
+        ))
+    }
+
     fn resolve_track_drop(
         &self,
         containing: Option<&(ContainingList, &ListGeometry)>,
@@ -174,10 +200,9 @@ impl MusicPlayer {
             return Some(DropTarget::PlaylistAdd(idx));
         }
         if *list == ContainingList::ServerPlaylists {
-            let rows = self.server_playlist_rows();
-            let cursor_y = self.drag.cursor_pos.y + geo.translation_y;
-            let idx = nearest_row_index(&geo.rows, cursor_y).filter(|&idx| idx < rows.len())?;
-            return Some(DropTarget::ServerPlaylist(rows[idx].1.target()));
+            return self
+                .server_playlist_row_at(geo)
+                .map(DropTarget::ServerPlaylist);
         }
         let pane = list.track_target()?;
         // Only local playlists, server playlists and the queue are reorderable
@@ -282,8 +307,14 @@ impl MusicPlayer {
             }
             // A track dropped on a playlist row (local or server) highlights
             // that row (handled in the sidebar view) rather than drawing an
-            // insertion line, so it produces no indicator rect.
-            Some(DropTarget::PlaylistAdd(_) | DropTarget::ServerPlaylist(_)) | None => return None,
+            // insertion line, so it produces no indicator rect. A card over a
+            // server's playlist list highlights that provider's group header.
+            Some(
+                DropTarget::PlaylistAdd(_)
+                | DropTarget::ServerPlaylist(_)
+                | DropTarget::ServerPlaylistCreate(_),
+            )
+            | None => return None,
         };
 
         // Virtualized (queue/active) lists leave `geo.rows` empty, so their
@@ -433,8 +464,14 @@ impl MusicPlayer {
         }
     }
 
+    /// Where a dragged card lands: the local playlist list creates a local
+    /// playlist, the library saves it, and a server's playlist list creates a
+    /// playlist on that server — the same "a dropped card becomes a playlist
+    /// there" rule on both lists. A server only receives a card that carries
+    /// its own ids, so the destination group must be the card's provider.
     fn card_drop_target(
         &self,
+        card: &LibraryItem,
         containing: Option<&(ContainingList, &ListGeometry)>,
     ) -> Option<DropTarget> {
         if let Some((list, geo)) = containing {
@@ -450,8 +487,22 @@ impl MusicPlayer {
                     self.sidebar_insertion_index(geo, count),
                 ));
             }
+            if *list == ContainingList::ServerPlaylists {
+                let provider = self.server_playlist_row_at(geo)?.provider;
+                return (card.provider == provider)
+                    .then_some(DropTarget::ServerPlaylistCreate(provider));
+            }
         }
         None
+    }
+
+    /// The sidebar server-playlist row under the cursor, which names the
+    /// provider group the cursor is in.
+    fn server_playlist_row_at(&self, geo: &ListGeometry) -> Option<ServerPlaylistId> {
+        let rows = self.server_playlist_rows();
+        let cursor_y = self.drag.cursor_pos.y + geo.translation_y;
+        let idx = nearest_row_index(&geo.rows, cursor_y).filter(|&idx| idx < rows.len())?;
+        Some(rows[idx].1.target())
     }
 
     /// The index within a sidebar list where a drop would insert, given the
@@ -523,6 +574,10 @@ impl MusicPlayer {
                 }
                 Task::none()
             }
+            DropTarget::ServerPlaylistCreate(provider) => {
+                self.create_server_playlist_from_card(&item, *provider);
+                Task::none()
+            }
             _ => Task::none(),
         }
     }
@@ -539,11 +594,7 @@ impl MusicPlayer {
         let idx = self.playlists.create_at(&item.title, insert_at);
         let name = self.playlists.playlists[idx].name.clone();
 
-        let kind_str = match item.kind {
-            LibraryKind::Artist => "artist",
-            LibraryKind::Album => "album",
-            LibraryKind::Playlist => "playlist",
-        };
+        let kind_str = item.kind.browse_kind();
         let id = item.id.clone();
         let tx = self.result_tx.clone();
         let provider = item.provider;

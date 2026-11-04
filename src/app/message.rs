@@ -169,9 +169,13 @@ pub enum ServerPlaylistChange {
     Removed(usize),
     /// The playlist's tracks were put in a new order.
     Reordered,
+    /// A new playlist appeared on the server; `track_count` is what the
+    /// server reported for it, so a playlist created from a card shows its
+    /// real size before the next index refresh.
     Created {
         id: String,
         name: String,
+        track_count: usize,
     },
     Renamed(String),
     Deleted,

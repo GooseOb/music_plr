@@ -14,6 +14,17 @@ pub enum LibraryKind {
     Playlist,
 }
 
+impl LibraryKind {
+    /// The kind string the provider's `browse` path takes for this card.
+    pub fn browse_kind(self) -> &'static str {
+        match self {
+            LibraryKind::Album => "album",
+            LibraryKind::Artist => "artist",
+            LibraryKind::Playlist => "playlist",
+        }
+    }
+}
+
 /// A single saved library entry. Mirrors the fields of a `CardData` plus the
 /// kind, so a saved item can be dragged (onto the playlist list or library)
 /// or opened via the card-press mechanism. `provider` records which provider
