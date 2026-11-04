@@ -279,6 +279,52 @@ fn theme_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .into()
 }
 
+/// One provider's on/off switch. Switched-off providers are hidden from every
+/// picker (search bar, default provider, context menus, artist headers,
+/// server-playlist groups); their existing tracks keep playing. `labelled`
+/// draws the provider's name next to the box, which the custom-provider rows
+/// skip because their own row already shows it.
+fn provider_checkbox(
+    player: &MusicPlayer,
+    provider: ProviderId,
+    labelled: bool,
+) -> Element<'_, Message, AppTheme> {
+    let toggle = checkbox(!player.config.disabled_providers.contains(&provider))
+        .on_toggle(move |enabled| {
+            Message::SettingsChanged(SettingsChange::ProviderEnabled(provider, enabled))
+        })
+        .spacing(theme::SPACING_MD);
+    if labelled {
+        toggle.label(player.strings.provider(provider)).into()
+    } else {
+        toggle.into()
+    }
+}
+
+/// The built-in providers' checkboxes plus the custom-provider list.
+fn providers_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    let tr = &player.strings;
+    let dir = tr.direction;
+    let builtin = Column::with_children(
+        ProviderId::builtin_all()
+            .iter()
+            .copied()
+            .filter(|provider| *provider != ProviderId::Local)
+            .map(|provider| provider_checkbox(player, provider, true)),
+    )
+    .spacing(theme::SPACING_SM)
+    .align_x(dir.align());
+
+    Column::with_children([
+        builtin.into(),
+        text(tr.sec_providers).style(fg_secondary()).into(),
+        custom_providers_section(player),
+    ])
+    .spacing(theme::SPACING_MD)
+    .align_x(dir.align())
+    .into()
+}
+
 fn custom_providers_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let tr = &player.strings;
     let dir = tr.direction;
@@ -312,10 +358,18 @@ fn custom_providers_section(player: &MusicPlayer) -> Element<'_, Message, AppThe
             ])
             .spacing(theme::SPACING_XS);
         children.push(
-            dir.row([info.into(), actions.into()])
-                .spacing(theme::SPACING_MD)
-                .align_y(alignment::Vertical::Center)
-                .into(),
+            dir.row([
+                provider_checkbox(
+                    player,
+                    ProviderId::Custom(provider.kind, provider.id),
+                    false,
+                ),
+                info.into(),
+                actions.into(),
+            ])
+            .spacing(theme::SPACING_MD)
+            .align_y(alignment::Vertical::Center)
+            .into(),
         );
     }
 
@@ -519,8 +573,8 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         ),
         section(
             player.strings.direction,
-            player.strings.sec_providers,
-            [custom_providers_section(player)],
+            player.strings.providers,
+            [providers_section(player)],
         ),
         section(
             player.strings.direction,

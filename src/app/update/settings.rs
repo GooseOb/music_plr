@@ -24,14 +24,21 @@ pub enum SettingsChange {
     TranslationApiKey(String),
     TranslationModel(String),
     CheckUpdatesOnStartup(bool),
+    /// Switch a provider off (or back on) in Settings. Disabled providers are
+    /// hidden from every picker, submenu and server-playlist group.
+    ProviderEnabled(crate::providers::ProviderId, bool),
 }
 
 impl MusicPlayer {
     /// Apply `f` to the config, persist it, and keep dependent runtime state
-    /// in sync. The single write path for every settings field.
+    /// in sync. The single write path for every settings field: the disabled
+    /// provider mirror is refreshed here so no caller can forget it.
     fn set_config(&mut self, f: impl FnOnce(&mut config::Config)) {
         f(&mut self.config);
         self.config.save();
+        crate::providers::set_disabled_providers(
+            self.config.disabled_providers.iter().copied().collect(),
+        );
     }
 
     pub fn handle_settings_change(&mut self, change: SettingsChange) {
@@ -107,6 +114,22 @@ impl MusicPlayer {
                     self.check_for_updates();
                 }
             }
+            SettingsChange::ProviderEnabled(provider, enabled) => {
+                self.set_config(|c| {
+                    if enabled {
+                        c.disabled_providers.remove(&provider);
+                    } else {
+                        c.disabled_providers.insert(provider);
+                    }
+                });
+                self.reconcile_provider_refs();
+                self.save_session();
+                if enabled && provider.is_custom() {
+                    // A server's playlist index is hidden while it is off, so
+                    // fetch it again as soon as it comes back.
+                    let _ = self.refresh_server_playlists(Some(provider));
+                }
+            }
         }
     }
 
@@ -117,6 +140,8 @@ impl MusicPlayer {
         self.stream_cache
             .set_max_size_mb(self.config.cache_max_size_mb);
         self.app_theme = AppTheme::new(&self.config.theme_kind.palette());
+        self.reconcile_provider_refs();
+        self.save_session();
     }
 
     pub fn handle_custom_provider_add(&mut self) {
@@ -171,10 +196,15 @@ impl MusicPlayer {
         self.custom_providers.upsert(form.into_provider(id));
         self.custom_providers.save();
         custom_providers::set_registry(&self.custom_providers.providers);
-        self.reconcile_custom_provider_refs();
+        self.prune_disabled_providers();
+        self.reconcile_provider_refs();
         self.notify(self.strings.custom_provider_saved);
         // A fresh server's playlists belong in the sidebar right away.
-        self.refresh_server_playlists(Some(crate::providers::ProviderId::Custom(kind, id)))
+        let provider = crate::providers::ProviderId::Custom(kind, id);
+        if provider.enabled() {
+            return self.refresh_server_playlists(Some(provider));
+        }
+        iced::Task::none()
     }
 
     pub fn handle_custom_provider_delete(&mut self, id: u64) {
@@ -183,6 +213,7 @@ impl MusicPlayer {
         }
         self.custom_providers.save();
         custom_providers::set_registry(&self.custom_providers.providers);
+        self.prune_disabled_providers();
         if self
             .custom_provider_form
             .as_ref()
@@ -195,7 +226,7 @@ impl MusicPlayer {
             .entries
             .retain(|entry| !matches!(entry.provider, crate::providers::ProviderId::Custom(_, pid) if pid == id));
         self.server_playlists.save();
-        self.reconcile_custom_provider_refs();
+        self.reconcile_provider_refs();
         self.notify(self.strings.custom_provider_deleted);
     }
 
@@ -242,32 +273,157 @@ impl MusicPlayer {
         };
     }
 
-    /// Keep config and pane state pointing at providers that still exist.
-    /// Custom providers can be deleted while the default provider or a
-    /// pane's search bar still names them, so fall back to a usable
-    /// replacement after startup, save and delete.
-    pub(crate) fn reconcile_custom_provider_refs(&mut self) {
+    /// Drop disabled-provider entries that no longer name a registered custom
+    /// server (deleted, or edited into another kind). `set_config` re-syncs the
+    /// mirror the static provider lists read.
+    fn prune_disabled_providers(&mut self) {
+        let known = crate::data::custom_providers::all_provider_ids();
+        self.set_config(|config| {
+            config
+                .disabled_providers
+                .retain(|provider| !provider.is_custom() || known.contains(provider));
+        });
+    }
+
+    /// Keep config and pane state pointing at providers that are usable and
+    /// switched on. A custom provider can be deleted, and any provider can be
+    /// turned off, while the default provider or a pane's search bar still
+    /// names it, so fall back to a usable replacement after startup, save,
+    /// delete and every toggle.
+    pub(crate) fn reconcile_provider_refs(&mut self) {
+        // The config is the source of truth here; the static lists already
+        // filter through the mirror, but checking both keeps this correct no
+        // matter when the mirror was last synced.
+        let off = self.config.disabled_providers.clone();
         let default_caps = self.config.default_provider.capabilities();
-        if !(default_caps.stream && default_caps.download) {
-            let fallback = ProviderId::defaultable()
-                .into_iter()
-                .find(|provider| {
-                    let caps = provider.capabilities();
-                    caps.stream && caps.download
-                })
-                .unwrap_or(ProviderId::YouTube);
-            self.config.default_provider = fallback;
-            self.config.save();
+        let default_ok = default_caps.stream
+            && default_caps.download
+            && !off.contains(&self.config.default_provider);
+        if !default_ok {
+            let fallback = ProviderId::defaultable().into_iter().find(|provider| {
+                let caps = provider.capabilities();
+                caps.stream && caps.download && !off.contains(provider)
+            });
+            if let Some(fallback) = fallback {
+                self.config.default_provider = fallback;
+                self.config.save();
+            }
         }
 
         let fallback_search = ProviderId::searchable()
             .into_iter()
-            .find(|provider| provider.capabilities().search)
-            .unwrap_or(ProviderId::YouTube);
+            .find(|provider| provider.capabilities().search);
+        let Some(fallback_search) = fallback_search else {
+            return;
+        };
         for pane in self.panes.values_mut() {
-            if !pane.search_provider.capabilities().search {
+            if !pane.search_provider.capabilities().search || off.contains(&pane.search_provider) {
                 pane.search_provider = fallback_search;
+                if !fallback_search
+                    .supported_scopes()
+                    .contains(&pane.search_scope)
+                {
+                    pane.search_scope = fallback_search.supported_scopes()[0];
+                }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Mutex, MutexGuard};
+
+    use super::*;
+    use crate::{app::ViewData, data::config, providers::ProviderId};
+
+    /// The provider lists read a process-global mirror, so the tests that
+    /// switch a provider off and inspect those lists must not overlap.
+    static PROVIDERS: Mutex<()> = Mutex::new(());
+
+    fn lock() -> MutexGuard<'static, ()> {
+        PROVIDERS
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn player() -> MusicPlayer {
+        let mut player = MusicPlayer::new_with(config::Config::default());
+        player.reset_test_pane(vec![ViewData::default()]);
+        player
+    }
+
+    #[test]
+    fn switching_a_provider_off_takes_it_out_of_the_offered_lists() {
+        let _guard = lock();
+        let mut player = player();
+        player.handle_settings_change(SettingsChange::ProviderEnabled(ProviderId::Local, false));
+
+        assert!(!ProviderId::Local.enabled());
+        assert!(!ProviderId::all().contains(&ProviderId::Local));
+        // Cache and migration lookups still see every known id.
+        assert!(ProviderId::known().contains(&ProviderId::Local));
+
+        player.handle_settings_change(SettingsChange::ProviderEnabled(ProviderId::Local, true));
+        assert!(ProviderId::Local.enabled());
+        assert!(ProviderId::all().contains(&ProviderId::Local));
+    }
+
+    #[test]
+    fn switching_a_provider_off_hides_it_from_every_picker() {
+        let _guard = lock();
+        let mut player = player();
+        player.config.default_provider = ProviderId::SoundCloud;
+        player.stage_search_provider(0, ProviderId::SoundCloud);
+
+        player.handle_settings_change(SettingsChange::ProviderEnabled(
+            ProviderId::SoundCloud,
+            false,
+        ));
+
+        assert!(player
+            .config
+            .disabled_providers
+            .contains(&ProviderId::SoundCloud));
+        assert!(!ProviderId::searchable().contains(&ProviderId::SoundCloud));
+        assert!(!ProviderId::defaultable().contains(&ProviderId::SoundCloud));
+        // Both the default provider and the pane move to one that is still on.
+        assert_eq!(player.config.default_provider, ProviderId::YouTube);
+        assert_eq!(player.pane(0).search_provider, ProviderId::YouTube);
+
+        player.handle_settings_change(SettingsChange::ProviderEnabled(
+            ProviderId::SoundCloud,
+            true,
+        ));
+        assert!(ProviderId::searchable().contains(&ProviderId::SoundCloud));
+    }
+
+    #[test]
+    fn a_disabled_provider_keeps_its_tracks_playable() {
+        let _guard = lock();
+        let mut player = player();
+        player.handle_settings_change(SettingsChange::ProviderEnabled(ProviderId::Bandcamp, false));
+
+        // Switching a provider off only takes it out of the pickers; its
+        // capabilities (and so playback of its tracks) are unchanged.
+        let caps = ProviderId::Bandcamp.capabilities();
+        assert!(caps.stream && caps.download);
+        assert!(!ProviderId::searchable().contains(&ProviderId::Bandcamp));
+        assert!(ProviderId::known().contains(&ProviderId::Bandcamp));
+
+        player.handle_settings_change(SettingsChange::ProviderEnabled(ProviderId::Bandcamp, true));
+        assert!(ProviderId::searchable().contains(&ProviderId::Bandcamp));
+    }
+
+    #[test]
+    fn resetting_defaults_switches_every_provider_back_on() {
+        let _guard = lock();
+        let mut player = player();
+        player.handle_settings_change(SettingsChange::ProviderEnabled(ProviderId::LastFm, false));
+        assert!(!ProviderId::searchable().contains(&ProviderId::LastFm));
+
+        player.handle_settings_reset_defaults();
+        assert!(player.config.disabled_providers.is_empty());
+        assert!(ProviderId::searchable().contains(&ProviderId::LastFm));
     }
 }

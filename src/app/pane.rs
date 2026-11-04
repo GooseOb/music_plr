@@ -77,15 +77,10 @@ impl Pane {
             nav_history_pos: 0,
             search_query: String::new(),
             search_scope: SearchScope::Songs,
-            search_provider: if ProviderId::YouTube.capabilities().search {
-                ProviderId::YouTube
-            } else {
-                ProviderId::searchable()
-                    .iter()
-                    .copied()
-                    .find(|p| p.capabilities().search)
-                    .unwrap_or(ProviderId::SoundCloud)
-            },
+            search_provider: ProviderId::searchable()
+                .into_iter()
+                .find(|provider| provider.capabilities().search)
+                .unwrap_or(ProviderId::YouTube),
             show_search_history: false,
             last_filtered_history: Vec::new(),
             lyrics: None,

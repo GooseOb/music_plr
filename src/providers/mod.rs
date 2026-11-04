@@ -27,6 +27,7 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     process::{Command, Output, Stdio},
+    sync::RwLock,
     thread,
     time::{Duration, Instant},
 };
@@ -188,6 +189,20 @@ impl<'de> Deserialize<'de> for ProviderId {
     }
 }
 
+/// Providers the user switched off in Settings. Mirrored from
+/// [`crate::data::config::Config::disabled_providers`] at startup and on every
+/// toggle so the static provider lists can filter without threading the config
+/// through every call site — the same reason the custom-provider registry is
+/// process-global.
+static DISABLED_PROVIDERS: RwLock<Vec<ProviderId>> = RwLock::new(Vec::new());
+
+/// Replace the set of providers switched off in Settings.
+pub fn set_disabled_providers(providers: Vec<ProviderId>) {
+    if let Ok(mut disabled) = DISABLED_PROVIDERS.write() {
+        *disabled = providers;
+    }
+}
+
 /// Capability flags for a [`ProviderId`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(clippy::struct_excessive_bools)]
@@ -199,6 +214,15 @@ pub struct ProviderCaps {
 }
 
 impl ProviderId {
+    /// Whether this provider is switched on. A disabled provider is hidden
+    /// from every picker, submenu and server-playlist group, while tracks that
+    /// already carry its identity keep playing.
+    pub fn enabled(self) -> bool {
+        DISABLED_PROVIDERS
+            .read()
+            .map_or(true, |disabled| !disabled.contains(&self))
+    }
+
     /// Directory name for this provider's cached files (thumbnails, stream
     /// cache) and the prefix of its persisted keys. Lowercase ASCII, safe to
     /// use as a path segment.
@@ -298,20 +322,32 @@ impl ProviderId {
 
     fn with_custom(mut providers: Vec<ProviderId>) -> Vec<ProviderId> {
         providers.extend(crate::data::custom_providers::all_provider_ids());
+        providers.retain(|provider| provider.enabled());
         providers
     }
 
-    /// Every provider, including `Local` and the registered custom ones.
-    /// Prefer the narrower lists ([`searchable`](ProviderId::searchable),
+    /// Every provider, enabled or not: the built-ins plus the registered
+    /// custom ones. For "which providers exist" questions (cache lookups,
+    /// migrations); the pickers use [`all`](ProviderId::all) and friends so
+    /// switched-off providers stay out of the UI.
+    pub fn known() -> Vec<ProviderId> {
+        let mut providers = Self::builtin_all().to_vec();
+        providers.extend(crate::data::custom_providers::all_provider_ids());
+        providers
+    }
+
+    /// Every enabled provider, including `Local` and the registered custom
+    /// ones. Prefer the narrower lists ([`searchable`](ProviderId::searchable),
     /// [`defaultable`](ProviderId::defaultable),
     /// [`header_providers`](ProviderId::header_providers)) when only capable
-    /// providers make sense.
+    /// providers make sense. Providers the user switched off in Settings are
+    /// left out, so this is the "offered" set rather than every known id.
     pub fn all() -> Vec<ProviderId> {
         Self::with_custom(Self::builtin_all().to_vec())
     }
 
-    /// All providers that appear in the search provider picker (excludes
-    /// `Local`, which is not a remote search source).
+    /// All enabled providers that appear in the search provider picker
+    /// (excludes `Local`, which is not a remote search source).
     pub fn searchable() -> Vec<ProviderId> {
         Self::with_custom(
             Self::builtin_all()
@@ -322,8 +358,8 @@ impl ProviderId {
         )
     }
 
-    /// Providers eligible to be the default provider: must support both
-    /// streaming and downloading (search-only `MusicBrainz`/`LastFm` and
+    /// Enabled providers eligible to be the default provider: must support
+    /// both streaming and downloading (search-only `MusicBrainz`/`LastFm` and
     /// `Local` are excluded).
     pub fn defaultable() -> Vec<ProviderId> {
         Self::with_custom(vec![
@@ -333,7 +369,7 @@ impl ProviderId {
         ])
     }
 
-    /// Providers that can serve an artist-page header worth displaying
+    /// Enabled providers that can serve an artist-page header worth displaying
     /// (picture + stats + description). Shown in the artist header picker
     /// and pre-fetched as companions by `open_artist`. `MusicBrainz` is
     /// excluded: its header is stats-only with no picture.

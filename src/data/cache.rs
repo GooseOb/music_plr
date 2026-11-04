@@ -177,7 +177,7 @@ impl StreamCache {
     }
 
     pub fn cached_providers_for(&self, track: &crate::types::Track) -> Vec<ProviderId> {
-        ProviderId::all()
+        ProviderId::known()
             .iter()
             .copied()
             .filter(|p| {

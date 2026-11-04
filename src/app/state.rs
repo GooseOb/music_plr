@@ -254,6 +254,13 @@ impl MusicPlayer {
         let (result_tx, result_rx) = mpsc::channel();
         let (media_event_tx, media_event_rx) = mpsc::channel();
         crate::deps::set_cookie_browser(config.cookie_browser.clone());
+        // Tests drive the mirror through `set_disabled_providers` (the Settings
+        // toggle path); a reset from every `new_with` would race the tests that
+        // switch a provider off and inspect the lists.
+        #[cfg(not(test))]
+        crate::providers::set_disabled_providers(
+            config.disabled_providers.iter().copied().collect(),
+        );
 
         let custom_providers = CustomProviderStore::load();
         crate::data::custom_providers::set_registry(&custom_providers.providers);
@@ -348,7 +355,7 @@ impl MusicPlayer {
         #[cfg(not(target_os = "windows"))]
         player.init_media_controls(None);
         player.restore_session();
-        player.reconcile_custom_provider_refs();
+        player.reconcile_provider_refs();
         player.resume_playback();
         for item in &player.library.items {
             if !item.thumbnail.is_empty() {

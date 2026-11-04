@@ -34,6 +34,11 @@ pub struct Config {
     /// Whether the app queries crates.io for a newer release at startup.
     #[serde(default = "default_true")]
     pub check_updates_on_startup: bool,
+    /// Providers the user switched off in Settings. They disappear from every
+    /// picker, submenu and server-playlist group, while tracks that already
+    /// carry their identity keep playing.
+    #[serde(default)]
+    pub disabled_providers: std::collections::BTreeSet<ProviderId>,
 }
 
 fn default_true() -> bool {
@@ -71,6 +76,7 @@ impl Default for Config {
             translation_language: String::new(),
             translation_prompt: default_translation_prompt(),
             check_updates_on_startup: true,
+            disabled_providers: std::collections::BTreeSet::new(),
         }
     }
 }
@@ -130,6 +136,7 @@ mod tests {
             translation_language: "Spanish".into(),
             translation_prompt: "translate".into(),
             check_updates_on_startup: false,
+            disabled_providers: [ProviderId::LastFm].into_iter().collect(),
         };
 
         let json = serde_json::to_string(&cfg).unwrap();
@@ -155,5 +162,6 @@ mod tests {
         assert_eq!(cfg.translation_model, crate::translate::DEFAULT_MODEL);
         assert_eq!(cfg.translation_prompt, crate::translate::DEFAULT_PROMPT);
         assert!(cfg.check_updates_on_startup);
+        assert!(cfg.disabled_providers.is_empty());
     }
 }
