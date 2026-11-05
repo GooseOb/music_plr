@@ -16,7 +16,9 @@ use crate::{
     app::{
         interaction::{CardTarget, DropTarget, HoverTarget, Pressed, PressedDrag},
         ui::styles::{fg_tab, icon_style_accent_dimmed, icon_style_fg_secondary, icon_style_tab},
-        update::operation::{ScrollTarget, SIDEBAR_SERVER_PLAYLISTS_LIST_ID},
+        update::operation::{
+            ScrollTarget, LIBRARY_LIST_ID, SIDEBAR_LIST_ID, SIDEBAR_SERVER_PLAYLISTS_LIST_ID,
+        },
         ViewData, ViewKind,
     },
     data::{library::Card, server_playlists::ServerPlaylistEntry},
@@ -454,7 +456,7 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
         library_collapsed(player.strings.direction, player.strings.nothing_saved_yet)
     } else if player.library_expanded {
         scrollable(Column::with_children(library_items).spacing(theme::SPACING_XS))
-            .id(iced::widget::Id::new("sidebar_library_list"))
+            .id(LIBRARY_LIST_ID)
             // Keep the captured offset fresh so a row's card menu anchors at
             // the cursor rather than at the unscrolled position.
             .on_scroll(|vp| super::scrolled(ScrollTarget::Library, vp.absolute_offset()))
@@ -546,6 +548,12 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             widget::rule::horizontal(1).into(),
             scrollable(Column::with_children(server_playlist_rows).spacing(theme::SPACING_XS))
                 .id(SIDEBAR_SERVER_PLAYLISTS_LIST_ID)
+                // Keep the captured offset fresh: row hit-testing and drop
+                // targets are resolved against it, so a stale offset would
+                // address the wrong row after scrolling.
+                .on_scroll(|vp| {
+                    super::scrolled(ScrollTarget::ServerPlaylists, vp.absolute_offset())
+                })
                 .height(Length::FillPortion(2))
                 .into(),
         ])
@@ -566,7 +574,8 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
             widget::rule::horizontal(1).into(),
             create_row.into(),
             scrollable(Column::with_children(playlist_items).spacing(theme::SPACING_XS))
-                .id(iced::widget::Id::new("sidebar_playlist_list"))
+                .id(SIDEBAR_LIST_ID)
+                .on_scroll(|vp| super::scrolled(ScrollTarget::Sidebar, vp.absolute_offset()))
                 .height(Length::FillPortion(2))
                 .into(),
             server_playlist_section,

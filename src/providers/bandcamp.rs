@@ -279,8 +279,6 @@ fn discover_new(limit: usize) -> Result<Vec<crate::providers::HomeCard>> {
             subtitle: artist.unwrap_or_default(),
             thumbnail,
             url: album_page_url(item).unwrap_or_default(),
-            badge: String::new(),
-            date: text_field(item, "publish_date").unwrap_or_default(),
         });
         if cards.len() >= limit {
             break;
@@ -444,8 +442,6 @@ pub fn resolve_id(track: &Track) -> Result<Option<Track>> {
 }
 
 pub fn download(track: &Track, download_dir: &std::path::Path) -> Result<String> {
-    use std::io::Write as _;
-
     let url = track
         .provider_url(ProviderId::Bandcamp)
         .unwrap_or_else(|| track.primary_url())
@@ -454,20 +450,13 @@ pub fn download(track: &Track, download_dir: &std::path::Path) -> Result<String>
         .provider_id(ProviderId::Bandcamp)
         .unwrap_or("download");
     let output_path = super::download_file_path(download_dir, id);
-    let mut body = super::http_agent()
-        .get(&url)
-        .header("User-Agent", "curl/8.5.0")
-        .call()
-        .context("Bandcamp download failed")?
-        .body_mut()
-        .read_to_vec()
-        .context("Bandcamp download body unreadable")?;
-    if body.is_empty() {
-        anyhow::bail!("Bandcamp download was empty");
-    }
-    let mut file = std::fs::File::create(&output_path).context("download file not writable")?;
-    file.write_all(&body).context("download write failed")?;
-    body.clear();
+    super::download_to_file(
+        super::http_agent()
+            .get(&url)
+            .header("User-Agent", "curl/8.5.0"),
+        &output_path,
+        "Bandcamp",
+    )?;
     Ok(output_path.to_string_lossy().into_owned())
 }
 

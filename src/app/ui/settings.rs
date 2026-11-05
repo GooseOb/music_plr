@@ -337,7 +337,7 @@ fn custom_providers_section(player: &MusicPlayer) -> Element<'_, Message, AppThe
             text(&provider.name).style(fg_accent()).into(),
             text(format!(
                 "{} · {}",
-                provider.kind_label(),
+                provider.kind.label(),
                 provider.server_url
             ))
             .style(fg_secondary())

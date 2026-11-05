@@ -117,7 +117,7 @@ impl MusicPlayer {
             let view = self.view_data_in_mut(pane);
             view.request_id = rid;
             if let ViewKind::Home(home) = &mut view.kind {
-                home.loading = true;
+                home.pending = providers.len();
             }
         }
         let tx = self.result_tx.clone();
@@ -178,9 +178,13 @@ impl MusicPlayer {
                             continue;
                         }
                         if section.key.kind == HomeSectionKind::QuickPicks {
+                            // An empty row would replace the list with a blank
+                            // page; keep whatever is already there instead.
                             if let HomeSectionData::Tracks(tracks) = &section.data {
-                                *content = LoadState::Ready(tracks.clone());
-                                home.quick_picks_provider = Some(provider);
+                                if !tracks.is_empty() {
+                                    *content = LoadState::Ready(tracks.clone());
+                                    home.quick_picks_provider = Some(provider);
+                                }
                             }
                         } else {
                             rows.push(section.clone());
@@ -196,7 +200,7 @@ impl MusicPlayer {
                     tracing::debug!("Home rows for {provider:?} failed: {error:#}");
                 }
             }
-            home.loading = false;
+            home.pending = home.pending.saturating_sub(1);
             providers::sort_sections(&mut home.sections, &providers);
         }
 
@@ -221,8 +225,8 @@ impl MusicPlayer {
                 .into_iter()
                 .cloned()
                 .collect(),
-            HomeTrackSource::Section(section) => match &self.view_data_in(pane).kind {
-                ViewKind::Home(home) => match home.sections.get(section).map(|s| &s.data) {
+            HomeTrackSource::Section(key) => match &self.view_data_in(pane).kind {
+                ViewKind::Home(home) => match home.section(key).map(|s| &s.data) {
                     Some(HomeSectionData::Tracks(tracks)) => tracks.clone(),
                     _ => return,
                 },

@@ -197,11 +197,6 @@ impl MusicPlayer {
                     }
                 }
             }
-            ViewKind::Home(home) => {
-                for section in &home.sections {
-                    section.data.seed_thumbnails(index);
-                }
-            }
             _ => {}
         }
         view.thumbnails_seeded = true;
@@ -218,11 +213,15 @@ impl MusicPlayer {
     /// sections, so their artwork is seeded here every tick (the per-view pass
     /// only runs when the view changes, and these rows move under it).
     fn seed_home_row_thumbnails(&mut self) {
-        if !self
-            .pane_ids_unsorted()
-            .into_iter()
-            .any(|pane| matches!(self.view_data_in(pane).kind, ViewKind::Home(_)))
-        {
+        let shows_home = self.panes.values().any(|pane| {
+            matches!(
+                pane.nav_history
+                    .get(pane.nav_history_pos)
+                    .map(|view| &view.kind),
+                Some(ViewKind::Home(_))
+            )
+        });
+        if !shows_home {
             return;
         }
         for track in &self.queue.recently_played {
@@ -231,7 +230,7 @@ impl MusicPlayer {
                     .ensure(track.source, track.primary_id(), track.thumbnail());
             }
         }
-        for track in self.download_registry.tracks() {
+        for track in self.download_registry.iter() {
             if !track.thumbnail().is_empty() {
                 self.thumbnail_index
                     .ensure(track.source, track.primary_id(), track.thumbnail());
@@ -252,20 +251,19 @@ impl MusicPlayer {
                 }
             }
         }
-        for pane in self.pane_ids_unsorted() {
-            let Some(view) = self
-                .panes
-                .get(&pane)
-                .and_then(|pane| pane.nav_history.get(pane.nav_history_pos))
-            else {
+        let Self {
+            panes,
+            thumbnail_index,
+            ..
+        } = self;
+        for pane in panes.values() {
+            let Some(view) = pane.nav_history.get(pane.nav_history_pos) else {
                 continue;
             };
             if let ViewKind::Home(home) = &view.kind {
-                let mut index = std::mem::take(&mut self.thumbnail_index);
                 for section in &home.sections {
-                    section.data.seed_thumbnails(&mut index);
+                    section.data.seed_thumbnails(thumbnail_index);
                 }
-                self.thumbnail_index = index;
             }
         }
     }
@@ -569,8 +567,7 @@ impl MusicPlayer {
                 Task::none()
             }
             BackendResult::ServerPlaylists { provider, result } => {
-                self.apply_server_playlists(provider, result);
-                Task::none()
+                self.apply_server_playlists(provider, result)
             }
             BackendResult::ServerPlaylistWritten { target, result } => {
                 self.apply_server_playlist_write(&target, result)

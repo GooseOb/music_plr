@@ -90,14 +90,14 @@ pub(super) fn view_home<'a>(
                     .into(),
             );
         }
-    } else if matches!(view.content, LoadState::Loading) && home.loading {
+    } else if matches!(view.content, LoadState::Loading) && home.is_loading() {
         children.push(super::shared_components::loading_state(
             player.strings.loading,
         ));
     }
 
     let mut block: Option<ProviderId> = None;
-    for (index, section) in home.sections.iter().enumerate() {
+    for section in &home.sections {
         let provider = section.key.provider;
         if block != Some(provider) {
             block = Some(provider);
@@ -106,7 +106,7 @@ pub(super) fn view_home<'a>(
                 children.push(rail);
             }
         }
-        children.push(section_rail(player, pane, index, section));
+        children.push(section_rail(player, pane, section));
     }
 
     super::card_scrollable(
@@ -211,12 +211,9 @@ fn rail<'a>(
     title: Element<'a, Message, AppTheme>,
     cards: Vec<Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
-    Container::new(iced::widget::Column::with_children([
-        title,
-        card_rail(pane, RailKey::Home(rail), cards),
-    ]))
-    .width(Length::Fill)
-    .into()
+    iced::widget::Column::with_children([title, card_rail(pane, RailKey::Home(rail), cards)])
+        .width(Length::Fill)
+        .into()
 }
 
 fn track_tile<'a>(
@@ -405,7 +402,6 @@ fn server_playlists_rail<'a>(
 fn section_rail<'a>(
     player: &'a MusicPlayer,
     pane: PaneId,
-    index: usize,
     section: &'a HomeSection,
 ) -> Element<'a, Message, AppTheme> {
     let rail_id = HomeRailId::Section(section.key);
@@ -419,7 +415,7 @@ fn section_rail<'a>(
                     track,
                     Message::PlayHomeTrack {
                         pane,
-                        source: HomeTrackSource::Section(index),
+                        source: HomeTrackSource::Section(section.key),
                         index: track_index,
                     },
                 )
@@ -447,14 +443,7 @@ fn card_rail_tile<'a>(
     rail: HomeRailId,
     card: &'a HomeCard,
 ) -> Element<'a, Message, AppTheme> {
-    let item = LibraryItem {
-        kind: card.kind,
-        id: card.id.clone(),
-        title: card.title.clone(),
-        thumbnail: card.thumbnail.clone(),
-        provider: card.provider,
-        url: card.url.clone(),
-    };
+    let item = LibraryItem::from(card);
     art_card(
         player,
         pane,
@@ -492,8 +481,6 @@ mod tests {
                     subtitle: "Artist".to_string(),
                     thumbnail: String::new(),
                     url: String::new(),
-                    badge: String::new(),
-                    date: String::new(),
                 }]),
             ));
             home.sections.push(HomeSection::new(
@@ -507,8 +494,6 @@ mod tests {
                     subtitle: "Artist".to_string(),
                     thumbnail: String::new(),
                     url: String::new(),
-                    badge: String::new(),
-                    date: String::new(),
                 }]),
             ));
         }

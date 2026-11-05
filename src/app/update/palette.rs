@@ -147,7 +147,7 @@ impl MusicPlayer {
                         .get(index)
                         .map(|(_, entry)| entry.target())
                     {
-                        let tracks = self.tracks_at_indices(add.pane, &add.indices);
+                        let tracks = self.get_tracks_at(&add.indices, add.pane);
                         return self.add_tracks_to_server_playlist(entry, tracks);
                     }
                 }

@@ -16,14 +16,17 @@ use crate::{
 
 /// One kind of home row. The (provider, kind) pair identifies a row across
 /// refreshes and in the on-disk cache.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// The declaration order is the row order inside a provider's block, so
+/// [`sort_sections`] can sort on the value itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum HomeSectionKind {
     /// The pane's single track list (always the provider's own picks).
     QuickPicks,
+    ForYou,
     NewReleases,
     Trending,
     TopArtists,
-    ForYou,
     RecentlyAdded,
     RecentlyPlayed,
     MostPlayed,
@@ -85,28 +88,10 @@ impl HomeSectionKind {
             HomeSectionKind::Artists => tr.artists,
         }
     }
-
-    /// Relative position of a row inside its provider's block. Quick picks
-    /// never reaches the row list (it becomes the pane's track list).
-    fn rank(self) -> u8 {
-        match self {
-            HomeSectionKind::QuickPicks => 0,
-            HomeSectionKind::ForYou => 1,
-            HomeSectionKind::NewReleases => 2,
-            HomeSectionKind::Trending => 3,
-            HomeSectionKind::TopArtists => 4,
-            HomeSectionKind::RecentlyAdded => 5,
-            HomeSectionKind::RecentlyPlayed => 6,
-            HomeSectionKind::MostPlayed => 7,
-            HomeSectionKind::Starred => 8,
-            HomeSectionKind::Discover => 9,
-            HomeSectionKind::Artists => 10,
-        }
-    }
 }
 
 /// Identity of a home row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HomeSectionKey {
     pub provider: ProviderId,
     pub kind: HomeSectionKind,
@@ -131,16 +116,9 @@ pub struct HomeCard {
     pub provider: ProviderId,
     pub id: String,
     pub title: String,
-    #[serde(default)]
     pub subtitle: String,
-    #[serde(default)]
     pub thumbnail: String,
-    #[serde(default)]
     pub url: String,
-    #[serde(default)]
-    pub badge: String,
-    #[serde(default)]
-    pub date: String,
 }
 
 impl HomeCard {
@@ -153,15 +131,20 @@ impl HomeCard {
             subtitle: card.subtitle,
             thumbnail: card.thumbnail,
             url: card.url,
-            badge: String::new(),
-            date: String::new(),
         }
     }
+}
 
-    pub fn with_meta(mut self, badge: String, date: String) -> Self {
-        self.badge = badge;
-        self.date = date;
-        self
+impl From<&HomeCard> for crate::data::library::LibraryItem {
+    fn from(card: &HomeCard) -> Self {
+        Self {
+            kind: card.kind,
+            id: card.id.clone(),
+            title: card.title.clone(),
+            thumbnail: card.thumbnail.clone(),
+            provider: card.provider,
+            url: card.url.clone(),
+        }
     }
 }
 
@@ -204,7 +187,7 @@ impl HomeSectionData {
 }
 
 /// A fetched row, before it is merged into a pane's home state.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HomeSection {
     pub key: HomeSectionKey,
     pub title: String,
@@ -240,30 +223,28 @@ pub fn titled(tr: &'static Strings, label: &str, provider: ProviderId) -> String
 /// servers first (their library is what they came for), then the configured
 /// default provider, then the remaining discovery sources.
 pub fn home_providers(default: ProviderId) -> Vec<ProviderId> {
-    let mut providers: Vec<ProviderId> = Vec::new();
-    for provider in ProviderId::all() {
-        if provider.is_custom() && home_capable(provider) {
-            providers.push(provider);
-        }
-    }
-    if home_capable(default) && !providers.contains(&default) {
+    let enabled: Vec<ProviderId> = ProviderId::all()
+        .into_iter()
+        .filter(|provider| home_capable(*provider))
+        .collect();
+    let mut providers: Vec<ProviderId> = enabled
+        .iter()
+        .copied()
+        .filter(|provider| provider.is_custom())
+        .collect();
+    if enabled.contains(&default) && !providers.contains(&default) {
         providers.push(default);
     }
-    for provider in [
-        ProviderId::YouTube,
-        ProviderId::SoundCloud,
-        ProviderId::Bandcamp,
-        ProviderId::LastFm,
-    ] {
-        if home_capable(provider) && !providers.contains(&provider) {
-            providers.push(provider);
-        }
-    }
+    let sources: Vec<ProviderId> = enabled
+        .into_iter()
+        .filter(|provider| !provider.is_custom() && !providers.contains(provider))
+        .collect();
+    providers.extend(sources);
     providers
 }
 
 /// Whether `provider` can serve a home feed right now.
-pub fn home_capable(provider: ProviderId) -> bool {
+fn home_capable(provider: ProviderId) -> bool {
     if !provider.enabled() {
         return false;
     }
@@ -283,7 +264,7 @@ pub fn sort_sections(sections: &mut [HomeSection], providers: &[ProviderId]) {
             .iter()
             .position(|&p| p == section.key.provider)
             .unwrap_or(usize::MAX);
-        (provider_rank, section.key.kind.rank())
+        (provider_rank, section.key.kind)
     });
 }
 
@@ -354,8 +335,6 @@ mod tests {
             subtitle: String::new(),
             thumbnail: String::new(),
             url: String::new(),
-            badge: String::new(),
-            date: String::new(),
         }
     }
 

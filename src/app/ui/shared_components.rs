@@ -447,6 +447,38 @@ where
     .into()
 }
 
+/// The body every tile shares: the picture with its title underneath and an
+/// optional subtitle. Both [`art_card`] and [`click_card`] draw it, so the two
+/// kinds of tile cannot drift apart.
+fn card_body<'a>(
+    image: Element<'a, Message, AppTheme>,
+    title: &'a str,
+    subtitle: &str,
+    title_style: impl Fn(&AppTheme) -> iced::widget::text::Style + 'a,
+) -> Container<'a, Message, AppTheme> {
+    let mut body = vec![
+        image,
+        text(title)
+            .size(theme::TEXT_SIZE_SM)
+            .width(CARD_WIDTH)
+            .wrapping(text::Wrapping::Word)
+            .style(title_style)
+            .into(),
+    ];
+    let trimmed_subtitle = subtitle.trim();
+    if !trimmed_subtitle.is_empty() {
+        body.push(
+            text(trimmed_subtitle.to_string())
+                .size(theme::TEXT_SIZE_XS)
+                .style(fg_secondary())
+                .into(),
+        );
+    }
+    Container::new(Column::with_children(body).spacing(theme::SPACING_2XS))
+        .padding(theme::SPACING_2XS)
+        .width(CARD_WIDTH)
+}
+
 /// One square art card on a shelf: picture with title and subtitle underneath.
 /// It is a full drag-and-drop citizen — a press starts a card drag (onto a
 /// playlist, the library or the queue), a plain click opens `target` and a
@@ -478,39 +510,20 @@ pub fn art_card<'a>(
     let hot = is_hovered || is_dragging_this;
     let thumb_path = player.thumbnail_index.get(card.provider, card.id);
     let image = Container::new(thumbnail(CARD_IMAGE_SIZE, thumb_path)).height(CARD_IMAGE_SIZE);
-    let mut body = vec![
-        image.into(),
-        text(title)
-            .size(theme::TEXT_SIZE_SM)
-            .width(CARD_WIDTH)
-            .wrapping(text::Wrapping::Word)
-            .style(move |t: &AppTheme| iced::widget::text::Style {
-                color: Some(if hot {
-                    t.palette.fg
-                } else {
-                    t.palette.fg_secondary
-                }),
-            })
-            .into(),
-    ];
-    let trimmed_subtitle = subtitle.trim();
-    if !trimmed_subtitle.is_empty() {
-        body.push(
-            text(trimmed_subtitle.to_string())
-                .size(theme::TEXT_SIZE_XS)
-                .style(fg_secondary())
-                .into(),
-        );
-    }
-    let area = MouseArea::new(
-        Container::new(Column::with_children(body).spacing(theme::SPACING_2XS))
-            .padding(theme::SPACING_2XS)
-            .width(CARD_WIDTH),
-    )
-    .interaction(player.drag.clickable_cursor_interaction())
-    .on_press(Message::DragPress(Pressed::Card(item.clone(), Some(pane))))
-    .on_enter(Message::HoverStart(HoverTarget::Card(item.clone())))
-    .on_exit(Message::HoverEnd(HoverTarget::Card(item)));
+    let body = card_body(image.into(), title, subtitle, move |t: &AppTheme| {
+        iced::widget::text::Style {
+            color: Some(if hot {
+                t.palette.fg
+            } else {
+                t.palette.fg_secondary
+            }),
+        }
+    });
+    let area = MouseArea::new(body)
+        .interaction(player.drag.clickable_cursor_interaction())
+        .on_press(Message::DragPress(Pressed::Card(item.clone(), Some(pane))))
+        .on_enter(Message::HoverStart(HoverTarget::Card(item.clone())))
+        .on_exit(Message::HoverEnd(HoverTarget::Card(item)));
     super::right_click::RightClickArea::new(
         area,
         CardTarget {
@@ -533,28 +546,9 @@ pub fn click_card<'a>(
     subtitle: &str,
     message: Message,
 ) -> Element<'a, Message, AppTheme> {
-    let mut body = vec![
-        image,
-        text(title)
-            .size(theme::TEXT_SIZE_SM)
-            .width(CARD_WIDTH)
-            .wrapping(text::Wrapping::Word)
-            .into(),
-    ];
-    let trimmed_subtitle = subtitle.trim();
-    if !trimmed_subtitle.is_empty() {
-        body.push(
-            text(trimmed_subtitle.to_string())
-                .size(theme::TEXT_SIZE_XS)
-                .style(fg_secondary())
-                .into(),
-        );
-    }
-    MouseArea::new(
-        Container::new(Column::with_children(body).spacing(theme::SPACING_2XS))
-            .padding(theme::SPACING_2XS)
-            .width(CARD_WIDTH),
-    )
+    MouseArea::new(card_body(image, title, subtitle, |_| {
+        iced::widget::text::Style::default()
+    }))
     .on_press(message)
     .interaction(iced::mouse::Interaction::Pointer)
     .into()

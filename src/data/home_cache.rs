@@ -17,14 +17,12 @@ pub const HOME_CACHE_TTL_SECS: u64 = 6 * 60 * 60;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CachedHomeSection {
     pub fetched_at: u64,
-    #[serde(default)]
     pub title: String,
     pub data: HomeSectionData,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct HomeCache {
-    #[serde(default)]
     pub sections: HashMap<String, CachedHomeSection>,
 }
 
@@ -61,6 +59,17 @@ impl HomeCache {
         keys.into_iter()
             .filter_map(|key| self.section(key).map(|s| s.fetched_at))
             .min()
+    }
+
+    /// Drop every cached row of `provider`, for when the server stops existing
+    /// under that identity (deleted, or edited into another kind).
+    pub fn forget_provider(&mut self, provider: crate::providers::ProviderId) {
+        let prefix = format!("{}:", provider.slug());
+        let before = self.sections.len();
+        self.sections.retain(|key, _| !key.starts_with(&prefix));
+        if self.sections.len() != before {
+            self.save();
+        }
     }
 }
 

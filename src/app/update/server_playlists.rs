@@ -419,23 +419,23 @@ impl MusicPlayer {
                 Ok(ServerPlaylistChange::Renamed(name))
             });
         } else {
-            let tx = self.result_tx.clone();
-            std::thread::spawn(move || {
-                let result = providers::create_playlist(provider, &name, &[])
-                    .map(|created| ServerPlaylistChange::Created {
-                        id: created.id,
-                        name: created.name,
-                        track_count: created.track_count,
+            // The id only exists once the server answers, so the write is
+            // reported against an empty one.
+            self.spawn_playlist_write(
+                ServerPlaylistId {
+                    provider,
+                    id: String::new(),
+                },
+                move || {
+                    providers::create_playlist(provider, &name, &[]).map(|created| {
+                        ServerPlaylistChange::Created {
+                            id: created.id,
+                            name: created.name,
+                            track_count: created.track_count,
+                        }
                     })
-                    .map_err(ProviderError::from);
-                let _ = tx.send(BackendResult::ServerPlaylistWritten {
-                    target: ServerPlaylistId {
-                        provider,
-                        id: String::new(),
-                    },
-                    result,
-                });
-            });
+                },
+            );
         }
         Task::none()
     }
@@ -461,13 +461,23 @@ impl MusicPlayer {
         &mut self,
         provider: ProviderId,
         result: Result<Vec<ServerPlaylist>, ProviderError>,
-    ) {
+    ) -> Task<Message> {
         self.server_playlists_requested.remove(&provider);
         match result {
-            Ok(playlists) => self.server_playlists.replace_provider(provider, &playlists),
+            Ok(playlists) => {
+                // The sidebar's rows are measured by the capture pass, so a
+                // changed listing has to be re-measured before drag and drop
+                // can address them.
+                if self.server_playlists.replace_provider(provider, &playlists) {
+                    self.capture_bounds_task()
+                } else {
+                    Task::none()
+                }
+            }
             Err(error) => {
                 let message = self.strings.error_reason(&error).to_string();
                 self.notify_error(message);
+                Task::none()
             }
         }
     }
@@ -573,11 +583,7 @@ impl MusicPlayer {
     /// Replace every page showing the deleted playlist with a search view
     /// (the playlist no longer exists on the server).
     fn close_server_playlist_views(&mut self, target: &ServerPlaylistId) -> Task<Message> {
-        let panes: Vec<PaneId> = self
-            .pane_ids()
-            .into_iter()
-            .filter(|pane| shows_playlist(self.view_data_in(*pane), target))
-            .collect();
+        let panes = self.panes_showing(target);
         let mut task = Task::none();
         for pane in panes {
             let provider = self.pane(pane).search_provider;

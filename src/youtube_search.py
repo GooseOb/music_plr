@@ -151,14 +151,19 @@ def _home_normalize(c):
 
 
 def _home_card_item(raw):
-    """Map one home/explore shelf entry to a navigable card.
+    """Map one raw home/explore shelf entry to a navigable card."""
+    c = _home_normalize(raw)
+    return _home_card_entry(c) if c else None
+
+
+def _home_card_entry(c):
+    """Map one normalized home/explore shelf entry to a navigable card.
 
     Home shelves carry no `resultType`: songs are identified by `videoId`,
     playlists by a `VL…`/`RD…`/`OLAK…` id (playlistId or browseId), albums by
     an `MPRE…` browseId and artists by a `UC…` channel id, so the kind comes
     from the id itself."""
-    c = _home_normalize(raw)
-    if not c or c.get("videoId"):
+    if c.get("videoId"):
         return None
     title = c.get("title", "") or ""
     if not title:
@@ -175,7 +180,6 @@ def _home_card_item(raw):
             "subtitle": subtitle or c.get("description", "") or "",
             "thumbnail": thumb,
             "url": f"https://music.youtube.com/playlist?list={cid}",
-            "badge": "", "date": "",
         }
     if bid.startswith("UC"):
         return {
@@ -183,7 +187,6 @@ def _home_card_item(raw):
             "subtitle": c.get("subscribers", "") or subtitle,
             "thumbnail": thumb,
             "url": f"https://music.youtube.com/channel/{bid}",
-            "badge": "", "date": "",
         }
     if bid:
         artist = ", ".join(
@@ -193,7 +196,6 @@ def _home_card_item(raw):
             "kind": "album", "id": bid, "title": title,
             "subtitle": artist or subtitle, "thumbnail": thumb,
             "url": f"https://music.youtube.com/browse/{bid}",
-            "badge": str(c.get("year") or ""), "date": "",
         }
     return None
 
@@ -218,7 +220,7 @@ def home(limit=20):
         if len(songs) >= 5:
             song_rows.append((title, songs))
             continue
-        cards = [i for i in (_home_card_item(e) for e in entries) if i]
+        cards = [i for i in (_home_card_entry(e) for e in entries) if i]
         if len(cards) >= 4:
             card_rows.append((title, cards))
 

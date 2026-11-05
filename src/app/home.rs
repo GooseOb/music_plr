@@ -17,8 +17,12 @@ pub struct HomeData {
     /// stays small.
     #[serde(skip)]
     pub sections: Vec<HomeSection>,
+    /// How many provider fetches of the running refresh are still in flight.
+    /// The feed shows its spinner until every source has answered (or failed),
+    /// so one fast provider cannot make the page look complete while the rest
+    /// are still coming.
     #[serde(skip)]
-    pub loading: bool,
+    pub pending: usize,
     /// Which provider supplied the quick-pick list: its tracks live in the
     /// view's `content`, so the section itself never reaches `sections` and
     /// the view needs this to label the row.
@@ -38,8 +42,8 @@ impl HomeData {
         self.sections.iter().find(|s| s.key == key)
     }
 
-    pub fn has_rows(&self) -> bool {
-        !self.sections.is_empty()
+    pub fn is_loading(&self) -> bool {
+        self.pending > 0
     }
 }
 
@@ -49,8 +53,9 @@ impl HomeData {
 pub enum HomeTrackSource {
     Recent,
     Downloads,
-    /// Index into `HomeData::sections`.
-    Section(usize),
+    /// The rail this tile belongs to, keyed like every other rail identity so
+    /// a refresh between the click and the handler cannot play the wrong row.
+    Section(crate::providers::HomeSectionKey),
 }
 
 /// Identity of one horizontal rail on the Home page. Sections are keyed by
@@ -105,8 +110,6 @@ mod tests {
                 subtitle: String::new(),
                 thumbnail: String::new(),
                 url: String::new(),
-                badge: String::new(),
-                date: String::new(),
             }]),
         )
     }
@@ -132,7 +135,7 @@ mod tests {
                 HomeSectionKind::NewReleases
             ))
             .is_none());
-        assert!(home.has_rows());
+        assert!(!home.sections.is_empty());
     }
 
     #[test]

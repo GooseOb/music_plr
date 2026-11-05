@@ -254,10 +254,6 @@ struct YtHomeCardRaw {
     thumbnail: String,
     #[serde(default)]
     url: String,
-    #[serde(default)]
-    badge: String,
-    #[serde(default)]
-    date: String,
 }
 
 /// Fetch `YouTube Music`'s home feed rows (quick picks, recommendations, new
@@ -294,8 +290,6 @@ pub fn home_sections() -> Result<Vec<crate::providers::HomeSection>> {
                         subtitle: card.subtitle,
                         thumbnail: card.thumbnail,
                         url: card.url,
-                        badge: card.badge,
-                        date: card.date,
                     })
                 })
                 .collect();

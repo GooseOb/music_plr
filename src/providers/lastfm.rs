@@ -584,8 +584,6 @@ pub fn home_sections() -> Result<Vec<crate::providers::HomeSection>> {
                 subtitle: String::new(),
                 thumbnail,
                 url: str_field(artist, "url"),
-                badge: String::new(),
-                date: String::new(),
             }
         })
         .collect();

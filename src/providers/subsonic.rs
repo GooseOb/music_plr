@@ -3,7 +3,7 @@
 //! `ProviderId::Custom(CustomProviderKind::Subsonic, id)` entry backed by
 //! [`custom_providers`].
 
-use std::{io::Write as _, time::Duration};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use opensubsonic::{
@@ -39,12 +39,13 @@ fn configured(provider: ProviderId) -> Result<CustomProvider> {
 }
 
 fn make_client(provider: &CustomProvider) -> Result<Client> {
-    Client::new(
-        &provider.server_url,
-        Auth::token(&provider.username, &provider.password),
-    )
-    .map(|client| client.with_client_name("goosemusic"))
-    .map_err(anyhow::Error::from)
+    client_for(&provider.server_url, &provider.username, &provider.password)
+}
+
+fn client_for(server_url: &str, username: &str, password: &str) -> Result<Client> {
+    Client::new(server_url, Auth::token(username, password))
+        .map(|client| client.with_client_name("goosemusic"))
+        .map_err(anyhow::Error::from)
 }
 
 fn block_on<T>(
@@ -362,25 +363,11 @@ pub fn search(
 
 /// Next page of song results ("Load More").
 pub fn search_more(provider: ProviderId, query: &str, offset: usize) -> Result<Vec<Track>> {
-    let config = configured(provider)?;
-    let client = make_client(&config)?;
-    let query = query.trim();
-    if query.is_empty() {
+    // A blank query is a browse and never paginates.
+    if query.trim().is_empty() {
         return Ok(Vec::new());
     }
-    let result = block_on(
-        client.search3(
-            query,
-            &Search3Options::new()
-                .song_count(PAGE_SIZE)
-                .song_offset(i32::try_from(offset).unwrap_or(i32::MAX)),
-        ),
-    )?;
-    Ok(result
-        .song
-        .iter()
-        .map(|song| track_from_child(provider, &client, song))
-        .collect())
+    Ok(search(provider, query, SearchScope::Songs, offset)?.0)
 }
 
 /// Drill into an album (`kind == "album"`) or a playlist.
@@ -601,15 +588,7 @@ pub fn download(
         .map(|url| url.to_string())
         .context("Subsonic track has no stream URL")?;
     let output_path = download_file_path(download_dir, id);
-    let mut response = ureq::get(&url).call().context("Subsonic download failed")?;
-    let mut file = std::fs::File::create(&output_path).context("download file not writable")?;
-    std::io::copy(&mut response.body_mut().as_reader(), &mut file)
-        .context("Subsonic download failed")?;
-    file.flush().context("download flush failed")?;
-    if file.metadata().is_ok_and(|meta| meta.len() == 0) {
-        let _ = std::fs::remove_file(&output_path);
-        anyhow::bail!("Subsonic download was empty");
-    }
+    super::download_to_file(ureq::get(&url), &output_path, "Subsonic")?;
     Ok(output_path.to_string_lossy().into_owned())
 }
 
@@ -707,9 +686,7 @@ pub fn fetch_artist_page(
 /// Probe a candidate server configuration (used by the Settings form before
 /// saving).
 pub fn test_connection(server_url: &str, username: &str, password: &str) -> Result<String> {
-    let client = Client::new(server_url, Auth::token(username, password))
-        .map(|client| client.with_client_name("goosemusic"))
-        .map_err(anyhow::Error::from)?;
+    let client = client_for(server_url, username, password)?;
     let info = block_on(client.server_info())?;
     let name = match (info.server_type.as_deref(), info.server_version.as_deref()) {
         (Some(kind), Some(version)) => format!("{kind} {version}"),

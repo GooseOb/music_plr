@@ -26,16 +26,15 @@ impl DownloadRegistry {
     /// [`Track::cache_key`] so old entries stay reachable.
     pub fn load_migrated() -> Self {
         let mut store = Self::load();
-        let mut remapped = std::collections::HashMap::new();
-        let mut remapped_times = std::collections::HashMap::new();
+        let mut remapped = HashMap::new();
+        let mut remapped_times = HashMap::new();
         let mut migrated = false;
         for (old_key, track) in store.tracks.drain() {
             let new_key = track.cache_key();
             let registered = store.registered_at.remove(&old_key).unwrap_or(0);
             migrated |= new_key != old_key;
-            if remapped.insert(new_key.clone(), track).is_none() {
-                remapped_times.insert(new_key, registered);
-            }
+            remapped.entry(new_key.clone()).or_insert(track);
+            remapped_times.entry(new_key).or_insert(registered);
         }
         store.tracks = remapped;
         store.registered_at = remapped_times;
@@ -74,25 +73,30 @@ impl DownloadRegistry {
         self.tracks.get(key).and_then(Track::local_path)
     }
 
-    pub fn clone_tracks(&self) -> Vec<Track> {
-        self.tracks.values().cloned().collect()
+    /// Every registered track, in no particular order, for callers that only
+    /// need the set (thumbnail seeding).
+    pub fn iter(&self) -> impl Iterator<Item = &Track> {
+        self.tracks.values()
     }
 
     /// Every registered track, newest download first. The home rail's row
-    /// indices are built from this order, so drawing and playing agree.
+    /// indices are built from this order, so drawing and playing agree; the
+    /// Downloads view keeps it too, so both list the same thing the same way.
     pub fn tracks(&self) -> Vec<&Track> {
-        let mut tracks: Vec<&Track> = self.tracks.values().collect();
-        tracks.sort_by(|a, b| {
-            let at = |track: &Track| {
-                self.registered_at
-                    .get(&track.cache_key())
-                    .copied()
-                    .unwrap_or(0)
-            };
-            at(b)
-                .cmp(&at(a))
-                .then_with(|| a.cache_key().cmp(&b.cache_key()))
+        let mut entries: Vec<(&String, &Track)> = self.tracks.iter().collect();
+        entries.sort_by(|(a_key, _), (b_key, _)| {
+            self.downloaded_at(b_key)
+                .cmp(&self.downloaded_at(a_key))
+                .then_with(|| a_key.cmp(b_key))
         });
-        tracks
+        entries.into_iter().map(|(_, track)| track).collect()
+    }
+
+    pub fn clone_tracks(&self) -> Vec<Track> {
+        self.tracks().into_iter().cloned().collect()
+    }
+
+    fn downloaded_at(&self, key: &str) -> u64 {
+        self.registered_at.get(key).copied().unwrap_or(0)
     }
 }

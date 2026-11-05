@@ -156,6 +156,27 @@ pub(crate) fn download_file_path(dir: &std::path::Path, id: &str) -> std::path::
     dir.join(format!("{id}.mp3"))
 }
 
+/// Stream a request's body into `path`, rejecting an empty download. `what`
+/// names the source backend in the error text.
+pub(crate) fn download_to_file(
+    request: ureq::RequestBuilder<ureq::typestate::WithoutBody>,
+    path: &std::path::Path,
+    what: &str,
+) -> Result<()> {
+    let mut response = request
+        .call()
+        .with_context(|| format!("{what} download failed"))?;
+    let mut file = std::fs::File::create(path).context("download file not writable")?;
+    std::io::copy(&mut response.body_mut().as_reader(), &mut file)
+        .with_context(|| format!("{what} download failed"))?;
+    file.flush().context("download flush failed")?;
+    if file.metadata().is_ok_and(|meta| meta.len() == 0) {
+        let _ = std::fs::remove_file(path);
+        anyhow::bail!("{what} download was empty");
+    }
+    Ok(())
+}
+
 /// Identifies a music provider. Stored on tracks (which provider is the source of a
 /// result) and in configuration (the default stream+download provider).
 ///

@@ -69,6 +69,10 @@ pub enum ScrollTarget {
     /// One card shelf, scrolled sideways: an artist-page section or a Home
     /// rail. Only the horizontal offset matters.
     CardRow(PaneId, RailKey),
+    /// The sidebar's local playlist list.
+    Sidebar,
+    /// The sidebar's server-playlist rows (one list, grouped by provider).
+    ServerPlaylists,
     /// The sidebar's saved-library list.
     Library,
 }
@@ -122,6 +126,8 @@ impl From<ScrollTarget> for Slot {
             },
             ScrollTarget::Cards(pane) => Slot::Cards(pane),
             ScrollTarget::CardRow(pane, section) => Slot::CardRow(pane, section),
+            ScrollTarget::Sidebar => Slot::Sidebar,
+            ScrollTarget::ServerPlaylists => Slot::ServerPlaylists,
             ScrollTarget::Library => Slot::Library,
         }
     }

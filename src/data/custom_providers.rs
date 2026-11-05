@@ -59,19 +59,11 @@ pub struct CustomProvider {
     pub password: String,
 }
 
-impl CustomProvider {
-    pub fn kind_label(&self) -> &'static str {
-        self.kind.label()
-    }
-}
-
 /// Persisted custom-provider list. Ids are never reused: `next_id` survives
 /// deletions so a stale track identity can never resolve to a new server.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CustomProviderStore {
-    #[serde(default)]
     pub next_id: u64,
-    #[serde(default)]
     pub providers: Vec<CustomProvider>,
 }
 

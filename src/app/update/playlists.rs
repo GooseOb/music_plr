@@ -294,7 +294,7 @@ impl MusicPlayer {
             return;
         }
 
-        let tracks = self.tracks_at_indices(pane, indices);
+        let tracks = self.get_tracks_at(indices, pane);
         let count = self
             .playlists
             .insert_tracks_at(playlist_idx, tracks.iter(), PREPEND);
@@ -312,8 +312,8 @@ impl MusicPlayer {
                 self.notify(msg);
                 self.clear_selection_if_touched_in(pane, indices);
             }
-            // A server playlist is written on the server; the rows disappear
-            // when the refetch lands, so nothing is removed locally.
+            // A server playlist is written on the server, and its rows leave
+            // every open page right away; a failed write puts them back.
             ViewKind::PlaylistView(reference)
                 if crate::providers::playlists_supported(reference.provider) =>
             {
@@ -324,7 +324,7 @@ impl MusicPlayer {
     }
 
     pub fn handle_add_to_trashbin(&mut self, pane: PaneId, indices: &[usize]) {
-        let tracks = self.tracks_at_indices(pane, indices);
+        let tracks = self.get_tracks_at(indices, pane);
         if tracks.is_empty() {
             return;
         }

@@ -193,9 +193,21 @@ impl MusicPlayer {
             .id
             .unwrap_or_else(|| self.custom_providers.allocate_id());
         let kind = form.kind;
+        // An edit that switches the backend re-identifies the server, so the
+        // state filed under the old identity has to go with it.
+        let previous_kind = form.id.and_then(|id| {
+            self.custom_providers
+                .providers
+                .iter()
+                .find(|provider| provider.id == id)
+                .map(|provider| provider.kind)
+        });
         self.custom_providers.upsert(form.into_provider(id));
         self.custom_providers.save();
         custom_providers::set_registry(&self.custom_providers.providers);
+        if let Some(previous_kind) = previous_kind.filter(|previous| *previous != kind) {
+            self.forget_provider_data(crate::providers::ProviderId::Custom(previous_kind, id));
+        }
         self.prune_disabled_providers();
         self.reconcile_provider_refs();
         self.notify(self.strings.custom_provider_saved);
@@ -208,9 +220,9 @@ impl MusicPlayer {
     }
 
     pub fn handle_custom_provider_delete(&mut self, id: u64) {
-        if self.custom_providers.remove(id).is_none() {
+        let Some(removed) = self.custom_providers.remove(id) else {
             return;
-        }
+        };
         self.custom_providers.save();
         custom_providers::set_registry(&self.custom_providers.providers);
         self.prune_disabled_providers();
@@ -222,12 +234,20 @@ impl MusicPlayer {
             self.custom_provider_form = None;
         }
         // Its playlists went away with the server, and its id is never reused.
-        self.server_playlists
-            .entries
-            .retain(|entry| !matches!(entry.provider, crate::providers::ProviderId::Custom(_, pid) if pid == id));
-        self.server_playlists.save();
+        self.forget_provider_data(crate::providers::ProviderId::Custom(removed.kind, id));
         self.reconcile_provider_refs();
         self.notify(self.strings.custom_provider_deleted);
+    }
+
+    /// Drop the indexed playlists and cached feed rows of a server identity
+    /// that no longer exists. Tracks that still name it are left alone: they
+    /// simply stop resolving, so nothing is silently repointed at a new server.
+    fn forget_provider_data(&mut self, provider: crate::providers::ProviderId) {
+        self.server_playlists
+            .entries
+            .retain(|entry| entry.provider != provider);
+        self.server_playlists.save();
+        self.home_cache.forget_provider(provider);
     }
 
     pub fn handle_custom_provider_test(&mut self) {

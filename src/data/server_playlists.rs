@@ -22,7 +22,6 @@ pub struct ServerPlaylistEntry {
     pub provider: ProviderId,
     pub id: String,
     pub name: String,
-    #[serde(default)]
     pub track_count: usize,
 }
 
@@ -37,7 +36,6 @@ impl ServerPlaylistEntry {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ServerPlaylistStore {
-    #[serde(default)]
     pub entries: Vec<ServerPlaylistEntry>,
 }
 
@@ -56,26 +54,23 @@ impl ServerPlaylistStore {
         self.entries.iter().filter(move |e| e.provider == provider)
     }
 
-    pub fn count_for(&self, provider: ProviderId) -> usize {
-        self.for_provider(provider).count()
-    }
-
     pub fn get(&self, target: &ServerPlaylistId) -> Option<&ServerPlaylistEntry> {
         self.entries
             .iter()
             .find(|e| e.provider == target.provider && e.id == target.id)
     }
 
-    pub fn find_by_id(&self, provider: ProviderId, id: &str) -> Option<&ServerPlaylistEntry> {
+    fn get_mut(&mut self, target: &ServerPlaylistId) -> Option<&mut ServerPlaylistEntry> {
         self.entries
-            .iter()
-            .find(|e| e.provider == provider && e.id == id)
+            .iter_mut()
+            .find(|e| e.provider == target.provider && e.id == target.id)
     }
 
     /// Replace every entry of `provider` with a fresh server listing, keeping
     /// the other providers' entries where they are. Saves only when the
-    /// listing actually changed, so a periodic refresh is free.
-    pub fn replace_provider(&mut self, provider: ProviderId, playlists: &[ServerPlaylist]) {
+    /// listing actually changed, so a periodic refresh is free. Returns
+    /// whether the list changed, i.e. whether the sidebar rows moved.
+    pub fn replace_provider(&mut self, provider: ProviderId, playlists: &[ServerPlaylist]) -> bool {
         let fresh: Vec<ServerPlaylistEntry> = playlists
             .iter()
             .map(|playlist| ServerPlaylistEntry {
@@ -87,7 +82,7 @@ impl ServerPlaylistStore {
             .collect();
         let existing: Vec<ServerPlaylistEntry> = self.for_provider(provider).cloned().collect();
         if existing == fresh {
-            return;
+            return false;
         }
         let insert_at = self
             .entries
@@ -98,6 +93,7 @@ impl ServerPlaylistStore {
         let insert_at = insert_at.min(self.entries.len());
         self.entries.splice(insert_at..insert_at, fresh);
         self.save();
+        true
     }
 
     pub fn insert(&mut self, entry: ServerPlaylistEntry) {
@@ -119,11 +115,7 @@ impl ServerPlaylistStore {
     }
 
     pub fn rename(&mut self, target: &ServerPlaylistId, name: &str) {
-        if let Some(entry) = self
-            .entries
-            .iter_mut()
-            .find(|e| e.provider == target.provider && e.id == target.id)
-        {
+        if let Some(entry) = self.get_mut(target) {
             if entry.name != name {
                 entry.name = name.to_string();
                 self.save();
@@ -132,11 +124,7 @@ impl ServerPlaylistStore {
     }
 
     pub fn set_count(&mut self, target: &ServerPlaylistId, count: usize) {
-        if let Some(entry) = self
-            .entries
-            .iter_mut()
-            .find(|e| e.provider == target.provider && e.id == target.id)
-        {
+        if let Some(entry) = self.get_mut(target) {
             if entry.track_count != count {
                 entry.track_count = count;
                 self.save();
@@ -146,11 +134,7 @@ impl ServerPlaylistStore {
 
     /// Put a row back exactly where it was, for a rolled-back write.
     pub fn restore(&mut self, entry: ServerPlaylistEntry) {
-        match self
-            .entries
-            .iter_mut()
-            .find(|e| e.provider == entry.provider && e.id == entry.id)
-        {
+        match self.get_mut(&entry.target()) {
             Some(existing) => *existing = entry,
             None => self.entries.push(entry),
         }
@@ -161,11 +145,7 @@ impl ServerPlaylistStore {
     /// a write that just landed instead of waiting for the next listing (the
     /// open views refetch and correct it to the server's own number anyway).
     pub fn adjust_count(&mut self, target: &ServerPlaylistId, delta: isize) {
-        if let Some(entry) = self
-            .entries
-            .iter_mut()
-            .find(|e| e.provider == target.provider && e.id == target.id)
-        {
+        if let Some(entry) = self.get_mut(target) {
             let count = entry.track_count.saturating_add_signed(delta);
             if entry.track_count != count {
                 entry.track_count = count;
@@ -209,8 +189,8 @@ mod tests {
         store.replace_provider(jellyfin, &[playlist("b", "Two", 2)]);
 
         store.replace_provider(subsonic, &[playlist("c", "Three", 3)]);
-        assert_eq!(store.count_for(subsonic), 1);
-        assert_eq!(store.count_for(jellyfin), 1);
+        assert_eq!(store.for_provider(subsonic).count(), 1);
+        assert_eq!(store.for_provider(jellyfin).count(), 1);
         assert!(store.get(&target("a")).is_none());
         assert_eq!(
             store.get(&target("c")).map(|e| e.name.as_str()),
@@ -226,6 +206,16 @@ mod tests {
         store.replace_provider(provider, &[playlist("a", "A", 1), playlist("b", "B", 2)]);
         let ids: Vec<&str> = store.entries.iter().map(|e| e.id.as_str()).collect();
         assert_eq!(ids, ["a", "b"]);
+    }
+
+    #[test]
+    fn replacing_reports_whether_the_rows_moved() {
+        let provider = target("any").provider;
+        let mut store = ServerPlaylistStore::default();
+        assert!(store.replace_provider(provider, &[playlist("a", "One", 1)]));
+        assert!(!store.replace_provider(provider, &[playlist("a", "One", 1)]));
+        assert!(store.replace_provider(provider, &[playlist("b", "Two", 2)]));
+        assert!(store.replace_provider(provider, &[]));
     }
 
     #[test]
