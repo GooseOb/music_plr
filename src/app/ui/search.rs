@@ -383,7 +383,7 @@ pub(super) fn view_server_playlist<'a>(
         TrackPage {
             thumbnail: player
                 .thumbnail_index
-                .get(reference.provider, &reference.thumbnail),
+                .get(reference.provider, &reference.id),
             title: &reference.name,
             meta: tr.provider(reference.provider),
             loading: tr.loading,

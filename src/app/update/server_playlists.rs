@@ -20,6 +20,7 @@ use crate::{
     data::{
         library::{Card, LibraryItem, LibraryKind},
         server_playlists::{ServerPlaylistEntry, ServerPlaylistId},
+        JsonStore,
     },
     load_state::LoadState,
     providers::{self, ProviderError, ProviderId, ServerPlaylist},
@@ -29,6 +30,12 @@ use crate::{
 /// How long an index request may stay unanswered before the guard lets a new
 /// one through. Every provider call times out well inside this, so an entry
 /// that old belongs to a thread that will never report back.
+/// Whether the sidebar shows a server-playlist group for `provider`: a
+/// configured custom server that is switched on in Settings.
+fn server_playlist_group(provider: ProviderId) -> bool {
+    provider.enabled() && providers::playlists_supported(provider) && provider.capabilities().search
+}
+
 const INDEX_REQUEST_TIMEOUT: Duration = Duration::from_mins(2);
 
 impl MusicPlayer {
@@ -37,9 +44,7 @@ impl MusicPlayer {
     pub fn server_playlist_providers() -> Vec<ProviderId> {
         ProviderId::all()
             .into_iter()
-            .filter(|provider| {
-                providers::playlists_supported(*provider) && provider.capabilities().search
-            })
+            .filter(|provider| server_playlist_group(*provider))
             .collect()
     }
 
@@ -134,6 +139,22 @@ impl MusicPlayer {
             .is_some_and(|sent| sent.elapsed() < INDEX_REQUEST_TIMEOUT)
     }
 
+    /// Index entries for servers that no longer exist: a playlist created on a
+    /// server deleted between the write and its reply has no group to show in,
+    /// and the server's own removal normally handled it before it could land.
+    pub(crate) fn drop_unregistered_server_playlists(&mut self) {
+        let before = self.server_playlists.entries.len();
+        self.server_playlists
+            .entries
+            .retain(|entry| match entry.provider {
+                ProviderId::Custom(kind, id) => crate::data::custom_providers::contains(kind, id),
+                _ => true,
+            });
+        if self.server_playlists.entries.len() != before {
+            self.server_playlists.save();
+        }
+    }
+
     /// Open a server playlist in `pane`, fetching its contents. `play` starts
     /// playback once the tracks arrive (the sidebar's double click).
     pub fn open_server_playlist(
@@ -156,11 +177,16 @@ impl MusicPlayer {
             };
         }
         let provider = target.provider;
+        let thumbnail = self
+            .server_playlists
+            .get(&target)
+            .map(|entry| entry.thumbnail.clone())
+            .unwrap_or_default();
         let kind = ViewKind::PlaylistView(crate::app::view_data::PlaylistRef {
             id: target.id,
             name: name.to_string(),
             provider,
-            thumbnail: String::new(),
+            thumbnail,
             url: String::new(),
         });
         let task = self.handle_browse(pane, &kind, provider);
@@ -283,6 +309,7 @@ impl MusicPlayer {
                     id: created.id,
                     name: created.name,
                     track_count: created.track_count,
+                    thumbnail: created.thumbnail,
                 })
             },
         );
@@ -547,6 +574,7 @@ impl MusicPlayer {
                             id: created.id,
                             name: created.name,
                             track_count: created.track_count,
+                            thumbnail: created.thumbnail,
                         }
                     })
                 },
@@ -644,16 +672,25 @@ impl MusicPlayer {
                 id,
                 name,
                 track_count,
+                thumbnail,
             } => {
-                self.server_playlists.insert(ServerPlaylistEntry {
-                    provider: target.provider,
-                    id,
-                    name: name.clone(),
-                    track_count,
-                });
                 self.notify((self.strings.playlist_created)(&name));
-                // A new row was added to the measured sidebar list.
-                self.capture_bounds_task()
+                // The server may have been deleted between the write and its
+                // reply; with no sidebar group to draw the row, the entry is
+                // dropped instead of lingering in the index.
+                if server_playlist_group(target.provider) {
+                    self.server_playlists.insert(ServerPlaylistEntry {
+                        provider: target.provider,
+                        id,
+                        name,
+                        thumbnail,
+                        track_count,
+                    });
+                    // A new row was added to the measured sidebar list.
+                    self.capture_bounds_task()
+                } else {
+                    Task::none()
+                }
             }
             ServerPlaylistChange::Renamed(new_name) => {
                 self.server_playlists.rename(target, &new_name);
@@ -715,16 +752,44 @@ fn shows_playlist(view: &ViewData, target: &ServerPlaylistId) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Mutex, MutexGuard};
+
     use crate::{
         app::{MusicPlayer, ViewData, ViewKind},
         data::{
             config,
-            custom_providers::CustomProviderKind,
+            custom_providers::{self, CustomProvider, CustomProviderKind},
             server_playlists::{ServerPlaylistEntry, ServerPlaylistId},
         },
         providers::{ErrorKind, ProviderError, ServerPlaylist},
         types::Track,
     };
+
+    /// The created-playlist write checks the process-global registry, so only
+    /// this module's registry write may run at a time.
+    static REGISTRY: Mutex<()> = Mutex::new(());
+
+    fn lock() -> MutexGuard<'static, ()> {
+        REGISTRY
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Trades the test server into the registry for the body's duration, then
+    /// restores whatever was registered before it.
+    fn with_test_server(body: impl FnOnce()) {
+        let remembered = custom_providers::all();
+        custom_providers::set_registry(&[CustomProvider {
+            id: 9,
+            name: "Test".into(),
+            kind: CustomProviderKind::Subsonic,
+            server_url: "https://example.com".into(),
+            username: String::new(),
+            password: String::new(),
+        }]);
+        body();
+        custom_providers::set_registry(&remembered);
+    }
 
     fn provider() -> crate::providers::ProviderId {
         crate::providers::ProviderId::Custom(CustomProviderKind::Subsonic, 9)
@@ -760,6 +825,7 @@ mod tests {
             &[ServerPlaylist {
                 id: "pl".into(),
                 name: "Server".into(),
+                thumbnail: String::new(),
                 track_count: ids.len(),
             }],
         );
@@ -875,27 +941,31 @@ mod tests {
 
     #[test]
     fn a_created_playlist_lands_in_the_index_with_its_count() {
+        let _guard = lock();
         let mut p = player_with_playlist(&["a"]);
-        let created = ServerPlaylistId {
-            provider: provider(),
-            id: String::new(),
-        };
-        let write_id = p.request_ids.next();
-        let _ = p.apply_server_playlist_write(
-            write_id,
-            &created,
-            Ok(crate::app::ServerPlaylistChange::Created {
-                id: "new".into(),
-                name: "New".into(),
-                track_count: 7,
-            }),
-        );
+        with_test_server(|| {
+            let created = ServerPlaylistId {
+                provider: provider(),
+                id: String::new(),
+            };
+            let write_id = p.request_ids.next();
+            let _ = p.apply_server_playlist_write(
+                write_id,
+                &created,
+                Ok(crate::app::ServerPlaylistChange::Created {
+                    id: "new".into(),
+                    name: "New".into(),
+                    track_count: 7,
+                    thumbnail: String::new(),
+                }),
+            );
 
-        let entry = p.server_playlists.get(&ServerPlaylistId {
-            provider: provider(),
-            id: "new".into(),
+            let entry = p.server_playlists.get(&ServerPlaylistId {
+                provider: provider(),
+                id: "new".into(),
+            });
+            assert_eq!(entry.map(|entry| entry.track_count), Some(7));
         });
-        assert_eq!(entry.map(|entry| entry.track_count), Some(7));
     }
 
     #[test]
@@ -1009,11 +1079,13 @@ mod tests {
                 ServerPlaylist {
                     id: "first".into(),
                     name: "First".into(),
+                    thumbnail: String::new(),
                     track_count: 1,
                 },
                 ServerPlaylist {
                     id: "pl".into(),
                     name: "Server".into(),
+                    thumbnail: String::new(),
                     track_count: 1,
                 },
             ],
@@ -1024,6 +1096,7 @@ mod tests {
                 provider: provider(),
                 id: "pl".into(),
                 name: "Server".into(),
+                thumbnail: String::new(),
                 track_count: 1,
             })
         );

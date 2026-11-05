@@ -22,6 +22,8 @@ pub struct ServerPlaylistEntry {
     pub provider: ProviderId,
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub thumbnail: String,
     pub track_count: usize,
 }
 
@@ -77,6 +79,7 @@ impl ServerPlaylistStore {
                 provider,
                 id: playlist.id.clone(),
                 name: playlist.name.clone(),
+                thumbnail: playlist.thumbnail.clone(),
                 track_count: playlist.track_count,
             })
             .collect();
@@ -163,6 +166,7 @@ mod tests {
         ServerPlaylist {
             id: id.into(),
             name: name.into(),
+            thumbnail: String::new(),
             track_count: count,
         }
     }
@@ -253,12 +257,14 @@ mod tests {
                     provider,
                     id: "a".into(),
                     name: "A".into(),
+                    thumbnail: String::new(),
                     track_count: 1,
                 },
                 ServerPlaylistEntry {
                     provider,
                     id: "a".into(),
                     name: "A again".into(),
+                    thumbnail: String::new(),
                     track_count: 1,
                 },
             ],

@@ -387,28 +387,29 @@ impl ArtistSectionKind {
 
     /// Providers that can serve this section, in preference order.
     pub fn providers(self) -> Vec<ProviderId> {
-        let mut providers: Vec<ProviderId> = match self {
-            Self::Popular => vec![
+        let base: &[ProviderId] = match self {
+            Self::Popular => &[
                 ProviderId::YouTube,
                 ProviderId::SoundCloud,
                 ProviderId::Bandcamp,
                 ProviderId::LastFm,
             ],
-            Self::Albums => vec![
+            Self::Albums => &[
                 ProviderId::YouTube,
                 ProviderId::SoundCloud,
                 ProviderId::MusicBrainz,
                 ProviderId::Bandcamp,
                 ProviderId::LastFm,
             ],
-            Self::Related => vec![
+            Self::Related => &[
                 ProviderId::YouTube,
                 ProviderId::SoundCloud,
                 ProviderId::LastFm,
             ],
-            Self::Playlists => vec![ProviderId::YouTube, ProviderId::SoundCloud],
+            Self::Playlists => &[ProviderId::YouTube, ProviderId::SoundCloud],
         };
-        providers.extend(crate::data::custom_providers::all_provider_ids());
+        let mut providers = base.to_vec();
+        providers.extend(ProviderId::custom_servers());
         providers
     }
 }

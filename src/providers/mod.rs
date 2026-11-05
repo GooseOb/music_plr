@@ -218,11 +218,87 @@ impl<'de> Deserialize<'de> for ProviderId {
 /// process-global.
 static DISABLED_PROVIDERS: RwLock<Vec<ProviderId>> = RwLock::new(Vec::new());
 
-/// Replace the set of providers switched off in Settings.
+/// Replace the set of providers switched off in Settings, rebuilding the
+/// offered lists ([`ProviderId::all`] and friends) with it.
 pub fn set_disabled_providers(providers: Vec<ProviderId>) {
     if let Ok(mut disabled) = DISABLED_PROVIDERS.write() {
         *disabled = providers;
     }
+    refresh_provider_lists();
+}
+
+/// Snapshots of every provider list the UI offers, so the render path reads a
+/// ready list instead of re-deriving it from the disabled set and the
+/// custom-server registry on every frame. `None` until the first rebuild;
+/// readers then fall back to building their list on the spot.
+static OFFERED_LISTS: RwLock<Option<OfferedLists>> = RwLock::new(None);
+
+/// One rebuild of the offered-provider lists.
+#[derive(Debug, Default)]
+struct OfferedLists {
+    all: Vec<ProviderId>,
+    searchable: Vec<ProviderId>,
+    defaultable: Vec<ProviderId>,
+    header: Vec<ProviderId>,
+    /// The registered custom servers, regardless of the disabled set: the
+    /// artist-page section picker offers every kind of server.
+    custom_servers: Vec<ProviderId>,
+}
+
+/// Rebuild the offered lists. The one refresh point for anything they derive
+/// from: the disabled set (via [`set_disabled_providers`]) and the custom-server
+/// registry (via `custom_providers::set_registry`).
+pub fn refresh_provider_lists() {
+    if let Ok(mut offered) = OFFERED_LISTS.write() {
+        *offered = Some(build_offered_lists());
+    }
+}
+
+fn build_offered_lists() -> OfferedLists {
+    let custom_servers = crate::data::custom_providers::all_provider_ids();
+    let offered_customs: Vec<ProviderId> = custom_servers
+        .iter()
+        .copied()
+        .filter(|provider| provider.enabled())
+        .collect();
+    let offered = |mut providers: Vec<ProviderId>| {
+        providers.extend(offered_customs.iter().copied());
+        providers.retain(|provider| provider.enabled());
+        providers
+    };
+    OfferedLists {
+        all: offered(ProviderId::builtin_all().to_vec()),
+        searchable: offered(
+            ProviderId::builtin_all()
+                .iter()
+                .copied()
+                .filter(|provider| *provider != ProviderId::Local)
+                .collect(),
+        ),
+        defaultable: offered(vec![
+            ProviderId::YouTube,
+            ProviderId::SoundCloud,
+            ProviderId::Bandcamp,
+        ]),
+        header: offered(vec![
+            ProviderId::YouTube,
+            ProviderId::SoundCloud,
+            ProviderId::Bandcamp,
+            ProviderId::LastFm,
+        ]),
+        custom_servers,
+    }
+}
+
+/// Snapshot of one cached list. Before the first rebuild (tests read earlier)
+/// the list is built instead of read, so no caller sees an empty cache.
+fn cached_list(select: fn(&OfferedLists) -> &[ProviderId]) -> Vec<ProviderId> {
+    if let Ok(offered) = OFFERED_LISTS.read() {
+        if let Some(offered) = offered.as_ref() {
+            return select(offered).to_vec();
+        }
+    }
+    select(&build_offered_lists()).to_vec()
 }
 
 /// Capability flags for a [`ProviderId`].
@@ -342,19 +418,13 @@ impl ProviderId {
         ]
     }
 
-    fn with_custom(mut providers: Vec<ProviderId>) -> Vec<ProviderId> {
-        providers.extend(crate::data::custom_providers::all_provider_ids());
-        providers.retain(|provider| provider.enabled());
-        providers
-    }
-
     /// Every provider, enabled or not: the built-ins plus the registered
     /// custom ones. For "which providers exist" questions (cache lookups,
     /// migrations); the pickers use [`all`](ProviderId::all) and friends so
     /// switched-off providers stay out of the UI.
     pub fn known() -> Vec<ProviderId> {
         let mut providers = Self::builtin_all().to_vec();
-        providers.extend(crate::data::custom_providers::all_provider_ids());
+        providers.extend(ProviderId::custom_servers());
         providers
     }
 
@@ -365,30 +435,20 @@ impl ProviderId {
     /// providers make sense. Providers the user switched off in Settings are
     /// left out, so this is the "offered" set rather than every known id.
     pub fn all() -> Vec<ProviderId> {
-        Self::with_custom(Self::builtin_all().to_vec())
+        cached_list(|lists| &lists.all)
     }
 
     /// All enabled providers that appear in the search provider picker
     /// (excludes `Local`, which is not a remote search source).
     pub fn searchable() -> Vec<ProviderId> {
-        Self::with_custom(
-            Self::builtin_all()
-                .iter()
-                .copied()
-                .filter(|p| *p != ProviderId::Local)
-                .collect(),
-        )
+        cached_list(|lists| &lists.searchable)
     }
 
     /// Enabled providers eligible to be the default provider: must support
     /// both streaming and downloading (search-only `MusicBrainz`/`LastFm` and
     /// `Local` are excluded).
     pub fn defaultable() -> Vec<ProviderId> {
-        Self::with_custom(vec![
-            ProviderId::YouTube,
-            ProviderId::SoundCloud,
-            ProviderId::Bandcamp,
-        ])
+        cached_list(|lists| &lists.defaultable)
     }
 
     /// Enabled providers that can serve an artist-page header worth displaying
@@ -396,12 +456,13 @@ impl ProviderId {
     /// and pre-fetched as companions by `open_artist`. `MusicBrainz` is
     /// excluded: its header is stats-only with no picture.
     pub fn header_providers() -> Vec<ProviderId> {
-        Self::with_custom(vec![
-            ProviderId::YouTube,
-            ProviderId::SoundCloud,
-            ProviderId::Bandcamp,
-            ProviderId::LastFm,
-        ])
+        cached_list(|lists| &lists.header)
+    }
+
+    /// The registered custom servers, whether switched on or off. Off shows up
+    /// only where a section picker needs kinds, not capabilities.
+    pub fn custom_servers() -> Vec<ProviderId> {
+        cached_list(|lists| &lists.custom_servers)
     }
 
     pub fn capabilities(self) -> ProviderCaps {
@@ -794,6 +855,8 @@ pub struct ServerPlaylist {
     pub id: String,
     pub name: String,
     pub track_count: usize,
+    /// The playlist's cover-art URL, empty when the server has none.
+    pub thumbnail: String,
 }
 
 /// Outcome of writing tracks into a server playlist. `skipped` counts the

@@ -375,7 +375,7 @@ fn server_playlists_rail<'a>(
                 id: entry.id.clone(),
                 name: entry.name.clone(),
                 provider: entry.provider,
-                thumbnail: String::new(),
+                thumbnail: entry.thumbnail.clone(),
                 url: String::new(),
             });
             art_card(
@@ -521,6 +521,7 @@ mod tests {
                 provider: server,
                 id: "pl-1".to_string(),
                 name: "Server playlist".to_string(),
+                thumbnail: String::new(),
                 track_count: 4,
             });
         let mut view = home_view();

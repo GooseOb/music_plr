@@ -466,12 +466,12 @@ impl MusicPlayer {
         }
         let indices: Vec<usize> = self.view_data_mut().selection.clone();
 
-        if matches!(self.view_data_mut().kind, ViewKind::Playlist(_))
-            || matches!(
-                &self.view_data().kind,
-                ViewKind::PlaylistView(r) if crate::providers::playlists_supported(r.provider)
-            )
-        {
+        let removable_playlist = match &self.view_data().kind {
+            ViewKind::Playlist(_) => true,
+            ViewKind::PlaylistView(r) => crate::providers::playlists_supported(r.provider),
+            _ => false,
+        };
+        if removable_playlist {
             self.handle_remove_from_playlist_batch(self.focused_pane_id, &indices);
         } else if matches!(self.view_data().kind, ViewKind::Trashbin) {
             self.handle_remove_from_trashbin(self.focused_pane_id, &indices);

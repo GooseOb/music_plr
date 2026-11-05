@@ -266,6 +266,12 @@ impl MusicPlayer {
                 }
             }
         }
+        for entry in &self.server_playlists.entries {
+            if !entry.thumbnail.is_empty() {
+                self.thumbnail_index
+                    .ensure(entry.provider, &entry.id, &entry.thumbnail);
+            }
+        }
         let Self {
             panes,
             thumbnail_index,

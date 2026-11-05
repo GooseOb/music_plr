@@ -127,6 +127,9 @@ fn write() -> std::sync::RwLockWriteGuard<'static, Vec<CustomProvider>> {
 /// current credentials live here and are synced whenever the store changes.
 pub fn set_registry(providers: &[CustomProvider]) {
     *write() = providers.to_vec();
+    // The custom lists are cached with the disabled ones; a save or delete of
+    // a server changes them as much as a Settings toggle does.
+    crate::providers::refresh_provider_lists();
 }
 
 pub fn all_provider_ids() -> Vec<ProviderId> {
@@ -134,6 +137,13 @@ pub fn all_provider_ids() -> Vec<ProviderId> {
         .iter()
         .map(|p| ProviderId::Custom(p.kind, p.id))
         .collect()
+}
+
+/// The registered servers, whole, so tests restoring the registry can put
+/// back everything that was registered before them.
+#[cfg(test)]
+pub fn all() -> Vec<CustomProvider> {
+    read().clone()
 }
 
 pub fn contains(kind: CustomProviderKind, id: u64) -> bool {

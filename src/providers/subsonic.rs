@@ -417,6 +417,7 @@ pub fn list_playlists(provider: ProviderId) -> Result<Vec<ServerPlaylist>> {
             id: playlist.id,
             name: playlist.name,
             track_count: playlist.song_count.unwrap_or(0).max(0) as usize,
+            thumbnail: cover_url(&client, playlist.cover_art.as_deref()),
         })
         .collect())
 }
@@ -499,6 +500,8 @@ pub fn create_playlist(
         id: created.id,
         name: created.name,
         track_count: created.entry.len(),
+        // A fresh cover is only assured after the server indexes the songs.
+        thumbnail: cover_url(&client, created.cover_art.as_deref()),
     })
 }
 

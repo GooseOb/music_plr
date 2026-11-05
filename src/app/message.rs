@@ -177,6 +177,7 @@ pub enum ServerPlaylistChange {
         id: String,
         name: String,
         track_count: usize,
+        thumbnail: String,
     },
     Renamed(String),
     Deleted,

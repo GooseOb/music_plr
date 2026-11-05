@@ -363,6 +363,7 @@ impl MusicPlayer {
         #[cfg(not(target_os = "windows"))]
         player.init_media_controls(None);
         player.restore_session();
+        player.drop_unregistered_server_playlists();
         player.reconcile_provider_refs();
         player.resume_playback();
         for item in &player.library.items {

@@ -841,6 +841,7 @@ pub fn list_playlists(provider: ProviderId) -> Result<Vec<ServerPlaylist>> {
             id: item.id.clone(),
             name: item.name.clone(),
             track_count: item.child_count.unwrap_or(0) as usize,
+            thumbnail: own_image(&config, &session, item),
         })
         .collect())
 }
@@ -1008,6 +1009,7 @@ pub fn create_playlist(
         .filter(|id| !id.is_empty())
         .context("Jellyfin did not return the new playlist id")?;
     Ok(ServerPlaylist {
+        thumbnail: image_url_for_id(&config, &session, &id),
         id,
         name: name.to_string(),
         track_count: ids.len(),
