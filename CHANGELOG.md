@@ -10,6 +10,12 @@ auto-generated compare link below it.
 
 ## [Unreleased]
 
+### Fixed
+
+- Some strings in belarusian translation.
+
+## [1.5.0] - 2026-11-05
+
 ### Added
 
 - Home page: the launch view with a continue-listening strip, recently played tracks, playlists, saved library items and downloads, and per-provider shelves of picks and new releases; it opens from its cache and refreshes in the background.
