@@ -138,14 +138,14 @@ fn server_playlist_row<'a>(
     };
     // A write in flight (add/remove) is shown in place of the track count: the
     // server is the source of truth, so the count is stale until it lands.
-    let trailing: Element<'a, Message, AppTheme> =
-        if player.server_playlist_writes.contains_key(&target) {
-            icons::icon(icons::REFRESH_ICON, theme::ICON_SIZE_SM)
-                .style(icon_style_fg_muted())
-                .into()
-        } else {
-            text(entry.track_count).style(fg_secondary()).into()
-        };
+    let trailing: Element<'a, Message, AppTheme> = if player.server_playlist_write_pending(&target)
+    {
+        icons::icon(icons::REFRESH_ICON, theme::ICON_SIZE_SM)
+            .style(icon_style_fg_muted())
+            .into()
+    } else {
+        text(entry.track_count).style(fg_secondary()).into()
+    };
 
     MouseArea::new(shared_row(
         dir,
@@ -181,7 +181,7 @@ fn server_group_header(
     provider: ProviderId,
 ) -> Element<'_, Message, AppTheme> {
     let dir = player.strings.direction;
-    let busy = player.server_playlists_requested.contains(&provider);
+    let busy = player.server_playlist_index_busy(provider);
     let is_drop_target = matches!(
         player.drag.drop_target,
         Some(DropTarget::ServerPlaylistCreate(p)) if p == provider

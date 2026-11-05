@@ -356,7 +356,7 @@ pub(super) fn view_server_playlist<'a>(
         provider: reference.provider,
         id: reference.id.clone(),
     };
-    let busy = player.server_playlist_writes.contains_key(&target);
+    let busy = player.server_playlist_write_pending(&target);
     let refresh = icon_button(
         icons::REFRESH_ICON,
         theme::ICON_SIZE_MD,

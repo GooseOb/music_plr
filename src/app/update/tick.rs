@@ -41,6 +41,21 @@ impl MusicPlayer {
             task = task.chain(self.process_result(result));
         }
 
+        // A "play when the list arrives" is only meaningful while its request
+        // is still the one its view is waiting for; navigating away from that
+        // view drops the request, and the entry with it.
+        if !self.play_after_browse.is_empty() {
+            let orphaned: Vec<u64> = self
+                .play_after_browse
+                .iter()
+                .copied()
+                .filter(|rid| self.slot_for_request(*rid).is_none())
+                .collect();
+            for rid in orphaned {
+                self.play_after_browse.remove(&rid);
+            }
+        }
+
         self.expire_notification();
         // Reconcile currently visible thumbnails: queue any missing ones for
         // download and flush the queue to a background thread.
@@ -569,9 +584,11 @@ impl MusicPlayer {
             BackendResult::ServerPlaylists { provider, result } => {
                 self.apply_server_playlists(provider, result)
             }
-            BackendResult::ServerPlaylistWritten { target, result } => {
-                self.apply_server_playlist_write(&target, result)
-            }
+            BackendResult::ServerPlaylistWritten {
+                write_id,
+                target,
+                result,
+            } => self.apply_server_playlist_write(write_id, &target, result),
             BackendResult::HomeLoaded {
                 rid,
                 provider,
@@ -1078,5 +1095,13 @@ mod tests {
         p.track_loading = true;
         p.process_media_event(&souvlaki::MediaControlEvent::Pause);
         assert!(!p.track_loading);
+    }
+
+    #[test]
+    fn an_orphaned_play_after_browse_entry_is_dropped() {
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        p.play_after_browse.insert(7);
+        let _ = p.handle_tick();
+        assert!(p.play_after_browse.is_empty());
     }
 }

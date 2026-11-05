@@ -366,11 +366,8 @@ impl MusicPlayer {
             }
             _ => return Vec::new(),
         };
-        // Snapshot before anything moves, so a rejected write can put the page
-        // (rows and selection) back the way it was.
-        if let ReorderTarget::Server(playlist) = &target {
-            self.begin_playlist_write(playlist);
-        }
+        // The selection travels through the reorder so it lands on the moved
+        // rows; a server write also keeps a copy of what it replaced.
         let selection = std::mem::take(&mut self.view_data_in_mut(pane).selection);
         match target {
             ReorderTarget::Local(index) => {
@@ -385,13 +382,17 @@ impl MusicPlayer {
             }
             ReorderTarget::Server(playlist) => {
                 let Some(tracks) = self.view_data_in_mut(pane).tracks_mut() else {
-                    self.server_playlist_undo.remove(&playlist);
                     return Vec::new();
+                };
+                let undo = crate::app::ServerPlaylistUndo::Reordered {
+                    pane,
+                    tracks: tracks.clone(),
+                    selection: selection.clone(),
                 };
                 let new_positions =
                     crate::util::reorder_tracks(tracks, drop_idx, indices, selection);
                 let order = tracks.clone();
-                self.reorder_server_playlist(playlist, order);
+                self.reorder_server_playlist(playlist, order, undo);
                 new_positions
             }
         }

@@ -370,6 +370,18 @@ pub fn remap_removed_indices(selection: &mut Vec<usize>, indices: &[usize]) {
     }
 }
 
+/// The exact inverse of [`remap_removed_indices`]: shift a selection back down
+/// after `indices` (ascending, the positions they held before) are put back.
+pub fn remap_reinserted_indices(selection: &mut [usize], indices: &[usize]) {
+    for index in selection.iter_mut() {
+        for &back in indices {
+            if back <= *index {
+                *index += 1;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -525,6 +537,19 @@ mod tests {
         let mut selection = vec![0, 4];
         remap_removed_indices(&mut selection, &[]);
         assert_eq!(selection, [0, 4]);
+    }
+
+    #[test]
+    fn remap_reinserted_indices_restores_the_original_positions() {
+        let mut selection = vec![0, 1, 3, 5];
+        remap_removed_indices(&mut selection, &[1, 2]);
+        remap_reinserted_indices(&mut selection, &[1, 2]);
+        assert_eq!(selection, [0, 3, 5]);
+
+        let mut selection = vec![2];
+        remap_removed_indices(&mut selection, &[1, 3]);
+        remap_reinserted_indices(&mut selection, &[1, 3]);
+        assert_eq!(selection, [2]);
     }
 
     #[test]

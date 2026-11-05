@@ -7,13 +7,15 @@
 //! back through [`BackendResult::ServerPlaylistWritten`], after which the open
 //! view is refetched — the server stays the source of truth.
 
+use std::time::Duration;
+
 use iced::Task;
 
 use super::{BackendResult, Message, MusicPlayer, TrackPos, ViewData};
 use crate::{
     app::{
-        pane::PaneId, Dialog, ServerPlaylistChange, ServerPlaylistNameDialog, ServerPlaylistUndo,
-        ServerPlaylistViewUndo, ViewKind,
+        pane::PaneId, Dialog, PendingPlaylistWrite, ServerPlaylistChange, ServerPlaylistNameDialog,
+        ServerPlaylistUndo, ViewKind,
     },
     data::{
         library::{Card, LibraryItem, LibraryKind},
@@ -23,6 +25,11 @@ use crate::{
     providers::{self, ProviderError, ProviderId, ServerPlaylist},
     types::Track,
 };
+
+/// How long an index request may stay unanswered before the guard lets a new
+/// one through. Every provider call times out well inside this, so an entry
+/// that old belongs to a thread that will never report back.
+const INDEX_REQUEST_TIMEOUT: Duration = Duration::from_mins(2);
 
 impl MusicPlayer {
     /// Every configured server that has playlists, in provider order so the
@@ -80,9 +87,11 @@ impl MusicPlayer {
             None => Self::server_playlist_providers(),
         };
         for provider in providers {
-            if !self.server_playlists_requested.insert(provider) {
+            if self.server_playlist_index_busy(provider) {
                 continue;
             }
+            self.server_playlists_requested
+                .insert(provider, std::time::Instant::now());
             let tx = self.result_tx.clone();
             std::thread::spawn(move || {
                 let result = providers::list_playlists(provider).map_err(ProviderError::from);
@@ -90,6 +99,23 @@ impl MusicPlayer {
             });
         }
         Task::none()
+    }
+
+    /// Whether a write for `target` is in flight, which is what the sidebar row
+    /// and the playlist header show in place of the track count.
+    pub fn server_playlist_write_pending(&self, target: &ServerPlaylistId) -> bool {
+        self.server_playlist_writes
+            .values()
+            .any(|write| &write.target == target)
+    }
+
+    /// Whether `provider`'s index is still being fetched, which is what the
+    /// sidebar's refresh glyph shows. An entry older than
+    /// [`INDEX_REQUEST_TIMEOUT`] is treated as gone.
+    pub fn server_playlist_index_busy(&self, provider: ProviderId) -> bool {
+        self.server_playlists_requested
+            .get(&provider)
+            .is_some_and(|sent| sent.elapsed() < INDEX_REQUEST_TIMEOUT)
     }
 
     /// Open a server playlist in `pane`, fetching its contents. `play` starts
@@ -190,10 +216,10 @@ impl MusicPlayer {
             self.notify_error(message);
             return Task::none();
         }
-        self.begin_playlist_write(&target);
         self.apply_added_tracks(&target, &added);
+        let undo = ServerPlaylistUndo::Added { tracks: added };
         let playlist_id = target.id.clone();
-        self.spawn_playlist_write(target, move || {
+        self.spawn_playlist_write(target, Some(undo), move || {
             let write = providers::add_to_playlist(provider, &playlist_id, &tracks)?;
             Ok(ServerPlaylistChange::Added {
                 added: write.added,
@@ -204,13 +230,17 @@ impl MusicPlayer {
     }
 
     /// Rewrite a server playlist's track order. The caller has already
-    /// reordered the rows it shows, so a success needs no refetch; a failure
-    /// puts the order it had back.
-    pub fn reorder_server_playlist(&mut self, target: ServerPlaylistId, tracks: Vec<Track>) {
+    /// reordered the rows it shows, so a success needs no refetch; `undo` puts
+    /// the order it had back if the server rejects the write.
+    pub fn reorder_server_playlist(
+        &mut self,
+        target: ServerPlaylistId,
+        tracks: Vec<Track>,
+        undo: ServerPlaylistUndo,
+    ) {
         let provider = target.provider;
         let playlist_id = target.id.clone();
-        self.begin_playlist_write(&target);
-        self.spawn_playlist_write(target, move || {
+        self.spawn_playlist_write(target, Some(undo), move || {
             providers::reorder_playlist(provider, &playlist_id, &tracks)?;
             Ok(ServerPlaylistChange::Reordered)
         });
@@ -229,6 +259,7 @@ impl MusicPlayer {
                 provider,
                 id: String::new(),
             },
+            None,
             move || {
                 let (tracks, _) = providers::browse(provider, &id, kind)?;
                 let created = providers::create_playlist(provider, &name, &tracks)?;
@@ -259,14 +290,20 @@ impl MusicPlayer {
             provider,
             id: reference.id.clone(),
         };
-        self.begin_playlist_write(&target);
-        self.apply_removed_rows(&target, indices);
+        let rows = self.apply_removed_rows(&target, indices);
         let playlist_id = target.id.clone();
         let positions = indices.to_vec();
-        self.spawn_playlist_write(target, move || {
-            let removed = providers::remove_from_playlist(provider, &playlist_id, &positions)?;
-            Ok(ServerPlaylistChange::Removed(removed))
-        });
+        self.spawn_playlist_write(
+            target,
+            Some(ServerPlaylistUndo::Removed {
+                count: indices.len(),
+                rows,
+            }),
+            move || {
+                let removed = providers::remove_from_playlist(provider, &playlist_id, &positions)?;
+                Ok(ServerPlaylistChange::Removed(removed))
+            },
+        );
     }
 
     /// Append `tracks` to the cached count and to every open page showing the
@@ -284,94 +321,151 @@ impl MusicPlayer {
     }
 
     /// Drop `indices` from the cached count and from every open page showing
-    /// the playlist, remapping each page's selection.
-    fn apply_removed_rows(&mut self, target: &ServerPlaylistId, indices: &[usize]) {
+    /// the playlist, remapping each page's selection. Returns the rows it took
+    /// out, grouped by pane, so a failed write can put them back.
+    fn apply_removed_rows(
+        &mut self,
+        target: &ServerPlaylistId,
+        indices: &[usize],
+    ) -> Vec<(PaneId, Vec<(usize, Track)>)> {
         self.server_playlists
             .adjust_count(target, -(indices.len().cast_signed()));
+        let mut removed = Vec::new();
         for pane in self.panes_showing(target) {
             let view = self.view_data_in_mut(pane);
             let Some(list) = view.tracks_mut() else {
                 continue;
             };
+            let mut rows: Vec<(usize, Track)> = indices
+                .iter()
+                .filter_map(|&index| list.get(index).map(|track| (index, track.clone())))
+                .collect();
+            rows.sort_unstable_by_key(|(index, _)| *index);
             crate::util::remove_at(list, indices);
             crate::util::remap_removed_indices(&mut view.selection, indices);
+            removed.push((pane, rows));
         }
+        removed
     }
 
-    fn spawn_playlist_write<F>(&mut self, target: ServerPlaylistId, run: F)
-    where
+    fn spawn_playlist_write<F>(
+        &mut self,
+        target: ServerPlaylistId,
+        undo: Option<ServerPlaylistUndo>,
+        run: F,
+    ) where
         F: FnOnce() -> anyhow::Result<ServerPlaylistChange> + Send + 'static,
     {
-        *self
-            .server_playlist_writes
-            .entry(target.clone())
-            .or_insert(0) += 1;
+        let write_id = self.request_ids.next();
+        self.server_playlist_writes.insert(
+            write_id,
+            PendingPlaylistWrite {
+                target: target.clone(),
+                undo,
+            },
+        );
         let tx = self.result_tx.clone();
         std::thread::spawn(move || {
             let result = run().map_err(ProviderError::from);
-            let _ = tx.send(BackendResult::ServerPlaylistWritten { target, result });
+            let _ = tx.send(BackendResult::ServerPlaylistWritten {
+                write_id,
+                target,
+                result,
+            });
         });
     }
 
-    /// Remember what `target` looks like before an optimistic write touches it,
-    /// so the write's failure can put it back. Only the first write of a burst
-    /// records it: the state to return to is the one before any of them.
-    pub(crate) fn begin_playlist_write(&mut self, target: &ServerPlaylistId) {
-        if self.server_playlist_undo.contains_key(target) {
-            return;
+    /// Undo one failed write by reversing what it changed, so a write that
+    /// overlapped it keeps its own optimistic state.
+    fn undo_playlist_write(&mut self, target: &ServerPlaylistId, undo: ServerPlaylistUndo) {
+        match undo {
+            ServerPlaylistUndo::Added { tracks } => self.undo_added_tracks(target, &tracks),
+            ServerPlaylistUndo::Removed { count, rows } => {
+                self.undo_removed_rows(target, count, &rows);
+            }
+            ServerPlaylistUndo::Reordered {
+                pane,
+                tracks,
+                selection,
+            } => {
+                if !self.shows_playlist_in(pane, target) {
+                    return;
+                }
+                let view = self.view_data_in_mut(pane);
+                view.content = LoadState::Ready(tracks);
+                view.selection = selection;
+            }
+            ServerPlaylistUndo::Renamed { previous } => {
+                self.server_playlists.rename(target, &previous);
+                self.rename_server_playlist_views(target, &previous);
+            }
         }
-        let entry = self.server_playlists.get(target).cloned();
-        let views = self
-            .panes_showing(target)
-            .into_iter()
-            .filter_map(|pane| {
-                let view = self.view_data_in(pane);
-                let LoadState::Ready(tracks) = &view.content else {
-                    return None;
-                };
-                Some(ServerPlaylistViewUndo {
-                    pane,
-                    tracks: tracks.clone(),
-                    selection: view.selection.clone(),
-                })
-            })
-            .collect();
-        self.server_playlist_undo
-            .insert(target.clone(), ServerPlaylistUndo { entry, views });
     }
 
-    /// Put the pre-write state back after a failed write: the index row (name
-    /// and count, so the sidebar agrees) and the tracks and selection of every
-    /// page that was showing the playlist.
-    fn rollback_playlist_write(&mut self, target: &ServerPlaylistId) {
-        let Some(undo) = self.server_playlist_undo.remove(target) else {
-            return;
-        };
-        match undo.entry {
-            Some(entry) => {
-                let name = entry.name.clone();
-                self.server_playlists.restore(entry);
-                self.rename_server_playlist_views(target, &name);
-            }
-            None => {
-                self.server_playlists.remove(target);
-            }
-        }
-        for view in undo.views {
-            if !shows_playlist(self.view_data_in(view.pane), target) {
+    /// Take back the rows an append put on every page showing the playlist.
+    fn undo_added_tracks(&mut self, target: &ServerPlaylistId, tracks: &[Track]) {
+        self.server_playlists
+            .adjust_count(target, -(tracks.len().cast_signed()));
+        for pane in self.panes_showing(target) {
+            let view = self.view_data_in_mut(pane);
+            let Some(list) = view.tracks_mut() else {
                 continue;
+            };
+            let mut removed = Vec::with_capacity(tracks.len());
+            for track in tracks {
+                // The rows went on the end, so the last copy is the one this
+                // write added (a playlist may hold the same track twice).
+                if let Some(index) = list.iter().rposition(|row| row == track) {
+                    list.remove(index);
+                    removed.push(index);
+                }
             }
-            let data = self.view_data_in_mut(view.pane);
-            data.content = LoadState::Ready(view.tracks);
-            data.selection = view.selection;
+            removed.sort_unstable();
+            crate::util::remap_removed_indices(&mut view.selection, &removed);
+        }
+    }
+
+    /// Put the rows a failed removal took out back where they were, and shift
+    /// the selection back with them.
+    fn undo_removed_rows(
+        &mut self,
+        target: &ServerPlaylistId,
+        count: usize,
+        rows: &[(PaneId, Vec<(usize, Track)>)],
+    ) {
+        self.server_playlists
+            .adjust_count(target, count.cast_signed());
+        for pane in self.panes_showing(target) {
+            let Some((_, rows)) = rows.iter().find(|(recorded, _)| *recorded == pane) else {
+                continue;
+            };
+            let view = self.view_data_in_mut(pane);
+            let Some(list) = view.tracks_mut() else {
+                continue;
+            };
+            let mut restored = Vec::with_capacity(rows.len());
+            for (index, track) in rows {
+                let at = (*index).min(list.len());
+                list.insert(at, track.clone());
+                restored.push(at);
+            }
+            crate::util::remap_reinserted_indices(&mut view.selection, &restored);
         }
     }
 
     fn panes_showing(&self, target: &ServerPlaylistId) -> Vec<PaneId> {
         self.pane_ids()
             .into_iter()
-            .filter(|pane| shows_playlist(self.view_data_in(*pane), target))
+            .filter(|pane| self.shows_playlist_in(*pane, target))
             .collect()
+    }
+
+    /// Whether `pane` still exists and shows `target` — a pane can be closed
+    /// while a write is in flight.
+    fn shows_playlist_in(&self, pane: PaneId, target: &ServerPlaylistId) -> bool {
+        self.panes
+            .get(&pane)
+            .is_some_and(|pane| shows_playlist(pane.view_data(), target))
     }
 
     pub fn open_new_server_playlist(&mut self, provider: ProviderId) {
@@ -411,13 +505,17 @@ impl MusicPlayer {
             let playlist_id = target.id.clone();
             // The new name shows up in the sidebar and the page headers at
             // once; a rejected rename puts the old one back.
-            self.begin_playlist_write(&target);
+            let previous = self.server_playlist_name(&target);
             self.server_playlists.rename(&target, &name);
             self.rename_server_playlist_views(&target, &name);
-            self.spawn_playlist_write(target, move || {
-                providers::rename_playlist(provider, &playlist_id, &name)?;
-                Ok(ServerPlaylistChange::Renamed(name))
-            });
+            self.spawn_playlist_write(
+                target,
+                Some(ServerPlaylistUndo::Renamed { previous }),
+                move || {
+                    providers::rename_playlist(provider, &playlist_id, &name)?;
+                    Ok(ServerPlaylistChange::Renamed(name))
+                },
+            );
         } else {
             // The id only exists once the server answers, so the write is
             // reported against an empty one.
@@ -426,6 +524,7 @@ impl MusicPlayer {
                     provider,
                     id: String::new(),
                 },
+                None,
                 move || {
                     providers::create_playlist(provider, &name, &[]).map(|created| {
                         ServerPlaylistChange::Created {
@@ -448,7 +547,7 @@ impl MusicPlayer {
         self.dialog = None;
         let provider = target.provider;
         let playlist_id = target.id.clone();
-        self.spawn_playlist_write(target, move || {
+        self.spawn_playlist_write(target, None, move || {
             providers::delete_playlist(provider, &playlist_id)?;
             Ok(ServerPlaylistChange::Deleted)
         });
@@ -484,32 +583,26 @@ impl MusicPlayer {
 
     /// Apply a finished write. Every write touches the index and the open pages
     /// as it starts, so success only reports it and re-syncs the count; failure
-    /// rolls that optimistic state back.
+    /// reverses what this write changed, leaving any sibling write's state
+    /// alone.
     pub(crate) fn apply_server_playlist_write(
         &mut self,
+        write_id: u64,
         target: &ServerPlaylistId,
         result: Result<ServerPlaylistChange, ProviderError>,
     ) -> Task<Message> {
-        if let Some(pending) = self.server_playlist_writes.get_mut(target) {
-            *pending -= 1;
-            if *pending == 0 {
-                self.server_playlist_writes.remove(target);
-            }
-        }
+        let pending = self.server_playlist_writes.remove(&write_id);
         let change = match result {
             Ok(change) => change,
             Err(error) => {
                 let message = self.strings.error_reason(&error).to_string();
                 self.notify_error(message);
-                self.rollback_playlist_write(target);
+                if let Some(undo) = pending.and_then(|pending| pending.undo) {
+                    self.undo_playlist_write(target, undo);
+                }
                 return Task::none();
             }
         };
-        // Only drop the rollback state once the playlist has no write left in
-        // flight; an earlier success must not disable a later failure's undo.
-        if !self.server_playlist_writes.contains_key(target) {
-            self.server_playlist_undo.remove(target);
-        }
         let name = self.server_playlist_name(target);
         match change {
             ServerPlaylistChange::Added { added, skipped } => {
@@ -684,8 +777,21 @@ mod tests {
     }
 
     fn fail(p: &mut MusicPlayer) {
-        let error = ProviderError::new(ErrorKind::Unavailable, "gone");
-        let _ = p.apply_server_playlist_write(&target(), Err(error));
+        settle(p, Err(ProviderError::new(ErrorKind::Unavailable, "gone")));
+    }
+
+    /// Answer the newest write still in flight, the way the background thread
+    /// would.
+    fn settle(
+        p: &mut MusicPlayer,
+        result: Result<crate::app::ServerPlaylistChange, ProviderError>,
+    ) {
+        let write_id = *p
+            .server_playlist_writes
+            .keys()
+            .max()
+            .expect("a write in flight");
+        let _ = p.apply_server_playlist_write(write_id, &target(), result);
     }
 
     #[test]
@@ -695,8 +801,8 @@ mod tests {
 
         assert_eq!(titles(&p), ["Track a", "Track b"]);
         assert_eq!(count(&p), Some(2));
-        // The optimistic state is remembered for a possible rollback.
-        assert!(p.server_playlist_undo.contains_key(&target()));
+        // The write and the inverse of what it changed are tracked together.
+        assert!(p.server_playlist_write_pending(&target()));
     }
 
     #[test]
@@ -709,7 +815,24 @@ mod tests {
         assert_eq!(titles(&p), ["Track a"]);
         assert_eq!(count(&p), Some(1));
         assert_eq!(p.view_data().selection, [0]);
-        assert!(!p.server_playlist_undo.contains_key(&target()));
+        assert!(!p.server_playlist_write_pending(&target()));
+    }
+
+    #[test]
+    fn a_failed_write_leaves_a_sibling_write_alone() {
+        let mut p = player_with_playlist(&["a"]);
+        let _ = p.add_tracks_to_server_playlist(target(), vec![track("b")]);
+        let first = *p.server_playlist_writes.keys().min().expect("a write");
+        let _ = p.add_tracks_to_server_playlist(target(), vec![track("c")]);
+
+        let error = ProviderError::new(ErrorKind::Unavailable, "gone");
+        let _ = p.apply_server_playlist_write(first, &target(), Err(error));
+
+        // Only the failed append is undone; the other write is still in flight
+        // and keeps its rows.
+        assert_eq!(titles(&p), ["Track a", "Track c"]);
+        assert_eq!(count(&p), Some(2));
+        assert!(p.server_playlist_write_pending(&target()));
     }
 
     #[test]
@@ -741,7 +864,9 @@ mod tests {
             provider: provider(),
             id: String::new(),
         };
+        let write_id = p.request_ids.next();
         let _ = p.apply_server_playlist_write(
+            write_id,
             &created,
             Ok(crate::app::ServerPlaylistChange::Created {
                 id: "new".into(),
@@ -846,8 +971,8 @@ mod tests {
         let mut p = player_with_playlist(&["a"]);
         let _ = p.add_tracks_to_server_playlist(target(), vec![track("b")]);
 
-        let _ = p.apply_server_playlist_write(
-            &target(),
+        settle(
+            &mut p,
             Ok(crate::app::ServerPlaylistChange::Added {
                 added: 1,
                 skipped: 0,
@@ -856,7 +981,7 @@ mod tests {
 
         assert_eq!(titles(&p), ["Track a", "Track b"]);
         assert_eq!(count(&p), Some(2));
-        assert!(p.server_playlist_undo.is_empty());
+        assert!(p.server_playlist_writes.is_empty());
     }
 
     #[test]
@@ -897,5 +1022,20 @@ mod tests {
             .map(|entry| entry.id.as_str())
             .collect();
         assert_eq!(order, ["first", "pl"]);
+    }
+
+    #[test]
+    fn a_stale_index_request_lets_the_next_refresh_through() {
+        let mut p = player_with_playlist(&["a"]);
+
+        p.server_playlists_requested
+            .insert(provider(), std::time::Instant::now());
+        assert!(p.server_playlist_index_busy(provider()));
+
+        let stale = std::time::Instant::now()
+            .checked_sub(super::INDEX_REQUEST_TIMEOUT)
+            .expect("the timeout fits in an instant");
+        p.server_playlists_requested.insert(provider(), stale);
+        assert!(!p.server_playlist_index_busy(provider()));
     }
 }

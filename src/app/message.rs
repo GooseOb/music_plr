@@ -145,6 +145,7 @@ pub enum BackendResult {
     },
     /// A write on a server playlist finished.
     ServerPlaylistWritten {
+        write_id: u64,
         target: crate::data::server_playlists::ServerPlaylistId,
         result: Result<ServerPlaylistChange, crate::providers::ProviderError>,
     },

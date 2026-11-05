@@ -49,20 +49,35 @@ pub struct PendingCache {
     pub id: String,
 }
 
-/// State captured before an optimistic server-playlist write: the cached index
-/// row plus, for every page showing that playlist, the tracks and selection it
-/// had. A failed write puts all of it back.
-#[derive(Clone, Debug, Default)]
-pub struct ServerPlaylistUndo {
-    pub entry: Option<crate::data::server_playlists::ServerPlaylistEntry>,
-    pub views: Vec<ServerPlaylistViewUndo>,
+/// The inverse of one optimistic server-playlist write, so a failed write can
+/// undo exactly what it changed instead of restoring a state captured before a
+/// whole burst of them.
+#[derive(Clone, Debug)]
+pub enum ServerPlaylistUndo {
+    /// Rows the write appended to every page showing the playlist.
+    Added { tracks: Vec<Track> },
+    /// Rows the write took out, with the position each held in its page.
+    Removed {
+        /// How many rows the cached count lost.
+        count: usize,
+        rows: Vec<(PaneId, Vec<(usize, Track)>)>,
+    },
+    /// The rows and selection the reordered page had before the write.
+    Reordered {
+        pane: PaneId,
+        tracks: Vec<Track>,
+        selection: Vec<usize>,
+    },
+    /// The name the rename replaced.
+    Renamed { previous: String },
 }
 
+/// A write that is in flight: the playlist it targets, for the row's busy
+/// marker, and the inverse of the change it already made.
 #[derive(Clone, Debug)]
-pub struct ServerPlaylistViewUndo {
-    pub pane: PaneId,
-    pub tracks: Vec<Track>,
-    pub selection: Vec<usize>,
+pub struct PendingPlaylistWrite {
+    pub target: crate::data::server_playlists::ServerPlaylistId,
+    pub undo: Option<ServerPlaylistUndo>,
 }
 
 #[allow(clippy::struct_excessive_bools)]
@@ -119,19 +134,15 @@ pub struct MusicPlayer {
     /// Index of the playlists that live on user-configured servers. Contents
     /// are always fetched through the provider, so nothing here goes stale.
     pub server_playlists: crate::data::server_playlists::ServerPlaylistStore,
-    /// Providers whose playlist index was requested and hasn't answered yet,
-    /// so a boot refresh and a manual one don't double up.
-    pub server_playlists_requested: std::collections::HashSet<ProviderId>,
-    /// How many writes are in flight per server playlist, for the row's busy
-    /// marker (a burst of drops can overlap).
-    pub server_playlist_writes:
-        std::collections::HashMap<crate::data::server_playlists::ServerPlaylistId, usize>,
-    /// Pre-write state of each server playlist with an optimistic write in
-    /// flight, so a failure can roll the sidebar row and open pages back.
-    pub server_playlist_undo: std::collections::HashMap<
-        crate::data::server_playlists::ServerPlaylistId,
-        ServerPlaylistUndo,
-    >,
+    /// Providers whose playlist index was requested, with the moment the
+    /// request went out, so a boot refresh and a manual one don't double up
+    /// while the stale entries can still expire (see
+    /// [`MusicPlayer::server_playlist_index_busy`]).
+    pub server_playlists_requested: std::collections::HashMap<ProviderId, std::time::Instant>,
+    /// Writes that are in flight, keyed by write id, so the row's busy marker
+    /// and a failed write's undo travel with the write itself (a burst of drops
+    /// can overlap).
+    pub server_playlist_writes: std::collections::HashMap<u64, PendingPlaylistWrite>,
     /// Browse request ids whose installed tracks should start playing (a
     /// server playlist opened with a double click).
     pub play_after_browse: std::collections::HashSet<u64>,
@@ -305,9 +316,8 @@ impl MusicPlayer {
             track_loading: false,
             playlists: PlaylistStore::load(),
             server_playlists: crate::data::server_playlists::ServerPlaylistStore::load(),
-            server_playlists_requested: std::collections::HashSet::new(),
+            server_playlists_requested: std::collections::HashMap::new(),
             server_playlist_writes: std::collections::HashMap::new(),
-            server_playlist_undo: std::collections::HashMap::new(),
             play_after_browse: std::collections::HashSet::new(),
             trashbin: crate::data::trashbin::TrashStore::load(),
             playlist_create_name: String::new(),
