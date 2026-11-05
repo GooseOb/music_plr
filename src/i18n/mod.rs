@@ -505,6 +505,13 @@ impl Strings {
             kind => self.error_summary(kind),
         }
     }
+
+    /// The reason for surfaces (a toast, a failed page) that don't name the
+    /// provider the failure came from: "{provider}: {reason}", so "couldn't
+    /// reach the provider" says *which* provider.
+    pub fn error_reason_on(&self, provider: ProviderId, error: &ProviderError) -> String {
+        format!("{}: {}", self.provider(provider), self.error_reason(error))
+    }
 }
 
 /// Builds a submenu label in one buffer, appending `marker` when the action falls back to a search.
@@ -590,6 +597,19 @@ mod tests {
         assert_eq!(s.error_reason(&unknown), "provider SDK did something odd");
         let known = ProviderError::from_text("ERROR: Video unavailable");
         assert_eq!(s.error_reason(&known), s.error_unavailable);
+    }
+
+    #[test]
+    fn error_reason_on_prefixes_the_provider_name() {
+        let error = ProviderError::from_text("ERROR: timed out");
+        for lang in Language::ALL {
+            let s = lang.strings();
+            for provider in ProviderId::builtin_all() {
+                let reason = s.error_reason_on(*provider, &error);
+                let named = format!("{}: {}", s.provider(*provider), s.error_reason(&error));
+                assert_eq!(reason, named, "{lang:?} {provider:?}");
+            }
+        }
     }
 
     #[test]

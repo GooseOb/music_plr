@@ -12,18 +12,24 @@ auto-generated compare link below it.
 
 ### Added
 
+- Home page: the launch view with a continue-listening strip, recently played tracks, playlists, saved library items and downloads, and per-provider shelves of picks and new releases; it opens from its cache and refreshes in the background.
 - Custom providers for Subsonic-compatible servers (Navidrome, Airsonic, Gonic) and Jellyfin: add, edit, test, and delete them in Settings, then use them for search, playback, downloads, radio, album and playlist browsing, and artist pages.
-- Server playlist pages and the Home server rail show the playlist's cover art.
-- Providers can be disabled in Settings.
-- Home page.
+- Playlists on those servers can be managed from the sidebar: each server's playlists are listed under its own header with new-playlist and refresh buttons. Create, rename and delete playlists, add and remove tracks, and reorder them by drag. Writes apply on the server right away, a failed write rolls the view back, and open pages always refetch their contents so they follow the server's state. Playlist pages and the Home rail show the playlist's cover art. Dropping a playlist or album card on its server's playlist list creates it there, and a server playlist dropped on the local list is copied into a local playlist.
+- Providers can be disabled in Settings. Switched-off providers disappear from the search bar, context menus and the other pickers, while tracks that already use them keep playing and downloading.
+- Load More also pages artist, album and playlist search results like it does songs.
 
 ### Changed
 
 - Escape no longer redirects to the search page.
 
+### Removed
+
+- The Search button from the sidebar; every pane keeps its own search bar, focused with `/`.
+
 ### Fixed
 
 - The first play of an uncached stream now starts even when its download finishes before playback is initialized.
+- Last.fm artist pages, related artists and artist search results load the artist's real artwork (its top album's cover when none exists) instead of the placeholder image everywhere.
 
 ## [1.4.1] - 2026-11-01
 

@@ -602,6 +602,7 @@ impl MusicPlayer {
         let rid = self.request_ids.next();
         Self::spawn_backend_thread(
             rid,
+            provider,
             move || crate::providers::browse(provider, &id, kind_str),
             move |(tracks, _)| BackendResult::CardPlaylistReady(idx, name, tracks),
             tx,

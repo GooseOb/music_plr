@@ -302,7 +302,7 @@ impl MusicPlayer {
         }
         if self.artist_error_dedup != Some((rid, provider)) {
             self.artist_error_dedup = Some((rid, provider));
-            let msg = format!("{}: {reason}", self.strings.provider(provider));
+            let msg = self.strings.error_reason_on(provider, error);
             self.notify_error(msg);
         }
     }

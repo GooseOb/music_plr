@@ -483,9 +483,9 @@ impl MusicPlayer {
                 self.process_download_complete(track);
                 Task::none()
             }
-            BackendResult::DownloadError(error) => {
+            BackendResult::DownloadError(provider, error) => {
                 error!("Download error: {}", error.detail);
-                let msg = self.strings.error_reason(&error).to_string();
+                let msg = self.strings.error_reason_on(provider, &error);
                 self.notify_error(msg);
                 Task::none()
             }
@@ -493,21 +493,21 @@ impl MusicPlayer {
                 self.notify_client_event(event);
                 Task::none()
             }
-            BackendResult::SearchError(rid, error) => {
+            BackendResult::SearchError(rid, provider, error) => {
                 self.play_after_browse.remove(&rid);
-                self.process_search_error(rid, &error);
+                self.process_search_error(rid, provider, &error);
                 Task::none()
             }
             BackendResult::EditTrackProviderResolved(provider, resolved) => {
                 self.apply_edit_track_provider_resolution(provider, resolved);
                 Task::none()
             }
-            BackendResult::EditTrackProviderError(_provider, error) => {
+            BackendResult::EditTrackProviderError(provider, error) => {
                 if let Some(Dialog::Edit(edit)) = &mut self.dialog {
                     edit.finding = None;
                 }
                 warn!("Edit track lookup failed: {}", error.detail);
-                let msg = self.strings.error_reason(&error).to_string();
+                let msg = self.strings.error_reason_on(provider, &error);
                 self.notify_error(msg);
                 Task::none()
             }
@@ -623,10 +623,17 @@ impl MusicPlayer {
 
     /// A failed search/browse/radio fetch: surface the error on the
     /// requesting pane's view only while it is still waiting (never wiping
-    /// loaded results), plus a toast.
-    fn process_search_error(&mut self, rid: u64, error: &crate::providers::ProviderError) {
+    /// loaded results), plus a toast. The reason names the backend the
+    /// request went to, since the failing view can be a radio or browse page
+    /// whose header says nothing about it.
+    fn process_search_error(
+        &mut self,
+        rid: u64,
+        provider: crate::providers::ProviderId,
+        error: &crate::providers::ProviderError,
+    ) {
         error!("Search request {rid} failed: {}", error.detail);
-        let reason = self.strings.error_reason(error).to_string();
+        let reason = self.strings.error_reason_on(provider, error);
         if let Some((pane, idx)) = self.slot_for_request(rid) {
             let slot = &mut self.pane_mut(pane).nav_history[idx];
             slot.request_id = 0;

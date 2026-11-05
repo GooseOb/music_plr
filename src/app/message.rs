@@ -32,11 +32,15 @@ pub enum BackendResult {
     RadioResults(u64, Vec<Track>),
     BrowseResults(u64, Vec<Track>, Option<crate::providers::AlbumMeta>),
     DownloadComplete(Track, String),
-    DownloadError(crate::providers::ProviderError),
+    /// Failed download from a specific provider; carries it so the toast can
+    /// name the source.
+    DownloadError(ProviderId, crate::providers::ProviderError),
     /// A `YouTube` player-client race event from a download thread; the tick
     /// loop surfaces it as a toast.
     PlayerClientEvent(crate::providers::ClientEvent),
-    SearchError(u64, crate::providers::ProviderError),
+    /// A failed search/browse/radio fetch. `provider` names the backend the
+    /// request was dispatched to, so the routed failure toast can too.
+    SearchError(u64, ProviderId, crate::providers::ProviderError),
     ThumbnailDownloaded(ProviderId, String),
     LyricsFetched(
         Result<Lyrics, String>,

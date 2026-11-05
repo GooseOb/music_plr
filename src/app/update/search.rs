@@ -35,6 +35,7 @@ impl MusicPlayer {
         let tx = self.result_tx.clone();
         Self::spawn_backend_thread(
             rid,
+            provider,
             move || crate::providers::search(provider, &query, scope, 0),
             move |(tracks, tab)| BackendResult::SearchResults(rid, tracks, tab),
             tx,
@@ -44,10 +45,12 @@ impl MusicPlayer {
 
     /// Spawn a background thread that runs `run` (or returns an error), maps
     /// the result into a `BackendResult`, and sends it on `tx`. Failures carry
-    /// `rid` so the tick can route them to the requesting pane's slot.
+    /// `rid` (to route them to the requesting pane's slot) and `provider`
+    /// (which backend served the request), so the failure toast names both.
     /// All search/radio/browse callers share this one thread body.
     pub(super) fn spawn_backend_thread<T, R, M>(
         rid: u64,
+        provider: crate::providers::ProviderId,
         run: R,
         make_result: M,
         tx: mpsc::Sender<BackendResult>,
@@ -60,7 +63,7 @@ impl MusicPlayer {
                 let _ = tx.send(make_result(tracks));
             }
             Err(e) => {
-                let _ = tx.send(BackendResult::SearchError(rid, e.into()));
+                let _ = tx.send(BackendResult::SearchError(rid, provider, e.into()));
             }
         });
     }
@@ -222,7 +225,7 @@ impl MusicPlayer {
             {
                 Ok(results) => results,
                 Err(e) => {
-                    let _ = tx.send(BackendResult::SearchError(rid, e.into()));
+                    let _ = tx.send(BackendResult::SearchError(rid, provider, e.into()));
                     return;
                 }
             };
@@ -347,6 +350,7 @@ impl MusicPlayer {
         };
         Self::spawn_backend_thread(
             rid,
+            provider,
             move || {
                 let id = if id.is_empty() {
                     let resolved = if artist {
@@ -402,6 +406,7 @@ impl MusicPlayer {
         let id = id.to_string();
         Self::spawn_backend_thread(
             rid,
+            provider,
             move || crate::providers::browse(provider, &id, kind_str),
             move |(tracks, meta)| BackendResult::BrowseResults(rid, tracks, meta),
             tx,

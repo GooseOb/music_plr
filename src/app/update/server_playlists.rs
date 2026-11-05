@@ -218,7 +218,7 @@ impl MusicPlayer {
                 let _ = tx.send(BackendResult::BrowseResults(rid, tracks, meta));
             }
             Err(error) => {
-                let _ = tx.send(BackendResult::SearchError(rid, error.into()));
+                let _ = tx.send(BackendResult::SearchError(rid, provider, error.into()));
             }
         });
         Task::none()
@@ -618,7 +618,7 @@ impl MusicPlayer {
                 }
             }
             Err(error) => {
-                let message = self.strings.error_reason(&error).to_string();
+                let message = self.strings.error_reason_on(provider, &error);
                 self.notify_error(message);
                 Task::none()
             }
@@ -639,7 +639,7 @@ impl MusicPlayer {
         let change = match result {
             Ok(change) => change,
             Err(error) => {
-                let message = self.strings.error_reason(&error).to_string();
+                let message = self.strings.error_reason_on(target.provider, &error);
                 self.notify_error(message);
                 if let Some(undo) = pending.and_then(|pending| pending.undo) {
                     self.undo_playlist_write(target, undo);
