@@ -1,6 +1,6 @@
 //! Automatic version checking and self-update.
 //!
-//! A background thread queries the latest stable version on crates.io,
+//! A background thread queries the latest stable 1.x version on crates.io,
 //! compares it against the compiled-in [`APP_VERSION`], and — when a newer
 //! release exists and the binary was not installed via a package manager —
 //! downloads the matching platform asset from the GitHub release page
@@ -94,16 +94,16 @@ pub fn can_self_update() -> bool {
 
 // ── crates.io version lookup ──────────────────────────────────────────
 
-/// Minimal crates.io response shape: only the latest stable version.
+/// Minimal crates.io response shape: one entry per published version.
 #[derive(Deserialize)]
-struct CratesIoResponse {
-    #[serde(rename = "crate")]
-    crate_info: CratesIoCrate,
+struct CratesIoVersionsResponse {
+    versions: Vec<CratesIoVersion>,
 }
 
 #[derive(Deserialize)]
-struct CratesIoCrate {
-    max_stable_version: String,
+struct CratesIoVersion {
+    num: String,
+    yanked: bool,
 }
 
 /// Release page URL for a bare version, e.g. `.../releases/tag/v1.2.3`.
@@ -120,9 +120,28 @@ fn constructed_asset_url(version: &str) -> String {
     )
 }
 
-/// Query crates.io for the latest stable version.
+/// Parse a three-part semver string (`major.minor.patch`, ignoring any
+/// prerelease/build suffix). Returns `None` for anything else, including
+/// two-part or prerelease-only numbers.
+fn parse_semver(s: &str) -> Option<(u32, u32, u32)> {
+    let core = s.split(['-', '+']).next().unwrap_or(s);
+    let mut parts = core.split('.');
+    let (major, minor, patch) = (parts.next()?, parts.next()?, parts.next()?);
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((
+        major.parse().ok()?,
+        minor.parse().ok()?,
+        patch.parse().ok()?,
+    ))
+}
+
+/// Query crates.io for the latest stable, non-yanked release on the same
+/// major line as the running binary (a fresh 2.x must not be offered to 1.x
+/// installs — switching majors is a separate, manual decision).
 fn fetch_latest_version() -> Result<String, String> {
-    let url = format!("https://crates.io/api/v1/crates/{CRATES_IO_NAME}");
+    let url = format!("https://crates.io/api/v1/crates/{CRATES_IO_NAME}/versions");
     let mut resp = agent()
         .get(&url)
         .header(
@@ -131,15 +150,22 @@ fn fetch_latest_version() -> Result<String, String> {
         )
         .call()
         .map_err(|e| format!("Version check request failed: {e}"))?;
-    let parsed: CratesIoResponse = resp
+    let parsed: CratesIoVersionsResponse = resp
         .body_mut()
         .read_json()
         .map_err(|e| format!("Failed to parse crates.io response: {e}"))?;
-    let version = parsed.crate_info.max_stable_version.trim().to_string();
-    if version.is_empty() {
-        return Err("crates.io returned an empty version".to_string());
-    }
-    Ok(version)
+    let current = parse_semver(APP_VERSION)
+        .ok_or_else(|| format!("unknown current version {APP_VERSION}"))?;
+    let latest = parsed
+        .versions
+        .iter()
+        .filter(|v| !v.yanked)
+        .filter_map(|v| parse_semver(&v.num))
+        .filter(|(major, ..)| *major == current.0)
+        .max();
+    latest
+        .map(|(a, b, c)| format!("{a}.{b}.{c}"))
+        .ok_or_else(|| "crates.io returned no valid 1.x version".to_string())
 }
 
 /// Parse a `sha256sum` sidecar body (`<hex>  <filename>` or bare hex) into the
@@ -240,8 +266,9 @@ fn agent() -> &'static ureq::Agent {
 // ── background operations ────────────────────────────────────────────
 
 /// Spawn a detached thread that queries crates.io for the latest stable
-/// version, compares it against [`APP_VERSION`], and reports the outcome
-/// through `tx` as [`BackendResult::VersionChecked`]. The asset URL is
+/// version on the current major line, compares it against [`APP_VERSION`],
+/// and reports the outcome through `tx` as
+/// [`BackendResult::VersionChecked`]. The asset URL is
 /// constructed from the version and the current platform.
 pub fn spawn_version_check(tx: std::sync::mpsc::Sender<BackendResult>) {
     std::thread::spawn(move || {
@@ -545,10 +572,39 @@ mod tests {
     }
 
     #[test]
-    fn crates_response_parses_max_stable_version() {
-        let body = r#"{"crate": {"id": "goosemusic", "max_stable_version": "1.3.5"}}"#;
-        let parsed: CratesIoResponse = serde_json::from_str(body).unwrap();
-        assert_eq!(parsed.crate_info.max_stable_version, "1.3.5");
+    fn crates_response_parses_versions() {
+        let body = r#"{"versions": [{"num": "1.3.5", "yanked": false}, {"num": "2.0.0", "yanked": true}]}"#;
+        let parsed: CratesIoVersionsResponse = serde_json::from_str(body).unwrap();
+        assert_eq!(parsed.versions.len(), 2);
+        assert_eq!(parsed.versions[0].num, "1.3.5");
+        assert!(parsed.versions[1].yanked);
+    }
+
+    #[test]
+    fn parse_semver_handles_core_and_suffixes() {
+        assert_eq!(parse_semver("1.4.1"), Some((1, 4, 1)));
+        assert_eq!(parse_semver("1.4.1-rc1"), Some((1, 4, 1)));
+        assert_eq!(parse_semver("1.4.1+build"), Some((1, 4, 1)));
+        assert_eq!(parse_semver("1.4"), None);
+        assert_eq!(parse_semver("1.4.a"), None);
+        assert!(parse_semver("alpha").is_none());
+    }
+
+    #[test]
+    fn version_selection_keeps_current_major() {
+        let current_major = parse_semver(APP_VERSION).unwrap().0;
+        let picks = |nums: &[&str]| -> Option<(u32, u32, u32)> {
+            nums.iter()
+                .filter_map(|n| parse_semver(n))
+                .filter(|(major, ..)| *major == current_major)
+                .max()
+        };
+        assert_eq!(
+            picks(&["2.0.0", "1.4.1", "1.4.0", "0.9.9"]),
+            Some((1, 4, 1))
+        );
+        assert_eq!(picks(&["2.0.0", "1.4.1-rc2"]), Some((1, 4, 1)));
+        assert_eq!(picks(&["2.1.0"]), None);
     }
 
     #[test]
