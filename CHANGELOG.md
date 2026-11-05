@@ -12,10 +12,11 @@ auto-generated compare link below it.
 
 ### Added
 
-- Now playing track place is persisted across app restarts.
+- Now playing track source is persisted across app restarts.
 
 ### Fixed
 
+- Home page is supported as now playing source.
 - Translations.
 
 ## [1.5.0] - 2026-11-05

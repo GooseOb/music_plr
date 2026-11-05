@@ -240,5 +240,6 @@ impl MusicPlayer {
             return;
         }
         self.set_queue(tracks.split_off(index));
+        self.record_now_playing_origin();
     }
 }

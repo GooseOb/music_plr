@@ -93,17 +93,6 @@ impl MusicPlayer {
         self.now_playing_from = state.now_playing_from;
     }
 
-    pub fn resume_playback(&mut self) {
-        if self.is_playing {
-            if let Some(track) = self.queue.current() {
-                let track = track.clone();
-                self.play_track_internal(&track, track.source);
-            } else {
-                self.is_playing = false;
-            }
-        }
-    }
-
     pub fn notify(&mut self, msg: impl Into<std::borrow::Cow<'static, str>>) {
         self.notification = Some(crate::app::Toast {
             message: msg.into(),

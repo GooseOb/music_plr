@@ -110,6 +110,7 @@ pub fn now_playing_source_label<'a>(
         ViewKind::PlaylistView(r) => Some(&r.name),
         ViewKind::Playlist(e) => Some(e.name.as_str()),
         ViewKind::Downloads => Some(tr.downloads),
+        ViewKind::Home(_) => Some(tr.home),
         _ => None,
     }
 }
