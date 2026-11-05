@@ -10,7 +10,7 @@ use iced::{
 use super::{
     shared_components::{
         empty_state, icon_button, inner_row_layout, loading_state, search_button, text_button,
-        thumbnail, toggle_bookmark_button, track_row,
+        thumbnail, thumbnail_mosaic, toggle_bookmark_button, track_row,
     },
     styles::{
         bg_search_hist, bg_secondary, button_style_hist, fg_secondary, icon_color,
@@ -330,7 +330,7 @@ pub(super) fn view_browse<'a>(
         player,
         pane,
         TrackPage {
-            thumbnail: player.thumbnail_index.get(provider, thumb_key),
+            thumbnail: PageThumbnail::Single(player.thumbnail_index.get(provider, thumb_key)),
             title: PageTitle::Label(label),
             meta,
         },
@@ -373,9 +373,11 @@ pub(super) fn view_server_playlist<'a>(
         player,
         pane,
         TrackPage {
-            thumbnail: player
-                .thumbnail_index
-                .get(reference.provider, &reference.id),
+            thumbnail: PageThumbnail::Single(
+                player
+                    .thumbnail_index
+                    .get(reference.provider, &reference.id),
+            ),
             title: PageTitle::Rename {
                 placeholder: &reference.name,
                 value: &reference.name,
@@ -399,9 +401,11 @@ pub(super) fn view_radio<'a>(
         player,
         pane,
         TrackPage {
-            thumbnail: player
-                .thumbnail_index
-                .get(data.thumb_provider, &data.thumb_id),
+            thumbnail: PageThumbnail::Single(
+                player
+                    .thumbnail_index
+                    .get(data.thumb_provider, &data.thumb_id),
+            ),
             title: PageTitle::Label(&data.title),
             meta: meta.into(),
         },
@@ -423,8 +427,15 @@ pub(super) enum PageTitle<'a> {
     },
 }
 
+/// The artwork slot of a track page: most pages paint one image, a local
+/// playlist builds its cover out of the first four tracks'.
+pub(super) enum PageThumbnail<'a> {
+    Single(Option<&'a std::path::PathBuf>),
+    Mosaic([Option<&'a std::path::PathBuf>; 4]),
+}
+
 pub(super) struct TrackPage<'a> {
-    pub(super) thumbnail: Option<&'a std::path::PathBuf>,
+    pub(super) thumbnail: PageThumbnail<'a>,
     pub(super) title: PageTitle<'a>,
     pub(super) meta: std::borrow::Cow<'a, str>,
 }
@@ -479,8 +490,12 @@ pub(super) fn track_page_header<'a>(
             .width(Length::Fill)
             .into(),
     };
+    let art: Element<'a, Message, AppTheme> = match spec.thumbnail {
+        PageThumbnail::Single(thumb) => thumbnail(theme::PAGE_THUMBNAIL_SIZE, thumb),
+        PageThumbnail::Mosaic(tiles) => thumbnail_mosaic(theme::PAGE_THUMBNAIL_SIZE, tiles),
+    };
     dir.row([
-        thumbnail(theme::PAGE_THUMBNAIL_SIZE, spec.thumbnail),
+        art,
         Column::with_children([
             heading,
             text(spec.meta)

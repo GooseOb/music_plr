@@ -2,7 +2,7 @@ use iced::{
     alignment,
     widget::{
         container, image, scrollable, svg, text, text_input, Button, Column, Container, Id,
-        MouseArea, ProgressBar, Row,
+        MouseArea, ProgressBar, Row, Space,
     },
     Color, Element, Length,
 };
@@ -43,6 +43,77 @@ pub fn thumbnail(size: f32, thumb: Option<&std::path::PathBuf>) -> Element<'_, M
         icons::icon(icons::MUSIC_ICON, size)
             .style(icon_style_fg_muted())
             .into()
+    }
+}
+
+/// The cover of a page assembled from its first four tracks' thumbnails: a
+/// flush 2×2 board whose tiles round only their outward corner of the cover
+/// (the widget primitives can't clip children into a rounded silhouette).
+/// With no artwork at all it degrades to [`thumbnail`]'s own placeholder
+/// glyph, so a freshly created playlist looks like every other page without
+/// an image.
+pub fn thumbnail_mosaic(
+    size: f32,
+    tiles: [Option<&std::path::PathBuf>; 4],
+) -> Element<'_, Message, AppTheme> {
+    if tiles.iter().all(|t| t.is_none_or(|p| !p.exists())) {
+        return thumbnail(size, None);
+    }
+    let half = size / 2.0;
+    let corner = half / 4.0;
+    let tile = |thumb: Option<&std::path::PathBuf>,
+                radius: iced::border::Radius|
+     -> Element<'_, Message, AppTheme> {
+        match thumb.filter(|p| p.exists()) {
+            Some(path) => image(image::Handle::from_path(path))
+                .width(half)
+                .height(half)
+                .border_radius(reflected(radius))
+                .content_fit(iced::ContentFit::Cover)
+                .into(),
+            None => Container::new(Space::new())
+                .width(half)
+                .height(half)
+                .style(move |theme: &AppTheme| container::Style {
+                    background: Some(theme.palette.overlay.into()),
+                    border: iced::border::rounded(radius),
+                    ..Default::default()
+                })
+                .into(),
+        }
+    };
+    let corner_radius =
+        |top_left: f32, top_right: f32, bottom_left: f32, bottom_right: f32| iced::border::Radius {
+            top_left,
+            top_right,
+            bottom_left,
+            bottom_right,
+        };
+    Column::with_children([
+        Row::with_children([
+            tile(tiles[0], corner_radius(corner, 0.0, 0.0, 0.0)),
+            tile(tiles[1], corner_radius(0.0, corner, 0.0, 0.0)),
+        ])
+        .into(),
+        Row::with_children([
+            tile(tiles[2], corner_radius(0.0, 0.0, corner, 0.0)),
+            tile(tiles[3], corner_radius(0.0, 0.0, 0.0, corner)),
+        ])
+        .into(),
+    ])
+    .into()
+}
+
+/// The radius as `iced_wgpu`'s image shader applies it: point-reflected, so the
+/// `top_left` field rounds the visual bottom-right and every other field its
+/// opposite corner. Container quads round the named corners, so image tiles
+/// pass their outward corner through here while board tiles don't.
+fn reflected(radius: iced::border::Radius) -> iced::border::Radius {
+    iced::border::Radius {
+        top_left: radius.bottom_right,
+        top_right: radius.bottom_left,
+        bottom_right: radius.top_left,
+        bottom_left: radius.top_right,
     }
 }
 
@@ -147,11 +218,9 @@ pub fn scope_button(
 /// `on_press` is `None` while no query can run (blank query, or one already
 /// in flight), which renders it disabled.
 pub fn search_button(on_press: Option<Message>) -> Button<'static, Message, AppTheme> {
-    Button::new(icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_MD).style(icon_style_primary()))
+    Button::new(icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_LG).style(icon_style_primary()))
         .padding(theme::SPACING_SM)
         .style(button_style_primary())
-        .width(theme::SEARCH_BTN_SIZE)
-        .height(theme::SEARCH_BTN_SIZE)
         .on_press_maybe(on_press)
 }
 

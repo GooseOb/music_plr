@@ -5,7 +5,7 @@ use iced::{
 };
 
 use super::{
-    search::{track_page_header, PageTitle, TrackPage},
+    search::{track_page_header, PageThumbnail, PageTitle, TrackPage},
     shared_components::{empty_state, icon_button_delete},
     styles::{fg_secondary, icon_style_fg_muted, icon_style_fg_secondary},
     theme, view_track_list, Message, MusicPlayer,
@@ -47,10 +47,20 @@ pub(super) fn view_playlist<'a>(
     .padding([theme::SPACING_XS, theme::SPACING_SM])
     .on_press(Message::AddLocalMusic);
 
+    // The cover is the first four tracks' thumbnails — a track's own
+    // artwork marks its quarter; they are already seeded into the index
+    // when the view becomes active, so missing quarters fill in as the
+    // tick lands the downloads.
+    let cover = std::array::from_fn(|i| {
+        pl.tracks
+            .get(i)
+            .and_then(|track| player.thumbnail_index.get(track.source, track.primary_id()))
+    });
+
     let header = track_page_header(
         player,
         TrackPage {
-            thumbnail: None,
+            thumbnail: PageThumbnail::Mosaic(cover),
             title: PageTitle::Rename {
                 // The live store name is both mirror and truth: what the box
                 // shows is what the store holds (the typed name saves at
