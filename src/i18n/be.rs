@@ -22,7 +22,7 @@ pub const STRINGS: Strings = Strings {
     for_you: "Для вас",
     discover: "Адкрыцьці",
     recently_added: "Нядаўна дададзеныя",
-    most_played: "Найчасьцей",
+    most_played: "Найбольш граныя",
     starred: "Выбранае",
 
     queue: "Чарга",
@@ -276,7 +276,7 @@ pub const STRINGS: Strings = Strings {
             "Шаблёны «{a}» і «{b}» могуць супасьці для аднаго файла з супярэчлівымі палямі. Выдаліце або выпраўце адзін зь іх."
         )
     },
-    import_playlists_imported: |n| format!("Імпартавана {}", be_tracks(n)),
+    import_playlists_imported: |n| format!("Імпартавана {} {}", n, slavic(n as u64, "плейліст", "плейліста", "плейлістаў")),
     import_imported_into: |n, into| format!("Імпартавана {} у {into}", be_tracks(n)),
     import_no_tracks: "Ня знойдзена трэкаў для імпарту.",
     import_no_match: "Ні адзін файл не адпавядае шаблёнам.",
@@ -321,8 +321,8 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("Абнаўленьне не прайшло: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    deps_failed_detail: |e| format!("Failed: {e}"),
-    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
+    deps_failed_detail: |e| format!("Не ўдалося: {e}"),
+    deps_delete_failed_detail: |e| format!("Не ўдалося выдаліць: {e}"),
 
     pal_play_focused: "Граць выбраны трэк",
     pal_toggle_selection: "Пераключыць выбар радка",

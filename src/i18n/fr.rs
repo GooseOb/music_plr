@@ -250,7 +250,7 @@ pub const STRINGS: Strings = Strings {
     creating_playlist: |name| format!("Création de la playlist « {name} »..."),
 
     import_playlist: "Importer une playlist",
-    import_method_native: "Native",
+    import_method_native: "Natif",
     import_method_filelist: "Liste de fichiers",
     import_method_csv: "CSV",
     import_native_hint: "Importe des playlists depuis un fichier playlists.json.",
@@ -271,7 +271,7 @@ pub const STRINGS: Strings = Strings {
             "Les motifs « {a} » et « {b} » peuvent correspondre au même fichier avec des champs en conflit. Supprimez ou corrigez l'un d'eux."
         )
     },
-    import_playlists_imported: |n| format!("Importées {}", fr_tracks(n)),
+    import_playlists_imported: |n| format!("Importées {} {}", n, zero_or_one(n as u64, "playlist", "playlists")),
     import_imported_into: |n, into| format!("Importées {} dans {}", fr_tracks(n), into),
     import_no_tracks: "Aucune piste à importer.",
     import_no_match: "Aucun fichier ne correspond aux motifs.",
@@ -310,14 +310,14 @@ pub const STRINGS: Strings = Strings {
     current_version: |v| format!("Version {v}"),
     update_available: |v| format!("Version {v} disponible. Allez dans Paramètres pour mettre à jour."),
     update_now: "Mettre à jour",
-    updating: "Mise à jour…",
+    updating: "Mise à jour en cours…",
     update_applied: |v| format!("Mis à jour vers {v}. Redémarrage…"),
     package_managed: "Impossible de mettre à jour automatiquement (pas d'accès en écriture dans le répertoire de l'application). Si installé via un gestionnaire de paquets, utilisez-le pour mettre à jour.",
     update_failed: |e| format!("Échec de la mise à jour : {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    deps_failed_detail: |e| format!("Failed: {e}"),
-    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
+    deps_failed_detail: |e| format!("Échec : {e}"),
+    deps_delete_failed_detail: |e| format!("Échec de la suppression : {e}"),
 
     pal_play_focused: "Lire le titre ciblé",
     pal_toggle_selection: "Basculer la sélection de la ligne",

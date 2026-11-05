@@ -20,7 +20,7 @@ pub const STRINGS: Strings = Strings {
     discover: "استكشف",
     recently_added: "أضيفت مؤخرًا",
     most_played: "الأكثر تشغيلًا",
-    starred: "المفضلة",
+    starred: "المميّزة",
 
     queue: "قائمة الانتظار",
     recently_played: "تم تشغيلها مؤخراً",
@@ -271,7 +271,7 @@ pub const STRINGS: Strings = Strings {
             "قد يتطابق النمطان \"{a}\" و\"{b}\" مع نفس الملف مع حقول متعارضة. أزل أحدهما أو صححه."
         )
     },
-    import_playlists_imported: |n| format!("تم استيراد {}", ar_tracks(n)),
+    import_playlists_imported: |n| format!("تم استيراد {} {}", n, arabic(n as u64, "قائمة تشغيل", "قائمتا تشغيل", "قوائم تشغيل", "قائمة تشغيل")),
     import_imported_into: |n, into| format!("تم استيراد {} إلى {into}", ar_tracks(n)),
     import_no_tracks: "لم يتم العثور على أغانٍ للاستيراد.",
     import_no_match: "لا يوجد ملف يطابق الأنماط.",
@@ -316,8 +316,8 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("فشل التحديث: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    deps_failed_detail: |e| format!("Failed: {e}"),
-    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
+    deps_failed_detail: |e| format!("فشل: {e}"),
+    deps_delete_failed_detail: |e| format!("فشل الحذف: {e}"),
 
     pal_play_focused: "تشغيل الأغنية المحددة",
     pal_toggle_selection: "تبديل تحديد الصف",

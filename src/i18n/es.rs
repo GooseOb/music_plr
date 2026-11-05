@@ -156,7 +156,7 @@ pub const STRINGS: Strings = Strings {
     language_lbl: "Idioma",
     default_provider_lbl: "Proveedor predeterminado de streaming y descarga",
     cookie_browser_lbl: "Cookies del navegador (vídeos con restricción de edad)",
-    cookies_off: "No",
+    cookies_off: "Desactivado",
     normalize_volume_lbl: "Normalizar el volumen entre pistas",
     download_dir_lbl: "Directorio de descargas",
     cache_size_lbl: "Tamaño máximo de caché de streaming (MB)",
@@ -273,7 +273,7 @@ pub const STRINGS: Strings = Strings {
             "Los patrones \"{a}\" y \"{b}\" pueden coincidir con el mismo archivo con campos en conflicto. Elimina o corrige uno."
         )
     },
-    import_playlists_imported: |n| format!("Importadas {}", es_tracks(n)),
+    import_playlists_imported: |n| format!("Importadas {} {}", n, two(n as u64, "lista", "listas")),
     import_imported_into: |n, into| format!("Importadas {} en {}", es_tracks(n), into),
     import_no_tracks: "No se encontraron pistas para importar.",
     import_no_match: "Ningún archivo coincide con los patrones.",
@@ -318,8 +318,8 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("La actualización falló: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    deps_failed_detail: |e| format!("Failed: {e}"),
-    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
+    deps_failed_detail: |e| format!("Error: {e}"),
+    deps_delete_failed_detail: |e| format!("Error al eliminar: {e}"),
 
     pal_play_focused: "Reproducir la canción enfocada",
     pal_toggle_selection: "Activar la selección de la fila",

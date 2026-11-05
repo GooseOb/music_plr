@@ -10,7 +10,7 @@ pub const STRINGS: Strings = Strings {
     downloads: "Pobrane",
     settings: "Ustawienia",
     library: "Biblioteka",
-    nothing_saved_yet: "Nic jeszcze nie pobrano",
+    nothing_saved_yet: "Nic jeszcze nie zapisano",
     new_playlist_name: "Nazwa nowej playlisty",
 
     home: "Start",
@@ -55,7 +55,7 @@ pub const STRINGS: Strings = Strings {
 
     looking_up_lyrics: "Szukanie tekstu…",
     play_a_track_for_lyrics: "Odtwórz utwór, aby zobaczyć jego tekst.",
-    lyrics_selectable: "Zaznaczany",
+    lyrics_selectable: "Zaznaczalny",
     lyrics_synced: "Synchronizowany",
     lyrics_plain: "Zwykły",
     lyrics_translations: "Tłumaczenia",
@@ -206,7 +206,7 @@ pub const STRINGS: Strings = Strings {
     reordered_playlist: "Zmieniono kolejność playlisty",
     max_panes_reached: "Osiągnięto maksymalną liczbę paneli",
 
-    n_saved: |n| format!("zapisano: {n}"),
+    n_saved: |n| format!("Zapisano: {n}"),
     n_plays: pl_plays,
     search_youtube: "Szukaj w YouTube Music...",
     search_local: "Szukaj...",
@@ -282,7 +282,7 @@ pub const STRINGS: Strings = Strings {
             "Wzory \"{a}\" i \"{b}\" mogą pasować do tego samego pliku z konfliktowymi polami. Usuń lub popraw jeden."
         )
     },
-    import_playlists_imported: |n| format!("Zaimportowano {}", pl_tracks(n)),
+    import_playlists_imported: |n| format!("Zaimportowano {} {}", n, slavic(n as u64, "playlistę", "playlisty", "playlist")),
     import_imported_into: |n, into| format!("Zaimportowano {} do: {}", pl_tracks(n), into),
     import_no_tracks: "Nie znaleziono utworów do importu.",
     import_no_match: "Żaden plik nie pasuje do wzorów.",
@@ -327,8 +327,8 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("Aktualizacja nie powiodła się: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    deps_failed_detail: |e| format!("Failed: {e}"),
-    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
+    deps_failed_detail: |e| format!("Nieudane: {e}"),
+    deps_delete_failed_detail: |e| format!("Usuwanie nieudane: {e}"),
 
     pal_play_focused: "Odtwórz zaznaczony utwór",
     pal_toggle_selection: "Przełącz zaznaczenie wiersza",

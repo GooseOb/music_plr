@@ -285,7 +285,7 @@ pub const STRINGS: Strings = Strings {
             "模式“{a}”和“{b}”可能匹配同一文件且字段冲突。请移除或修复其中一个。"
         )
     },
-    import_playlists_imported: |n| format!("已导入 {}", zh_tracks(n)),
+    import_playlists_imported: |n| format!("已导入 {n} 个播放列表"),
     import_imported_into: |n, into| format!("已将 {} 导入到 {}", zh_tracks(n), into),
     import_no_tracks: "没有找到可导入的曲目。",
     import_no_match: "没有文件匹配这些模式。",
@@ -330,8 +330,8 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("更新失败：{e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    deps_failed_detail: |e| format!("Failed: {e}"),
-    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
+    deps_failed_detail: |e| format!("失败: {e}"),
+    deps_delete_failed_detail: |e| format!("删除失败: {e}"),
 
     pal_play_focused: "播放聚焦的曲目",
     pal_toggle_selection: "切换该行的选择状态",

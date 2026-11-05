@@ -224,7 +224,7 @@ pub const STRINGS: Strings = Strings {
     resolving_on: |title, p| format!("Визначення «{title}» на {p}…"),
     resolving_player_client: "Підбір сумісного плеєр-клієнта…",
     resolved_player_client: |c| format!("Обрано плеєр-клієнт: {c}"),
-    player_client_unavailable: "Сумісний плеєр-клієнт не знайдено, використовується за замовчуванням……",
+    player_client_unavailable: "Сумісний плеєр-клієнт не знайдено, використовується за замовчуванням…",
     provider_no_radio: |p| format!("{p} не підтримує радіо"),
     generating_radio_for: |w, name| format!("Створення радіо для {w}: {name}…"),
     could_not_find_on: |name, p| format!("Не вдалося знайти «{name}» на {p}"),
@@ -276,7 +276,7 @@ pub const STRINGS: Strings = Strings {
             "Шаблони «{a}» і «{b}» можуть збігатися для одного файлу з конфліктуючими полями. Видаліть або виправте один з них."
         )
     },
-    import_playlists_imported: |n| format!("Імпортовано {}", uk_tracks(n)),
+    import_playlists_imported: |n| format!("Імпортовано {} {}", n, slavic(n as u64, "плейліст", "плейліста", "плейлістів")),
     import_imported_into: |n, into| format!("Імпортовано {} до {into}", uk_tracks(n)),
     import_no_tracks: "Не знайдено треків для імпорту.",
     import_no_match: "Жоден файл не відповідає шаблонам.",
@@ -286,7 +286,7 @@ pub const STRINGS: Strings = Strings {
     deps_intro: "Деякі інструменти, що використовуються програмою, відсутні. Оберіть, які встановити, або скасуйте, щоб продовжити (пошук і потік можуть не працювати, поки вони не з'являться).",
     deps_install: "Встановити",
     deps_install_selected: "Встановити вибрані",
-    deps_discard: "Скасувати",
+    deps_discard: "Відхилити",
     deps_installing: "Встановлення…",
     deps_installed: "Встановлено",
     deps_failed: "Не вдалося",
@@ -321,8 +321,8 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("Оновлення не вдалося: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    deps_failed_detail: |e| format!("Failed: {e}"),
-    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
+    deps_failed_detail: |e| format!("Не вдалося: {e}"),
+    deps_delete_failed_detail: |e| format!("Не вдалося видалити: {e}"),
 
     pal_play_focused: "Відтворити вибраний трек",
     pal_toggle_selection: "Перемкнути вибір рядка",

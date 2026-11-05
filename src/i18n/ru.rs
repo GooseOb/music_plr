@@ -127,7 +127,7 @@ pub const STRINGS: Strings = Strings {
     finding: "Поиск…",
     found_on: |p| format!("Найдено на {p}"),
     not_linked: "Не привязано",
-    providers: "Поставщики",
+    providers: "Провайдеры",
     provider_local: "Локальные файлы",
     no_provider_data: "У этого трека нет данных поставщика.",
     save: "Сохранить",
@@ -276,7 +276,7 @@ pub const STRINGS: Strings = Strings {
             "Шаблоны «{a}» и «{b}» могут совпасть для одного файла с конфликтующими полями. Удалите или исправьте один из них."
         )
     },
-    import_playlists_imported: |n| format!("Импортировано {}", ru_tracks(n)),
+    import_playlists_imported: |n| format!("Импортировано {} {}", n, slavic(n as u64, "плейлист", "плейлиста", "плейлистов")),
     import_imported_into: |n, into| format!("Импортировано {} в {into}", ru_tracks(n)),
     import_no_tracks: "Не найдено треков для импорта.",
     import_no_match: "Ни один файл не соответствует шаблонам.",
@@ -286,7 +286,7 @@ pub const STRINGS: Strings = Strings {
     deps_intro: "Некоторые инструменты, используемые приложением, отсутствуют. Выберите, какие установить, или отмените, чтобы продолжить (поиск и потоковая передача могут не работать, пока они не появятся).",
     deps_install: "Установить",
     deps_install_selected: "Установить выбранные",
-    deps_discard: "Отменить",
+    deps_discard: "Отклонить",
     deps_installing: "Установка…",
     deps_installed: "Установлено",
     deps_failed: "Не удалось",
@@ -321,8 +321,8 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("Обновление не удалось: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    deps_failed_detail: |e| format!("Failed: {e}"),
-    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
+    deps_failed_detail: |e| format!("Не удалось: {e}"),
+    deps_delete_failed_detail: |e| format!("Не удалось удалить: {e}"),
 
     pal_play_focused: "Играть выбранный трек",
     pal_toggle_selection: "Переключить выбор строки",

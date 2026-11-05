@@ -204,7 +204,7 @@ pub const STRINGS: Strings = Strings {
     max_panes_reached: "अधिकतम पैन संख्या तक पहुँच गए",
 
     n_saved: |n| format!("{n} सहेजे गए"),
-    n_plays: |n| format!("{} प्लेबैक", crate::util::format_count(n)),
+    n_plays: |n| format!("{} प्ले", crate::util::format_count(n)),
     search_youtube: "YouTube Music पर खोजें…",
     search_local: "खोजें…",
     search_provider: |p| format!("{p} पर खोजें…"),
@@ -273,7 +273,7 @@ pub const STRINGS: Strings = Strings {
             "पैटर्न \"{a}\" और \"{b}\" एक ही फ़ाइल से मेल खा सकते हैं जिनमें विरोधाभासी फ़ील्ड हैं। एक को हटाएँ या ठीक करें।"
         )
     },
-    import_playlists_imported: |n| format!("आयातित {}", hi_tracks(n)),
+    import_playlists_imported: |n| format!("आयातित {n} प्लेलिस्ट"),
     import_imported_into: |n, into| format!("आयातित {} में {into}", hi_tracks(n)),
     import_no_tracks: "आयात करने के लिए कोई ट्रैक नहीं मिला।",
     import_no_match: "कोई फ़ाइल पैटर्न से मेल नहीं खाती।",
@@ -318,8 +318,8 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("अपडेट विफल: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    deps_failed_detail: |e| format!("Failed: {e}"),
-    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
+    deps_failed_detail: |e| format!("विफल: {e}"),
+    deps_delete_failed_detail: |e| format!("हटाने में विफल: {e}"),
 
     pal_play_focused: "फ़ोकस किया गया ट्रैक चलाएँ",
     pal_toggle_selection: "पंक्ति का चयन बदलें",

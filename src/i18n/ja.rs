@@ -22,7 +22,7 @@ pub const STRINGS: Strings = Strings {
 
     queue: "キュー",
     recently_played: "最近再生した曲",
-    now_playing_from: "再生中（元：",
+    now_playing_from: "再生元：",
     now_playing: "再生中",
     up_next: "次に再生",
     no_track_playing: "再生中の曲はありません",
@@ -285,7 +285,7 @@ pub const STRINGS: Strings = Strings {
             "パターン「{a}」と「{b}」は同じファイルに一致し、フィールドが競合する可能性があります。どちらかを削除または修正してください。"
         )
     },
-    import_playlists_imported: |n| format!("{} をインポート", ja_tracks(n)),
+    import_playlists_imported: |n| format!("{n} 件のプレイリストをインポート"),
     import_imported_into: |n, into| format!("{} を {into} にインポート", ja_tracks(n)),
     import_no_tracks: "インポートする曲が見つかりません。",
     import_no_match: "いずれのパターンにも一致するファイルがありません。",
@@ -330,8 +330,8 @@ pub const STRINGS: Strings = Strings {
     update_failed: |e| format!("アップデートに失敗しました: {e}"),
     percent: |pct| format!("{pct}%"),
     list_match_pos: |pos, total| format!("{pos}/{total}"),
-    deps_failed_detail: |e| format!("Failed: {e}"),
-    deps_delete_failed_detail: |e| format!("Delete failed: {e}"),
+    deps_failed_detail: |e| format!("失敗: {e}"),
+    deps_delete_failed_detail: |e| format!("削除に失敗: {e}"),
 
     pal_play_focused: "フォーカス中の曲を再生",
     pal_toggle_selection: "行の選択を切り替え",

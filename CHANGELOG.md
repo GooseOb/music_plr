@@ -12,7 +12,7 @@ auto-generated compare link below it.
 
 ### Fixed
 
-- Some strings in belarusian translation.
+- Translations.
 
 ## [1.5.0] - 2026-11-05
 

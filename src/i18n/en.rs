@@ -274,7 +274,7 @@ pub const STRINGS: Strings = Strings {
             "Patterns \"{a}\" and \"{b}\" can match the same file with conflicting fields. Remove or fix one."
         )
     },
-    import_playlists_imported: |n| format!("Imported {} playlists", en_tracks(n)),
+    import_playlists_imported: |n| format!("Imported {} {}", n, two(n as u64, "playlist", "playlists")),
     import_imported_into: |n, into| format!("Imported {} into {}", en_tracks(n), into),
     import_no_tracks: "No tracks found to import.",
     import_no_match: "No files matched the patterns.",
