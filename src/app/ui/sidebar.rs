@@ -377,16 +377,6 @@ pub(super) fn view_sidebar(player: &MusicPlayer) -> Element<'_, Message, AppThem
     let nav_items: Vec<Element<'_, Message, AppTheme>> = vec![
         sidebar_nav_item(player.strings.home, ViewData::new_home(), player, None),
         sidebar_nav_item(
-            player.strings.search,
-            ViewData::new_search(
-                String::new(),
-                focused_pane.search_provider,
-                focused_pane.search_scope,
-            ),
-            player,
-            None,
-        ),
-        sidebar_nav_item(
             player.strings.downloads,
             ViewData::new_downloads(Vec::new()),
             player,
@@ -602,18 +592,9 @@ fn sidebar_nav_item<'a>(
     player: &'a MusicPlayer,
     count: Option<usize>,
 ) -> Element<'a, Message, AppTheme> {
-    let is_search_item = matches!(target.kind, ViewKind::Search { .. });
-    // The Search item is active for any Search view (any query), not just the
-    // blank landing view; it restores the last search instead of navigating
-    // to that blank view, so `same_kind` doesn't apply.
-    let is_active = if is_search_item {
-        matches!(player.focused_pane().view_data().kind, ViewKind::Search(_))
-    } else {
-        player.focused_pane().view_data().same_kind(&target)
-    };
+    let is_active = player.focused_pane().view_data().same_kind(&target);
     let icon_name: &[u8] = match target.kind {
         ViewKind::Home(_) => icons::HOME_ICON,
-        ViewKind::Search { .. } => icons::SEARCH_ICON,
         ViewKind::Downloads => icons::DOWNLOAD_ICON,
         ViewKind::Trashbin => icons::DELETE_ICON,
         ViewKind::Settings => icons::SETTINGS_ICON,
@@ -644,14 +625,8 @@ fn sidebar_nav_item<'a>(
         content.into()
     };
 
-    let on_press = if is_search_item {
-        Message::SidebarSearch
-    } else {
-        Message::NavigateTo(player.focused_pane_id, target)
-    };
-
     sidebar_button(content)
         .style(button_style_panel_item(is_active))
-        .on_press(on_press)
+        .on_press(Message::NavigateTo(player.focused_pane_id, target))
         .into()
 }

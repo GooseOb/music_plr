@@ -395,8 +395,6 @@ impl MusicPlayer {
                     || (!tab.is_track_tab() && !s.provider.pages_cards());
                 s.tab = tab;
                 self.install_results(pane, idx, tracks);
-                // Snapshot the completed search for the sidebar "Search" item.
-                self.last_search_view = Some(self.pane(pane).nav_history[idx].clone());
             }
         }
     }
@@ -897,13 +895,6 @@ impl MusicPlayer {
                 // New cards carry thumbnails the last seeding pass never saw.
                 slot.thumbnails_seeded = false;
                 slot.request_id = 0;
-            }
-            if self
-                .last_search_view
-                .as_ref()
-                .is_some_and(|l| rid == l.request_id)
-            {
-                self.last_search_view = Some(self.pane(pane).nav_history[idx].clone());
             }
             self.finalize_view(pane, idx);
         }

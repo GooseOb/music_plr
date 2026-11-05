@@ -96,12 +96,6 @@ pub struct MusicPlayer {
     pub focused_pane_id: PaneId,
     pub next_pane_id: PaneId,
     pub request_ids: RequestIdGenerator,
-    /// Snapshot of the most recent completed search view.
-    /// The sidebar "Search" item restores this instead of opening
-    /// a blank search; `None` until the first search completes this session.
-    /// Intentionally global (not per-pane): whichever pane searched last wins,
-    /// and sidebar clicks target the focused pane.
-    pub last_search_view: Option<ViewData>,
 
     pub queue: PlayQueue,
     pub show_queue: bool,
@@ -303,7 +297,6 @@ impl MusicPlayer {
             split_root: SplitNode::Leaf(0),
             focused_pane_id: 0,
             next_pane_id: 1,
-            last_search_view: None,
             queue: PlayQueue::new(),
             is_playing: false,
             volume: 0.8,

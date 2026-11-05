@@ -566,11 +566,6 @@ impl crate::app::MusicPlayer {
                 self.pane_mut(pane).lyrics = None;
                 self.handle_navigate_to(pane, data)
             }
-            Message::SidebarSearch => {
-                let pane = self.focused_pane_id;
-                self.pane_mut(pane).lyrics = None;
-                self.handle_sidebar_search()
-            }
             Message::NavigateBack(pane) => {
                 if self.pane(pane).lyrics.is_some() {
                     self.pane_mut(pane).lyrics = None;

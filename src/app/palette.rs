@@ -71,16 +71,14 @@ impl PaletteGroup {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaletteView {
     Home,
-    Search,
     Downloads,
     Trashbin,
     Settings,
 }
 
 impl PaletteView {
-    pub const ALL: [PaletteView; 5] = [
+    pub const ALL: [PaletteView; 4] = [
         PaletteView::Home,
-        PaletteView::Search,
         PaletteView::Downloads,
         PaletteView::Trashbin,
         PaletteView::Settings,
@@ -89,7 +87,6 @@ impl PaletteView {
     pub fn label(self, strings: &Strings) -> &'static str {
         match self {
             Self::Home => strings.home,
-            Self::Search => strings.search,
             Self::Downloads => strings.downloads,
             Self::Trashbin => strings.trashbin,
             Self::Settings => strings.settings,
@@ -100,7 +97,6 @@ impl PaletteView {
     pub fn keywords(self) -> &'static str {
         match self {
             Self::Home => "home start landing feed discovery",
-            Self::Search => "search find browse",
             Self::Downloads => "downloads offline saved",
             Self::Trashbin => "trash bin deleted removed",
             Self::Settings => "settings preferences options config",
@@ -109,10 +105,7 @@ impl PaletteView {
 
     pub fn message(self, pane: PaneId) -> Message {
         match self {
-            // The sidebar button's message: restore the last search view, or
-            // run the blank-query browse until one exists.
             Self::Home => Message::NavigateTo(pane, ViewData::new_home()),
-            Self::Search => Message::SidebarSearch,
             Self::Downloads => Message::NavigateTo(pane, ViewData::new_downloads(Vec::new())),
             Self::Trashbin => Message::NavigateTo(pane, ViewData::new_trashbin()),
             Self::Settings => Message::NavigateTo(pane, ViewData::new_settings()),

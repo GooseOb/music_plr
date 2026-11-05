@@ -42,22 +42,6 @@ impl MusicPlayer {
         nav_task
     }
 
-    /// Sidebar "Search" click: restore the most recent completed search view
-    /// (query, results, active tab). Until any search has finished this
-    /// session, behave like the search button and run a search (a blank
-    /// query browses charts/trending).
-    pub fn handle_sidebar_search(&mut self) -> Task<Message> {
-        let pane = self.focused_pane_id;
-        let Some(last) = &self.last_search_view else {
-            return self.run_search(pane);
-        };
-        if self.view_data_in(pane).same_kind(last) {
-            Task::none()
-        } else {
-            self.handle_navigate_to(pane, last.clone())
-        }
-    }
-
     /// Spawn a background thread that runs `run` (or returns an error), maps
     /// the result into a `BackendResult`, and sends it on `tx`. Failures carry
     /// `rid` so the tick can route them to the requesting pane's slot.

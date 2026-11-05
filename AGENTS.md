@@ -104,7 +104,7 @@ src/
 
 ## UI Layout
 
-- **Sidebar** (`SIDEBAR_WIDTH = 300.0`): nav buttons (Search/Downloads/Trashbin), scrollable local playlist list, create-playlist input, a second scrollable for server playlists (per-server header with new/refresh, rows show the track count or a refresh glyph while a write is in flight), local import. **Main**: `SplitNode` tiling of panes, each with its own search bar + view (Search / Radio / Artist / Album / Playlist / Downloads / Trashbin / Lyrics); split panes show a header, single-pane mode has none. **Queue panel** (`QUEUE_MIN_WIDTH = 240.0`); **Playbar**: track info, progress, controls, volume. **Overlays** (exclusive `Dialog`, drop indicator, per-pane search-history dropdown, toast) via `iced::widget::Stack`.
+- **Sidebar** (`SIDEBAR_WIDTH = 300.0`): nav buttons (Home/Downloads/Trashbin/Settings), scrollable local playlist list, create-playlist input, a second scrollable for server playlists (per-server header with new/refresh, rows show the track count or a refresh glyph while a write is in flight), local import. **Main**: `SplitNode` tiling of panes, each with its own search bar + view (Search / Radio / Artist / Album / Playlist / Downloads / Trashbin / Lyrics); split panes show a header, single-pane mode has none. **Queue panel** (`QUEUE_MIN_WIDTH = 240.0`); **Playbar**: track info, progress, controls, volume. **Overlays** (exclusive `Dialog`, drop indicator, per-pane search-history dropdown, toast) via `iced::widget::Stack`.
 
 ## iced API Notes
 

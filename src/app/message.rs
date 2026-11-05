@@ -337,7 +337,6 @@ pub enum Message {
     TranslationModelsFilterChanged(String),
 
     NavigateTo(PaneId, ViewData),
-    SidebarSearch,
     NavigateBack(PaneId),
     NavigateForward(PaneId),
     SplitHorizontal(PaneId),
