@@ -7,12 +7,8 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use super::{CardData, ProviderId};
-use crate::{
-    data::{custom_providers::CustomProviderKind, library::LibraryKind},
-    i18n::Strings,
-    types::Track,
-};
+use super::{custom_dispatch, CardData, ProviderId};
+use crate::{data::library::LibraryKind, i18n::Strings, types::Track};
 
 /// One kind of home row. The (provider, kind) pair identifies a row across
 /// refreshes and in the on-disk cache.
@@ -298,12 +294,7 @@ pub fn fetch_home(provider: ProviderId) -> Result<Vec<HomeSection>> {
         ProviderId::SoundCloud => super::soundcloud::home_sections(),
         ProviderId::Bandcamp => super::bandcamp::home_sections(),
         ProviderId::LastFm => super::lastfm::home_sections(),
-        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
-            super::subsonic::home_sections(provider)
-        }
-        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
-            super::jellyfin::home_sections(provider)
-        }
+        ProviderId::Custom(kind, _) => custom_dispatch!(kind, home_sections(provider)),
         ProviderId::MusicBrainz | ProviderId::Local => Ok(Vec::new()),
     }
 }
@@ -325,6 +316,7 @@ pub fn provider_sections(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data::custom_providers::CustomProviderKind;
 
     fn card(id: &str) -> HomeCard {
         HomeCard {
