@@ -57,6 +57,22 @@ impl MusicPlayer {
             .collect()
     }
 
+    /// The `index`-th row of [`server_playlist_rows`](Self::server_playlist_rows),
+    /// resolved without building the list: drop hit-testing reads one row per
+    /// pointer move.
+    pub fn server_playlist_row(&self, index: usize) -> Option<(ProviderId, &ServerPlaylistEntry)> {
+        let mut skip = index;
+        for provider in Self::server_playlist_providers() {
+            for entry in self.server_playlists.for_provider(provider) {
+                if skip == 0 {
+                    return Some((provider, entry));
+                }
+                skip -= 1;
+            }
+        }
+        None
+    }
+
     pub fn server_playlist_name(&self, target: &ServerPlaylistId) -> String {
         self.server_playlists
             .get(target)

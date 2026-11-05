@@ -499,10 +499,10 @@ impl MusicPlayer {
     /// The sidebar server-playlist row under the cursor, which names the
     /// provider group the cursor is in.
     fn server_playlist_row_at(&self, geo: &ListGeometry) -> Option<ServerPlaylistId> {
-        let rows = self.server_playlist_rows();
         let cursor_y = self.drag.cursor_pos.y + geo.translation_y;
-        let idx = nearest_row_index(&geo.rows, cursor_y).filter(|&idx| idx < rows.len())?;
-        Some(rows[idx].1.target())
+        let idx = nearest_row_index(&geo.rows, cursor_y)?;
+        self.server_playlist_row(idx)
+            .map(|(_, entry)| entry.target())
     }
 
     /// The index within a sidebar list where a drop would insert, given the
