@@ -19,6 +19,10 @@ pub struct SessionState {
     pub repeat: bool,
     pub library_expanded: bool,
     pub lyrics_provider: crate::lyrics::LyricsProvider,
+    /// The view the currently playing track came from, so "reveal now playing"
+    /// survives a restart.
+    #[serde(default)]
+    pub now_playing_from: Option<ViewData>,
 }
 
 impl Default for SessionState {
@@ -40,6 +44,7 @@ impl Default for SessionState {
             repeat: false,
             library_expanded: true,
             lyrics_provider: crate::lyrics::LyricsProvider::default(),
+            now_playing_from: None,
         }
     }
 }
@@ -95,6 +100,7 @@ impl From<LegacySessionState> for SessionState {
             repeat: old.repeat,
             library_expanded: old.library_expanded,
             lyrics_provider: old.lyrics_provider,
+            now_playing_from: None,
         }
     }
 }
@@ -211,6 +217,7 @@ mod tests {
             repeat: true,
             library_expanded: false,
             lyrics_provider: crate::lyrics::LyricsProvider::LrcLib,
+            now_playing_from: None,
         };
         let json = serde_json::to_string(&state).unwrap();
         let restored: SessionState = serde_json::from_str(&json).unwrap();

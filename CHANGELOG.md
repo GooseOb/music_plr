@@ -10,6 +10,10 @@ auto-generated compare link below it.
 
 ## [Unreleased]
 
+### Added
+
+- Now playing track place is persisted across app restarts.
+
 ### Fixed
 
 - Translations.

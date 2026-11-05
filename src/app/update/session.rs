@@ -41,6 +41,7 @@ impl MusicPlayer {
             repeat: self.repeat,
             library_expanded: self.library_expanded,
             lyrics_provider: self.lyrics_provider,
+            now_playing_from: self.now_playing_from.clone(),
         };
         state.save();
         self.session_dirty = false;
@@ -89,6 +90,7 @@ impl MusicPlayer {
             self.sync_downloads_view(pane);
         }
         self.lyrics_provider = state.lyrics_provider;
+        self.now_playing_from = state.now_playing_from;
     }
 
     pub fn resume_playback(&mut self) {

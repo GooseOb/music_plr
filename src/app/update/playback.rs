@@ -49,6 +49,7 @@ impl MusicPlayer {
     /// Snapshot the current view as the source of the track being played.
     pub(super) fn record_now_playing_origin(&mut self) {
         self.now_playing_from = Some(self.view_data().clone());
+        self.save_session();
     }
 
     /// Persist `track` back into the list it came from (`pos`), so a resolved
