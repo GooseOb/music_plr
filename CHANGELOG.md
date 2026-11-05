@@ -10,6 +10,12 @@ auto-generated compare link below it.
 
 ## [Unreleased]
 
+### Fixed
+
+- "Provider" strings in Belarusian translation.
+
+## [1.5.1] - 2026-11-05
+
 ### Added
 
 - Now playing track source is persisted across app restarts.

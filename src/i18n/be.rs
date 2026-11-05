@@ -45,7 +45,7 @@ pub const STRINGS: Strings = Strings {
     generating_radio: "Стварэньне радыё…",
 
     not_an_artist_page: "Гэта не старонка выканаўцы",
-    provided_by: "Крыніца:",
+    provided_by: "Правайдэр:",
     retry: "Паўтарыць",
     nothing_here: "Тут нічога няма",
     most_popular_songs: "Найпапулярнейшыя трэкі",
@@ -127,7 +127,7 @@ pub const STRINGS: Strings = Strings {
     finding: "Пошук…",
     found_on: |p| format!("Знойдзена на {p}"),
     not_linked: "Не прывязана",
-    providers: "Крыніцы",
+    providers: "Правайдэры",
     provider_local: "Лякальныя файлы",
     no_provider_data: "У гэтага трэка няма даных крыніцы.",
     save: "Захаваць",
