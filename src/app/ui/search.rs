@@ -331,21 +331,22 @@ pub(super) fn view_browse<'a>(
         pane,
         TrackPage {
             thumbnail: player.thumbnail_index.get(provider, thumb_key),
-            title: label,
+            title: PageTitle::Label(label),
             meta,
-            loading: player.strings.loading,
         },
         browser_url.as_deref(),
+        player.strings.loading,
         [toggle_bookmark_button(saved)
             .on_press(Message::ToggleLibrarySave(item))
             .into()],
     )
 }
 
-/// A playlist that lives on a user-configured server: the same header as a
-/// browse page plus the server-side actions (refresh, rename, delete). Its
-/// contents are always the server's, so refresh is the way to pick up edits
-/// made elsewhere.
+/// A playlist that lives on a user-configured server: the same header as the
+/// local playlist page (inline name input, delete) plus the refresh button,
+/// since its contents are always the server's and edits made elsewhere only
+/// show up through a refetch. Renaming happens in the name input; the write
+/// to the server is debounced.
 pub(super) fn view_server_playlist<'a>(
     player: &'a MusicPlayer,
     pane: PaneId,
@@ -363,15 +364,6 @@ pub(super) fn view_server_playlist<'a>(
         icon_style_fg_secondary(),
     )
     .on_press_maybe((!busy).then_some(Message::RefreshServerPlaylistView(pane)));
-    let rename = icon_button(
-        icons::EDIT_ICON,
-        theme::ICON_SIZE_MD,
-        icon_style_fg_secondary(),
-    )
-    .on_press(Message::OpenRenameServerPlaylist(
-        target.clone(),
-        reference.name.clone(),
-    ));
     let delete = icon_button_delete().on_press(Message::ShowDeleteServerPlaylist(
         target,
         reference.name.clone(),
@@ -384,12 +376,16 @@ pub(super) fn view_server_playlist<'a>(
             thumbnail: player
                 .thumbnail_index
                 .get(reference.provider, &reference.id),
-            title: &reference.name,
+            title: PageTitle::Rename {
+                placeholder: &reference.name,
+                value: &reference.name,
+                on_input: Box::new(move |name| Message::RenameServerPlaylist(pane, name)),
+            },
             meta: tr.provider(reference.provider),
-            loading: tr.loading,
         },
         None,
-        [refresh.into(), rename.into(), delete.into()],
+        tr.loading,
+        [refresh.into(), delete.into()],
     )
 }
 
@@ -406,78 +402,134 @@ pub(super) fn view_radio<'a>(
             thumbnail: player
                 .thumbnail_index
                 .get(data.thumb_provider, &data.thumb_id),
-            title: &data.title,
+            title: PageTitle::Label(&data.title),
             meta: meta.into(),
-            loading: player.strings.generating_radio,
         },
         None,
+        player.strings.generating_radio,
         std::iter::empty(),
     )
 }
 
-struct TrackPage<'a> {
-    thumbnail: Option<&'a std::path::PathBuf>,
-    title: &'a str,
-    meta: std::borrow::Cow<'a, str>,
-    loading: &'a str,
+/// The heading of one of these pages: a plain label (album, radio), or the
+/// inline name input that playlist pages use for renames — local and server
+/// pages alike, each carrying its own rename message.
+pub(super) enum PageTitle<'a> {
+    Label(&'a str),
+    Rename {
+        placeholder: &'a str,
+        value: &'a str,
+        on_input: Box<dyn Fn(String) -> Message + 'a>,
+    },
 }
 
-/// Shared artwork/title/meta header plus track list for album/playlist
-/// browse pages and radio pages. Callers prepend their own buttons via
-/// `leading_buttons` (the save-to-library bookmark for browse, none for
-/// radio); the save-as-playlist button is always appended while tracks
-/// are loaded, plus an "open in browser" button when `browser_url` names a
-/// page for what is being viewed (a radio page has none).
+pub(super) struct TrackPage<'a> {
+    pub(super) thumbnail: Option<&'a std::path::PathBuf>,
+    pub(super) title: PageTitle<'a>,
+    pub(super) meta: std::borrow::Cow<'a, str>,
+}
+
+/// The save-as-playlist button of a page whose tracks are already loaded —
+/// the copy the page can become in the local store. Rendered only when it
+/// does something: no button while the page is loading or failed.
+fn save_as_playlist_button<'a>(
+    player: &MusicPlayer,
+    pane: PaneId,
+) -> Option<Element<'a, Message, AppTheme>> {
+    matches!(
+        &player.view_data_in(pane).content,
+        LoadState::Ready(tracks) if !tracks.is_empty()
+    )
+    .then(|| {
+        text_button(player.strings.save_as_playlist)
+            .on_press(Message::SaveBrowseAsPlaylist(pane))
+            .into()
+    })
+}
+
+/// Shared artwork/title/meta header for album/playlist browse pages, radio
+/// pages and playlist pages: layout over the button iterator the caller
+/// hands in, plus an "open in browser" button when `browser_url` names a
+/// page for what is being viewed. Pages usually arrive through
+/// `view_track_page`; the local playlist page builds the header itself,
+/// because its body reads the store instead of the pane's `LoadState`.
+pub(super) fn track_page_header<'a>(
+    player: &'a MusicPlayer,
+    spec: TrackPage<'a>,
+    browser_url: Option<&str>,
+    leading_buttons: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
+) -> Element<'a, Message, AppTheme> {
+    let buttons = leading_buttons
+        .into_iter()
+        .chain(browser_url.map(|url| open_in_browser_button(player.strings, url)));
+
+    let dir = player.strings.direction;
+    let align = dir.align();
+    let heading: Element<'a, Message, AppTheme> = match spec.title {
+        PageTitle::Label(label) => text(label).size(theme::TEXT_SIZE_LG).into(),
+        PageTitle::Rename {
+            placeholder,
+            value,
+            on_input,
+        } => text_input(placeholder, value)
+            .on_input(on_input)
+            .align_x(align)
+            .size(theme::TEXT_SIZE_LG)
+            .padding([theme::SPACING_XS, theme::SPACING_SM])
+            .width(Length::Fill)
+            .into(),
+    };
+    dir.row([
+        thumbnail(theme::PAGE_THUMBNAIL_SIZE, spec.thumbnail),
+        Column::with_children([
+            heading,
+            text(spec.meta)
+                .size(theme::TEXT_SIZE_SM)
+                .style(fg_secondary())
+                .into(),
+            dir.row(buttons).spacing(theme::SPACING_SM).into(),
+        ])
+        .spacing(theme::SPACING_MD)
+        .align_x(align)
+        .into(),
+    ])
+    .align_y(alignment::Vertical::Center)
+    .spacing(theme::SPACING_MD)
+    .padding([theme::SPACING_SM, theme::SPACING_XL])
+    .into()
+}
+
+/// The whole page: the shared header plus a track list for the page's
+/// `LoadState` content, with the save-as-playlist button riding along
+/// ([`save_as_playlist_button`] — every page routed through here is a
+/// `LoadState`-backed one, so the offer applies to all of it).
 fn view_track_page<'a>(
     player: &'a MusicPlayer,
     pane: PaneId,
     spec: TrackPage<'a>,
     browser_url: Option<&str>,
+    loading: &'a str,
     leading_buttons: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
-    let content = &player.view_data_in(pane).content;
-    // The trailing buttons are only rendered when they do something: no
-    // save-as-playlist without tracks, no browser button without a page.
-    let mut buttons: Vec<Element<'a, Message, AppTheme>> = leading_buttons.into_iter().collect();
-    if matches!(content, LoadState::Ready(tracks) if !tracks.is_empty()) {
-        buttons.push(
-            text_button(player.strings.save_as_playlist)
-                .on_press(Message::SaveBrowseAsPlaylist(pane))
-                .into(),
-        );
-    }
-    if let Some(url) = browser_url {
-        buttons.push(open_in_browser_button(player.strings, url));
-    }
+    let header = track_page_header(
+        player,
+        spec,
+        browser_url,
+        leading_buttons
+            .into_iter()
+            .chain(save_as_playlist_button(player, pane)),
+    );
 
-    let dir = player.strings.direction;
-    let align = dir.align();
-    let header = dir
-        .row([
-            thumbnail(theme::PAGE_THUMBNAIL_SIZE, spec.thumbnail),
-            Column::with_children([
-                text(spec.title).size(theme::TEXT_SIZE_LG).into(),
-                text(spec.meta)
-                    .size(theme::TEXT_SIZE_SM)
-                    .style(fg_secondary())
-                    .into(),
-                dir.row(buttons).spacing(theme::SPACING_SM).into(),
-            ])
-            .spacing(theme::SPACING_MD)
-            .align_x(align)
-            .into(),
-        ])
-        .align_y(alignment::Vertical::Center)
-        .spacing(theme::SPACING_MD)
-        .padding([theme::SPACING_SM, theme::SPACING_XL]);
+    let track_list = match super::shared_components::load_state_tracks(
+        &player.view_data_in(pane).content,
+        player.strings,
+        loading,
+    ) {
+        Ok(tracks) => view_track_list(tracks, player, pane, 0),
+        Err(el) => el,
+    };
 
-    let track_list =
-        match super::shared_components::load_state_tracks(content, player.strings, spec.loading) {
-            Ok(tracks) => view_track_list(tracks, player, pane, 0),
-            Err(el) => el,
-        };
-
-    Column::with_children([dir.leading(header), track_list]).into()
+    Column::with_children([player.strings.direction.leading(header), track_list]).into()
 }
 
 pub(super) fn view_search_history(

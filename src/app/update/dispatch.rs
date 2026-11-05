@@ -393,8 +393,8 @@ impl crate::app::MusicPlayer {
                 self.playlist_create_name = name;
                 Task::none()
             }
-            Message::RenamePlaylist(name) => {
-                self.handle_rename_playlist(&name);
+            Message::RenamePlaylist(index, name) => {
+                self.handle_rename_playlist(index, &name);
                 Task::none()
             }
             Message::AddLocalMusic => {
@@ -455,8 +455,8 @@ impl crate::app::MusicPlayer {
                 self.open_new_server_playlist(provider);
                 Task::none()
             }
-            Message::OpenRenameServerPlaylist(target, name) => {
-                self.open_rename_server_playlist(&target, &name);
+            Message::RenameServerPlaylist(pane, name) => {
+                self.handle_server_playlist_rename(pane, &name);
                 Task::none()
             }
             Message::ServerPlaylistNameChanged(name) => {

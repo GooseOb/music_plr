@@ -70,6 +70,7 @@ impl MusicPlayer {
 
         self.update_media_controls_if_dirty();
         self.flush_session();
+        self.flush_server_playlist_renames();
 
         for pane in self.pane_ids_unsorted() {
             if self.pane(pane).lyrics.is_some() {

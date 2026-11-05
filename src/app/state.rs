@@ -80,6 +80,17 @@ pub struct PendingPlaylistWrite {
     pub undo: Option<ServerPlaylistUndo>,
 }
 
+/// A server-playlist rename being typed: the name the server still holds
+/// (`previous`, a failed write's undo), the live name, and the instant from
+/// which the write may go out. Successive keystrokes only re-arm `due`, so
+/// a burst of typing coalesces into one server call.
+#[derive(Clone, Debug)]
+pub struct PendingServerRename {
+    pub previous: String,
+    pub name: String,
+    pub due: Instant,
+}
+
 #[allow(clippy::struct_excessive_bools)]
 pub struct MusicPlayer {
     pub audio: AudioPlayer,
@@ -137,6 +148,13 @@ pub struct MusicPlayer {
     /// and a failed write's undo travel with the write itself (a burst of drops
     /// can overlap).
     pub server_playlist_writes: std::collections::HashMap<u64, PendingPlaylistWrite>,
+    /// Renames being typed on a server-playlist page, keyed by playlist, so
+    /// the write to the server can wait out a pause in the typing (the tick
+    /// flushes the due ones).
+    pub pending_server_renames: std::collections::HashMap<
+        crate::data::server_playlists::ServerPlaylistId,
+        PendingServerRename,
+    >,
     /// Browse request ids whose installed tracks should start playing (a
     /// server playlist opened with a double click).
     pub play_after_browse: std::collections::HashSet<u64>,
@@ -311,6 +329,7 @@ impl MusicPlayer {
             server_playlists: crate::data::server_playlists::ServerPlaylistStore::load(),
             server_playlists_requested: std::collections::HashMap::new(),
             server_playlist_writes: std::collections::HashMap::new(),
+            pending_server_renames: std::collections::HashMap::new(),
             play_after_browse: std::collections::HashSet::new(),
             trashbin: crate::data::trashbin::TrashStore::load(),
             playlist_create_name: String::new(),

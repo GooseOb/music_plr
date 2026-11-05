@@ -170,17 +170,21 @@ impl MusicPlayer {
         task
     }
 
-    pub fn handle_rename_playlist(&mut self, new_name: &str) {
-        let idx = match &self.view_data().kind {
-            ViewKind::Playlist(entry) if !new_name.trim().is_empty() => entry.index,
-            _ => return,
-        };
-        self.playlists.playlists[idx].name = new_name.trim().to_string();
+    pub fn handle_rename_playlist(&mut self, index: usize, new_name: &str) {
+        let new_name = new_name.trim();
+        if new_name.is_empty() || index >= self.playlists.playlists.len() {
+            return;
+        }
+        self.playlists.playlists[index].name = new_name.to_string();
         self.playlists.save();
         for pane in self.pane_ids() {
-            if let ViewKind::Playlist(entry) = &mut self.view_data_in_mut(pane).kind {
-                if entry.index == idx {
-                    entry.name = new_name.trim().to_string();
+            for view in &mut self.pane_mut(pane).nav_history {
+                if let ViewKind::Playlist(entry) = &mut view.kind {
+                    if entry.index == index {
+                        // The name input reads this snapshot, so Back/Forward
+                        // must not show a stale one either.
+                        entry.name = new_name.to_string();
+                    }
                 }
             }
         }
@@ -757,6 +761,40 @@ mod tests {
             None,
             None,
         )
+    }
+
+    #[test]
+    fn renaming_a_playlist_renames_every_view_of_it() {
+        let mut p = player_with_playlists(&["A", "B"]);
+        let pane = p.focused_pane_id;
+        // The history holds two views of the same playlist: the open one and
+        // an older one Back would return to.
+        p.pane_mut(pane).nav_history = vec![
+            ViewData::new_playlist(0, "A".into()),
+            ViewData::new_playlist(0, "A".into()),
+        ];
+        p.pane_mut(pane).nav_history_pos = 1;
+
+        let _ = p.update(Message::RenamePlaylist(0, "  Renamed ".into()));
+
+        assert_eq!(p.playlists.playlists[0].name, "Renamed");
+        for view in &p.pane(pane).nav_history {
+            assert_eq!(
+                view.kind,
+                ViewKind::Playlist(crate::app::view_data::PlaylistEntry {
+                    index: 0,
+                    name: "Renamed".into()
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn renaming_to_a_blank_name_is_noop() {
+        let mut p = player_with_playlists(&["A"]);
+        let _ = p.update(Message::RenamePlaylist(0, "   ".into()));
+
+        assert_eq!(p.playlists.playlists[0].name, "A");
     }
 
     #[test]

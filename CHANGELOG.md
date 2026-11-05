@@ -21,6 +21,7 @@ auto-generated compare link below it.
 ### Changed
 
 - Escape no longer redirects to the search page.
+- Local playlist view looks more like browse view.
 
 ### Removed
 

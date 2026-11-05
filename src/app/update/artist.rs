@@ -300,8 +300,9 @@ impl MusicPlayer {
         if popular_failed && self.pane(pane).nav_history[idx].content.is_loading() {
             self.pane_mut(pane).nav_history[idx].content = LoadState::Failed(reason.clone());
         }
-        if self.artist_error_dedup != Some((rid, provider)) {
-            self.artist_error_dedup = Some((rid, provider));
+        let dedup = Some((rid, provider));
+        if self.artist_error_dedup != dedup {
+            self.artist_error_dedup = dedup;
             let msg = self.strings.error_reason_on(provider, error);
             self.notify_error(msg);
         }

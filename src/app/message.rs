@@ -272,7 +272,9 @@ pub enum Message {
     /// The palette list's viewport height, reported by the scrollable.
     PaletteViewport(f32),
     NewPlaylistNameChanged(String),
-    RenamePlaylist(String),
+    /// The inline name input of a local playlist page (`usize`: which
+    /// playlist); the sync of every open view happens at once.
+    RenamePlaylist(usize, String),
     AddLocalMusic,
     OpenPlaylistAdd(Vec<usize>),
     ShowDeleteConfirm(usize),
@@ -289,8 +291,9 @@ pub enum Message {
     RefreshServerPlaylistView(PaneId),
     /// Open the create-playlist dialog for one server.
     OpenNewServerPlaylist(ProviderId),
-    /// Open the rename dialog for a server playlist.
-    OpenRenameServerPlaylist(crate::data::server_playlists::ServerPlaylistId, String),
+    /// The inline name input of a server-playlist page (`PaneId`: which pane
+    /// shows it); the write to the server is debounced.
+    RenameServerPlaylist(PaneId, String),
     ServerPlaylistNameChanged(String),
     SubmitServerPlaylistName,
     ShowDeleteServerPlaylist(crate::data::server_playlists::ServerPlaylistId, String),

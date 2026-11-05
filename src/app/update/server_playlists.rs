@@ -5,7 +5,9 @@
 //! come from the provider's `browse` path, so a playlist edited elsewhere shows
 //! the server's state. Every write runs on a background thread and reports
 //! back through [`BackendResult::ServerPlaylistWritten`], after which the open
-//! view is refetched — the server stays the source of truth.
+//! view is refetched — the server stays the source of truth. A rename is typed
+//! into the page's name input and debounced: every keystroke updates the open
+//! views and the cached index, and the write goes out once the typing pauses.
 
 use std::time::Duration;
 
@@ -14,8 +16,8 @@ use iced::Task;
 use super::{BackendResult, Message, MusicPlayer, TrackPos, ViewData};
 use crate::{
     app::{
-        pane::PaneId, Dialog, PendingPlaylistWrite, ServerPlaylistChange, ServerPlaylistNameDialog,
-        ServerPlaylistUndo, ViewKind,
+        pane::PaneId, Dialog, PendingPlaylistWrite, PendingServerRename, ServerPlaylistChange,
+        ServerPlaylistNameDialog, ServerPlaylistUndo, ViewKind,
     },
     data::{
         library::{Card, LibraryItem, LibraryKind},
@@ -37,6 +39,11 @@ fn server_playlist_group(provider: ProviderId) -> bool {
 }
 
 const INDEX_REQUEST_TIMEOUT: Duration = Duration::from_mins(2);
+
+/// The quiet period after the last rename keystroke before the write goes
+/// out to the server. The tick flushes the due ones, so the real wait is
+/// this plus up to a tick.
+const RENAME_DEBOUNCE: Duration = Duration::from_secs(1);
 
 impl MusicPlayer {
     /// Every configured server that has playlists, in provider order so the
@@ -517,10 +524,91 @@ impl MusicPlayer {
         ));
     }
 
-    pub fn open_rename_server_playlist(&mut self, target: &ServerPlaylistId, name: &str) {
-        self.dialog = Some(Dialog::ServerPlaylistName(
-            ServerPlaylistNameDialog::rename(target, name),
-        ));
+    /// Rename the server playlist `pane` shows while the user types. Every
+    /// open view and the local index pick the name up at once (optimistic,
+    /// like every other write); the write to the server waits out a pause in
+    /// the typing.
+    pub fn handle_server_playlist_rename(&mut self, pane: PaneId, name: &str) {
+        let target = match &self.view_data_in(pane).kind {
+            ViewKind::PlaylistView(reference)
+                if providers::playlists_supported(reference.provider)
+                    && !name.trim().is_empty() =>
+            {
+                ServerPlaylistId {
+                    provider: reference.provider,
+                    id: reference.id.clone(),
+                }
+            }
+            _ => return,
+        };
+        let name = name.trim();
+
+        // Arm or re-arm the debounce. An already-typed rename only updates
+        // its own record; a first one must snapshot what the server still
+        // holds, so a rejected write can restore it.
+        let had_pending = self
+            .pending_server_renames
+            .get_mut(&target)
+            .map(|pending| {
+                pending.name = name.to_string();
+                pending.due = std::time::Instant::now() + RENAME_DEBOUNCE;
+            })
+            .is_some();
+        if !had_pending {
+            let previous = self.server_playlist_name(&target);
+            self.pending_server_renames.insert(
+                target.clone(),
+                PendingServerRename {
+                    previous,
+                    name: name.to_string(),
+                    due: std::time::Instant::now() + RENAME_DEBOUNCE,
+                },
+            );
+        }
+
+        // The new name shows up in the sidebar and every open page header at
+        // once; a rejected rename puts the old one back.
+        self.server_playlists.rename(&target, name);
+        self.rename_server_playlist_views(&target, name);
+    }
+
+    /// Send the renames whose quiet period has lapsed. Called from the tick,
+    /// so the write can be up to one tick late.
+    pub(crate) fn flush_server_playlist_renames(&mut self) {
+        let due: Vec<ServerPlaylistId> = self
+            .pending_server_renames
+            .iter()
+            .filter(|(_, pending)| pending.due <= std::time::Instant::now())
+            .map(|(target, _)| target.clone())
+            .collect();
+        for target in due {
+            let Some(pending) = self.pending_server_renames.remove(&target) else {
+                continue;
+            };
+            self.write_server_playlist_rename(target, pending);
+        }
+    }
+
+    /// Send one rename the user finished typing, through the ordinary write
+    /// pipeline (its undo was recorded when the typing started).
+    fn write_server_playlist_rename(
+        &mut self,
+        target: ServerPlaylistId,
+        pending: PendingServerRename,
+    ) {
+        let name = pending.name;
+        let provider = target.provider;
+        let playlist_id = target.id.clone();
+        self.spawn_playlist_write(
+            target,
+            Some(ServerPlaylistUndo::Renamed {
+                previous: pending.previous,
+            }),
+            move || {
+                providers::rename_playlist(provider, &playlist_id, &name)?;
+                Ok(ServerPlaylistChange::Renamed(name))
+            },
+        );
     }
 
     pub fn open_delete_server_playlist(&mut self, target: ServerPlaylistId, name: &str) {
@@ -532,7 +620,8 @@ impl MusicPlayer {
         ));
     }
 
-    /// Create the playlist, or rename the one the dialog was opened for.
+    /// Create the playlist on its server (no id yet — the write is reported
+    /// against an empty one and the entry lands once the server answers).
     pub fn submit_server_playlist_name(&mut self) -> Task<Message> {
         let Some(Dialog::ServerPlaylistName(dialog)) = &self.dialog else {
             return Task::none();
@@ -542,44 +631,24 @@ impl MusicPlayer {
             return Task::none();
         }
         let provider = dialog.provider;
-        let target = dialog.target();
         self.dialog = None;
-        if let Some(target) = target {
-            let playlist_id = target.id.clone();
-            // The new name shows up in the sidebar and the page headers at
-            // once; a rejected rename puts the old one back.
-            let previous = self.server_playlist_name(&target);
-            self.server_playlists.rename(&target, &name);
-            self.rename_server_playlist_views(&target, &name);
-            self.spawn_playlist_write(
-                target,
-                Some(ServerPlaylistUndo::Renamed { previous }),
-                move || {
-                    providers::rename_playlist(provider, &playlist_id, &name)?;
-                    Ok(ServerPlaylistChange::Renamed(name))
-                },
-            );
-        } else {
-            // The id only exists once the server answers, so the write is
-            // reported against an empty one.
-            self.spawn_playlist_write(
-                ServerPlaylistId {
-                    provider,
-                    id: String::new(),
-                },
-                None,
-                move || {
-                    providers::create_playlist(provider, &name, &[]).map(|created| {
-                        ServerPlaylistChange::Created {
-                            id: created.id,
-                            name: created.name,
-                            track_count: created.track_count,
-                            thumbnail: created.thumbnail,
-                        }
-                    })
-                },
-            );
-        }
+        self.spawn_playlist_write(
+            ServerPlaylistId {
+                provider,
+                id: String::new(),
+            },
+            None,
+            move || {
+                providers::create_playlist(provider, &name, &[]).map(|created| {
+                    ServerPlaylistChange::Created {
+                        id: created.id,
+                        name: created.name,
+                        track_count: created.track_count,
+                        thumbnail: created.thumbnail,
+                    }
+                })
+            },
+        );
         Task::none()
     }
 
@@ -698,6 +767,9 @@ impl MusicPlayer {
                 Task::none()
             }
             ServerPlaylistChange::Deleted => {
+                // A rename typed just before may still sit in the debounce,
+                // and there is no playlist left to rename.
+                self.pending_server_renames.remove(target);
                 self.server_playlists.remove(target);
                 self.close_server_playlist_views(target)
             }
@@ -1025,14 +1097,10 @@ mod tests {
     #[test]
     fn a_failed_rename_restores_the_name_everywhere() {
         let mut p = player_with_playlist(&["a"]);
-        p.dialog = Some(crate::app::Dialog::ServerPlaylistName(
-            crate::app::ServerPlaylistNameDialog::rename(&target(), "Server"),
-        ));
-        if let Some(crate::app::Dialog::ServerPlaylistName(dialog)) = &mut p.dialog {
-            dialog.name = "Renamed".into();
-        }
-        let _ = p.submit_server_playlist_name();
+        p.handle_server_playlist_rename(p.focused_pane_id, " Renamed ");
 
+        // The rename is optimistic: the index record and the open page show
+        // the typed name at once.
         assert_eq!(p.server_playlist_name(&target()), "Renamed");
         assert_eq!(
             p.server_playlists
@@ -1040,16 +1108,78 @@ mod tests {
                 .map(|entry| entry.name.clone()),
             Some("Renamed".to_string())
         );
+        match &p.view_data().kind {
+            ViewKind::PlaylistView(reference) => assert_eq!(reference.name, "Renamed"),
+            other => panic!("expected server playlist view, got {other:?}"),
+        }
+
+        // The write waits out the debounce; answering its failure puts the
+        // name back everywhere.
+        let target = target();
+        p.pending_server_renames
+            .get_mut(&target)
+            .expect("a typed rename")
+            .due = std::time::Instant::now();
+        p.flush_server_playlist_renames();
 
         fail(&mut p);
 
-        assert_eq!(p.server_playlist_name(&target()), "Server");
+        assert_eq!(p.server_playlist_name(&target), "Server");
         assert_eq!(
             p.server_playlists
-                .get(&target())
+                .get(&target)
                 .map(|entry| entry.name.clone()),
             Some("Server".to_string())
         );
+        match &p.view_data().kind {
+            ViewKind::PlaylistView(reference) => assert_eq!(reference.name, "Server"),
+            other => panic!("expected server playlist view, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn typed_renames_debounce_into_one_server_write() {
+        let mut p = player_with_playlist(&["a"]);
+        for name in ["R", "Re", "Renamed"] {
+            p.handle_server_playlist_rename(p.focused_pane_id, name);
+        }
+
+        // Nothing went out while the typing was under way.
+        assert!(p.server_playlist_writes.is_empty());
+        let target = target();
+        assert_eq!(p.server_playlist_name(&target), "Renamed");
+
+        p.pending_server_renames
+            .get_mut(&target)
+            .expect("a typed rename")
+            .due = std::time::Instant::now();
+        p.flush_server_playlist_renames();
+
+        // One write carries the name as it read when the typing stopped, and
+        // its success keeps the optimistic state as is.
+        assert_eq!(p.server_playlist_writes.len(), 1);
+        settle(
+            &mut p,
+            Ok(crate::app::ServerPlaylistChange::Renamed("Renamed".into())),
+        );
+        assert_eq!(p.server_playlist_name(&target), "Renamed");
+        assert!(p.pending_server_renames.is_empty());
+    }
+
+    #[test]
+    fn deleting_a_playlist_drops_its_typed_rename() {
+        let mut p = player_with_playlist(&["a"]);
+        p.handle_server_playlist_rename(p.focused_pane_id, "R");
+        assert!(p.pending_server_renames.contains_key(&target()));
+
+        let write_id = p.request_ids.next();
+        let _ = p.apply_server_playlist_write(
+            write_id,
+            &target(),
+            Ok(crate::app::ServerPlaylistChange::Deleted),
+        );
+
+        assert!(p.pending_server_renames.is_empty());
     }
 
     #[test]

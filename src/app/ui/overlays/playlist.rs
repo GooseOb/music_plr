@@ -1,7 +1,7 @@
-//! Playlist dialogs: the delete confirmation and the name field shared by
-//! "new playlist" and "rename playlist". The playlist picker lives in
-//! [`super::palette`], which the add-to-playlist flow shares with the command
-//! palette.
+//! Playlist dialogs: the delete confirmation and the create-playlist name
+//! field (renames happen inline on the playlist pages). The playlist picker
+//! lives in [`super::palette`], which the add-to-playlist flow shares with
+//! the command palette.
 
 use iced::{
     alignment,
@@ -51,8 +51,8 @@ pub(super) fn view_delete_confirm(
     )
 }
 
-/// One name field for both server-playlist naming flows: creating a playlist
-/// (`id: None`) and renaming an existing one (`id: Some`).
+/// The create-playlist dialog's name field (renames happen inline on the
+/// playlist pages).
 pub(super) fn view_server_playlist_name<'a>(
     player: &'a MusicPlayer,
     dialog: &'a crate::app::ServerPlaylistNameDialog,
