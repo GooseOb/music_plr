@@ -45,10 +45,7 @@ impl io::Read for GrowingMediaSource {
                         .writer_alive
                         .as_ref()
                         .is_some_and(|w| w.load(Ordering::Acquire));
-                    if !still_writing {
-                        return Ok(0);
-                    }
-                    if start.elapsed() > Duration::from_mins(10) {
+                    if !still_writing || start.elapsed() > Duration::from_mins(10) {
                         return Ok(0);
                     }
                     // Writer still has bytes coming; wait briefly and retry

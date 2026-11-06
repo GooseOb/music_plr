@@ -11,6 +11,12 @@ readme = "README.md"
 debug = "line-tables-only"
 incremental = true
 
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
 [features]
 # Opt-in developer tools (F12/Comet); never part of a default release build.
 devtools = ["iced/debug"]
