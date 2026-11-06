@@ -16,6 +16,7 @@ auto-generated compare link below it.
 
 ### Fixed
 
+- App crashing when dragging from queue.
 - Disabled providers are no longer shown on artist page unless provider is the source.
 - Some strings in Belarusian translation.
 

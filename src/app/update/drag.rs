@@ -205,13 +205,20 @@ impl MusicPlayer {
                 .map(DropTarget::ServerPlaylist);
         }
         let pane = list.track_target()?;
+        if pane == RECENT_PANE_ID {
+            return None;
+        }
         // Only local playlists, server playlists and the queue are reorderable
-        // in place; other views would drop the rows on the floor.
-        let reorderable = match &self.view_data_in(pane).kind {
-            ViewKind::Playlist(_) => true,
-            ViewKind::PlaylistView(reference) => providers::playlists_supported(reference.provider),
-            _ => false,
-        };
+        // in place; other views would drop the rows on the floor. The queue is
+        // virtual, so it has no view data to consult — it always reorders.
+        let reorderable = pane == QUEUE_PANE_ID
+            || match &self.view_data_in(pane).kind {
+                ViewKind::Playlist(_) => true,
+                ViewKind::PlaylistView(reference) => {
+                    providers::playlists_supported(reference.provider)
+                }
+                _ => false,
+            };
         if is_main_pane(pane) && !reorderable {
             return None;
         }
@@ -697,8 +704,103 @@ fn nearest_row_index(rows: &[iced::Rectangle], cursor_y: f32) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        app::view_data::ViewData,
+        data::config,
+        providers::{ProviderId, SearchScope},
+    };
 
     const ROW: f32 = crate::theme::ROW_HEIGHT;
+
+    fn player_with_queue(count: usize) -> MusicPlayer {
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        p.reset_test_pane(vec![ViewData::new_search(
+            String::new(),
+            ProviderId::YouTube,
+            SearchScope::Songs,
+        )]);
+        p.queue.tracks = (0..count)
+            .map(|i| {
+                Track::from_provider(
+                    ProviderId::YouTube,
+                    i.to_string(),
+                    format!("https://example.com/{i}"),
+                    format!("Track {i}"),
+                    "Artist",
+                    10,
+                    String::new(),
+                    None,
+                    None,
+                )
+            })
+            .collect();
+        p
+    }
+
+    fn capture_queue(p: &mut MusicPlayer) {
+        p.bounds.queue = Some(ListGeometry {
+            bounds: iced::Rectangle {
+                x: 0.0,
+                y: 0.0,
+                width: 200.0,
+                height: 400.0,
+            },
+            translation_y: 0.0,
+            rows: Vec::new(),
+        });
+    }
+
+    fn start_drag(p: &mut MusicPlayer, pos: TrackPos, at: iced::Point) {
+        p.drag.cursor_pos = at;
+        p.drag.pressed = Some(PressedDrag {
+            what: Pressed::Track(pos),
+            origin: at,
+        });
+        p.drag.drag_active = true;
+    }
+
+    #[test]
+    fn dragging_a_queue_row_resolves_a_queue_drop_target() {
+        let mut p = player_with_queue(5);
+        capture_queue(&mut p);
+        start_drag(
+            &mut p,
+            TrackPos::new(1, QUEUE_PANE_ID),
+            iced::Point::new(50.0, 40.0),
+        );
+
+        let _ = p.handle_drag_update();
+
+        let Some(DropTarget::Track(drop)) = p.drag.drop_target else {
+            panic!("a queue row is reorderable in place");
+        };
+        assert_eq!(drop.pane, QUEUE_PANE_ID);
+        assert!((2..=5).contains(&drop.index));
+    }
+
+    #[test]
+    fn dragging_over_the_recent_list_is_not_a_drop_target() {
+        let mut p = player_with_queue(5);
+        p.bounds.recent = Some(ListGeometry {
+            bounds: iced::Rectangle {
+                x: 0.0,
+                y: 0.0,
+                width: 200.0,
+                height: 400.0,
+            },
+            translation_y: 0.0,
+            rows: Vec::new(),
+        });
+        start_drag(
+            &mut p,
+            TrackPos::new(1, QUEUE_PANE_ID),
+            iced::Point::new(50.0, 40.0),
+        );
+
+        let _ = p.handle_drag_update();
+
+        assert_eq!(p.drag.drop_target, None);
+    }
 
     #[test]
     fn drop_index_snaps_to_nearest_boundary() {
