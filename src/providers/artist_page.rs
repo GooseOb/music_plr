@@ -385,8 +385,10 @@ impl ArtistSectionKind {
         }
     }
 
-    /// Providers that can serve this section, in preference order.
-    pub fn providers(self) -> Vec<ProviderId> {
+    /// Providers that can serve this section, in preference order. Providers
+    /// the user switched off in Settings are dropped, apart from `source` —
+    /// the provider the page was opened from, which its sections still name.
+    pub fn providers(self, source: ProviderId) -> Vec<ProviderId> {
         let base: &[ProviderId] = match self {
             Self::Popular => &[
                 ProviderId::YouTube,
@@ -410,6 +412,7 @@ impl ArtistSectionKind {
         };
         let mut providers = base.to_vec();
         providers.extend(ProviderId::custom_servers());
+        providers.retain(|provider| *provider == source || provider.enabled());
         providers
     }
 }

@@ -59,7 +59,13 @@ pub(super) fn view_artist<'a>(
         ArtistSectionKind::Related,
     ] {
         let section = entry.page.section(kind);
-        children.push(section_header(pane, kind, section.provider, player.strings));
+        children.push(section_header(
+            pane,
+            kind,
+            section.provider,
+            entry.source,
+            player.strings,
+        ));
         children.push(section_body(player, pane, section, kind));
     }
 
@@ -205,11 +211,12 @@ fn section_header(
     pane: PaneId,
     kind: ArtistSectionKind,
     selected: Option<ProviderId>,
+    source: ProviderId,
     tr: &'static crate::i18n::Strings,
 ) -> Element<'static, Message, AppTheme> {
     let picker = scope_tab_row(
         tr.direction,
-        kind.providers().iter().map(|&provider| {
+        kind.providers(source).iter().map(|&provider| {
             (
                 tr.provider(provider),
                 selected == Some(provider),

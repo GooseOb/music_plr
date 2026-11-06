@@ -355,7 +355,11 @@ mod tests {
     use std::sync::{Mutex, MutexGuard};
 
     use super::*;
-    use crate::{app::ViewData, data::config, providers::ProviderId};
+    use crate::{
+        app::ViewData,
+        data::config,
+        providers::{ArtistSectionKind, ProviderId},
+    };
 
     /// The provider lists read a process-global mirror, so the tests that
     /// switch a provider off and inspect those lists must not overlap.
@@ -445,5 +449,32 @@ mod tests {
         player.handle_settings_reset_defaults();
         assert!(player.config.disabled_providers.is_empty());
         assert!(ProviderId::searchable().contains(&ProviderId::LastFm));
+    }
+
+    #[test]
+    fn artist_section_pickers_drop_switched_off_providers() {
+        let _guard = lock();
+        let mut player = player();
+        player.handle_settings_change(SettingsChange::ProviderEnabled(
+            ProviderId::SoundCloud,
+            false,
+        ));
+
+        let albums = ArtistSectionKind::Albums.providers(ProviderId::YouTube);
+        assert!(albums.contains(&ProviderId::YouTube));
+        assert!(!albums.contains(&ProviderId::SoundCloud));
+
+        // The page's own provider stays offered even after it is switched off,
+        // because the sections it opened still name it.
+        let from_soundcloud = ArtistSectionKind::Albums.providers(ProviderId::SoundCloud);
+        assert!(from_soundcloud.contains(&ProviderId::SoundCloud));
+
+        player.handle_settings_change(SettingsChange::ProviderEnabled(
+            ProviderId::SoundCloud,
+            true,
+        ));
+        assert!(ArtistSectionKind::Albums
+            .providers(ProviderId::YouTube)
+            .contains(&ProviderId::SoundCloud));
     }
 }
