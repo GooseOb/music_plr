@@ -343,7 +343,7 @@ impl ContextMenuState {
         if self.pos.pane != MANUAL_SEARCH_PANE_ID {
             v.push(CtxAction::Edit);
         }
-        if !self.track.artist.is_empty() {
+        if !self.track.artists.is_empty() {
             v.push(CtxAction::GoToArtist);
         }
         if self.track.web_url().is_some() {

@@ -10,6 +10,10 @@ auto-generated compare link below it.
 
 ## [Unreleased]
 
+### Added
+
+- Support for multiple track authors.
+
 ### Fixed
 
 - "Provider" strings in Belarusian translation.

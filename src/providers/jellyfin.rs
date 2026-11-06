@@ -99,6 +99,7 @@ struct ItemDto {
 #[serde(rename_all = "PascalCase", default)]
 struct NameId {
     id: Option<String>,
+    name: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -419,6 +420,31 @@ fn download_url(config: &CustomProvider, session: &Session, id: &str) -> String 
     )
 }
 
+fn item_artists(item: &ItemDto) -> (Vec<String>, Vec<String>) {
+    for artists in [&item.artist_items, &item.album_artists]
+        .into_iter()
+        .flatten()
+        .filter(|artists| !artists.is_empty())
+    {
+        let (names, ids): (Vec<String>, Vec<String>) = artists
+            .iter()
+            .filter_map(|artist| {
+                artist
+                    .name
+                    .clone()
+                    .map(|name| (name, artist.id.clone().unwrap_or_default()))
+            })
+            .unzip();
+        if !names.is_empty() {
+            return (names, ids);
+        }
+    }
+    if let Some(artists) = item.artists.as_ref().filter(|a| !a.is_empty()) {
+        return (artists.clone(), Vec::new());
+    }
+    (item.album_artist.clone().into_iter().collect(), Vec::new())
+}
+
 fn track_from_item(
     provider: ProviderId,
     config: &CustomProvider,
@@ -429,24 +455,7 @@ fn track_from_item(
         name,
         id: item.album_id.clone().unwrap_or_default(),
     });
-    let artist = item
-        .artists
-        .as_ref()
-        .and_then(|artists| artists.first())
-        .cloned()
-        .or_else(|| item.album_artist.clone())
-        .unwrap_or_default();
-    let artist_id = item
-        .artist_items
-        .as_ref()
-        .and_then(|artists| artists.first())
-        .and_then(|artist| artist.id.clone())
-        .or_else(|| {
-            item.album_artists
-                .as_ref()
-                .and_then(|artists| artists.first())
-                .and_then(|artist| artist.id.clone())
-        });
+    let (artists, artist_ids) = item_artists(item);
     let duration = item
         .run_time_ticks
         .unwrap_or(0)
@@ -459,16 +468,16 @@ fn track_from_item(
         .as_ref()
         .and_then(|data| data.play_count)
         .unwrap_or(0);
-    Track::from_provider_with_count(
+    Track::from_provider_artists_with_count(
         provider,
         item.id.clone(),
         stream_url(config, session, &item.id),
         item.name.clone(),
-        artist,
+        artists,
         duration,
         image_url(config, session, item),
         album,
-        artist_id,
+        artist_ids,
         play_count,
     )
 }
@@ -1085,28 +1094,31 @@ pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<Track>> 
     let item = items
         .iter()
         .find(|item| {
-            item_matches_artist(item, &track.artist) && item.name.eq_ignore_ascii_case(&track.title)
+            item_matches_artist(item, &track.artists)
+                && item.name.eq_ignore_ascii_case(&track.title)
         })
         .or_else(|| {
             items
                 .iter()
-                .find(|item| item_matches_artist(item, &track.artist))
+                .find(|item| item_matches_artist(item, &track.artists))
         })
         .or_else(|| items.first());
     Ok(item.map(|item| track_from_item(provider, &config, &session, item)))
 }
 
-fn item_matches_artist(item: &ItemDto, artist: &str) -> bool {
-    if artist.trim().is_empty() {
-        return false;
-    }
-    item.artists
-        .as_ref()
-        .is_some_and(|artists| artists.iter().any(|name| name.eq_ignore_ascii_case(artist)))
-        || item
-            .album_artist
-            .as_deref()
-            .is_some_and(|name| name.eq_ignore_ascii_case(artist))
+fn item_matches_artist(item: &ItemDto, artists: &[String]) -> bool {
+    artists.iter().any(|artist| {
+        if artist.trim().is_empty() {
+            return false;
+        }
+        item.artists
+            .as_ref()
+            .is_some_and(|names| names.iter().any(|name| name.eq_ignore_ascii_case(artist)))
+            || item
+                .album_artist
+                .as_deref()
+                .is_some_and(|name| name.eq_ignore_ascii_case(artist))
+    })
 }
 
 fn instant_mix_path(session: &Session, collection: &str, id: &str) -> String {

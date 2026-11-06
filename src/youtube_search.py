@@ -29,21 +29,33 @@ EXPECTED_TYPE = {
 }
 
 
-def _make_track(vid, title, artist, *, duration=0, thumbnail="",
-                album=None, artist_id=None, views=""):
+def _artist_entries(artists):
+    """Normalize a ytmusicapi credit list (or one plain name) to entries."""
+    if isinstance(artists, str):
+        artists = [{"name": artists, "id": None}]
+    out = []
+    for a in artists or []:
+        if not isinstance(a, dict):
+            continue
+        name = a.get("name") or ""
+        if name:
+            out.append({"name": name, "id": a.get("id")})
+    return out
+
+
+def _make_track(vid, title, artists, *, duration=0, thumbnail="",
+                album=None, views=""):
     return {
         "kind": "track",
         "resultType": "song",
         "id": vid,
         "title": title,
-        "subtitle": artist,
         "url": f"https://youtube.com/watch?v={vid}",
         # Either a number (search's duration_seconds) or a raw "M:SS" /
         # "H:MM:SS" string; the Rust side parses both.
         "duration": duration,
         "thumbnail": thumbnail,
-        "channel": artist,
-        "artist_id": artist_id,
+        "artists": _artist_entries(artists),
         "album": album,
         "views": views,
     }
@@ -293,9 +305,7 @@ def result_to_item(r, rt):
         vid = r.get("videoId", "")
         if not vid:
             return None
-        artists = r.get("artists", [])
-        artist = artists[0].get("name", "") if artists else ""
-        artist_id = artists[0].get("id") if artists else None
+        artists = r.get("artists") or r.get("artist", "")
         duration = r.get("duration_seconds", 0) or 0
         album = r.get("album") or {}
         album_name = album.get("name", "") or ""
@@ -306,9 +316,9 @@ def result_to_item(r, rt):
             else None
         )
         return _make_track(
-            vid, r.get("title", ""), artist,
+            vid, r.get("title", ""), artists,
             duration=duration, thumbnail=thumb, album=album_obj,
-            artist_id=artist_id, views=r.get("views") or "",
+            views=r.get("views") or "",
         )
     if rt == "artist":
         bid = r.get("browseId", "")
@@ -368,14 +378,13 @@ def _track_from_album_entry(e, album=None):
     vid = e.get("videoId") or ""
     if not vid:
         return None
-    artist = e.get("artists", [{}])[0].get("name", "") if e.get("artists") \
-        else (e.get("artist", "") or "")
+    artists = e.get("artists") or e.get("artist", "")
     thumb = (e.get("thumbnails") or [{}])[-1].get("url", "")
     # get_album reports an exact integer view count; normalize to string so
     # the Rust side can parse it like the abbreviated shelf counts.
     views = e.get("views")
     return _make_track(
-        vid, e.get("title", ""), artist,
+        vid, e.get("title", ""), artists,
         duration=e.get("duration") or 0, thumbnail=thumb, album=album,
         views=str(views) if views else "",
     )
@@ -423,11 +432,13 @@ def browse(browse_id, limit=50, kind=None):
             if not vid:
                 continue
             thumb = (e.get("thumbnails") or [{}])[-1].get("url", "")
+            shelf_artists = e.get("artists") or [
+                {"name": e.get("artist", ""), "id": browse_id}
+            ]
             out.append(
                 _make_track(
-                    vid, e.get("title", ""), e.get("artist", ""),
+                    vid, e.get("title", ""), shelf_artists,
                     duration=e.get("duration") or 0, thumbnail=thumb,
-                    artist_id=browse_id,
                 )
             )
             if len(out) >= limit:
@@ -517,9 +528,9 @@ def _track_from_two_row_item(item, browse_id, channel_name):
         .get("thumbnails", [])
     )
     return _make_track(
-        vid, title, artist or channel_name,
+        vid, title, [{"name": artist or channel_name, "id": browse_id}],
         duration=0, thumbnail=thumbs[-1].get("url", "") if thumbs else "",
-        artist_id=browse_id, views=views,
+        views=views,
     )
 
 
@@ -716,10 +727,9 @@ def artist_page(browse_id):
         )
         t = _make_track(
             vid, e.get("title", ""),
-            artists[0].get("name", "") if artists else "",
+            artists or [{"name": e.get("artist", ""), "id": browse_id}],
             duration=e.get("duration") or 0, thumbnail=thumb(e),
             album=album_obj,
-            artist_id=browse_id,
             views=e.get("views") or "",
         )
         popular.append(t)
@@ -820,8 +830,6 @@ def watch_playlist(video_id=None, playlist_id=None, radio=True, limit=50):
         if not vid:
             continue
         artists = t.get("artists", [])
-        artist = artists[0].get("name", "") if artists else ""
-        artist_id = artists[0].get("id") if artists else None
         # watch_playlist omits numeric duration and thumbnails, so pass the
         # raw length string (parsed Rust-side) and synthesize the standard
         # thumbnail URL. This avoids a slow per-track yt-dlp
@@ -830,9 +838,8 @@ def watch_playlist(video_id=None, playlist_id=None, radio=True, limit=50):
         thumbnail = thumbs[-1].get("url", "") if thumbs else f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg"
         out.append(
             _make_track(
-                vid, t.get("title", ""), artist,
+                vid, t.get("title", ""), artists,
                 duration=t.get("length") or 0, thumbnail=thumbnail,
-                artist_id=artist_id,
             )
         )
         if len(out) >= limit:

@@ -20,31 +20,43 @@ pub struct YouTubeVideo {
     #[serde(default, deserialize_with = "deserialize_flexible_duration")]
     pub duration: u32,
     #[serde(default)]
-    pub channel: String,
-    #[serde(default)]
     pub thumbnail: String,
     #[serde(default)]
     pub album: Option<crate::types::TrackAlbum>,
     #[serde(default)]
-    pub artist_id: Option<String>,
+    pub artists: Vec<YouTubeArtist>,
     /// ytmusicapi's abbreviated view count ("1.2M", "841M plays"), parsed
     /// to an exact number at deserialization; 0 when absent.
     #[serde(default, deserialize_with = "deserialize_view_count")]
     pub views: u64,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct YouTubeArtist {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub id: Option<String>,
+}
+
 impl From<YouTubeVideo> for Track {
     fn from(v: YouTubeVideo) -> Self {
-        Track::from_provider_with_count(
+        let artists: Vec<String> = v.artists.iter().map(|a| a.name.clone()).collect();
+        let artist_ids: Vec<String> = v
+            .artists
+            .iter()
+            .map(|a| a.id.clone().unwrap_or_default())
+            .collect();
+        Track::from_provider_artists_with_count(
             ProviderId::YouTube,
             v.id,
             v.url,
             v.title,
-            v.channel,
+            artists,
             v.duration,
             v.thumbnail,
             v.album,
-            v.artist_id,
+            artist_ids,
             v.views,
         )
     }
@@ -538,6 +550,14 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
                 continue;
             }
             valid_ids.push(id.clone());
+            let artists = if item.channel.is_empty() {
+                Vec::new()
+            } else {
+                vec![YouTubeArtist {
+                    name: item.channel,
+                    id: None,
+                }]
+            };
             videos.push(YouTubeVideo {
                 id: id.clone(),
                 title: item.title,
@@ -547,11 +567,10 @@ fn flat_search(query: &str, start: usize, end: usize) -> Result<(Vec<YouTubeVide
                     item.webpage_url
                 },
                 duration: item.duration,
-                channel: item.channel,
                 thumbnail: format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg"),
                 album: None,
                 views: item.view_count.unwrap_or(0),
-                artist_id: None,
+                artists,
             });
         }
     }

@@ -1028,7 +1028,9 @@ impl MusicPlayer {
                     MediaPlayback::Stopped
                 },
                 title: track.map(|t| t.title.clone()).unwrap_or_default(),
-                artist: track.map(|t| t.artist.clone()).unwrap_or_default(),
+                artist: track
+                    .map(crate::types::Track::artist_text)
+                    .unwrap_or_default(),
                 duration_secs: self.duration,
                 has_track: track.is_some(),
             };

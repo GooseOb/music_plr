@@ -328,7 +328,7 @@ pub(crate) fn build_reference_track(title: String, artist: String, album: String
         ProviderTrack {
             id: title.clone(),
             url: String::new(),
-            artist_id: None,
+            artist_ids: Vec::new(),
             duration: 0,
             thumbnail: String::new(),
             album: album_pt,
@@ -337,7 +337,7 @@ pub(crate) fn build_reference_track(title: String, artist: String, album: String
     );
     Track {
         title,
-        artist,
+        artists: (!artist.is_empty()).then_some(artist).into_iter().collect(),
         source: ProviderId::Local,
         providers,
     }
@@ -368,7 +368,7 @@ pub(crate) fn build_file_track(path: &Path, name: String, artist: String, album:
         ProviderTrack {
             id: stem,
             url: path_str,
-            artist_id: None,
+            artist_ids: Vec::new(),
             duration,
             thumbnail: String::new(),
             album: album_pt,
@@ -377,7 +377,7 @@ pub(crate) fn build_file_track(path: &Path, name: String, artist: String, album:
     );
     Track {
         title,
-        artist,
+        artists: (!artist.is_empty()).then_some(artist).into_iter().collect(),
         source: ProviderId::Local,
         providers,
     }

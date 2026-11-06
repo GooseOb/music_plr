@@ -154,7 +154,7 @@ pub const STRINGS: Strings = Strings {
     tracks_wont_be_deleted: "曲は削除されません。",
     lbl_id: "ID",
     lbl_url: "URL",
-    lbl_artist_id: "アーティスト ID",
+    lbl_artist_ids: "アーティスト ID",
     lbl_duration_secs: "長さ（秒）",
     lbl_thumbnail: "サムネイル",
     lbl_album: "アルバム",

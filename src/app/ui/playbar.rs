@@ -7,7 +7,7 @@ use iced::{
 use super::{
     progress_bar::ProgressBar,
     shared_components::{
-        icon_button, like_button, play_pause_button, playbar_toggle_button, subtitle_artist,
+        icon_button, like_button, play_pause_button, playbar_toggle_button, subtitle_artists,
         thumbnail,
     },
     styles::{
@@ -31,7 +31,6 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     let dir = player.strings.direction;
     let track = player.queue.current();
     let title = track.map_or(player.strings.not_playing, |t| t.title.as_str());
-    let artist = track.map_or("", |t| t.artist.as_str());
 
     let track_thumb: Element<'a, Message, AppTheme> = if let Some(t) = track {
         let thumb = player.thumbnail_index.get(t.source, t.primary_id());
@@ -43,20 +42,12 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
             .into()
     };
 
-    let artist_target = track.and_then(|t| {
-        t.provider_artist_id(t.source)
-            .map(|id| (id.to_string(), t.source))
-    });
+    let mut children = vec![text(title).into()];
+    if let Some(t) = track {
+        children.push(subtitle_artists(player.focused_pane_id, t, dir));
+    }
 
-    let artist_el = subtitle_artist(
-        player.focused_pane_id,
-        artist,
-        theme::TEXT_SIZE_SM,
-        artist_target,
-    );
-
-    let track_info =
-        Column::with_children([text(title).into(), artist_el]).spacing(theme::SPACING_XXS);
+    let track_info = Column::with_children(children).spacing(theme::SPACING_XXS);
 
     let elapsed_text = time_text((player.playback_progress() * player.duration) as u32);
     let total_text = time_text(player.duration as u32);

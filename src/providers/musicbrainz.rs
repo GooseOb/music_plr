@@ -40,20 +40,20 @@ fn from_mb_recording(rec: &Recording) -> Track {
 /// enclosing release's title/MBID rather than relying on the recording's own
 /// (often empty) `releases` list.
 fn from_mb_track(rec: &Recording, album: Option<&TrackAlbum>, thumbnail: &str) -> Track {
-    let artist_credit = rec.artist_credit.as_ref().and_then(|ac| ac.first());
-    let artist = artist_credit.map(|a| a.name.clone()).unwrap_or_default();
-    let artist_id = artist_credit.map(|a| a.artist.id.clone());
+    let credits = rec.artist_credit.as_deref().unwrap_or_default();
+    let artists: Vec<String> = credits.iter().map(|a| a.name.clone()).collect();
+    let artist_ids: Vec<String> = credits.iter().map(|a| a.artist.id.clone()).collect();
 
-    Track::from_provider(
+    Track::from_provider_artists(
         ProviderId::MusicBrainz,
         rec.id.clone(),
         String::new(),
         rec.title.clone(),
-        artist,
+        artists,
         rec.length.unwrap_or(0) / 1000,
         thumbnail.to_string(),
         album.cloned(),
-        artist_id,
+        artist_ids,
     )
 }
 

@@ -154,7 +154,7 @@ pub const STRINGS: Strings = Strings {
     tracks_wont_be_deleted: "曲目不会被删除。",
     lbl_id: "ID",
     lbl_url: "网址",
-    lbl_artist_id: "艺术家 ID",
+    lbl_artist_ids: "艺术家 ID",
     lbl_duration_secs: "时长（秒）",
     lbl_thumbnail: "缩略图",
     lbl_album: "专辑",

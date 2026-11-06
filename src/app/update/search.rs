@@ -309,7 +309,11 @@ impl MusicPlayer {
             Some(id) => (provider, crate::app::ui::artist::header_thumb_key(id)),
             None => (track.source, track.primary_id().to_string()),
         };
-        let name = if artist { &track.artist } else { &track.title };
+        let name = if artist {
+            track.primary_artist().to_string()
+        } else {
+            track.title.clone()
+        };
         let data = RadioData {
             title: name.clone(),
             thumb_provider,
@@ -333,7 +337,7 @@ impl MusicPlayer {
         let nav_task = self.push_new_view(pane, ViewData::new_radio(kind));
         let rid = self.request_ids.next();
         self.view_data_in_mut(pane).request_id = rid;
-        self.notify((self.strings.generating_radio_for)(word, name));
+        self.notify((self.strings.generating_radio_for)(word, &name));
         let id = id.unwrap_or_default().to_string();
         let name = name.clone();
         let seed = track.clone();

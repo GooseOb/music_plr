@@ -145,7 +145,7 @@ pub const STRINGS: Strings = Strings {
     tracks_wont_be_deleted: "Utwory nie zostaną usunięte.",
     lbl_id: "ID",
     lbl_url: "URL",
-    lbl_artist_id: "ID wykonawcy",
+    lbl_artist_ids: "ID wykonawców",
     lbl_duration_secs: "Czas trwania (sekundy)",
     lbl_thumbnail: "Miniatura",
     lbl_album: "Album",

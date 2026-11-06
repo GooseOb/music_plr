@@ -100,8 +100,8 @@ fn provider_row<'a>(
                 disabled_text_input_row(player.strings.direction, player.strings.lbl_url, &pt.url),
                 disabled_text_input_row(
                     player.strings.direction,
-                    player.strings.lbl_artist_id,
-                    pt.artist_id.as_deref().unwrap_or_default(),
+                    player.strings.lbl_artist_ids,
+                    &pt.artist_ids.join(", "),
                 ),
                 disabled_text_input_row(
                     player.strings.direction,

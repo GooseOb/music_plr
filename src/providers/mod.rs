@@ -1196,7 +1196,14 @@ pub struct ProviderTrack {
     /// provider this is the on-disk path of the imported/downloaded audio
     /// file (a local file has no remote URL).
     pub url: String,
-    pub artist_id: Option<String>,
+    /// Provider artist ids, index-aligned with the artists they identify. An
+    /// empty entry is an artist this provider cannot identify.
+    #[serde(
+        default,
+        alias = "artist_id",
+        deserialize_with = "crate::util::deserialize_string_list"
+    )]
+    pub artist_ids: Vec<String>,
     pub duration: u32,
     pub thumbnail: String,
     pub album: Option<crate::types::TrackAlbum>,

@@ -75,6 +75,29 @@ fn cover_url_sized(client: &Client, cover_art: Option<&str>, size: i32) -> Strin
         .unwrap_or_default()
 }
 
+fn child_artists(child: &opensubsonic::data::Child) -> (Vec<String>, Vec<String>) {
+    if let Some(artists) = child.artists.as_ref().filter(|a| !a.is_empty()) {
+        return (
+            artists.iter().map(|a| a.name.clone()).collect(),
+            artists.iter().map(|a| a.id.clone()).collect(),
+        );
+    }
+    let name = child
+        .artist
+        .clone()
+        .or_else(|| child.display_artist.clone())
+        .unwrap_or_default();
+    let ids = child.artist_id.iter().cloned().collect();
+    (vec![name], ids)
+}
+
+fn child_identifies_artist(child: &opensubsonic::data::Child, id: &str) -> bool {
+    if let Some(artists) = child.artists.as_ref().filter(|a| !a.is_empty()) {
+        return artists.iter().any(|artist| artist.id == id);
+    }
+    child.artist_id.as_deref() == Some(id)
+}
+
 fn track_from_child(
     provider: ProviderId,
     client: &Client,
@@ -84,16 +107,17 @@ fn track_from_child(
         name: name.clone(),
         id: child.album_id.clone().unwrap_or_default(),
     });
-    Track::from_provider(
+    let (artists, artist_ids) = child_artists(child);
+    Track::from_provider_artists(
         provider,
         child.id.clone(),
         stream_url(client, &child.id),
         child.title.clone(),
-        child.artist.clone().unwrap_or_default(),
+        artists,
         child.duration.unwrap_or(0).max(0) as u32,
         cover_url(client, child.cover_art.as_deref()),
         album,
-        child.artist_id.clone(),
+        artist_ids,
     )
 }
 
@@ -542,11 +566,13 @@ pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<Track>> 
 /// artist id on songs (older ones) can't be told apart, so it answers as before.
 fn top_songs(provider: ProviderId, client: &Client, id: &str, name: &str) -> Result<Vec<Track>> {
     let songs = block_on(client.get_top_songs(name, Some(TOP_SONGS_SIZE)))?;
-    let identifies_artists = songs.iter().any(|song| song.artist_id.is_some());
+    let identifies_artists = songs.iter().any(|song| {
+        song.artists.as_ref().is_some_and(|a| !a.is_empty()) || song.artist_id.is_some()
+    });
     let chosen: Vec<&opensubsonic::data::Child> = if identifies_artists {
         songs
             .iter()
-            .filter(|song| song.artist_id.as_deref() == Some(id))
+            .filter(|song| child_identifies_artist(song, id))
             .collect()
     } else {
         songs.iter().collect()

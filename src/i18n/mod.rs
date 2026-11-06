@@ -252,7 +252,7 @@ pub struct Strings {
     pub tracks_wont_be_deleted: &'static str,
     pub lbl_id: &'static str,
     pub lbl_url: &'static str,
-    pub lbl_artist_id: &'static str,
+    pub lbl_artist_ids: &'static str,
     pub lbl_duration_secs: &'static str,
     pub lbl_thumbnail: &'static str,
     pub lbl_album: &'static str,

@@ -300,26 +300,40 @@ pub fn open_in_browser_button(
         .into()
 }
 
-pub fn subtitle_artist(
+pub fn subtitle_artists<'a>(
     pane: PaneId,
-    name: &str,
-    size: u32,
-    artist_target: Option<(String, crate::providers::ProviderId)>,
-) -> Element<'_, Message, AppTheme> {
-    let artist = text(name).size(size);
-    if let Some((id, source)) = artist_target {
-        link_button(artist)
-            .on_press(Message::OpenArtist {
-                pane,
-                url: source.artist_page_url(&id).unwrap_or_default(),
-                id,
-                name: name.to_string(),
-                source,
-            })
-            .into()
-    } else {
-        artist.style(fg_secondary()).into()
+    track: &'a crate::types::Track,
+    dir: Direction,
+) -> Element<'a, Message, AppTheme> {
+    if track.artists.is_empty() {
+        return Space::new().into();
     }
+    let mut children: Vec<Element<'a, Message, AppTheme>> =
+        Vec::with_capacity(track.artists.len() * 2);
+    for (index, name) in track.artists.iter().enumerate() {
+        if index > 0 {
+            children.push(
+                text(", ")
+                    .size(theme::TEXT_SIZE_SM)
+                    .style(fg_secondary())
+                    .into(),
+            );
+        }
+        let name_element = text(name).size(theme::TEXT_SIZE_SM);
+        children.push(match track.artist_target(index) {
+            Some((id, source)) => link_button(name_element)
+                .on_press(Message::OpenArtist {
+                    pane,
+                    url: source.artist_page_url(id).unwrap_or_default(),
+                    id: id.to_string(),
+                    name: name.clone(),
+                    source,
+                })
+                .into(),
+            None => name_element.style(fg_secondary()).into(),
+        });
+    }
+    dir.row(children).into()
 }
 
 pub fn labeled_input<'a>(

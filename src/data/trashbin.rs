@@ -86,7 +86,7 @@ mod tests {
             ProviderTrack {
                 id: id.to_string(),
                 url: id.to_string(),
-                artist_id: None,
+                artist_ids: Vec::new(),
                 duration: 0,
                 thumbnail: String::new(),
                 album: None,
@@ -95,7 +95,7 @@ mod tests {
         );
         Track {
             title: id.to_string(),
-            artist: String::new(),
+            artists: Vec::new(),
             source: ProviderId::YouTube,
             providers,
         }

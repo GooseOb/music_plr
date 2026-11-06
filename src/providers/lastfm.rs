@@ -108,19 +108,42 @@ fn listeners(v: &serde_json::Value) -> u64 {
 fn track_from_search(t: &serde_json::Value) -> Track {
     let title = str_field(t, "name");
     let artist = str_field(t, "artist");
+    let artists = credited_artists(&artist);
     let play_count = listeners(t);
-    Track::from_provider_with_count(
+    Track::from_provider_artists_with_count(
         ProviderId::LastFm,
         track_key(&artist, &title),
         str_field(t, "url"),
         title,
-        artist.clone(),
+        artists.clone(),
         0,
         image_url(t),
         None,
-        Some(artist),
+        artists,
         play_count,
     )
+}
+
+/// Last.fm packs every credit into one `artist` string (`"Lady Gaga, Bruno
+/// Mars"`, `"Queen & David Bowie"`, `"A feat. B"`), so split it into the
+/// individual names. Each name doubles as that artist's Last.fm id.
+fn credited_artists(artist: &str) -> Vec<String> {
+    let separated = artist
+        .replace(" feat. ", ", ")
+        .replace(" ft. ", ", ")
+        .replace(" featuring ", ", ")
+        .replace(" & ", ", ");
+    crate::util::split_artist_names(&separated)
+}
+
+/// The artist name the API returned for `track`, recovered from its
+/// `artist\u{1f}title` id so artwork lookups still see the original credit
+/// line rather than only its first artist.
+fn credited_artist(track: &Track) -> String {
+    split_album_id(track.primary_id())
+        .map(|(artist, _)| artist)
+        .filter(|artist| !artist.is_empty())
+        .unwrap_or_else(|| track.primary_artist().to_string())
 }
 
 fn art_cache() -> &'static std::sync::Mutex<std::collections::HashMap<String, Option<String>>> {
@@ -159,8 +182,9 @@ fn enrich_songs_with_album_art(tracks: Vec<Track>) -> Vec<Track> {
     let tracks = enrich_parallel(tracks, album_art_for);
     let mut artists: Vec<String> = Vec::new();
     for track in &tracks {
-        if missing_lastfm_thumbnail(track) && !artists.contains(&track.artist) {
-            artists.push(track.artist.clone());
+        let artist = credited_artist(track);
+        if missing_lastfm_thumbnail(track) && !artists.iter().any(|a| a == &artist) {
+            artists.push(artist);
         }
     }
     if artists.is_empty() {
@@ -182,7 +206,7 @@ fn enrich_songs_with_album_art(tracks: Vec<Track>) -> Vec<Track> {
         .into_iter()
         .map(|mut track| {
             if missing_lastfm_thumbnail(&track) {
-                if let Some(art) = by_artist.get(track.artist.as_str()) {
+                if let Some(art) = by_artist.get(credited_artist(&track).as_str()) {
                     set_lastfm_thumbnail(&mut track, (*art).to_string());
                 }
             }
@@ -205,7 +229,7 @@ fn missing_lastfm_thumbnail(track: &Track) -> bool {
 }
 
 fn album_art_for(track: &Track) -> Option<String> {
-    album_art(&track.artist, &track.title)
+    album_art(&credited_artist(track), &track.title)
 }
 
 /// Artist-level fallback for tracks with no album art (covers, remixes):
@@ -408,19 +432,20 @@ fn album_tracks(artist: &str, album: &str, thumbnail: &str) -> Result<Vec<Track>
                 crate::util::urlencode(&track_artist),
                 crate::util::urlencode(&title)
             );
-            Track::from_provider(
+            let artists = credited_artists(&track_artist);
+            Track::from_provider_artists(
                 ProviderId::LastFm,
                 track_key(&track_artist, &title),
                 page,
                 title,
-                track_artist.clone(),
+                artists.clone(),
                 duration,
                 cover.clone(),
                 Some(TrackAlbum {
                     name: album.to_string(),
                     id: format!("{artist}\u{1f}{album}"),
                 }),
-                Some(track_artist),
+                artists,
             )
         })
         .collect())
@@ -728,16 +753,17 @@ pub fn radio_song(id: &str) -> Result<Vec<Track>> {
                 .and_then(|u| u.as_str())
                 .unwrap_or_default()
                 .to_string();
-            Track::from_provider(
+            let artists = credited_artists(&track_artist);
+            Track::from_provider_artists(
                 ProviderId::LastFm,
                 track_key(&track_artist, &name),
                 page,
                 name,
-                track_artist.clone(),
+                artists.clone(),
                 0,
                 image_url(t),
                 None,
-                Some(track_artist),
+                artists,
             )
         })
         .collect())
@@ -808,6 +834,40 @@ mod tests {
         let key = track_key("Cher", "Believe");
         let (artist, title) = split_album_id(&key).unwrap();
         assert_eq!((artist.as_str(), title.as_str()), ("Cher", "Believe"));
+    }
+
+    #[test]
+    fn credited_artists_split_lastfm_credit_lines() {
+        assert_eq!(
+            credited_artists("Lady Gaga, Bruno Mars"),
+            ["Lady Gaga", "Bruno Mars"]
+        );
+        assert_eq!(
+            credited_artists("Queen & David Bowie"),
+            ["Queen", "David Bowie"]
+        );
+        assert_eq!(credited_artists("A feat. B"), ["A", "B"]);
+        assert_eq!(credited_artists("Radiohead"), ["Radiohead"]);
+        assert!(credited_artists("").is_empty());
+    }
+
+    #[test]
+    fn a_composite_credit_yields_one_clickable_artist_per_name() {
+        let track = track_from_search(&serde_json::json!({
+            "name": "Under Pressure",
+            "artist": "Queen & David Bowie",
+            "url": "https://www.last.fm/music/Queen/_/Under+Pressure",
+        }));
+        assert_eq!(track.artists, ["Queen", "David Bowie"]);
+        assert_eq!(
+            track.provider_artist_ids(ProviderId::LastFm),
+            ["Queen", "David Bowie"]
+        );
+        assert_eq!(
+            track.artist_target(1),
+            Some(("David Bowie", ProviderId::LastFm))
+        );
+        assert_eq!(credited_artist(&track), "Queen & David Bowie");
     }
 
     #[test]

@@ -716,7 +716,9 @@ impl MusicPlayer {
         let matches: Vec<usize> = tracks
             .iter()
             .enumerate()
-            .filter(|(_, t)| needle.matches(&t.title) || needle.matches(&t.artist))
+            .filter(|(_, t)| {
+                needle.matches(&t.title) || t.artists.iter().any(|artist| needle.matches(artist))
+            })
             .map(|(i, _)| i)
             .collect();
         let fs = self.track_list_search.as_mut().expect("checked above");

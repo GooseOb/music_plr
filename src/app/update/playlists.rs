@@ -260,7 +260,7 @@ impl MusicPlayer {
                     crate::types::ProviderTrack {
                         id: filename.to_string(),
                         url: path_str,
-                        artist_id: None,
+                        artist_ids: Vec::new(),
                         duration,
                         thumbnail: String::new(),
                         album: None,
@@ -269,7 +269,7 @@ impl MusicPlayer {
                 );
                 new_tracks.push(Track {
                     title: filename.to_string(),
-                    artist: "Unknown Artist".to_string(),
+                    artists: vec!["Unknown Artist".to_string()],
                     source: crate::providers::ProviderId::Local,
                     providers,
                 });

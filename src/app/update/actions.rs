@@ -576,7 +576,7 @@ impl MusicPlayer {
             return;
         };
         let current_id = track.cache_key();
-        let artist = track.artist.clone();
+        let artist = track.artist_text();
         let title = track.title.clone();
         let album = track.album().map(|a| a.name.clone());
         let duration = track.duration();
@@ -937,7 +937,7 @@ impl MusicPlayer {
         self.open_artist(
             pane,
             menu.track.provider_artist_id(provider),
-            &menu.track.artist,
+            menu.track.primary_artist(),
             provider,
             &url,
         )

@@ -475,7 +475,7 @@ mod tests {
             crate::types::ProviderTrack {
                 id: "t1".into(),
                 url: String::new(),
-                artist_id: None,
+                artist_ids: Vec::new(),
                 duration: 0,
                 thumbnail: String::new(),
                 album: None,
@@ -484,7 +484,7 @@ mod tests {
         );
         let track = crate::types::Track {
             title: "Song".into(),
-            artist: "Artist".into(),
+            artists: vec!["Artist".into()],
             source: crate::providers::ProviderId::YouTube,
             providers,
         };

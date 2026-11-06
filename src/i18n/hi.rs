@@ -142,7 +142,7 @@ pub const STRINGS: Strings = Strings {
     tracks_wont_be_deleted: "ट्रैक हटाएँ नहीं जाएँगे।",
     lbl_id: "आईडी",
     lbl_url: "यूआरएल",
-    lbl_artist_id: "कलाकार आईडी",
+    lbl_artist_ids: "कलाकार आईडी",
     lbl_duration_secs: "अवधि (सेकंड में)",
     lbl_thumbnail: "थंबनेल",
     lbl_album: "एल्बम",

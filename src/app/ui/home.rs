@@ -14,10 +14,10 @@ use iced::{
 
 use super::{
     shared_components::{
-        art_card, card_rail, click_card, play_pause_button, section_label, thumbnail,
-        CARD_IMAGE_SIZE,
+        art_card, card_rail, click_card, play_pause_button, section_label, subtitle_artists,
+        thumbnail, CARD_IMAGE_SIZE,
     },
-    styles::{bg_secondary, fg_secondary, icon_style_fg_secondary},
+    styles::{bg_secondary, icon_style_fg_secondary},
     theme, Message, MusicPlayer,
 };
 use crate::{
@@ -150,10 +150,7 @@ fn continue_strip(player: &MusicPlayer) -> Option<Element<'_, Message, AppTheme>
     );
     let info = iced::widget::Column::with_children([
         text(track.title.clone()).size(theme::TEXT_SIZE_MD).into(),
-        text(track.artist.clone())
-            .size(theme::TEXT_SIZE_SM)
-            .style(fg_secondary())
-            .into(),
+        subtitle_artists(player.focused_pane_id, track, dir),
     ])
     .spacing(theme::SPACING_XXS)
     .width(Length::Fill);
@@ -225,7 +222,7 @@ fn track_tile<'a>(
         CARD_IMAGE_SIZE,
         player.thumbnail_index.get(track.source, track.primary_id()),
     );
-    click_card(image, &track.title, &track.artist, message)
+    click_card(image, &track.title, &track.artist_text(), message)
 }
 
 fn recent_rail<'a>(

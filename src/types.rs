@@ -18,7 +18,14 @@ pub struct TrackAlbum {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Track {
     pub title: String,
-    pub artist: String,
+    /// Every artist credited on the track, in display order. Provider artist
+    /// ids live alongside them on [`ProviderTrack::artist_ids`].
+    #[serde(
+        default,
+        alias = "artist",
+        deserialize_with = "crate::util::deserialize_string_list"
+    )]
+    pub artists: Vec<String>,
     pub source: ProviderId,
     pub providers: ProviderMap,
 }
@@ -80,11 +87,36 @@ impl Track {
         self.providers.get(&provider).map(|t| t.url.as_str())
     }
 
-    /// The provider artist id for `provider`, if known.
-    pub fn provider_artist_id(&self, provider: ProviderId) -> Option<&str> {
+    /// The provider artist ids for `provider`, in the same order as the
+    /// artists they identify. An empty entry is an artist the provider could
+    /// not identify.
+    pub fn provider_artist_ids(&self, provider: ProviderId) -> &[String] {
         self.providers
             .get(&provider)
-            .and_then(|t| t.artist_id.as_deref())
+            .map_or(&[], |t| t.artist_ids.as_slice())
+    }
+
+    /// The primary artist's id on `provider`, if it identifies that artist.
+    pub fn provider_artist_id(&self, provider: ProviderId) -> Option<&str> {
+        let id = self.provider_artist_ids(provider).first()?;
+        (!id.is_empty()).then_some(id.as_str())
+    }
+
+    /// The primary artist, or `""` when the track names none.
+    pub fn primary_artist(&self) -> &str {
+        self.artists.first().map_or("", String::as_str)
+    }
+
+    /// All credited artists as one display line, e.g. `"A, B"`.
+    pub fn artist_text(&self) -> String {
+        self.artists.join(", ")
+    }
+
+    /// The clickable target for the artist at `index`: its id on the source
+    /// provider. `None` when that artist has no id there.
+    pub fn artist_target(&self, index: usize) -> Option<(&str, ProviderId)> {
+        let id = self.provider_artist_ids(self.source).get(index)?;
+        (!id.is_empty()).then_some((id.as_str(), self.source))
     }
 
     /// Whether this track carries an identity for `provider`.
@@ -143,16 +175,17 @@ impl Track {
     /// Media-control metadata. Built from title + artist so the same song played from
     /// different providers collapses to one history entry.
     pub fn dedup_key(&self) -> String {
-        format!("{}|{}", self.title, self.artist)
+        format!("{}|{}", self.title, self.artist_text())
     }
 
     /// The search query used to resolve this track on a provider: the title
     /// alone when there is no artist, otherwise `title artist`.
     pub fn search_query(&self) -> String {
-        if self.artist.is_empty() {
+        let artist = self.artist_text();
+        if artist.is_empty() {
             self.title.clone()
         } else {
-            format!("{} {}", self.title, self.artist)
+            format!("{} {artist}", self.title)
         }
     }
 
@@ -214,13 +247,57 @@ impl Track {
         album: Option<TrackAlbum>,
         artist_id: Option<String>,
     ) -> Self {
+        Self::from_provider_artists(
+            provider,
+            id,
+            url,
+            title,
+            vec![artist_name.into()],
+            duration,
+            thumbnail,
+            album,
+            artist_id,
+        )
+    }
+
+    /// Build a `Track` credited to several artists. `artists` and `artist_ids`
+    /// are index-aligned: an empty id marks an artist the provider cannot
+    /// identify. Empty names are dropped together with their id so the two
+    /// lists stay in step.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_provider_artists(
+        provider: ProviderId,
+        id: String,
+        url: String,
+        title: impl Into<String>,
+        artists: Vec<String>,
+        duration: u32,
+        thumbnail: impl Into<String>,
+        album: Option<TrackAlbum>,
+        artist_ids: impl IntoIterator<Item = String>,
+    ) -> Self {
+        let artist_ids: Vec<String> = artist_ids.into_iter().collect();
+        let mut names = Vec::with_capacity(artists.len());
+        let mut ids = Vec::with_capacity(artists.len());
+        for (index, name) in artists.into_iter().enumerate() {
+            let name = name.trim();
+            if name.is_empty() || names.iter().any(|seen| seen == name) {
+                continue;
+            }
+            names.push(name.to_string());
+            ids.push(
+                artist_ids
+                    .get(index)
+                    .map_or_else(String::new, |id| id.trim().to_string()),
+            );
+        }
         let mut providers = ProviderMap::new();
         providers.insert(
             provider,
             ProviderTrack {
                 id,
                 url,
-                artist_id,
+                artist_ids: ids,
                 duration,
                 thumbnail: thumbnail.into(),
                 album,
@@ -229,7 +306,7 @@ impl Track {
         );
         Self {
             title: title.into(),
-            artist: artist_name.into(),
+            artists: names,
             source: provider,
             providers,
         }
@@ -258,6 +335,28 @@ impl Track {
             thumbnail,
             album,
             artist_id,
+        );
+        if let Some(pt) = track.providers.get_mut(&provider) {
+            pt.play_count = play_count;
+        }
+        track
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_provider_artists_with_count(
+        provider: ProviderId,
+        id: String,
+        url: String,
+        title: impl Into<String>,
+        artists: Vec<String>,
+        duration: u32,
+        thumbnail: impl Into<String>,
+        album: Option<TrackAlbum>,
+        artist_ids: Vec<String>,
+        play_count: u64,
+    ) -> Self {
+        let mut track = Self::from_provider_artists(
+            provider, id, url, title, artists, duration, thumbnail, album, artist_ids,
         );
         if let Some(pt) = track.providers.get_mut(&provider) {
             pt.play_count = play_count;
@@ -366,7 +465,7 @@ mod tests {
     fn make_track(id: &str, url: &str) -> Track {
         let mut t = Track {
             title: format!("Track {id}"),
-            artist: "Artist".into(),
+            artists: vec!["Artist".into()],
             source: ProviderId::YouTube,
             providers: HashMap::new(),
         };
@@ -375,7 +474,7 @@ mod tests {
             ProviderTrack {
                 id: id.into(),
                 url: url.into(),
-                artist_id: None,
+                artist_ids: Vec::new(),
                 duration: 10,
                 thumbnail: String::new(),
                 album: None,
@@ -383,6 +482,51 @@ mod tests {
             },
         );
         t
+    }
+
+    #[test]
+    fn multiple_artists_keep_ids_aligned_and_clickable() {
+        let track = Track::from_provider_artists(
+            ProviderId::YouTube,
+            "id".into(),
+            "url".into(),
+            "Title",
+            vec!["A".into(), "A".into(), String::new(), "B".into()],
+            0,
+            String::new(),
+            None,
+            vec![
+                "yt-a".into(),
+                "duplicate".into(),
+                "unnamed".into(),
+                "yt-b".into(),
+            ],
+        );
+
+        assert_eq!(track.artists, ["A", "B"]);
+        assert_eq!(
+            track.provider_artist_ids(ProviderId::YouTube),
+            ["yt-a", "yt-b"]
+        );
+        assert_eq!(track.artist_target(1), Some(("yt-b", ProviderId::YouTube)));
+        assert_eq!(track.primary_artist(), "A");
+        assert_eq!(track.artist_text(), "A, B");
+    }
+
+    #[test]
+    fn legacy_single_artist_fields_migrate_to_lists() {
+        let legacy = r#"{"title":"T","artist":"A, B","source":"YouTube",
+            "providers":{"YouTube":{"id":"x","url":"u","artist_id":"yt-a",
+            "duration":0,"thumbnail":"","album":null}}}"#;
+        let track: Track = serde_json::from_str(legacy).unwrap();
+        assert_eq!(track.artists, ["A, B"]);
+        assert_eq!(track.provider_artist_ids(ProviderId::YouTube), ["yt-a"]);
+
+        let saved = serde_json::to_value(&track).unwrap();
+        assert!(saved.get("artist").is_none());
+        assert_eq!(saved["artists"][0], "A, B");
+        assert!(saved["providers"]["YouTube"].get("artist_id").is_none());
+        assert_eq!(saved["providers"]["YouTube"]["artist_ids"][0], "yt-a");
     }
 
     #[test]
@@ -581,7 +725,7 @@ mod tests {
         // No page anywhere: a Bandcamp source with a direct MP3 url.
         let mut bc = Track {
             title: "T".into(),
-            artist: "A".into(),
+            artists: vec!["A".into()],
             source: ProviderId::Bandcamp,
             providers: HashMap::new(),
         };

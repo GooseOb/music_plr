@@ -140,7 +140,7 @@ pub const STRINGS: Strings = Strings {
     tracks_wont_be_deleted: "لن يتم حذف الأغاني.",
     lbl_id: "المعرّف",
     lbl_url: "الرابط",
-    lbl_artist_id: "معرّف الفنان",
+    lbl_artist_ids: "معرّفات الفنان",
     lbl_duration_secs: "المدة (بالثواني)",
     lbl_thumbnail: "الصورة المصغرة",
     lbl_album: "الألبوم",

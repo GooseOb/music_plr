@@ -145,7 +145,7 @@ pub const STRINGS: Strings = Strings {
     tracks_wont_be_deleted: "Трэкі ня будуць выдалены.",
     lbl_id: "ID",
     lbl_url: "URL",
-    lbl_artist_id: "Id выканаўцы",
+    lbl_artist_ids: "Id выканаўцаў",
     lbl_duration_secs: "Працягласьць (у сэкундах)",
     lbl_thumbnail: "Вокладка",
     lbl_album: "Альбом",
@@ -276,7 +276,7 @@ pub const STRINGS: Strings = Strings {
             "Шаблёны «{a}» і «{b}» могуць супасьці для аднаго файла з супярэчлівымі палямі. Выдаліце або выпраўце адзін зь іх."
         )
     },
-    import_playlists_imported: |n| format!("Імпартавана {} {}", n, slavic(n as u64, "плейліст", "плейліста", "плейлістаў")),
+    import_playlists_imported: |n| format!("Імпартавана {} {}", n, slavic(n as u64, "плэйліст", "плэйліста", "плэйлістоў")),
     import_imported_into: |n, into| format!("Імпартавана {} у {into}", be_tracks(n)),
     import_no_tracks: "Ня знойдзена трэкаў для імпарту.",
     import_no_match: "Ні адзін файл не адпавядае шаблёнам.",

@@ -1,3 +1,38 @@
+/// Deserialize a string-or-list field into a `Vec<String>`, dropping empty
+/// entries. Old single-value fields (`artist`, `artist_id`) load as a
+/// one-entry list, so stores written before lists existed keep their data.
+pub fn deserialize_string_list<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany {
+        One(String),
+        Many(Vec<String>),
+    }
+
+    use serde::Deserialize as _;
+    Ok(match Option::<OneOrMany>::deserialize(deserializer)? {
+        Some(OneOrMany::One(value)) => (!value.is_empty()).then_some(value).into_iter().collect(),
+        Some(OneOrMany::Many(values)) => values
+            .into_iter()
+            .filter(|value| !value.is_empty())
+            .collect(),
+        None => Vec::new(),
+    })
+}
+
+/// Split an artist line typed into the Edit Track popup into its artists.
+/// Commas and semicolons separate credits; surrounding whitespace is dropped.
+pub fn split_artist_names(line: &str) -> Vec<String> {
+    line.split([',', ';'])
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 /// Abbreviated count for display (1234 -> "1.2K"). Values that would round
 /// up across a unit boundary (999 500 -> "1000.0K") step to the next unit
 /// instead ("1.0M").
@@ -569,7 +604,7 @@ mod tests {
                     crate::types::ProviderTrack {
                         id: format!("id{i}"),
                         url: format!("url{i}"),
-                        artist_id: None,
+                        artist_ids: Vec::new(),
                         duration: 10,
                         thumbnail: String::new(),
                         album: None,
@@ -578,7 +613,7 @@ mod tests {
                 );
                 Track {
                     title: format!("Track {i}"),
-                    artist: "Artist".into(),
+                    artists: vec!["Artist".into()],
                     source: crate::providers::ProviderId::YouTube,
                     providers,
                 }

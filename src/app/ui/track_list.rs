@@ -16,7 +16,7 @@ pub fn track_list_id(pane: PaneId) -> Id {
 use super::{
     right_click::RightClickArea,
     shared_components::{
-        empty_state, inner_row_layout, play_pause_button, subtitle_artist, thumbnail, track_row,
+        empty_state, inner_row_layout, play_pause_button, subtitle_artists, thumbnail, track_row,
     },
     styles::{
         button_style_album, button_style_primary, fg_secondary, icon_style_accent,
@@ -349,13 +349,7 @@ fn track_row_layout_inner<'a>(
         .into(),
     );
 
-    let artist_id = track.provider_artist_id(track.source);
-    let artist_subtitle = subtitle_artist(
-        pane,
-        &track.artist,
-        theme::TEXT_SIZE_SM,
-        artist_id.map(|id| (id.to_string(), track.source)),
-    );
+    let artist_subtitle = subtitle_artists(pane, track, player.strings.direction);
 
     inner_row_layout(
         player.strings.direction,
