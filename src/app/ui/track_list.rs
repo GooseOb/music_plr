@@ -28,7 +28,7 @@ use crate::{
     app::{
         interaction::{row_id, HoverTarget, Pressed, TrackPos},
         pane::{is_main_pane, PaneId},
-        ui::shared_components::like_button,
+        ui::shared_components::playbar_toggle_button_unsized,
         update::operation::{ListGeometry, ScrollTarget},
         ViewData,
     },
@@ -231,6 +231,11 @@ fn view_track_row_inner<'a>(
 }
 
 // ── shared helpers ─────────────────────────────────────────────
+fn trailing_icon(icon: &'static [u8]) -> Element<'static, Message, AppTheme> {
+    icons::icon(icon, theme::ICON_SIZE_MD)
+        .style(icon_style_accent())
+        .into()
+}
 
 /// The inner row layout for a track: leading | thumbnail | title/artist |
 /// status icon | duration. Delegates to [`inner_row_layout`].
@@ -306,28 +311,21 @@ fn track_row_layout_inner<'a>(
     }
 
     if trashed {
-        trailing_children.push(
-            icons::icon(icons::DELETE_ICON, theme::ICON_SIZE_MD)
-                .style(icon_style_accent())
-                .into(),
-        );
+        trailing_children.push(trailing_icon(icons::DELETE_ICON));
     }
 
-    trailing_children.push(if is_downloaded {
-        icons::icon(icons::DOWNLOAD_ICON, theme::ICON_SIZE_MD)
-            .style(icon_style_accent())
-            .into()
-    } else if is_cached {
-        icons::icon(icons::CACHE_ICON, theme::ICON_SIZE_MD)
-            .style(icon_style_accent())
-            .into()
-    } else {
-        Space::new().width(theme::ICON_SIZE_MD).into()
-    });
+    let icon = is_downloaded
+        .then_some(icons::DOWNLOAD_ICON)
+        .or_else(|| is_cached.then_some(icons::CACHE_ICON));
+
+    if let Some(icon) = icon {
+        trailing_children.push(trailing_icon(icon));
+    }
 
     let liked = player.is_track_liked(track);
     trailing_children.push(
-        like_button(liked)
+        playbar_toggle_button_unsized(icons::HEART_ICON, liked)
+            .padding(theme::SPACING_XS)
             .on_press(Message::ToggleTrackLike(pos))
             .into(),
     );

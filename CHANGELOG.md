@@ -8,6 +8,17 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+## [1.5.3] - 2026-11-07
+
+### Changed
+
+- Queue icon size increased.
+- Set build options for better size reduction.
+
+### Fixed
+
+- Removed gap in track row trailing items before the trash icon if not downloaded or cached.
+
 ## [1.5.2] - 2026-11-06
 
 ### Added
@@ -191,6 +202,7 @@ Plain lyrics are now displayed correctly when synced lyrics are not available.
 - Clearing non-main list selection on navigation.
 - Selection ordering; Ctrl+C / Ctrl+V now respect the hovered list.
 
+[1.5.3]: https://github.com/GooseOb/music_plr/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/GooseOb/music_plr/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/GooseOb/music_plr/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/GooseOb/music_plr/compare/v1.4.1...v1.5.0

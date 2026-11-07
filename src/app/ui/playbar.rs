@@ -7,8 +7,7 @@ use iced::{
 use super::{
     progress_bar::ProgressBar,
     shared_components::{
-        icon_button, like_button, play_pause_button, playbar_toggle_button, subtitle_artists,
-        thumbnail,
+        icon_button, play_pause_button, playbar_toggle_button, subtitle_artists, thumbnail,
     },
     styles::{
         bg_tertiary, fg_secondary, icon_style_fg, icon_style_fg_muted, icon_style_fg_secondary,
@@ -105,10 +104,8 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     let like_btn = track.map_or_else(
         || Space::new().into(),
         |_| {
-            like_button(liked)
+            playbar_toggle_button(icons::HEART_ICON, liked)
                 .on_press(Message::ToggleCurrentTrackLike)
-                .width(theme::QUEUE_BTN_WIDTH)
-                .height(theme::QUEUE_BTN_WIDTH)
                 .into()
         },
     );

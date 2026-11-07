@@ -445,14 +445,6 @@ pub fn dep_install_status(
     None
 }
 
-pub fn like_button(liked: bool) -> Button<'static, Message, AppTheme> {
-    Button::new(
-        icons::icon(icons::HEART_ICON, theme::ICON_SIZE_MD).style(icon_style_playbar_button(liked)),
-    )
-    .padding(theme::SPACING_XS)
-    .style(button_style_playbar(liked))
-}
-
 pub fn dialog_button(
     label: impl text::IntoFragment<'static>,
 ) -> Button<'static, Message, AppTheme> {
@@ -475,9 +467,9 @@ pub fn text_button(label: impl text::IntoFragment<'static>) -> Button<'static, M
 pub fn icon_button(
     icon_data: &'static [u8],
     size: f32,
-    color: impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static,
+    style: impl Fn(&AppTheme, svg::Status) -> svg::Style + 'static,
 ) -> Button<'static, Message, AppTheme> {
-    Button::new(icons::icon(icon_data, size).style(color)).padding(theme::SPACING_2XS)
+    Button::new(icons::icon(icon_data, size).style(style)).padding(theme::SPACING_2XS)
 }
 
 pub fn icon_button_delete() -> Button<'static, Message, AppTheme> {
@@ -491,7 +483,7 @@ pub fn link_button<'a>(
     Button::new(content).padding(0).style(button_style_album())
 }
 
-pub fn playbar_toggle_button(
+pub fn playbar_toggle_button_unsized(
     icon_data: &'static [u8],
     active: bool,
 ) -> Button<'static, Message, AppTheme> {
@@ -501,8 +493,15 @@ pub fn playbar_toggle_button(
         icon_style_playbar_button(active),
     )
     .style(button_style_playbar(active))
-    .width(theme::QUEUE_BTN_WIDTH)
-    .height(theme::QUEUE_BTN_WIDTH)
+}
+
+pub fn playbar_toggle_button(
+    icon_data: &'static [u8],
+    active: bool,
+) -> Button<'static, Message, AppTheme> {
+    playbar_toggle_button_unsized(icon_data, active)
+        .width(theme::QUEUE_BTN_WIDTH)
+        .height(theme::QUEUE_BTN_WIDTH)
 }
 
 /// Width of one square art card and of its picture, shared by every card shelf
