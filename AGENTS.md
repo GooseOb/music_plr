@@ -26,6 +26,8 @@ cargo +nightly fmt && cargo clippy && cargo test
 
 **Do not commit unless explicitly asked.** Leave changes in the working tree and report what changed; the user decides when and how it lands. This covers `git commit` and anything that implicitly commits (`git merge`, `git rebase`, `git stash`, `git checkout` over local edits). Never `push`, amend, or rewrite history unprompted. When a commit _is_ requested: one logical change per commit, imperative subject under ~72 chars, body explaining **why** when the diff doesn't show it. Run `cargo +nightly fmt && cargo clippy && cargo test` before handing work back, committed or not.
 
+Versions are bumped with `./bump_version.sh patch|minor|major|vX.Y.Z`, which updates `Cargo.toml`/`Cargo.lock` and cuts the `CHANGELOG.md` release section from `[Unreleased]` (left empty) plus its compare-link reference.
+
 ## Conventions
 
 - No comments in code, unless logic is really non-obvious. Comments describe _current_ state, not what's changed.
