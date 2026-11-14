@@ -75,6 +75,8 @@ pub const STRINGS: Strings = Strings {
     translation_not_configured: "Пазначце URL сэрвэры і мадэль у наладах.",
     translation_failed: |e| format!("Памылка перакладу: {e}"),
     sec_translation: "ШІ-пераклад",
+    sec_lyrics: "Тэксты",
+    default_lyrics_provider_lbl: "Перадвызначаная крыніца тэкстаў",
     translation_base_url_lbl: "URL сэрвэру (сумяшчальны з OpenAI)",
     translation_api_key_lbl: "API-ключ (пуста для лякальных сэрвэраў)",
     translation_model_lbl: "Мадэль",

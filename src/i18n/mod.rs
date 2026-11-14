@@ -188,6 +188,8 @@ pub struct Strings {
     pub translation_not_configured: &'static str,
     pub translation_failed: fn(&str) -> String,
     pub sec_translation: &'static str,
+    pub sec_lyrics: &'static str,
+    pub default_lyrics_provider_lbl: &'static str,
     pub translation_base_url_lbl: &'static str,
     pub translation_api_key_lbl: &'static str,
     pub translation_model_lbl: &'static str,

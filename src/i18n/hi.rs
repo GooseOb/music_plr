@@ -72,6 +72,8 @@ pub const STRINGS: Strings = Strings {
     translation_not_configured: "सेटिंग्स में सर्वर URL और मॉडल भरें।",
     translation_failed: |e| format!("अनुवाद विफल: {e}"),
     sec_translation: "AI अनुवाद",
+    sec_lyrics: "बोल",
+    default_lyrics_provider_lbl: "डिफ़ॉल्ट लिरिक्स प्रदाता",
     translation_base_url_lbl: "सर्वर URL (OpenAI-संगत)",
     translation_api_key_lbl: "API कुंजी (स्थानीय सर्वर हेतु खाली)",
     translation_model_lbl: "मॉडल",

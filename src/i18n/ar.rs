@@ -72,6 +72,8 @@ pub const STRINGS: Strings = Strings {
     translation_not_configured: "حدد رابط الخادم والنموذج في الإعدادات.",
     translation_failed: |e| format!("فشلت الترجمة: {e}"),
     sec_translation: "الترجمة بالذكاء الاصطناعي",
+    sec_lyrics: "الكلمات",
+    default_lyrics_provider_lbl: "مزود الكلمات الافتراضي",
     translation_base_url_lbl: "رابط الخادم (متوافق مع OpenAI)",
     translation_api_key_lbl: "مفتاح API (فارغ للخوادم المحلية)",
     translation_model_lbl: "النموذج",

@@ -75,6 +75,8 @@ pub const STRINGS: Strings = Strings {
     translation_not_configured: "Укажите URL сервера и модель в настройках.",
     translation_failed: |e| format!("Ошибка перевода: {e}"),
     sec_translation: "ИИ-перевод",
+    sec_lyrics: "Тексты",
+    default_lyrics_provider_lbl: "Источник текстов по умолчанию",
     translation_base_url_lbl: "URL сервера (OpenAI-совместимый)",
     translation_api_key_lbl: "API-ключ (пусто для локальных серверов)",
     translation_model_lbl: "Модель",

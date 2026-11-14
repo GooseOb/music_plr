@@ -27,7 +27,6 @@ pub struct SessionState {
     pub volume: f32,
     pub repeat: bool,
     pub library_expanded: bool,
-    pub lyrics_provider: crate::lyrics::LyricsProvider,
     /// The view the currently playing track came from, so "reveal now playing"
     /// survives a restart.
     #[serde(default)]
@@ -45,7 +44,6 @@ impl Default for SessionState {
             volume: 0.8,
             repeat: false,
             library_expanded: true,
-            lyrics_provider: crate::lyrics::LyricsProvider::default(),
             now_playing_from: None,
         }
     }
@@ -178,8 +176,6 @@ struct LegacySessionState {
     search_scope: crate::providers::SearchScope,
     #[serde(default)]
     search_provider: crate::providers::ProviderId,
-    #[serde(default)]
-    lyrics_provider: crate::lyrics::LyricsProvider,
 }
 
 fn default_volume() -> f32 {
@@ -205,7 +201,6 @@ impl From<LegacySessionState> for SessionState {
             volume: old.volume,
             repeat: old.repeat,
             library_expanded: old.library_expanded,
-            lyrics_provider: old.lyrics_provider,
             now_playing_from: None,
         }
     }
@@ -269,7 +264,6 @@ mod tests {
         assert!(state.queue.tracks.is_empty());
         assert!(!state.show_queue);
         assert!((state.volume - 0.8).abs() < f32::EPSILON);
-        assert_eq!(state.lyrics_provider, crate::lyrics::LyricsProvider::LrcLib);
     }
 
     #[test]
@@ -558,7 +552,6 @@ mod tests {
             volume: 0.5,
             repeat: true,
             library_expanded: false,
-            lyrics_provider: crate::lyrics::LyricsProvider::LrcLib,
             now_playing_from: None,
         };
         let json = serde_json::to_string(&state).unwrap();
@@ -571,10 +564,6 @@ mod tests {
         assert!((restored.volume - 0.5).abs() < f32::EPSILON);
         assert!(restored.repeat);
         assert!(!restored.library_expanded);
-        assert_eq!(
-            restored.lyrics_provider,
-            crate::lyrics::LyricsProvider::LrcLib
-        );
         if let ViewKind::ArtistRadio(data) = &restored.panes[&0].nav_history[0].kind {
             assert_eq!(data.title, "Test Radio");
             assert_eq!(restored.panes[&0].nav_history[0].selection, vec![2]);

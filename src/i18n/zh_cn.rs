@@ -70,6 +70,8 @@ pub const STRINGS: Strings = Strings {
     translation_not_configured: "请在设置中填写服务器 URL 和模型。",
     translation_failed: |e| format!("翻译失败：{e}"),
     sec_translation: "AI 翻译",
+    sec_lyrics: "歌词",
+    default_lyrics_provider_lbl: "默认歌词提供方",
     translation_base_url_lbl: "服务器 URL（兼容 OpenAI）",
     translation_api_key_lbl: "API 密钥（本地服务器留空）",
     translation_model_lbl: "模型",

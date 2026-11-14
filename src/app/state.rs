@@ -370,6 +370,7 @@ impl MusicPlayer {
         player.restore_session();
         player.drop_unregistered_server_playlists();
         player.reconcile_provider_refs();
+        player.reconcile_lyrics_provider_refs();
         for item in &player.library.items {
             if !item.thumbnail.is_empty() {
                 player

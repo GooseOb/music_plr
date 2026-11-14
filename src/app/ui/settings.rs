@@ -14,19 +14,40 @@ use crate::{
     app::{
         custom_provider::{ConnectionTest, CustomProviderField, CustomProviderForm},
         dependency_dialog::dep_desc,
-        ui::styles::{fg_accent, fg_secondary},
+        ui::{
+            shared_components::secure_text_input_row,
+            styles::{fg_accent, fg_secondary},
+        },
         update::SettingsChange,
     },
     data::custom_providers::CustomProviderKind,
     deps::DepKind,
-    i18n::Language,
+    i18n::{Direction, Language},
+    load_state::LoadState,
     providers::ProviderId,
     theme::{self, AppTheme},
 };
 
-fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let row = scope_tab_row(
+/// A labelled row of chips: the shared shape of every settings picker.
+fn picker<'a, I, S>(
+    dir: Direction,
+    label: impl text::IntoFragment<'a>,
+    items: I,
+) -> Element<'a, Message, AppTheme>
+where
+    I: IntoIterator<Item = (S, bool, Message)>,
+    S: text::IntoFragment<'static>,
+{
+    Column::with_children([text(label).into(), scope_tab_row(dir, items)])
+        .spacing(theme::SPACING_SM)
+        .align_x(dir.align())
+        .into()
+}
+
+fn default_provider_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    picker(
         player.strings.direction,
+        player.strings.default_provider_lbl,
         ProviderId::defaultable().iter().map(|&provider| {
             (
                 player.strings.provider(provider),
@@ -34,14 +55,56 @@ fn default_provider_section(player: &MusicPlayer) -> Element<'_, Message, AppThe
                 Message::SettingsChanged(SettingsChange::DefaultProvider(provider)),
             )
         }),
-    );
-    Column::with_children([text(player.strings.default_provider_lbl).into(), row])
-        .spacing(theme::SPACING_SM)
-        .align_x(player.strings.direction.align())
+    )
+}
+
+fn default_lyrics_provider_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    picker(
+        player.strings.direction,
+        player.strings.default_lyrics_provider_lbl,
+        player
+            .config
+            .enabled_lyrics_providers()
+            .into_iter()
+            .map(|provider| {
+                (
+                    provider.name(),
+                    player.config.default_lyrics_provider == provider,
+                    Message::SettingsChanged(SettingsChange::DefaultLyricsProvider(provider)),
+                )
+            }),
+    )
+}
+
+fn lyrics_provider_checkbox(
+    player: &MusicPlayer,
+    provider: crate::lyrics::LyricsProvider,
+) -> Element<'_, Message, AppTheme> {
+    checkbox(player.config.lyrics_provider_enabled(provider))
+        .label(provider.name())
+        .on_toggle(move |enabled| {
+            Message::SettingsChanged(SettingsChange::LyricsProviderEnabled(provider, enabled))
+        })
+        .spacing(theme::SPACING_MD)
         .into()
 }
 
-fn cookie_browser_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+fn lyrics_section(
+    player: &MusicPlayer,
+) -> impl IntoIterator<Item = Element<'_, Message, AppTheme>> {
+    let dir = player.strings.direction;
+    let toggles = Column::with_children(
+        crate::lyrics::LyricsProvider::all()
+            .iter()
+            .copied()
+            .map(|provider| lyrics_provider_checkbox(player, provider)),
+    )
+    .spacing(theme::SPACING_SM)
+    .align_x(dir.align());
+    [default_lyrics_provider_picker(player), toggles.into()]
+}
+
+fn cookie_browser_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let current = player.config.cookie_browser.as_deref();
     let mut items = Vec::with_capacity(crate::deps::COOKIE_BROWSERS.len() + 1);
     items.push((
@@ -57,14 +120,16 @@ fn cookie_browser_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme
             Message::SettingsChanged(SettingsChange::CookieBrowser(Some(browser.to_string()))),
         ));
     }
-    let row = scope_tab_row(player.strings.direction, items);
-    Column::with_children([text(player.strings.cookie_browser_lbl).into(), row])
-        .spacing(theme::SPACING_SM)
-        .align_x(player.strings.direction.align())
-        .into()
+    picker(
+        player.strings.direction,
+        player.strings.cookie_browser_lbl,
+        items,
+    )
 }
 
-fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+fn translation_section(
+    player: &MusicPlayer,
+) -> impl IntoIterator<Item = Element<'_, Message, AppTheme>> {
     let cfg = &player.config;
     let base_url = text_input_row(
         player.strings.direction,
@@ -73,20 +138,13 @@ fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         crate::translate::DEFAULT_BASE_URL,
         |s| Message::SettingsChanged(SettingsChange::TranslationBaseUrl(s)),
     );
-    let api_key = Column::with_children([
-        Container::new(text(player.strings.translation_api_key_lbl))
-            .padding([0.0, theme::SPACING_XS])
-            .into(),
-        text_input("", &cfg.translation_api_key)
-            .secure(true)
-            .align_x(player.strings.direction.align())
-            .on_input(|s| Message::SettingsChanged(SettingsChange::TranslationApiKey(s)))
-            .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .into(),
-    ])
-    .spacing(theme::SPACING_XS)
-    .align_x(player.strings.direction.align())
-    .into();
+    let api_key = secure_text_input_row(
+        player.strings.direction,
+        player.strings.translation_api_key_lbl,
+        &cfg.translation_api_key,
+        "",
+        |s| Message::SettingsChanged(SettingsChange::TranslationApiKey(s)),
+    );
     let model = text_input_row(
         player.strings.direction,
         player.strings.translation_model_lbl,
@@ -97,31 +155,31 @@ fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let loading = player
         .translation_models
         .as_ref()
-        .is_some_and(crate::load_state::LoadState::is_loading);
+        .is_some_and(LoadState::is_loading);
     let refresh = text_button(player.strings.translation_refresh_models)
         .on_press_maybe((!loading).then_some(Message::RequestTranslationModels))
         .into();
     let mut children: Vec<Element<'_, Message, AppTheme>> = vec![base_url, api_key, model, refresh];
     match &player.translation_models {
         None => {}
-        Some(crate::load_state::LoadState::Loading) => {
+        Some(LoadState::Loading) => {
             children.push(text(player.strings.loading).style(fg_secondary()).into());
         }
-        Some(crate::load_state::LoadState::Failed(e)) => {
+        Some(LoadState::Failed(e)) => {
             children.push(
                 text((player.strings.translation_models_failed)(e))
                     .style(fg_secondary())
                     .into(),
             );
         }
-        Some(crate::load_state::LoadState::Ready(models)) if models.is_empty() => {
+        Some(LoadState::Ready(models)) if models.is_empty() => {
             children.push(
                 text(player.strings.translation_no_models)
                     .style(fg_secondary())
                     .into(),
             );
         }
-        Some(crate::load_state::LoadState::Ready(models)) => {
+        Some(LoadState::Ready(models)) => {
             children.push(
                 text_input(
                     player.strings.find_in_list,
@@ -156,14 +214,11 @@ fn translation_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             }
         }
     }
-    Column::with_children(children)
-        .spacing(theme::SPACING_SM)
-        .align_x(player.strings.direction.align())
-        .into()
+    children
 }
 
 fn section<'a>(
-    dir: crate::i18n::Direction,
+    dir: Direction,
     label: &'a str,
     children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
@@ -179,7 +234,9 @@ fn section<'a>(
     .into()
 }
 
-fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+fn updates_section(
+    player: &MusicPlayer,
+) -> impl IntoIterator<Item = Element<'_, Message, AppTheme>> {
     let tr = &player.strings;
     let check_on_startup = checkbox(player.config.check_updates_on_startup)
         .label(tr.check_updates_on_startup_lbl)
@@ -229,7 +286,7 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         }
     };
 
-    Column::with_children([
+    [
         text_button(tr.check_for_updates)
             .on_press(Message::CheckForUpdates)
             .into(),
@@ -238,15 +295,13 @@ fn updates_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
             .style(fg_secondary())
             .into(),
         status,
-    ])
-    .spacing(theme::SPACING_SM)
-    .align_x(tr.direction.align())
-    .into()
+    ]
 }
 
-fn language_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let row = scope_tab_row(
+fn language_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    picker(
         player.strings.direction,
+        player.strings.language_lbl,
         Language::ALL.iter().map(|&language| {
             (
                 language.label(),
@@ -254,16 +309,13 @@ fn language_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                 Message::SettingsChanged(SettingsChange::Language(language)),
             )
         }),
-    );
-    Column::with_children([text(player.strings.language_lbl).into(), row])
-        .spacing(theme::SPACING_SM)
-        .align_x(player.strings.direction.align())
-        .into()
+    )
 }
 
-fn theme_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let row = scope_tab_row(
+fn theme_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+    picker(
         player.strings.direction,
+        player.strings.theme_lbl,
         theme::ThemeKind::ALL.iter().map(|&kind| {
             (
                 kind.label(),
@@ -271,11 +323,7 @@ fn theme_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
                 Message::SettingsChanged(SettingsChange::Theme(kind)),
             )
         }),
-    );
-    Column::with_children([text(player.strings.theme_lbl).into(), row])
-        .spacing(theme::SPACING_SM)
-        .align_x(player.strings.direction.align())
-        .into()
+    )
 }
 
 /// One provider's on/off switch. Switched-off providers are hidden from every
@@ -301,7 +349,9 @@ fn provider_checkbox(
 }
 
 /// The built-in providers' checkboxes plus the custom-provider list.
-fn providers_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
+fn providers_section(
+    player: &MusicPlayer,
+) -> impl IntoIterator<Item = Element<'_, Message, AppTheme>> {
     let tr = &player.strings;
     let dir = tr.direction;
     let builtin = Column::with_children(
@@ -314,14 +364,12 @@ fn providers_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     .spacing(theme::SPACING_SM)
     .align_x(dir.align());
 
-    Column::with_children([
+    [
+        default_provider_picker(player),
         builtin.into(),
         text(tr.sec_providers).style(fg_secondary()).into(),
         custom_providers_section(player),
-    ])
-    .spacing(theme::SPACING_MD)
-    .align_x(dir.align())
-    .into()
+    ]
 }
 
 fn custom_providers_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
@@ -406,21 +454,17 @@ fn custom_provider_form<'a>(
         "",
         |value| Message::CustomProviderField(CustomProviderField::Name, value),
     );
-    let kind = Column::with_children([
-        text(tr.custom_provider_type_lbl).into(),
-        scope_tab_row(
-            dir,
-            CustomProviderKind::ALL.iter().map(|&kind| {
-                (
-                    kind.label(),
-                    form.draft.kind == kind,
-                    Message::CustomProviderKindChanged(kind),
-                )
-            }),
-        ),
-    ])
-    .spacing(theme::SPACING_SM)
-    .align_x(dir.align());
+    let kind = picker(
+        dir,
+        tr.custom_provider_type_lbl,
+        CustomProviderKind::ALL.iter().map(|&kind| {
+            (
+                kind.label(),
+                form.draft.kind == kind,
+                Message::CustomProviderKindChanged(kind),
+            )
+        }),
+    );
     let server_url = text_input_row(
         dir,
         tr.custom_provider_url_lbl,
@@ -435,19 +479,13 @@ fn custom_provider_form<'a>(
         "",
         |value| Message::CustomProviderField(CustomProviderField::Username, value),
     );
-    let password = Column::with_children([
-        Container::new(text(tr.custom_provider_password_lbl))
-            .padding([0.0, theme::SPACING_XS])
-            .into(),
-        text_input("", &form.draft.password)
-            .secure(true)
-            .align_x(dir.align())
-            .on_input(|value| Message::CustomProviderField(CustomProviderField::Password, value))
-            .padding([theme::SPACING_SM, theme::SPACING_MD])
-            .into(),
-    ])
-    .spacing(theme::SPACING_XS)
-    .align_x(dir.align());
+    let password = secure_text_input_row(
+        dir,
+        tr.custom_provider_password_lbl,
+        &form.draft.password,
+        "",
+        |value| Message::CustomProviderField(CustomProviderField::Password, value),
+    );
 
     let testing = matches!(form.test, ConnectionTest::Testing);
     let actions = dir
@@ -483,7 +521,7 @@ fn custom_provider_form<'a>(
             .style(fg_accent())
             .into(),
         name,
-        kind.into(),
+        kind,
         server_url,
         username,
         password.into(),
@@ -568,21 +606,22 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         section(
             player.strings.direction,
             player.strings.sec_playback,
-            [
-                normalize,
-                default_provider_section(player),
-                cookie_browser_section(player),
-            ],
+            [normalize, cookie_browser_picker(player)],
         ),
         section(
             player.strings.direction,
             player.strings.providers,
-            [providers_section(player)],
+            providers_section(player),
         ),
         section(
             player.strings.direction,
-            player.strings.sec_translation,
-            [translation_section(player)],
+            player.strings.sec_lyrics,
+            lyrics_section(player),
+        ),
+        section(
+            player.strings.direction,
+            player.strings.sec_updates,
+            updates_section(player),
         ),
         section(
             player.strings.direction,
@@ -596,48 +635,35 @@ pub(super) fn view_settings(player: &MusicPlayer) -> Element<'_, Message, AppThe
         ),
         section(
             player.strings.direction,
-            player.strings.sec_dependencies,
-            [dep_settings_section(player)],
+            player.strings.sec_translation,
+            translation_section(player),
         ),
         section(
             player.strings.direction,
-            player.strings.sec_updates,
-            [updates_section(player)],
+            player.strings.language_lbl,
+            [language_picker(player)],
         ),
-        Column::with_children([
-            section(
-                player.strings.direction,
-                player.strings.language_lbl,
-                [language_section(player)],
-            ),
-            section(
-                player.strings.direction,
-                player.strings.sec_appearance,
-                [theme_section(player)],
-            ),
-            text_button(player.strings.reset_defaults)
-                .on_press(Message::SettingsResetDefaults)
-                .into(),
-        ])
-        .spacing(theme::SPACING_XL)
-        .align_x(player.strings.direction.align())
-        .into(),
+        section(
+            player.strings.direction,
+            player.strings.sec_appearance,
+            [theme_picker(player)],
+        ),
+        section(
+            player.strings.direction,
+            player.strings.sec_dependencies,
+            DepKind::all()
+                .iter()
+                .map(|&kind| dep_settings_row(player, kind)),
+        ),
+        text_button(player.strings.reset_defaults)
+            .on_press(Message::SettingsResetDefaults)
+            .into(),
     ])
     .spacing(theme::SPACING_XL)
     .align_x(player.strings.direction.align());
 
     scrollable(Container::new(content).padding([theme::SPACING_MD, theme::SPACING_XL]))
         .id(iced::widget::Id::new("settings_scroll"))
-        .into()
-}
-
-fn dep_settings_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
-    let rows = DepKind::all()
-        .iter()
-        .map(|&kind| dep_settings_row(player, kind));
-    Column::with_children(rows)
-        .spacing(theme::SPACING_MD)
-        .align_x(player.strings.direction.align())
         .into()
 }
 

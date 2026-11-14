@@ -70,6 +70,8 @@ pub const STRINGS: Strings = Strings {
     translation_not_configured: "設定でサーバーのURLとモデルを指定してください。",
     translation_failed: |e| format!("翻訳に失敗しました: {e}"),
     sec_translation: "AI翻訳",
+    sec_lyrics: "歌詞",
+    default_lyrics_provider_lbl: "既定の歌詞プロバイダー",
     translation_base_url_lbl: "サーバーURL（OpenAI互換）",
     translation_api_key_lbl: "APIキー（ローカルサーバーでは空欄）",
     translation_model_lbl: "モデル",

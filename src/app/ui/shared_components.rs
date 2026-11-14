@@ -336,24 +336,26 @@ pub fn subtitle_artists<'a>(
     dir.row(children).into()
 }
 
-pub fn labeled_input<'a>(
+fn raw_input<'a>(
     dir: Direction,
-    label: &'a str,
     value: &str,
     placeholder: &'a str,
-    on_input: Option<fn(String) -> Message>,
-) -> Element<'a, Message, AppTheme> {
-    let mut input = text_input(placeholder, value)
+) -> text_input::TextInput<'a, Message, AppTheme> {
+    text_input(placeholder, value)
         .align_x(dir.align())
-        .padding([theme::SPACING_SM, theme::SPACING_MD]);
-    if let Some(on_input) = on_input {
-        input = input.on_input(on_input);
-    }
+        .padding([theme::SPACING_SM, theme::SPACING_MD])
+}
+
+fn labeled<'a>(
+    dir: Direction,
+    label: &'a str,
+    element: Element<'a, Message, AppTheme>,
+) -> Element<'a, Message, AppTheme> {
     Column::with_children([
         Container::new(text(label))
             .padding([0.0, theme::SPACING_XS])
             .into(),
-        input.into(),
+        element,
     ])
     .spacing(theme::SPACING_XS)
     .align_x(dir.align())
@@ -365,7 +367,7 @@ pub fn disabled_text_input_row<'a>(
     label: &'a str,
     value: &str,
 ) -> Element<'a, Message, AppTheme> {
-    labeled_input(dir, label, value, "", None::<fn(String) -> Message>)
+    labeled(dir, label, raw_input(dir, value, "").into())
 }
 
 pub fn text_input_row<'a>(
@@ -375,7 +377,28 @@ pub fn text_input_row<'a>(
     placeholder: &'a str,
     on_input: fn(String) -> Message,
 ) -> Element<'a, Message, AppTheme> {
-    labeled_input(dir, label, value, placeholder, Some(on_input))
+    labeled(
+        dir,
+        label,
+        raw_input(dir, value, placeholder).on_input(on_input).into(),
+    )
+}
+
+pub fn secure_text_input_row<'a>(
+    dir: Direction,
+    label: &'a str,
+    value: &str,
+    placeholder: &'a str,
+    on_input: fn(String) -> Message,
+) -> Element<'a, Message, AppTheme> {
+    labeled(
+        dir,
+        label,
+        raw_input(dir, value, placeholder)
+            .on_input(on_input)
+            .secure(true)
+            .into(),
+    )
 }
 
 pub fn load_state_tracks<'a>(

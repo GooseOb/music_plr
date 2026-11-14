@@ -17,6 +17,7 @@ pub enum SettingsChange {
     MaxRecentlyPlayed(String),
     VolumeNormalization(bool),
     DefaultProvider(crate::providers::ProviderId),
+    DefaultLyricsProvider(crate::lyrics::LyricsProvider),
     Language(crate::i18n::Language),
     Theme(crate::theme::ThemeKind),
     CookieBrowser(Option<String>),
@@ -27,6 +28,9 @@ pub enum SettingsChange {
     /// Switch a provider off (or back on) in Settings. Disabled providers are
     /// hidden from every picker, submenu and server-playlist group.
     ProviderEnabled(crate::providers::ProviderId, bool),
+    /// Switch a lyrics provider off (or back on) in Settings. Disabled lyrics
+    /// providers disappear from the lyrics provider picker.
+    LyricsProviderEnabled(crate::lyrics::LyricsProvider, bool),
 }
 
 impl MusicPlayer {
@@ -85,6 +89,9 @@ impl MusicPlayer {
                     self.set_config(|c| c.default_provider = provider);
                 }
             }
+            SettingsChange::DefaultLyricsProvider(provider) => {
+                self.set_default_lyrics_provider(provider);
+            }
             SettingsChange::Theme(kind) => {
                 self.set_config(|c| c.theme_kind = kind);
                 self.app_theme = AppTheme::new(&kind.palette());
@@ -130,6 +137,9 @@ impl MusicPlayer {
                     let _ = self.refresh_server_playlists(Some(provider));
                 }
             }
+            SettingsChange::LyricsProviderEnabled(provider, enabled) => {
+                self.set_lyrics_provider_enabled(provider, enabled);
+            }
         }
     }
 
@@ -141,6 +151,7 @@ impl MusicPlayer {
             .set_max_size_mb(self.config.cache_max_size_mb);
         self.app_theme = AppTheme::new(&self.config.theme_kind.palette());
         self.reconcile_provider_refs();
+        self.reconcile_lyrics_provider_refs();
         self.save_session();
     }
 
@@ -304,6 +315,48 @@ impl MusicPlayer {
         });
     }
 
+    fn set_default_lyrics_provider(&mut self, provider: crate::lyrics::LyricsProvider) {
+        if self.config.lyrics_provider_enabled(provider) {
+            self.set_config(|c| c.default_lyrics_provider = provider);
+        }
+    }
+
+    fn set_lyrics_provider_enabled(
+        &mut self,
+        provider: crate::lyrics::LyricsProvider,
+        enabled: bool,
+    ) {
+        // Keep one lyrics provider available: a pane with none has nothing to
+        // fetch, and the picker would be empty.
+        if !enabled && self.config.enabled_lyrics_providers().len() <= 1 {
+            return;
+        }
+        self.set_config(|c| {
+            if enabled {
+                c.disabled_lyrics_providers.remove(&provider);
+            } else {
+                c.disabled_lyrics_providers.insert(provider);
+            }
+        });
+        self.reconcile_lyrics_provider_refs();
+    }
+
+    /// Keep the lyrics default and open lyrics panes on providers that are
+    /// switched on. Runs after startup, defaults reset, and every lyrics
+    /// provider toggle.
+    pub(crate) fn reconcile_lyrics_provider_refs(&mut self) {
+        if !self
+            .config
+            .lyrics_provider_enabled(self.config.default_lyrics_provider)
+        {
+            if let Some(fallback) = self.config.enabled_lyrics_providers().into_iter().next() {
+                self.config.default_lyrics_provider = fallback;
+                self.config.save();
+            }
+        }
+        self.reconcile_open_lyrics_providers();
+    }
+
     /// Keep config and pane state pointing at providers that are usable and
     /// switched on. A custom provider can be deleted, and any provider can be
     /// turned off, while the default provider or a pane's search bar still
@@ -355,8 +408,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        app::ViewData,
+        app::{LyricsState, ViewData},
         data::config,
+        lyrics::LyricsProvider,
         providers::{ArtistSectionKind, ProviderId},
     };
 
@@ -445,9 +499,94 @@ mod tests {
         player.handle_settings_change(SettingsChange::ProviderEnabled(ProviderId::LastFm, false));
         assert!(!ProviderId::searchable().contains(&ProviderId::LastFm));
 
+        player.handle_settings_change(SettingsChange::LyricsProviderEnabled(
+            LyricsProvider::Genius,
+            false,
+        ));
+        assert!(!player
+            .config
+            .lyrics_provider_enabled(LyricsProvider::Genius));
+
         player.handle_settings_reset_defaults();
         assert!(player.config.disabled_providers.is_empty());
+        assert!(player.config.disabled_lyrics_providers.is_empty());
+        assert_eq!(
+            player.config.default_lyrics_provider,
+            LyricsProvider::LrcLib
+        );
         assert!(ProviderId::searchable().contains(&ProviderId::LastFm));
+    }
+
+    #[test]
+    fn disabling_a_lyrics_provider_hides_it_and_rehomes_the_default() {
+        let _guard = lock();
+        let mut player = player();
+        player.handle_settings_change(SettingsChange::DefaultLyricsProvider(
+            LyricsProvider::NetEase,
+        ));
+        assert_eq!(
+            player.config.default_lyrics_provider,
+            LyricsProvider::NetEase
+        );
+
+        player.handle_settings_change(SettingsChange::LyricsProviderEnabled(
+            LyricsProvider::NetEase,
+            false,
+        ));
+
+        assert!(!player
+            .config
+            .enabled_lyrics_providers()
+            .contains(&LyricsProvider::NetEase));
+        assert_ne!(
+            player.config.default_lyrics_provider,
+            LyricsProvider::NetEase
+        );
+        assert!(player
+            .config
+            .lyrics_provider_enabled(player.config.default_lyrics_provider));
+    }
+
+    #[test]
+    fn disabling_an_open_lyrics_provider_moves_the_pane_to_the_default() {
+        let _guard = lock();
+        let mut player = player();
+        player.config.default_lyrics_provider = LyricsProvider::NetEase;
+        player.pane_mut(0).lyrics = Some(LyricsState::new(LyricsProvider::Genius));
+
+        player.handle_settings_change(SettingsChange::LyricsProviderEnabled(
+            LyricsProvider::Genius,
+            false,
+        ));
+
+        assert_eq!(
+            player.pane(0).lyrics.as_ref().unwrap().provider,
+            LyricsProvider::NetEase
+        );
+    }
+
+    #[test]
+    fn the_last_enabled_lyrics_provider_cannot_be_switched_off() {
+        let _guard = lock();
+        let mut player = player();
+        player.config.disabled_lyrics_providers = LyricsProvider::all()
+            .iter()
+            .copied()
+            .filter(|provider| *provider != LyricsProvider::LrcLib)
+            .collect();
+
+        player.handle_settings_change(SettingsChange::LyricsProviderEnabled(
+            LyricsProvider::LrcLib,
+            false,
+        ));
+
+        assert!(player
+            .config
+            .lyrics_provider_enabled(LyricsProvider::LrcLib));
+        assert_eq!(
+            player.config.enabled_lyrics_providers(),
+            vec![LyricsProvider::LrcLib]
+        );
     }
 
     #[test]

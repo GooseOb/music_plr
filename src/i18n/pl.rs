@@ -75,6 +75,8 @@ pub const STRINGS: Strings = Strings {
     translation_not_configured: "Ustaw adres URL serwera i model w Ustawieniach.",
     translation_failed: |e| format!("Tłumaczenie nie powiodło się: {e}"),
     sec_translation: "Tłumaczenie AI",
+    sec_lyrics: "Teksty",
+    default_lyrics_provider_lbl: "Domyślny dostawca tekstów",
     translation_base_url_lbl: "Adres URL serwera (kompatybilny z OpenAI)",
     translation_api_key_lbl: "Klucz API (pusty dla serwerów lokalnych)",
     translation_model_lbl: "Model",

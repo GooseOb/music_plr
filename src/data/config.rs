@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{data::JsonStore, i18n::Language, providers::ProviderId, theme::ThemeKind};
+use crate::{
+    data::JsonStore, i18n::Language, lyrics::LyricsProvider, providers::ProviderId,
+    theme::ThemeKind,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
@@ -15,6 +18,10 @@ pub struct Config {
     /// at the UI level to providers that support both streaming and
     /// downloading.
     pub default_provider: ProviderId,
+    /// Provider a newly opened lyrics pane starts with. Reconciled to an
+    /// enabled one whenever the configured provider is switched off.
+    #[serde(default)]
+    pub default_lyrics_provider: LyricsProvider,
     pub language: Language,
     pub theme_kind: ThemeKind,
     /// Browser `yt-dlp` reads cookies from for age-restricted videos (`None`
@@ -39,6 +46,10 @@ pub struct Config {
     /// carry their identity keep playing.
     #[serde(default)]
     pub disabled_providers: std::collections::BTreeSet<ProviderId>,
+    /// Lyrics providers the user switched off in Settings. They disappear from
+    /// the lyrics provider picker, and open lyrics panes move to the default.
+    #[serde(default)]
+    pub disabled_lyrics_providers: std::collections::BTreeSet<LyricsProvider>,
 }
 
 fn default_true() -> bool {
@@ -67,6 +78,7 @@ impl Default for Config {
             max_recently_played: 50,
             volume_normalization: false,
             default_provider: ProviderId::YouTube,
+            default_lyrics_provider: LyricsProvider::default(),
             language: Language::from_system_locale().unwrap_or_default(),
             theme_kind: ThemeKind::Dark,
             cookie_browser: None,
@@ -77,7 +89,23 @@ impl Default for Config {
             translation_prompt: default_translation_prompt(),
             check_updates_on_startup: true,
             disabled_providers: std::collections::BTreeSet::new(),
+            disabled_lyrics_providers: std::collections::BTreeSet::new(),
         }
+    }
+}
+
+impl Config {
+    pub fn lyrics_provider_enabled(&self, provider: LyricsProvider) -> bool {
+        !self.disabled_lyrics_providers.contains(&provider)
+    }
+
+    /// Enabled lyrics providers in the order the lyrics view lists them.
+    pub fn enabled_lyrics_providers(&self) -> Vec<LyricsProvider> {
+        LyricsProvider::all()
+            .iter()
+            .copied()
+            .filter(|provider| self.lyrics_provider_enabled(*provider))
+            .collect()
     }
 }
 
@@ -115,6 +143,8 @@ mod tests {
         assert!(cfg.translation_api_key.is_empty());
         assert!(cfg.translation_language.is_empty());
         assert!(cfg.check_updates_on_startup);
+        assert_eq!(cfg.default_lyrics_provider, LyricsProvider::LrcLib);
+        assert!(cfg.disabled_lyrics_providers.is_empty());
     }
 
     #[test]
@@ -127,6 +157,7 @@ mod tests {
             max_recently_played: 9,
             volume_normalization: true,
             default_provider: ProviderId::SoundCloud,
+            default_lyrics_provider: LyricsProvider::NetEase,
             language: Language::Pl,
             theme_kind: ThemeKind::Light,
             cookie_browser: Some("firefox".into()),
@@ -137,10 +168,32 @@ mod tests {
             translation_prompt: "translate".into(),
             check_updates_on_startup: false,
             disabled_providers: [ProviderId::LastFm].into_iter().collect(),
+            disabled_lyrics_providers: [LyricsProvider::Genius].into_iter().collect(),
         };
 
         let json = serde_json::to_string(&cfg).unwrap();
         assert_eq!(serde_json::from_str::<Config>(&json).unwrap(), cfg);
+    }
+
+    #[test]
+    fn enabled_lyrics_providers_skip_disabled_ones() {
+        let cfg = Config {
+            disabled_lyrics_providers: [LyricsProvider::LrcLib, LyricsProvider::Genius]
+                .into_iter()
+                .collect(),
+            ..Config::default()
+        };
+
+        assert!(!cfg.lyrics_provider_enabled(LyricsProvider::LrcLib));
+        assert!(cfg.lyrics_provider_enabled(LyricsProvider::NetEase));
+        assert_eq!(
+            cfg.enabled_lyrics_providers(),
+            vec![
+                LyricsProvider::LrcMux,
+                LyricsProvider::NetEase,
+                LyricsProvider::LyricsOvh
+            ]
+        );
     }
 
     #[test]
@@ -163,5 +216,7 @@ mod tests {
         assert_eq!(cfg.translation_prompt, crate::translate::DEFAULT_PROMPT);
         assert!(cfg.check_updates_on_startup);
         assert!(cfg.disabled_providers.is_empty());
+        assert_eq!(cfg.default_lyrics_provider, LyricsProvider::LrcLib);
+        assert!(cfg.disabled_lyrics_providers.is_empty());
     }
 }

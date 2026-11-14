@@ -56,7 +56,7 @@ impl MusicPlayer {
             self.pane_mut(pane).lyrics = None;
             Task::none()
         } else {
-            let provider = self.session.lyrics_provider;
+            let provider = self.config.default_lyrics_provider;
             self.pane_mut(pane).lyrics = Some(crate::app::LyricsState::new(provider));
             self.ensure_lyrics_for_current(pane);
             self.scroll_lyrics_to_active(pane)
@@ -334,21 +334,40 @@ impl MusicPlayer {
         self.lyrics_scroll_task(pane, active, total)
     }
 
-    /// Switch the lyrics provider of one pane (and the default for newly
-    /// opened panes), persist it, and force that pane to refetch.
+    /// Switch the lyrics provider of one pane and force it to refetch.
     pub fn handle_select_lyrics_provider(
         &mut self,
         pane: PaneId,
         provider: crate::lyrics::LyricsProvider,
     ) {
-        self.session.lyrics_provider = provider;
+        if !self.config.lyrics_provider_enabled(provider) {
+            return;
+        }
         self.flush_note_draft(pane);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
             state.provider = provider;
             Self::reset_lyrics(state);
         }
         self.ensure_lyrics_for_current(pane);
-        self.save_session();
+    }
+
+    /// Switch every open lyrics pane off a provider that was just disabled,
+    /// then load the configured default (or the first enabled) one.
+    pub(super) fn reconcile_open_lyrics_providers(&mut self) {
+        let default = self.config.default_lyrics_provider;
+        for pane in self.pane_ids() {
+            let Some(provider) = self.pane(pane).lyrics.as_ref().map(|state| state.provider) else {
+                continue;
+            };
+            if self.config.lyrics_provider_enabled(provider) {
+                continue;
+            }
+            if let Some(state) = &mut self.pane_mut(pane).lyrics {
+                state.provider = default;
+                Self::reset_lyrics(state);
+            }
+            self.ensure_lyrics_for_current(pane);
+        }
     }
 
     /// Switch the displayed lyrics of one pane between the original and a

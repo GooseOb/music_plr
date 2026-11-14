@@ -14,6 +14,8 @@ auto-generated compare link below it.
 
 - Audius provider.
 - NetEase Lyrics provider.
+- Configurable default lyrics provider.
+- Disabling lyrics providers in settings.
 
 ### Fixed
 

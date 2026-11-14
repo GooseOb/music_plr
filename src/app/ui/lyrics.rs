@@ -268,13 +268,15 @@ fn view_bottom_controls<'a>(
     let selected_provider = lyrics_state.provider;
     let selected_custom = lyrics_state.selected_custom.as_deref();
     let provider_row = scope_tab_row_h_scroll(
-        crate::lyrics::LyricsProvider::all()
-            .iter()
+        player
+            .config
+            .enabled_lyrics_providers()
+            .into_iter()
             .map(|provider| {
                 (
                     provider.name().to_string(),
-                    selected_custom.is_none() && *provider == selected_provider,
-                    Some(Message::SelectLyricsProvider(pane, *provider)),
+                    selected_custom.is_none() && provider == selected_provider,
+                    Some(Message::SelectLyricsProvider(pane, provider)),
                 )
             })
             .chain(lyrics_state.custom_names.iter().map(|name| {
