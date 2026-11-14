@@ -7,7 +7,7 @@ YouTube-search music player with local playback and OS media controls, built wit
 - **Language**: Rust (edition 2021); **UI**: iced 0.14 (`iced::application(boot, update, view)`); **Audio**: rodio + symphonia; **pipeline**: yt-dlp (stream/download); **YouTube Music metadata**: innertube-rs
 - **Media controls**: souvlaki (MPRIS/D-Bus on Linux, SMTC on Windows, Now Playing on macOS); **Config**: JsonStore + directories; **HTTP**: ureq 3 (json); **Dialogs**: rfd; **Logging**: tracing + tracing-subscriber
 - **Custom providers**: user-added Subsonic-compatible servers (Navidrome/Airsonic/Gonic) via `opensubsonic` and Jellyfin servers via its REST API, edited in Settings and persisted in `custom_providers.json`; their server-side playlists are first-class (indexed locally, contents always refetched)
-- **Lyrics**: pluggable provider trait (`lyrics.rs`), LRCLib default, Genius (keyless web API: lyrics from embedded `__PRELOADED_STATE__` with container-scrape fallback, per-line annotations and song blurb as notes, lazy `translation_songs` in a language picker row), plus named user-added per-track lyrics (plain or LRC-synced) as tabs after the providers, editable/deletable from the lyrics view; cache in `data/lyrics_cache.rs`; AI translate (`translate.rs`, OpenAI-compatible/Ollama, BYOK in Settings) opens the result in the custom-lyrics editor under the target language
+- **Lyrics**: pluggable providers (`lyrics/` module: LRCLib default plus LrcMux, Lyrics.ovh, Genius — keyless web API with lyrics from embedded `__PRELOADED_STATE__` and container-scrape fallback, per-line annotations and song blurb as notes, lazy `translation_songs` in a language picker row), plus named user-added per-track lyrics (plain or LRC-synced) as tabs after the providers, editable/deletable from the lyrics view; cache in `data/lyrics_cache.rs`; AI translate (`translate.rs`, OpenAI-compatible/Ollama, BYOK in Settings) opens the result in the custom-lyrics editor under the target language
 
 ## Prerequisites
 
@@ -69,7 +69,7 @@ src/
 ├── providers/         # Provider types + dispatch (mod.rs; home.rs = Home row types + fetch dispatch) and per-provider backends (audius, bandcamp, jellyfin, lastfm, musicbrainz, soundcloud, subsonic, youtube/{mod,raw,innertube}); error.rs = ErrorKind/ProviderError (localized failure categories)
 ├── media_controls.rs  # OS media controls via souvlaki (MPRIS/SMTC/Now Playing)
 ├── types.rs           # Track (multi-artist `artists` + per-provider `artist_ids`), TrackSource, PlayQueue
-├── lyrics.rs          # LyricsProvider + Lyrics/LyricLine types + per-provider fetchers
+├── lyrics/            # LyricsProvider + Lyrics/LyricLine types (mod.rs); lrc.rs = LRC timestamps; lrclib.rs (LRCLib/LrcMux), lyrics_ovh.rs, genius.rs = fetchers; http.rs = shared agent
 ├── translate.rs       # AI translation via OpenAI-compatible chat completions (hosted or Ollama-local)
 ├── icons.rs           # SVG embedding via include_bytes! + icon()
 ├── load_state.rs      # LoadState<T, E>: Ready/Failed/Loading fetch-state wrapper
