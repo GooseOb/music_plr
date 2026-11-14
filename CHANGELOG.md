@@ -8,6 +8,12 @@ workflow extracts the section matching the tag and prepends it to the release
 body. `generate_release_notes` stays on, so GitHub still appends the
 auto-generated compare link below it.
 
+## [Unreleased]
+
+### Added
+
+- Audius provider.
+
 ## [1.5.6] - 2026-11-10
 
 ### Fixed

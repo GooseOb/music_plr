@@ -247,6 +247,7 @@ fn home_capable(provider: ProviderId) -> bool {
         ProviderId::YouTube
         | ProviderId::SoundCloud
         | ProviderId::Bandcamp
+        | ProviderId::Audius
         | ProviderId::LastFm => true,
         ProviderId::MusicBrainz | ProviderId::Local => false,
         ProviderId::Custom(_, _) => provider.capabilities().search,
@@ -273,7 +274,7 @@ pub fn planned_kinds(provider: ProviderId) -> &'static [HomeSectionKind] {
     };
     match provider {
         ProviderId::YouTube => &[QuickPicks, ForYou, NewReleases, Trending],
-        ProviderId::SoundCloud => &[Trending],
+        ProviderId::SoundCloud | ProviderId::Audius => &[Trending],
         ProviderId::Bandcamp => &[NewReleases],
         ProviderId::LastFm => &[TopArtists],
         ProviderId::Custom(_, _) => &[
@@ -294,6 +295,7 @@ pub fn fetch_home(provider: ProviderId) -> Result<Vec<HomeSection>> {
         ProviderId::YouTube => super::youtube::home_sections(),
         ProviderId::SoundCloud => super::soundcloud::home_sections(),
         ProviderId::Bandcamp => super::bandcamp::home_sections(),
+        ProviderId::Audius => super::audius::home_sections(),
         ProviderId::LastFm => super::lastfm::home_sections(),
         ProviderId::Custom(kind, _) => custom_dispatch!(kind, home_sections(provider)),
         ProviderId::MusicBrainz | ProviderId::Local => Ok(Vec::new()),

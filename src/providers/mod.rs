@@ -12,6 +12,7 @@
 //! [`crate::types::Track`]s carrying that provider's id.
 
 mod artist_page;
+mod audius;
 mod bandcamp;
 mod error;
 pub(crate) mod home;
@@ -195,6 +196,7 @@ pub enum ProviderId {
     SoundCloud,
     MusicBrainz,
     Bandcamp,
+    Audius,
     LastFm,
     Local,
     /// A user-configured provider; the kind names its backend and the id
@@ -285,11 +287,13 @@ fn build_offered_lists() -> OfferedLists {
             ProviderId::YouTube,
             ProviderId::SoundCloud,
             ProviderId::Bandcamp,
+            ProviderId::Audius,
         ]),
         header: offered(vec![
             ProviderId::YouTube,
             ProviderId::SoundCloud,
             ProviderId::Bandcamp,
+            ProviderId::Audius,
             ProviderId::LastFm,
         ]),
         custom_servers,
@@ -336,6 +340,7 @@ impl ProviderId {
             ProviderId::SoundCloud => Cow::Borrowed("soundcloud"),
             ProviderId::MusicBrainz => Cow::Borrowed("musicbrainz"),
             ProviderId::Bandcamp => Cow::Borrowed("bandcamp"),
+            ProviderId::Audius => Cow::Borrowed("audius"),
             ProviderId::LastFm => Cow::Borrowed("lastfm"),
             ProviderId::Local => Cow::Borrowed("local"),
             ProviderId::Custom(kind, id) => Cow::Owned(format!("{}-{id}", kind.slug())),
@@ -360,6 +365,7 @@ impl ProviderId {
             "soundcloud" => Some(ProviderId::SoundCloud),
             "musicbrainz" => Some(ProviderId::MusicBrainz),
             "bandcamp" => Some(ProviderId::Bandcamp),
+            "audius" => Some(ProviderId::Audius),
             "lastfm" => Some(ProviderId::LastFm),
             "local" => Some(ProviderId::Local),
             _ => {
@@ -388,6 +394,7 @@ impl ProviderId {
             "SoundCloud" => Some(ProviderId::SoundCloud),
             "MusicBrainz" => Some(ProviderId::MusicBrainz),
             "Bandcamp" => Some(ProviderId::Bandcamp),
+            "Audius" => Some(ProviderId::Audius),
             "LastFm" => Some(ProviderId::LastFm),
             "Local" => Some(ProviderId::Local),
             _ => None,
@@ -404,6 +411,7 @@ impl ProviderId {
             ProviderId::SoundCloud => Cow::Borrowed("SoundCloud"),
             ProviderId::MusicBrainz => Cow::Borrowed("MusicBrainz"),
             ProviderId::Bandcamp => Cow::Borrowed("Bandcamp"),
+            ProviderId::Audius => Cow::Borrowed("Audius"),
             ProviderId::LastFm => Cow::Borrowed("Last.fm"),
             ProviderId::Local => Cow::Borrowed("Local"),
             ProviderId::Custom(kind, id) => crate::data::custom_providers::display_name(kind, id)
@@ -419,6 +427,7 @@ impl ProviderId {
             ProviderId::SoundCloud,
             ProviderId::MusicBrainz,
             ProviderId::Bandcamp,
+            ProviderId::Audius,
             ProviderId::LastFm,
             ProviderId::Local,
         ]
@@ -494,7 +503,7 @@ impl ProviderId {
                 download: false,
                 radio: false,
             },
-            ProviderId::Bandcamp => ProviderCaps {
+            ProviderId::Bandcamp | ProviderId::Audius => ProviderCaps {
                 search: true,
                 stream: true,
                 download: true,
@@ -530,7 +539,7 @@ impl ProviderId {
     pub fn supported_scopes(self) -> &'static [SearchScope] {
         match self {
             ProviderId::YouTube => SearchScope::all(),
-            ProviderId::SoundCloud | ProviderId::Custom(_, _) => &[
+            ProviderId::SoundCloud | ProviderId::Audius | ProviderId::Custom(_, _) => &[
                 SearchScope::Songs,
                 SearchScope::Artists,
                 SearchScope::Albums,
@@ -564,6 +573,7 @@ impl ProviderId {
         matches!(
             self,
             ProviderId::SoundCloud
+                | ProviderId::Audius
                 | ProviderId::MusicBrainz
                 | ProviderId::LastFm
                 | ProviderId::Custom(_, _)
@@ -604,6 +614,7 @@ impl ProviderId {
             // web UI, so no page can be derived from the API id.
             ProviderId::SoundCloud
             | ProviderId::Bandcamp
+            | ProviderId::Audius
             | ProviderId::Local
             | ProviderId::Custom(_, _) => None,
         }
@@ -627,6 +638,7 @@ impl ProviderId {
             // no album at all.
             ProviderId::SoundCloud
             | ProviderId::Bandcamp
+            | ProviderId::Audius
             | ProviderId::LastFm
             | ProviderId::Local
             | ProviderId::Custom(_, _) => None,
@@ -647,10 +659,14 @@ impl ProviderId {
             ProviderId::MusicBrainz => {
                 (!pt.id.is_empty()).then(|| format!("https://musicbrainz.org/track/{}", pt.id))
             }
-            // Bandcamp's `url` is a direct MP3 and its page slug is not
-            // derivable from the numeric track id; `Local` has no web page.
-            // A custom provider's `url` is a token-authenticated stream endpoint.
-            ProviderId::Bandcamp | ProviderId::Local | ProviderId::Custom(_, _) => None,
+            // Bandcamp's `url` is a direct MP3 and Audius's a stream
+            // endpoint; neither page slug is derivable from the stored id.
+            // `Local` has no web page, and a custom provider's `url` is a
+            // token-authenticated stream endpoint.
+            ProviderId::Bandcamp
+            | ProviderId::Audius
+            | ProviderId::Local
+            | ProviderId::Custom(_, _) => None,
         }
     }
 }
@@ -843,6 +859,7 @@ pub fn search(
         ProviderId::SoundCloud => Ok(soundcloud::search(query, scope, offset)),
         ProviderId::MusicBrainz => Ok(musicbrainz::search(query, scope, offset)),
         ProviderId::Bandcamp => bandcamp::search(query, scope, offset),
+        ProviderId::Audius => audius::search(query, scope, offset),
         ProviderId::LastFm => lastfm::search(query, scope, offset),
         ProviderId::Custom(kind, _) => {
             custom_dispatch!(kind, search(provider, query, scope, offset))
@@ -875,6 +892,7 @@ pub fn search_more(
         ProviderId::SoundCloud => soundcloud::search_more(query, offset),
         ProviderId::MusicBrainz => musicbrainz::search_more(query, offset),
         ProviderId::Bandcamp => bandcamp::search_more(query, offset)?,
+        ProviderId::Audius => audius::search_more(query, offset)?,
         ProviderId::LastFm => lastfm::search_more(query, offset)?,
         ProviderId::Custom(kind, _) => {
             custom_dispatch!(kind, search_more(provider, query, offset))?
@@ -945,6 +963,7 @@ pub fn browse(
         ProviderId::SoundCloud => Ok((soundcloud::browse(id, kind)?, None)),
         ProviderId::MusicBrainz => Ok((musicbrainz::browse(id, kind)?, None)),
         ProviderId::Bandcamp => bandcamp::browse(id, kind),
+        ProviderId::Audius => audius::browse(id, kind),
         ProviderId::LastFm => lastfm::browse(id, kind),
         ProviderId::Custom(custom_kind, _) => {
             custom_dispatch!(custom_kind, browse(provider, id, kind))
@@ -1073,6 +1092,7 @@ pub fn spawn_artist_kinds_fetch(
                 ProviderId::YouTube => youtube::fetch_artist_page(&id, kinds),
                 ProviderId::MusicBrainz => musicbrainz::fetch_artist_page(&id, kinds),
                 ProviderId::Bandcamp => bandcamp::fetch_artist_page(&id, kinds),
+                ProviderId::Audius => audius::fetch_artist_page(&id, kinds),
                 ProviderId::LastFm => lastfm::fetch_artist_page(&id, kinds),
                 ProviderId::Custom(kind, _) => {
                     custom_dispatch!(kind, fetch_artist_page(provider, &id, kinds))
@@ -1151,6 +1171,7 @@ pub fn resolve_artist_id(provider: ProviderId, name: &str) -> Result<Option<Stri
         ProviderId::SoundCloud => soundcloud::resolve_artist_id(name),
         ProviderId::MusicBrainz => musicbrainz::resolve_artist_id(name),
         ProviderId::Bandcamp => bandcamp::resolve_artist_id(name),
+        ProviderId::Audius => audius::resolve_artist_id(name),
         ProviderId::LastFm => lastfm::resolve_artist_id(name),
         ProviderId::Custom(kind, _) => custom_dispatch!(kind, resolve_artist_id(provider, name)),
         ProviderId::Local => Ok(None),
@@ -1166,6 +1187,7 @@ pub fn radio_song(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
         ProviderId::SoundCloud
         | ProviderId::MusicBrainz
         | ProviderId::Bandcamp
+        | ProviderId::Audius
         | ProviderId::Local => Ok(Vec::new()),
     }
 }
@@ -1179,6 +1201,7 @@ pub fn radio_artist(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
         ProviderId::SoundCloud
         | ProviderId::MusicBrainz
         | ProviderId::Bandcamp
+        | ProviderId::Audius
         | ProviderId::Local => Ok(Vec::new()),
     }
 }
@@ -1195,6 +1218,7 @@ pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<Track>> 
         ProviderId::SoundCloud => soundcloud::resolve_id(track),
         ProviderId::MusicBrainz => musicbrainz::resolve_id(track),
         ProviderId::Bandcamp => bandcamp::resolve_id(track),
+        ProviderId::Audius => audius::resolve_id(track),
         ProviderId::LastFm => lastfm::resolve_id(track),
         ProviderId::Custom(kind, _) => custom_dispatch!(kind, resolve_id(provider, track)),
         ProviderId::Local => Ok(None),
@@ -1229,6 +1253,7 @@ pub fn download(
         }
         ProviderId::SoundCloud => soundcloud::download(track, download_dir),
         ProviderId::Bandcamp => bandcamp::download(track, download_dir),
+        ProviderId::Audius => audius::download(track, download_dir),
         ProviderId::Custom(kind, _) => {
             custom_dispatch!(kind, download(provider, track, download_dir))
         }
