@@ -58,6 +58,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "Выделяемый",
     lyrics_synced: "Синхронизирован",
     lyrics_plain: "Обычный",
+    refresh_lyrics: "Обновить текст",
     lyrics_translations: "Переводы",
     lyrics_original: "Оригинал",
     add_custom: "Добавить текст",

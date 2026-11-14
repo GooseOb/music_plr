@@ -169,6 +169,7 @@ pub struct Strings {
     pub lyrics_selectable: &'static str,
     pub lyrics_synced: &'static str,
     pub lyrics_plain: &'static str,
+    pub refresh_lyrics: &'static str,
     pub lyrics_translations: &'static str,
     pub lyrics_original: &'static str,
     pub add_custom: &'static str,

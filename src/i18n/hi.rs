@@ -55,6 +55,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "चयन योग्य",
     lyrics_synced: "सिंक किए गए",
     lyrics_plain: "सादा",
+    refresh_lyrics: "लिरिक्स रीफ़्रेश करें",
     lyrics_translations: "अनुवाद",
     lyrics_original: "मूल",
     add_custom: "बोल जोड़ें",

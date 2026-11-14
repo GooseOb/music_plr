@@ -82,13 +82,6 @@ pub fn thumbnail_mosaic(
                 .into(),
         }
     };
-    let corner_radius =
-        |top_left: f32, top_right: f32, bottom_left: f32, bottom_right: f32| iced::border::Radius {
-            top_left,
-            top_right,
-            bottom_left,
-            bottom_right,
-        };
     Column::with_children([
         Row::with_children([
             tile(tiles[0], corner_radius(corner, 0.0, 0.0, 0.0)),
@@ -102,6 +95,20 @@ pub fn thumbnail_mosaic(
         .into(),
     ])
     .into()
+}
+
+pub fn corner_radius(
+    top_left: f32,
+    top_right: f32,
+    bottom_left: f32,
+    bottom_right: f32,
+) -> iced::border::Radius {
+    iced::border::Radius {
+        top_left,
+        top_right,
+        bottom_left,
+        bottom_right,
+    }
 }
 
 /// The radius as `iced_wgpu`'s image shader applies it: point-reflected, so the
@@ -171,10 +178,12 @@ pub fn track_row<'a>(
         .height(theme::ROW_HEIGHT)
         .style(move |_: &AppTheme| container::Style {
             background: Some(bg.into()),
-            border: border.map_or(iced::border::Border::default(), |c| iced::border::Border {
-                width: 1.0,
-                color: c,
-                radius: 0.0.into(),
+            border: border.map_or(iced::border::Border::default(), |color| {
+                iced::border::Border {
+                    width: 1.0,
+                    color,
+                    radius: 0.0.into(),
+                }
             }),
             ..Default::default()
         });

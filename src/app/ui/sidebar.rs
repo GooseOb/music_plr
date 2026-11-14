@@ -186,8 +186,6 @@ fn server_group_header(
         player.drag.drop_target,
         Some(DropTarget::ServerPlaylistCreate(p)) if p == provider
     );
-    let radius = theme::RADIUS_MD;
-
     let header = dir
         .row([
             icons::icon(icons::CACHE_ICON, theme::ICON_SIZE_MD)
@@ -227,7 +225,7 @@ fn server_group_header(
         .width(Length::Fill)
         .style(move |theme: &AppTheme| iced::widget::container::Style {
             background: is_drop_target.then(|| theme.palette.bg_current.into()),
-            border: iced::border::rounded(radius),
+            border: iced::border::rounded(theme::RADIUS_MD),
             ..Default::default()
         })
         .into()

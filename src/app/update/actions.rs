@@ -351,6 +351,21 @@ impl MusicPlayer {
         self.ensure_lyrics_for_current(pane);
     }
 
+    /// Refetch the selected network provider's lyrics for the current track,
+    /// bypassing the cache. Custom entries are edited, not refetched.
+    pub fn handle_refresh_lyrics(&mut self, pane: PaneId) {
+        let refreshable = self.pane(pane).lyrics.as_ref().is_some_and(|state| {
+            state.selected_custom.is_none()
+                && state.provider != crate::lyrics::LyricsProvider::Custom
+                && self.config.lyrics_provider_enabled(state.provider)
+        });
+        if !refreshable {
+            return;
+        }
+        self.flush_note_draft(pane);
+        self.ensure_lyrics_for_current_with(pane, true);
+    }
+
     /// Switch every open lyrics pane off a provider that was just disabled,
     /// then load the configured default (or the first enabled) one.
     pub(super) fn reconcile_open_lyrics_providers(&mut self) {
@@ -567,6 +582,10 @@ impl MusicPlayer {
     /// on every track change, and by the tick loop as a safety net.
     #[allow(clippy::too_many_lines)]
     pub(super) fn ensure_lyrics_for_current(&mut self, pane: PaneId) {
+        self.ensure_lyrics_for_current_with(pane, false);
+    }
+
+    fn ensure_lyrics_for_current_with(&mut self, pane: PaneId, force: bool) {
         let Some(track) = self.session.queue.current() else {
             self.flush_note_draft(pane);
             if let Some(state) = &mut self.pane_mut(pane).lyrics {
@@ -596,14 +615,14 @@ impl MusicPlayer {
         };
 
         if editing {
-            if same_track {
+            if same_track && !force {
                 return;
             }
             if let Some(state) = &mut self.pane_mut(pane).lyrics {
                 Self::end_custom_edit(state);
             }
         }
-        if same_track && !loading {
+        if same_track && !loading && !force {
             return;
         }
         if same_track
@@ -613,14 +632,14 @@ impl MusicPlayer {
         {
             return;
         }
-        let selected = if same_track { selected } else { None };
+        let selected = if same_track && !force { selected } else { None };
         let custom_names = self.lyrics_cache.custom_names(&current_id);
         let custom = selected.as_ref().and_then(|name| {
             self.lyrics_cache
                 .get_custom(&current_id, name)
                 .map(|lyrics| (name.clone(), lyrics))
         });
-        let cached = if custom.is_none() {
+        let cached = if !force && custom.is_none() {
             self.lyrics_cache.get_for(&current_id, provider)
         } else {
             None

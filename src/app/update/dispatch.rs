@@ -564,6 +564,10 @@ impl crate::app::MusicPlayer {
                 self.handle_select_lyrics_provider(pane, id);
                 Task::none()
             }
+            Message::RefreshLyrics(pane) => {
+                self.handle_refresh_lyrics(pane);
+                Task::none()
+            }
             Message::SelectLyricsTranslation(pane, language) => {
                 self.handle_select_lyrics_translation(pane, language)
             }

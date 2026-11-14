@@ -16,6 +16,7 @@ auto-generated compare link below it.
 - NetEase Lyrics provider.
 - Configurable default lyrics provider.
 - Disabling lyrics providers in settings.
+- Lyrics refresh button in lyrics view.
 
 ### Fixed
 

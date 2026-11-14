@@ -322,6 +322,7 @@ pub enum Message {
     SetLyricsViewMode(PaneId, crate::app::LyricsViewMode),
     LyricsLineClicked(f32),
     SelectLyricsProvider(PaneId, crate::lyrics::LyricsProvider),
+    RefreshLyrics(PaneId),
     SelectLyricsTranslation(PaneId, Option<String>),
     LyricsEditorAction(PaneId, iced::widget::text_editor::Action),
     CopyLyrics(PaneId),
@@ -447,6 +448,7 @@ impl Message {
             | Message::ShowLyrics(pane)
             | Message::SetLyricsViewMode(pane, _)
             | Message::SelectLyricsProvider(pane, _)
+            | Message::RefreshLyrics(pane)
             | Message::SelectLyricsTranslation(pane, _)
             | Message::LyricsEditorAction(pane, _)
             | Message::CopyLyrics(pane)
@@ -557,6 +559,7 @@ mod tests {
             Message::ShowLyrics(pane),
             Message::SetLyricsViewMode(pane, crate::app::LyricsViewMode::Synced),
             Message::SelectLyricsProvider(pane, crate::lyrics::LyricsProvider::LrcLib),
+            Message::RefreshLyrics(pane),
             Message::LyricsEditorAction(pane, editor()),
             Message::CopyLyrics(pane),
             Message::SelectLyricLine(pane, 0),

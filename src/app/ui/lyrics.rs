@@ -1,9 +1,10 @@
 use iced::{
     alignment,
     widget::{
-        scrollable, text, text_editor::Binding, Button, Column, Container, Id, MouseArea, Row,
+        container, opaque, scrollable, text, text_editor::Binding, Button, Column, Container, Id,
+        MouseArea, Row, Stack,
     },
-    Color, Element, Length,
+    Border, Color, Element, Length,
 };
 
 pub fn lyrics_scroll_id(pane: PaneId) -> Id {
@@ -19,8 +20,13 @@ use super::{
     theme, Message, MusicPlayer,
 };
 use crate::{
-    app::{pane::PaneId, ui::shared_components::dialog_button, LyricsState, LyricsViewMode},
+    app::{
+        pane::PaneId,
+        ui::shared_components::{corner_radius, dialog_button},
+        LyricsState, LyricsViewMode,
+    },
     load_state::LoadState,
+    lyrics::LyricsProvider,
     theme::AppTheme,
 };
 
@@ -32,33 +38,36 @@ pub(super) fn view_lyrics<'a>(
     if lyrics_state.editing {
         return view_custom_editor(player, pane, lyrics_state);
     }
-    let track = player.session.queue.current();
+
+    let tr = player.strings;
+
+    if player.session.queue.current().is_none() {
+        return empty_state(tr.play_a_track_for_lyrics);
+    }
 
     let displayed = lyrics_state.displayed_lyrics();
     let lyrics_ready = displayed.is_some();
 
-    let body: Element<'a, Message, AppTheme> = if lyrics_state.mode == LyricsViewMode::Selectable
-        && lyrics_ready
-    {
-        view_select_editor(pane, &lyrics_state.editor)
-    } else {
-        let mode = lyrics_state.mode;
-        let scrolled = lyrics_state.scrolled_to;
-        let picked = lyrics_state.picked_line;
-        match (track, &lyrics_state.lyrics) {
-            (Some(_), LoadState::Ready(_)) => match displayed {
-                Some(lyrics) if lyrics.has_timed() && mode == LyricsViewMode::Synced => {
-                    view_synced(pane, lyrics, scrolled)
-                }
-                Some(_) => view_plain_notes(pane, &lyrics_state.plain_lines, picked),
-                // `displayed` is always `Some` once lyrics are ready.
-                None => empty_state(""),
-            },
-            (Some(_), LoadState::Loading) => loading_state(player.strings.looking_up_lyrics),
-            (Some(_), LoadState::Failed(e)) => empty_state((player.strings.couldnt_load_lyrics)(e)),
-            (None, _) => empty_state(player.strings.play_a_track_for_lyrics),
-        }
-    };
+    let body: Element<'a, Message, AppTheme> =
+        if lyrics_state.mode == LyricsViewMode::Selectable && lyrics_ready {
+            view_select_editor(pane, &lyrics_state.editor)
+        } else {
+            let mode = lyrics_state.mode;
+            let scrolled = lyrics_state.scrolled_to;
+            let picked = lyrics_state.picked_line;
+            match &lyrics_state.lyrics {
+                LoadState::Ready(_) => match displayed {
+                    Some(lyrics) if lyrics.has_timed() && mode == LyricsViewMode::Synced => {
+                        view_synced(pane, lyrics, scrolled)
+                    }
+                    Some(_) => view_plain_notes(pane, &lyrics_state.plain_lines, picked),
+                    // `displayed` is always `Some` once lyrics are ready.
+                    None => empty_state(""),
+                },
+                LoadState::Loading => loading_state(tr.looking_up_lyrics),
+                LoadState::Failed(e) => empty_state((tr.couldnt_load_lyrics)(e)),
+            }
+        };
 
     let body: Element<'a, Message, AppTheme> = MouseArea::new(body)
         .on_right_press(Message::CopyLyrics(pane))
@@ -73,59 +82,81 @@ pub(super) fn view_lyrics<'a>(
         }),
         _ => false,
     };
+    let corner_btn_data = if let Some(name) = lyrics_state.selected_custom.as_deref() {
+        Some((
+            tr.edit_lyrics,
+            Message::EditCustomLyrics(pane, name.to_string()),
+        ))
+    } else if lyrics_state.provider != LyricsProvider::Custom && !lyrics_state.lyrics.is_loading() {
+        Some((tr.refresh_lyrics, Message::RefreshLyrics(pane)))
+    } else {
+        None
+    };
 
-    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(5);
-    children.push(Container::new(body).height(Length::Fill).into());
+    let body: Element<'a, Message, AppTheme> = match corner_btn_data {
+        Some((label, msg)) => {
+            Stack::with_children([body, view_corner_button(dialog_button(label).on_press(msg))])
+                .height(Length::Fill)
+                .into()
+        }
+        None => Container::new(body).height(Length::Fill).into(),
+    };
+
+    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(4);
+    children.push(body);
     if note_visible {
         children.push(view_note_block(pane, lyrics_state));
     }
     if let Some(row) = view_translation_row(player, pane, lyrics_state) {
-        children.push(row);
+        children.push(Container::new(row).style(bg_secondary()).into());
     }
-    if track.is_some() {
-        if let Some(name) = &lyrics_state.selected_custom {
-            children.push(view_edit_custom_button(player, pane, name));
-        }
-    }
-    children.push(view_bottom_controls(player, pane, lyrics_state).into());
-    Column::with_children(children)
-        .spacing(theme::SPACING_MD)
-        .into()
+    children.push(
+        Container::new(view_bottom_controls(player, pane, lyrics_state))
+            .style(bg_secondary())
+            .into(),
+    );
+    Column::with_children(children).into()
 }
 
 fn view_note_block(pane: PaneId, lyrics_state: &LyricsState) -> Element<'_, Message, AppTheme> {
-    let editor = iced::widget::text_editor(&lyrics_state.note_editor)
+    iced::widget::text_editor(&lyrics_state.note_editor)
         .on_action(move |a| Message::LyricNoteAction(pane, a))
         .style(|theme: &AppTheme, _| {
             let p = &theme.palette;
             iced::widget::text_editor::Style {
-                background: Color::TRANSPARENT.into(),
+                background: p.bg_secondary.into(),
                 border: iced::Border::default(),
                 placeholder: Color::TRANSPARENT,
                 value: p.fg_secondary,
                 selection: p.accent.scale_alpha(0.4),
             }
         })
-        .padding([theme::SPACING_XS, theme::SPACING_MD])
-        .height(Length::Shrink);
-
-    Container::new(editor)
-        .style(bg_secondary())
-        .padding(theme::SPACING_XS)
+        .padding([theme::SPACING_MD, theme::SPACING_LG])
+        .height(Length::Shrink)
         .into()
 }
 
-fn view_edit_custom_button<'a>(
-    player: &'a MusicPlayer,
-    pane: PaneId,
-    name: &'a str,
+fn view_corner_button<'a>(
+    btn: impl Into<Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
-    Container::new(
-        dialog_button(player.strings.edit_lyrics)
-            .width(Length::Fill)
-            .on_press(Message::EditCustomLyrics(pane, name.to_string())),
-    )
-    .padding([0.0, theme::SPACING_SM])
+    Container::new(opaque(
+        Container::new(btn)
+            .width(Length::Shrink)
+            .style(|theme| container::Style {
+                background: Some(theme.palette.bg_secondary.into()),
+                border: Border {
+                    width: 0.0,
+                    color: Color::TRANSPARENT,
+                    radius: corner_radius(0.0, theme::RADIUS_MD, 0.0, 0.0),
+                },
+                ..Default::default()
+            })
+            .padding(theme::SPACING_SM),
+    ))
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .align_x(alignment::Horizontal::Left)
+    .align_y(alignment::Vertical::Bottom)
     .into()
 }
 

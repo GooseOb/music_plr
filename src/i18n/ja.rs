@@ -53,6 +53,7 @@ pub const STRINGS: Strings = Strings {
     lyrics_selectable: "選択可能",
     lyrics_synced: "同期済み",
     lyrics_plain: "プレーン",
+    refresh_lyrics: "歌詞を更新",
     lyrics_translations: "翻訳",
     lyrics_original: "オリジナル",
     add_custom: "歌詞を追加",

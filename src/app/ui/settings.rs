@@ -524,7 +524,7 @@ fn custom_provider_form<'a>(
         kind,
         server_url,
         username,
-        password.into(),
+        password,
         actions.into(),
         status,
     ])

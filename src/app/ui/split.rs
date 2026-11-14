@@ -84,7 +84,7 @@ fn view_pane(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppThem
                 border: iced::Border {
                     width: ring_width,
                     color: theme.palette.accent,
-                    radius: 0.0.into(),
+                    radius: 0.into(),
                 },
                 ..Default::default()
             })

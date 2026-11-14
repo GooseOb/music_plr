@@ -209,7 +209,7 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         rule::horizontal(1)
             .style(move |theme: &AppTheme| rule::Style {
                 color: theme.palette.fg_muted,
-                radius: iced::border::Radius::new(0),
+                radius: 0.into(),
                 fill_mode: rule::FillMode::Padded(theme::SPACING_MD as u16),
                 snap: true,
             })
