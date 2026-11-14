@@ -12,7 +12,10 @@ use std::{
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use super::{http::agent, LyricLine, Lyrics, LyricsProvider, LyricsRequest, TranslatedLyrics};
+use super::{
+    http::agent, matcher, plain_of, LyricLine, Lyrics, LyricsProvider, LyricsRequest,
+    TranslatedLyrics,
+};
 use crate::util::urlencode;
 
 const GENIUS_BASE: &str = "https://genius.com/api";
@@ -62,7 +65,7 @@ pub(super) fn fetch(req: &LyricsRequest) -> Result<Option<Lyrics>> {
     let annotations = fetch_annotations(hit.id).unwrap_or_default();
     if !annotations.is_empty() {
         for line in &mut lines {
-            if let Some(notes) = annotations.get(&normalize_lyric(&line.text)) {
+            if let Some(notes) = annotations.get(&matcher::normalize(&line.text)) {
                 line.description = notes.join("\n\n");
             }
         }
@@ -111,14 +114,6 @@ pub(super) fn fetch_translation(language: &str, url: &str) -> Result<Option<Tran
         },
         source: None,
     }))
-}
-
-fn plain_of(lines: &[LyricLine]) -> String {
-    lines
-        .iter()
-        .map(|line| line.text.as_str())
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 /// Lyrics text lines from a Genius song page. The server-rendered
@@ -322,30 +317,7 @@ fn score_hit(req: &LyricsRequest, hit: &GeniusSongHit) -> Option<u32> {
     if !hit.lyrics_state.is_empty() && hit.lyrics_state != "complete" {
         return None;
     }
-    let title = normalize_lyric(&req.title);
-    let artist = normalize_lyric(&req.artist);
-    let hit_title = normalize_lyric(&hit.title);
-    let hit_artist = normalize_lyric(&hit.artist_names);
-    if title.is_empty() || hit_title.is_empty() {
-        return None;
-    }
-    if !hit_title.contains(&title) && !title.contains(&hit_title) {
-        return None;
-    }
-    let mut score = 2;
-    if !artist.is_empty() && !hit_artist.is_empty() {
-        if hit_artist == artist {
-            score += 3;
-        } else if hit_artist.contains(&artist) || artist.contains(&hit_artist) {
-            score += 2;
-        } else {
-            return None;
-        }
-    }
-    if hit_title == title {
-        score += 2;
-    }
-    Some(score)
+    matcher::score(req, &hit.title, &hit.artist_names, None)
 }
 
 /// Annotation bodies keyed by normalized lyric line. Referent fragments span
@@ -369,7 +341,7 @@ fn fetch_annotations(song_id: u64) -> Result<HashMap<String, Vec<String>>> {
                 .find(|b| !b.is_empty());
             let Some(body) = body else { continue };
             for line in referent.range.content.lines() {
-                let key = normalize_lyric(line);
+                let key = matcher::normalize(line);
                 if !key.is_empty() {
                     out.entry(key).or_default().push(body.to_string());
                 }
@@ -654,25 +626,10 @@ fn decode_entities(text: &str) -> String {
     out
 }
 
-/// Lowercase, unify quotes, and collapse whitespace so Genius fragments
-/// (curly apostrophes, `"\n "` separators) match scraped lyric lines.
-fn normalize_lyric(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for ch in text.chars() {
-        match ch {
-            '\u{2018}' | '\u{2019}' | '\u{201a}' | '\u{201b}' | '\u{2032}' | '\u{2035}' | '`'
-            | '\u{b4}' => out.push('\''),
-            '\u{201c}' | '\u{201d}' | '\u{201e}' | '\u{201f}' => out.push('"'),
-            _ => out.extend(ch.to_lowercase()),
-        }
-    }
-    out.split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        containers, decode_entities, html_to_lines, js_unescape, normalize_lyric, preloaded_body,
+        containers, decode_entities, html_to_lines, js_unescape, matcher, preloaded_body,
         score_hit, scrape_lyrics, GeniusHit, GeniusSongHit, GeniusSongResponse,
     };
     use crate::lyrics::LyricsRequest;
@@ -740,15 +697,6 @@ mod tests {
         assert_eq!(song.id, 52968);
         let req = req("Nirvana", "Smells Like Teen Spirit");
         assert!(score_hit(&req, &song).is_some());
-    }
-
-    #[test]
-    fn normalize_unifies_quotes_and_space() {
-        assert_eq!(
-            normalize_lyric("With the lights out, it’s  less\ndangerous"),
-            "with the lights out, it's less dangerous"
-        );
-        assert_eq!(normalize_lyric("  HELLO   World "), "hello world");
     }
 
     #[test]
@@ -855,9 +803,9 @@ mod tests {
     fn annotation_key_matches_despite_quote_style() {
         let fragment = "With the lights out, it’s less dangerous";
         let line = "With the lights out, it's less dangerous";
-        assert_eq!(normalize_lyric(fragment), normalize_lyric(line));
+        assert_eq!(matcher::normalize(fragment), matcher::normalize(line));
         let multi = "Hello, hello, hello, how low\n Hello, hello, hello";
-        let keys: Vec<String> = multi.lines().map(normalize_lyric).collect();
+        let keys: Vec<String> = multi.lines().map(matcher::normalize).collect();
         assert_eq!(
             keys,
             vec!["hello, hello, hello, how low", "hello, hello, hello"]

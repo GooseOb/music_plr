@@ -5,6 +5,8 @@ mod http;
 mod lrc;
 mod lrclib;
 mod lyrics_ovh;
+mod matcher;
+mod netease;
 
 use lrc::{format_timestamp, parse_lrc_line};
 
@@ -19,6 +21,8 @@ pub enum LyricsProvider {
     LyricsOvh,
     #[serde(rename = "genius")]
     Genius,
+    #[serde(rename = "netease")]
+    NetEase,
     #[serde(rename = "custom")]
     Custom,
 }
@@ -30,6 +34,7 @@ impl LyricsProvider {
             LyricsProvider::LrcMux => "LrcMux",
             LyricsProvider::LyricsOvh => "Lyrics.ovh",
             LyricsProvider::Genius => "Genius",
+            LyricsProvider::NetEase => "NetEase",
             LyricsProvider::Custom => "Custom",
         }
     }
@@ -42,6 +47,7 @@ impl LyricsProvider {
         &[
             LyricsProvider::LrcLib,
             LyricsProvider::LrcMux,
+            LyricsProvider::NetEase,
             LyricsProvider::Genius,
             LyricsProvider::LyricsOvh,
         ]
@@ -53,6 +59,7 @@ impl LyricsProvider {
             LyricsProvider::LrcMux => lrclib::fetch_lrcmux(req),
             LyricsProvider::LyricsOvh => lyrics_ovh::fetch(req),
             LyricsProvider::Genius => genius::fetch(req),
+            LyricsProvider::NetEase => netease::fetch(req),
             LyricsProvider::Custom => Ok(None),
         }
     }
@@ -94,6 +101,14 @@ pub struct Lyrics {
     pub provider: LyricsProvider,
     #[serde(default)]
     pub translations: Vec<TranslatedLyrics>,
+}
+
+pub(super) fn plain_of(lines: &[LyricLine]) -> String {
+    lines
+        .iter()
+        .map(|line| line.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// A translated version of a track's lyrics. `lyrics` is empty while
@@ -201,6 +216,7 @@ pub fn language_name(code: &str) -> String {
         "uk" => "Ukrainian",
         "ur" => "Urdu",
         "uz" => "Uzbek",
+        "und-Latn" => "Romanization",
         "vi" => "Vietnamese",
         "yo" => "Yoruba",
         "zh" => "Chinese",
@@ -359,8 +375,9 @@ mod tests {
         assert_eq!(LyricsProvider::default(), LyricsProvider::LrcLib);
         assert!(LyricsProvider::all().contains(&LyricsProvider::LrcLib));
         assert!(LyricsProvider::all().contains(&LyricsProvider::Genius));
+        assert!(LyricsProvider::all().contains(&LyricsProvider::NetEase));
         assert!(!LyricsProvider::all().contains(&LyricsProvider::Custom));
-        assert_eq!(LyricsProvider::all().len(), 4);
+        assert_eq!(LyricsProvider::all().len(), 5);
     }
 
     #[test]
@@ -441,6 +458,7 @@ mod tests {
         assert_eq!(language_name("iw"), "Hebrew");
         assert_eq!(language_name("he"), "Hebrew");
         assert_eq!(language_name("pt"), "Portuguese");
+        assert_eq!(language_name("und-Latn"), "Romanization");
         assert_eq!(language_name("xx"), "XX");
     }
 

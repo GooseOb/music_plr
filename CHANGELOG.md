@@ -13,6 +13,7 @@ auto-generated compare link below it.
 ### Added
 
 - Audius provider.
+- NetEase Lyrics provider.
 
 ## [1.5.6] - 2026-11-10
 
@@ -235,6 +236,7 @@ Plain lyrics are now displayed correctly when synced lyrics are not available.
 - Clearing non-main list selection on navigation.
 - Selection ordering; Ctrl+C / Ctrl+V now respect the hovered list.
 
+[Unreleased]: https://github.com/GooseOb/music_plr/compare/v1.5.6...HEAD
 [1.5.6]: https://github.com/GooseOb/music_plr/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/GooseOb/music_plr/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/GooseOb/music_plr/compare/v1.5.3...v1.5.4

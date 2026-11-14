@@ -20,7 +20,7 @@ A YouTube/SoundCloud/Bandcamp/Audius search music player with local playback, do
 - **Split panes** — Split the main view.
 - **Drag & drop** — Drag tracks between views, into the queue, onto playlists (reorder or turn a card into a local playlist), and into the
   Library.
-- **Lyrics** — Free lyrics with synced lines that seek on click if available, plus Genius with per-line annotations, and a language picker row for its translations (loaded on demand); cached per track. Add your own named custom lyrics per track (plain or `[mm:ss.xx]`-synced) — they appear as tabs next to the providers, editable and deletable from the lyrics view. Attach multi-line notes to any custom line with `#` comment lines. **Translate with AI** — translate the active lyrics (with learner notes) via any OpenAI-compatible server or local Ollama; the API key, server URL, and model live in Settings, and the result opens in the lyrics editor for review.
+- **Lyrics** — Free lyrics with synced lines that seek on click if available, plus Genius with per-line annotations and NetEase Cloud Music for CJK catalogs (Chinese translation and romanization in the language picker row); cached per track. Add your own named custom lyrics per track (plain or `[mm:ss.xx]`-synced) — they appear as tabs next to the providers, editable and deletable from the lyrics view. Attach multi-line notes to any custom line with `#` comment lines. **Translate with AI** — translate the active lyrics (with learner notes) via any OpenAI-compatible server or local Ollama; the API key, server URL, and model live in Settings, and the result opens in the lyrics editor for review.
 - **Media controls** — OS media keys / MPRIS (Linux) / SMTC (Windows) / Now Playing (macOS) via souvlaki.
 - **More** — Search history, volume normalization, navigation history, session restore, right-click context menus (tracks, and artist/album/playlist cards for open / open in browser / save as playlist), dark/light theme.
 
@@ -73,7 +73,7 @@ Pick a language from the in-app **Settings** view. To add one, copy `src/i18n/en
 - **Rust** (stable, edition 2021)
 - **yt-dlp** — YouTube audio streaming, downloads, and search pagination
 - **D-Bus** session bus (Linux) — for MPRIS
-- Network access — lyrics fetch live from [LRCLib](https://lrclib.net) and [Genius](https://genius.com) (no keys)
+- Network access — lyrics fetch live from [LRCLib](https://lrclib.net), [Genius](https://genius.com), and [NetEase Cloud Music](https://music.163.com) (no keys)
 
 ```sh
 cargo build
