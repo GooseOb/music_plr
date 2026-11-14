@@ -15,6 +15,10 @@ auto-generated compare link below it.
 - Audius provider.
 - NetEase Lyrics provider.
 
+### Fixed
+
+- No more loading for cached lyrics, only non-cached lyrics are fetched.
+
 ## [1.5.6] - 2026-11-10
 
 ### Fixed

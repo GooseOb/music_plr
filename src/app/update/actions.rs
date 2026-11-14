@@ -58,6 +58,7 @@ impl MusicPlayer {
         } else {
             let provider = self.session.lyrics_provider;
             self.pane_mut(pane).lyrics = Some(crate::app::LyricsState::new(provider));
+            self.ensure_lyrics_for_current(pane);
             self.scroll_lyrics_to_active(pane)
         }
     }
@@ -90,6 +91,75 @@ impl MusicPlayer {
         if state.mode == LyricsViewMode::Selectable {
             state.editor = iced::widget::text_editor::Content::with_text(text);
         }
+    }
+
+    /// Put the pane back into its loading state for `track_id`
+    /// (`None` while no track is playing), dropping the previous lyrics and
+    /// every editor/translation side effect.
+    fn load_lyrics(
+        state: &mut crate::app::LyricsState,
+        track_id: Option<String>,
+        custom_names: Vec<String>,
+    ) {
+        state.lyrics = LoadState::Loading;
+        state.track_id = track_id;
+        state.scrolled_to = None;
+        state.viewport = None;
+        state.custom_names = custom_names;
+        Self::end_custom_edit(state);
+        state.selected_custom = None;
+        state.reset_translation_state();
+        state.reset_note_state();
+        Self::sync_editor_content(state);
+    }
+
+    /// Install ready lyrics and reset the display state derived from them.
+    pub(super) fn install_lyrics(
+        state: &mut crate::app::LyricsState,
+        lyrics: Arc<crate::lyrics::Lyrics>,
+    ) {
+        state.mode = LyricsViewMode::for_lyrics(&lyrics);
+        state.lyrics = LoadState::Ready(lyrics);
+        state.scrolled_to = None;
+        state.viewport = None;
+        state.reset_translation_state();
+        state.reset_note_state();
+    }
+
+    /// Recompute the view mode and drop scroll/note state after the
+    /// displayed lyrics changed (e.g. a translation was selected).
+    pub(super) fn refresh_displayed_lyrics(state: &mut crate::app::LyricsState) {
+        if let Some(lyrics) = state.displayed_lyrics() {
+            state.mode = LyricsViewMode::for_lyrics(lyrics);
+        }
+        state.scrolled_to = None;
+        state.viewport = None;
+        state.reset_note_state();
+    }
+
+    /// Drop everything tied to the current lyrics and wait for a new load.
+    fn reset_lyrics(state: &mut crate::app::LyricsState) {
+        Self::load_lyrics(state, None, Vec::new());
+    }
+
+    fn end_custom_edit(state: &mut crate::app::LyricsState) {
+        state.editing = false;
+        state.editing_custom_name = None;
+    }
+
+    fn begin_custom_edit(
+        state: &mut crate::app::LyricsState,
+        track_id: String,
+        content: iced::widget::text_editor::Content,
+        name: Option<String>,
+    ) {
+        state.track_id = Some(track_id);
+        state.edit_name = name.clone().unwrap_or_default();
+        state.edit_content = content;
+        state.editing = true;
+        state.editing_custom_name = name;
+        state.viewport = None;
+        state.reset_note_state();
     }
 
     pub(super) fn flush_note_draft(&mut self, pane: PaneId) {
@@ -275,18 +345,9 @@ impl MusicPlayer {
         self.flush_note_draft(pane);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
             state.provider = provider;
-            state.lyrics = crate::load_state::LoadState::Loading;
-            state.track_id = None;
-            state.scrolled_to = None;
-            state.viewport = None;
-            state.editing = false;
-            state.editing_custom_name = None;
-            state.selected_custom = None;
-            state.reset_translation_state();
-            state.custom_names = Vec::new();
-            state.reset_note_state();
+            Self::reset_lyrics(state);
         }
-        self.sync_lyrics_editor(pane);
+        self.ensure_lyrics_for_current(pane);
         self.save_session();
     }
 
@@ -326,49 +387,31 @@ impl MusicPlayer {
                 .find(|t| t.language == lang)
                 .and_then(|t| t.source.clone())
         });
-        match language {
-            None => {
-                state.selected_translation = None;
-                state.loading_translation = None;
-                if let Some(lyrics) = state.displayed_lyrics() {
-                    state.mode = LyricsViewMode::for_lyrics(lyrics);
-                }
-                state.scrolled_to = None;
-                state.viewport = None;
-                state.reset_note_state();
-            }
-            Some(language) => match source {
-                None => {
-                    state.selected_translation = Some(language);
-                    state.loading_translation = None;
-                    if let Some(lyrics) = state.displayed_lyrics() {
-                        state.mode = LyricsViewMode::for_lyrics(lyrics);
+        if let Some(source) = source {
+            let Some(language) = language else {
+                return Task::none();
+            };
+            state.selected_translation = Some(language.clone());
+            state.loading_translation = Some(language.clone());
+            let id = track_id.clone();
+            std::thread::spawn(move || {
+                let result = match provider.fetch_translation(&language, &source) {
+                    Ok(Some(translation)) => Ok(translation),
+                    Ok(None) => Err(no_lyrics.to_string()),
+                    Err(e) => {
+                        tracing::warn!("Lyrics translation lookup failed: {e}");
+                        Err(e.to_string())
                     }
-                    state.scrolled_to = None;
-                    state.viewport = None;
-                    state.reset_note_state();
-                }
-                Some(source) => {
-                    state.selected_translation = Some(language.clone());
-                    state.loading_translation = Some(language.clone());
-                    let id = track_id.clone();
-                    std::thread::spawn(move || {
-                        let result = match provider.fetch_translation(&language, &source) {
-                            Ok(Some(translation)) => Ok(translation),
-                            Ok(None) => Err(no_lyrics.to_string()),
-                            Err(e) => {
-                                tracing::warn!("Lyrics translation lookup failed: {e}");
-                                Err(e.to_string())
-                            }
-                        };
-                        let _ = tx.send(BackendResult::LyricsTranslationFetched(
-                            result, id, provider,
-                        ));
-                    });
-                    return Task::none();
-                }
-            },
+                };
+                let _ = tx.send(BackendResult::LyricsTranslationFetched(
+                    result, id, provider,
+                ));
+            });
+            return Task::none();
         }
+        state.selected_translation = language;
+        state.loading_translation = None;
+        Self::refresh_displayed_lyrics(state);
         self.sync_lyrics_editor(pane);
         self.scroll_lyrics_to_active(pane)
     }
@@ -383,13 +426,12 @@ impl MusicPlayer {
         let Some(state) = &mut self.pane_mut(pane).lyrics else {
             return;
         };
-        state.track_id = Some(track_id);
-        state.edit_name = String::new();
-        state.edit_content = iced::widget::text_editor::Content::default();
-        state.editing = true;
-        state.editing_custom_name = None;
-        state.viewport = None;
-        state.reset_note_state();
+        Self::begin_custom_edit(
+            state,
+            track_id,
+            iced::widget::text_editor::Content::default(),
+            None,
+        );
     }
 
     /// Open the editor prefilled with the named custom entry.
@@ -401,17 +443,12 @@ impl MusicPlayer {
         let Some(entry) = self.lyrics_cache.get_custom(&track_id, &name) else {
             return;
         };
+        let content = iced::widget::text_editor::Content::with_text(&entry.to_edit_text());
         self.flush_note_draft(pane);
         let Some(state) = &mut self.pane_mut(pane).lyrics else {
             return;
         };
-        state.track_id = Some(track_id);
-        state.edit_name.clone_from(&name);
-        state.edit_content = iced::widget::text_editor::Content::with_text(&entry.to_edit_text());
-        state.editing = true;
-        state.editing_custom_name = Some(name);
-        state.viewport = None;
-        state.reset_note_state();
+        Self::begin_custom_edit(state, track_id, content, Some(name));
     }
 
     /// Show the named custom entry for the current track.
@@ -426,19 +463,8 @@ impl MusicPlayer {
         let custom_names = self.lyrics_cache.custom_names(&track_id);
         self.flush_note_draft(pane);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
-            let mode = LyricsViewMode::for_lyrics(&entry);
-            state.lyrics = crate::load_state::LoadState::Ready(Arc::new(entry));
-            state.mode = mode;
-            state.track_id = Some(track_id);
-            state.selected_custom = Some(name);
-            state.reset_translation_state();
-            state.custom_names = custom_names;
-            state.editing = false;
-            state.scrolled_to = None;
-            state.viewport = None;
-            state.reset_note_state();
+            Self::apply_lyrics(state, &track_id, entry, Some(name), custom_names);
         }
-        self.sync_lyrics_editor(pane);
         self.scroll_lyrics_to_active(pane)
     }
 
@@ -476,28 +502,15 @@ impl MusicPlayer {
         self.lyrics_cache.save();
         let custom_names = self.lyrics_cache.custom_names(&track_id);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
-            let mode = LyricsViewMode::for_lyrics(&lyrics);
-            state.lyrics = crate::load_state::LoadState::Ready(Arc::new(lyrics));
-            state.mode = mode;
-            state.track_id = Some(track_id);
-            state.selected_custom = Some(name);
-            state.reset_translation_state();
-            state.custom_names = custom_names;
-            state.editing = false;
-            state.editing_custom_name = None;
-            state.scrolled_to = None;
-            state.viewport = None;
-            state.reset_note_state();
+            Self::apply_lyrics(state, &track_id, lyrics, Some(name), custom_names);
         }
-        self.sync_lyrics_editor(pane);
         self.notify(self.strings.lyrics_saved);
         self.scroll_lyrics_to_active(pane)
     }
 
     pub fn cancel_custom_lyrics_edit(&mut self, pane: PaneId) {
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
-            state.editing = false;
-            state.editing_custom_name = None;
+            Self::end_custom_edit(state);
         }
         self.refresh_note_editor(pane);
     }
@@ -522,43 +535,24 @@ impl MusicPlayer {
         if self.lyrics_cache.remove_custom(&track_id, &target) {
             self.lyrics_cache.save();
         }
-        let custom_names = self.lyrics_cache.custom_names(&track_id);
         self.flush_note_draft(pane);
         if let Some(state) = &mut self.pane_mut(pane).lyrics {
-            state.editing = false;
-            state.editing_custom_name = None;
-            state.selected_custom = None;
-            state.reset_translation_state();
-            state.custom_names = custom_names;
-            state.lyrics = crate::load_state::LoadState::Loading;
-            state.scrolled_to = None;
-            state.viewport = None;
-            state.reset_note_state();
+            Self::reset_lyrics(state);
         }
-        self.sync_lyrics_editor(pane);
+        self.ensure_lyrics_for_current(pane);
         self.notify(self.strings.lyrics_deleted);
     }
 
     /// Load (from cache) or fetch lyrics for the current track when we don't
-    /// already hold them; driven by the tick loop so it reacts to the overlay
-    /// being shown and track changes.
+    /// already hold them. Called when the overlay opens or switches provider,
+    /// on every track change, and by the tick loop as a safety net.
     #[allow(clippy::too_many_lines)]
     pub(super) fn ensure_lyrics_for_current(&mut self, pane: PaneId) {
         let Some(track) = self.session.queue.current() else {
             self.flush_note_draft(pane);
             if let Some(state) = &mut self.pane_mut(pane).lyrics {
-                state.lyrics = crate::load_state::LoadState::Loading;
-                state.track_id = None;
-                state.scrolled_to = None;
-                state.viewport = None;
-                state.editing = false;
-                state.editing_custom_name = None;
-                state.selected_custom = None;
-                state.reset_translation_state();
-                state.custom_names = Vec::new();
-                state.reset_note_state();
+                Self::reset_lyrics(state);
             }
-            self.sync_lyrics_editor(pane);
             return;
         };
         let current_id = track.cache_key();
@@ -566,7 +560,6 @@ impl MusicPlayer {
         let title = track.title.clone();
         let album = track.album().map(|a| a.name.clone());
         let duration = track.duration();
-        let tx = self.result_tx.clone();
         let no_lyrics = self.strings.no_lyrics_found;
         self.flush_note_draft(pane);
         let Some((provider, editing, same_track, loading, selected)) =
@@ -588,22 +581,20 @@ impl MusicPlayer {
                 return;
             }
             if let Some(state) = &mut self.pane_mut(pane).lyrics {
-                state.editing = false;
-                state.editing_custom_name = None;
+                Self::end_custom_edit(state);
             }
         }
         if same_track && !loading {
             return;
         }
-        let selected = if same_track {
-            selected
-        } else {
-            if let Some(state) = &mut self.pane_mut(pane).lyrics {
-                state.selected_custom = None;
-                state.reset_translation_state();
-            }
-            None
-        };
+        if same_track
+            && self
+                .lyrics_requests
+                .contains(&(current_id.clone(), provider))
+        {
+            return;
+        }
+        let selected = if same_track { selected } else { None };
         let custom_names = self.lyrics_cache.custom_names(&current_id);
         let custom = selected.as_ref().and_then(|name| {
             self.lyrics_cache
@@ -620,51 +611,31 @@ impl MusicPlayer {
             return;
         };
         if let Some((name, custom)) = custom {
-            let mode = LyricsViewMode::for_lyrics(&custom);
-            state.lyrics = crate::load_state::LoadState::Ready(Arc::new(custom));
-            state.track_id = Some(current_id.clone());
-            state.mode = mode;
-            state.selected_custom = Some(name);
-            state.scrolled_to = None;
-            state.viewport = None;
-            state.custom_names = custom_names;
-            state.reset_translation_state();
-            state.reset_note_state();
-            Self::sync_editor_content(state);
+            Self::apply_lyrics(state, &current_id, custom, Some(name), custom_names);
             return;
         }
         if selected.is_some() {
             state.selected_custom = None;
         }
         if let Some(cached_lyrics) = cached {
-            let mode = LyricsViewMode::for_lyrics(&cached_lyrics);
-            state.lyrics = crate::load_state::LoadState::Ready(Arc::new(cached_lyrics));
-            state.track_id = Some(current_id.clone());
-            state.mode = mode;
-            state.scrolled_to = None;
-            state.viewport = None;
-            state.custom_names = custom_names;
-            state.reset_translation_state();
-            state.reset_note_state();
-            Self::sync_editor_content(state);
+            Self::apply_lyrics(state, &current_id, cached_lyrics, None, custom_names);
             return;
         }
 
+        Self::load_lyrics(state, Some(current_id.clone()), custom_names);
+
+        // One request per track/provider: other panes (and a close/reopen)
+        // wait for its result instead of starting their own.
+        if !self.lyrics_requests.insert((current_id.clone(), provider)) {
+            return;
+        }
         let req = crate::lyrics::LyricsRequest {
             artist,
             title,
             album: album.unwrap_or_default(),
             duration,
         };
-        let id = current_id.clone();
-        state.lyrics = crate::load_state::LoadState::Loading;
-        state.track_id = Some(id.clone());
-        state.scrolled_to = None;
-        state.viewport = None;
-        state.custom_names = custom_names;
-        state.reset_translation_state();
-        state.reset_note_state();
-        Self::sync_editor_content(state);
+        let tx = self.result_tx.clone();
         std::thread::spawn(move || {
             let result = match provider.fetch(&req) {
                 Ok(Some(lyrics)) => Ok(lyrics),
@@ -674,28 +645,34 @@ impl MusicPlayer {
                     Err(e.to_string())
                 }
             };
-            let _ = tx.send(BackendResult::LyricsFetched(result, id, provider));
+            let _ = tx.send(BackendResult::LyricsFetched(result, current_id, provider));
         });
     }
 
-    /// Drop loaded lyrics when the track changes; every open lyrics pane
-    /// stays open and refetches for the new track.
+    fn apply_lyrics(
+        state: &mut crate::app::LyricsState,
+        track_id: &str,
+        lyrics: crate::lyrics::Lyrics,
+        custom_name: Option<String>,
+        custom_names: Vec<String>,
+    ) {
+        state.track_id = Some(track_id.to_owned());
+        state.selected_custom = custom_name;
+        Self::end_custom_edit(state);
+        state.custom_names = custom_names;
+        Self::install_lyrics(state, Arc::new(lyrics));
+        Self::sync_editor_content(state);
+    }
+
+    /// Drop the previous track's lyrics; every open lyrics pane immediately
+    /// shows the new track's cached lyrics or starts one fetch for them.
     pub fn clear_lyrics_for_track_change(&mut self) {
         for pane in self.pane_ids() {
             self.flush_note_draft(pane);
             if let Some(state) = &mut self.pane_mut(pane).lyrics {
-                state.lyrics = crate::load_state::LoadState::Loading;
-                state.track_id = None;
-                state.scrolled_to = None;
-                state.viewport = None;
-                state.editing = false;
-                state.editing_custom_name = None;
-                state.selected_custom = None;
-                state.reset_translation_state();
-                state.custom_names = Vec::new();
-                state.reset_note_state();
+                Self::reset_lyrics(state);
             }
-            self.sync_lyrics_editor(pane);
+            self.ensure_lyrics_for_current(pane);
         }
     }
 

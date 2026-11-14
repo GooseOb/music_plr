@@ -684,6 +684,8 @@ impl MusicPlayer {
         track_id: &str,
         provider: crate::lyrics::LyricsProvider,
     ) -> Task<Message> {
+        self.lyrics_requests
+            .remove(&(track_id.to_owned(), provider));
         if track_id.is_empty() {
             return Task::none();
         }
@@ -707,15 +709,7 @@ impl MusicPlayer {
                 continue;
             };
             match &shared {
-                Ok(lyrics) => {
-                    let mode = crate::app::LyricsViewMode::for_lyrics(lyrics);
-                    state.lyrics = crate::load_state::LoadState::Ready(Arc::clone(lyrics));
-                    state.mode = mode;
-                    state.scrolled_to = None;
-                    state.viewport = None;
-                    state.reset_translation_state();
-                    state.reset_note_state();
-                }
+                Ok(lyrics) => Self::install_lyrics(state, Arc::clone(lyrics)),
                 Err(e) => {
                     state.lyrics = crate::load_state::LoadState::Failed(e.clone());
                     state.reset_translation_state();
@@ -806,11 +800,7 @@ impl MusicPlayer {
                         }
                         cache_write.get_or_insert_with(|| lyrics.clone());
                         state.selected_translation = Some(language.clone());
-                        let mode = crate::app::LyricsViewMode::for_lyrics(&translation.lyrics);
-                        state.mode = mode;
-                        state.scrolled_to = None;
-                        state.viewport = None;
-                        state.reset_note_state();
+                        Self::refresh_displayed_lyrics(state);
                     }
                     Err(e) => {
                         failure = Some(e.clone());

@@ -10,7 +10,9 @@ mod netease;
 
 use lrc::{format_timestamp, parse_lrc_line};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize,
+)]
 pub enum LyricsProvider {
     #[default]
     #[serde(rename = "lrclib")]

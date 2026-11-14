@@ -158,6 +158,10 @@ pub struct MusicPlayer {
     /// track. Held in memory like every other store; the view reads it without
     /// touching the disk.
     pub lyrics_cache: crate::data::lyrics_cache::LyricsCache,
+    /// Lyrics lookups in flight, keyed by track and provider, so panes showing
+    /// the same track share one request and closing/reopening the overlay
+    /// doesn't start another.
+    pub lyrics_requests: std::collections::HashSet<(String, crate::lyrics::LyricsProvider)>,
 
     pub search_history: SearchHistory,
     pub stream_cache: StreamCache,
@@ -323,6 +327,7 @@ impl MusicPlayer {
                 .then(|| Dialog::Dependencies(DependencyDialog::new(missing_deps, found_deps))),
             library: LibraryStore::load(),
             lyrics_cache: crate::data::lyrics_cache::LyricsCache::load_migrated(),
+            lyrics_requests: std::collections::HashSet::new(),
             request_ids: RequestIdGenerator::default(),
             result_tx,
             result_rx,
