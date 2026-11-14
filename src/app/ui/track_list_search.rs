@@ -42,13 +42,16 @@ pub(super) fn view_track_list_search<'a>(
         .on_press(Message::TrackListSearchClose);
 
     let bar = dir
-        .row([
-            close.into(),
-            input.into(),
-            text(count).style(fg_secondary()).into(),
-            prev.into(),
-            next.into(),
-        ])
+        .row(
+            [
+                close.into(),
+                input.into(),
+                text(count).style(fg_secondary()).into(),
+                prev.into(),
+                next.into(),
+            ]
+            .into_iter(),
+        )
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center);
 

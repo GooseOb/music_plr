@@ -33,39 +33,34 @@ fn section_kind_label(kind: ArtistSectionKind, tr: &crate::i18n::Strings) -> &st
     }
 }
 
-pub(super) fn view_artist<'a>(
-    player: &'a MusicPlayer,
-    pane: PaneId,
-) -> Element<'a, Message, AppTheme> {
+pub(super) fn view_artist(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> {
     let ViewKind::Artist(entry) = &player.view_data_in(pane).kind else {
         return empty_state(player.strings.not_an_artist_page);
     };
-    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::new();
-    children.push(header(
+    let children = std::iter::once(header(
         player,
         pane,
         &entry.id,
         &entry.name,
         entry.page.header.as_ref(),
         entry.page.header_provider,
-    ));
-
-    for kind in [
-        ArtistSectionKind::Popular,
-        ArtistSectionKind::Albums,
-        ArtistSectionKind::Playlists,
-        ArtistSectionKind::Related,
-    ] {
-        let section = entry.page.section(kind);
-        children.push(section_header(
-            pane,
-            kind,
-            section.provider,
-            entry.source,
-            player.strings,
-        ));
-        children.push(section_body(player, pane, section, kind));
-    }
+    ))
+    .chain(
+        [
+            ArtistSectionKind::Popular,
+            ArtistSectionKind::Albums,
+            ArtistSectionKind::Playlists,
+            ArtistSectionKind::Related,
+        ]
+        .into_iter()
+        .flat_map(|kind| {
+            let section = entry.page.section(kind);
+            [
+                section_header(pane, kind, section.provider, entry.source, player.strings),
+                section_body(player, pane, section, kind),
+            ]
+        }),
+    );
 
     super::card_scrollable(
         pane,
@@ -96,22 +91,25 @@ fn header_provider_picker(
     tr: &'static crate::i18n::Strings,
 ) -> Element<'static, Message, AppTheme> {
     tr.direction
-        .row([
-            text(tr.provided_by)
-                .size(theme::TEXT_SIZE_XS)
-                .style(fg_secondary())
-                .into(),
-            scope_tab_row(
-                tr.direction,
-                ProviderId::header_providers().iter().map(|&p| {
-                    (
-                        tr.provider(p),
-                        selected == Some(p),
-                        Message::ArtistHeaderProviderChanged(pane, p),
-                    )
-                }),
-            ),
-        ])
+        .row(
+            [
+                text(tr.provided_by)
+                    .size(theme::TEXT_SIZE_XS)
+                    .style(fg_secondary())
+                    .into(),
+                scope_tab_row(
+                    tr.direction,
+                    ProviderId::header_providers().iter().map(|&p| {
+                        (
+                            tr.provider(p),
+                            selected == Some(p),
+                            Message::ArtistHeaderProviderChanged(pane, p),
+                        )
+                    }),
+                ),
+            ]
+            .into_iter(),
+        )
         .spacing(theme::SPACING_XS)
         .align_y(alignment::Vertical::Center)
         .into()
@@ -144,62 +142,63 @@ fn header<'a>(
         })
         .unwrap_or_default();
 
-    let mut info = vec![
+    let info = [
         text(name).size(theme::TEXT_SIZE_XL).into(),
         text(stats_line)
             .size(theme::TEXT_SIZE_SM)
             .style(fg_secondary())
             .into(),
-    ];
-    if let Some(description) = header
-        .as_ref()
-        .map(|h| h.description.as_str())
-        .filter(|d| !d.is_empty())
-    {
-        info.push(
-            text(description)
-                .size(theme::TEXT_SIZE_XS)
-                .style(fg_secondary())
-                .into(),
-        );
-    }
+    ]
+    .into_iter()
+    .chain(
+        header
+            .as_ref()
+            .map(|h| h.description.as_str())
+            .filter(|d| !d.is_empty())
+            .map(|description| {
+                text(description)
+                    .size(theme::TEXT_SIZE_XS)
+                    .style(fg_secondary())
+                    .into()
+            }),
+    );
 
-    let mut actions = vec![header_provider_picker(
+    let actions = std::iter::once(header_provider_picker(
         pane,
         header_provider,
         player.strings,
-    )];
-    if let Some(item) = player.current_library_item(pane) {
+    ))
+    .chain(player.current_library_item(pane).map(|item| {
         let saved = player.library.contains(item.kind, &item.id);
         // The artist's public page, when the provider advertised one.
         let browser_url = item.web_url().map(str::to_string);
-        let mut buttons: Vec<Element<'_, Message, AppTheme>> = vec![toggle_bookmark_button(saved)
+        let buttons = [toggle_bookmark_button(saved)
             .on_press(Message::ToggleLibrarySave(item))
-            .into()];
-        if let Some(url) = browser_url {
-            buttons.push(open_in_browser_button(player.strings, &url));
-        }
-        actions.push(
-            Container::new(dir.row(buttons).spacing(theme::SPACING_XS))
-                .align_y(alignment::Vertical::Bottom)
-                .height(Length::Fill)
-                .into(),
-        );
-    }
+            .into()]
+        .into_iter()
+        .chain(browser_url.map(|url| open_in_browser_button(player.strings, &url)));
+        Container::new(dir.row(buttons).spacing(theme::SPACING_XS))
+            .align_y(alignment::Vertical::Bottom)
+            .height(Length::Fill)
+            .into()
+    }));
 
     let dir = player.strings.direction;
-    dir.row([
-        image,
-        Column::with_children(info)
-            .spacing(theme::SPACING_2XS)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(dir.align())
-            .into(),
-        Column::with_children(actions)
-            .align_x(player.strings.direction.end_align())
-            .into(),
-    ])
+    dir.row(
+        [
+            image,
+            Column::with_children(info)
+                .spacing(theme::SPACING_2XS)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(dir.align())
+                .into(),
+            Column::with_children(actions)
+                .align_x(player.strings.direction.end_align())
+                .into(),
+        ]
+        .into_iter(),
+    )
     .spacing(theme::SPACING_LG)
     .padding([theme::SPACING_MD, theme::SPACING_XL])
     .into()
@@ -224,18 +223,21 @@ fn section_header(
     );
     Container::new(
         tr.direction
-            .row([
-                text(section_kind_label(kind, tr))
-                    .style(fg_accent())
-                    .size(theme::TEXT_SIZE_LG)
-                    .width(Length::Fill)
-                    .into(),
-                text(tr.provided_by)
-                    .size(theme::TEXT_SIZE_SM)
-                    .style(fg_secondary())
-                    .into(),
-                picker,
-            ])
+            .row(
+                [
+                    text(section_kind_label(kind, tr))
+                        .style(fg_accent())
+                        .size(theme::TEXT_SIZE_LG)
+                        .width(Length::Fill)
+                        .into(),
+                    text(tr.provided_by)
+                        .size(theme::TEXT_SIZE_SM)
+                        .style(fg_secondary())
+                        .into(),
+                    picker,
+                ]
+                .into_iter(),
+            )
             .align_y(alignment::Vertical::Center)
             .spacing(theme::SPACING_MD)
             .padding([theme::SPACING_SM, theme::SPACING_XL]),
@@ -383,9 +385,9 @@ fn h_scroll_cards<'a, I>(
 where
     I: IntoIterator<Item = Element<'a, Message, AppTheme>>,
 {
-    let row: Vec<Element<'a, Message, AppTheme>> = cards.into_iter().collect();
-    if row.is_empty() {
+    let mut cards = cards.into_iter().peekable();
+    if cards.peek().is_none() {
         return empty_state(tr.nothing_here);
     }
-    card_rail(pane, RailKey::Artist(section), row)
+    card_rail(pane, RailKey::Artist(section), cards)
 }

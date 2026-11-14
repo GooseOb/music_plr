@@ -61,7 +61,7 @@ fn menu_panel_width(player: &MusicPlayer) -> Length {
 /// panel's measured bounds.
 fn menu_panel<'a>(
     player: &MusicPlayer,
-    rows: Vec<Element<'a, Message, AppTheme>>,
+    rows: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Container<'a, Message, AppTheme> {
     Container::new(
         Column::with_children(rows)
@@ -76,7 +76,7 @@ fn menu_panel<'a>(
 /// alongside the row tops.
 fn main_menu_panel<'a>(
     player: &MusicPlayer,
-    rows: Vec<Element<'a, Message, AppTheme>>,
+    rows: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
     menu_panel(player, rows).id(CONTEXT_MENU_PANEL_ID).into()
 }
@@ -107,38 +107,35 @@ pub(in crate::app::ui) fn view_context_menu<'a>(
     let row_len = menu_row_len(player);
 
     let actions = menu.actions(&player.stream_cache);
-    let items: Vec<Element<'_, Message, AppTheme>> = actions
-        .iter()
-        .enumerate()
-        .map(|(i, action)| {
-            let (label, icon) = action_label(*action, n, player.strings);
-            let focused = menu.anchor.hovered == Some(ContextMenuFocus::Item(i));
-            let chevron = action.submenu().is_some();
-            menu_item(
-                player.strings.direction,
-                label,
-                icon,
-                i,
-                focused,
-                chevron,
-                action.to_message(menu),
-                row_len,
-            )
-        })
-        .collect();
+    let items = actions.iter().enumerate().map(|(i, action)| {
+        let (label, icon) = action_label(*action, n, player.strings);
+        let focused = menu.anchor.hovered == Some(ContextMenuFocus::Item(i));
+        let chevron = action.submenu().is_some();
+        menu_item(
+            player.strings.direction,
+            label,
+            icon,
+            i,
+            focused,
+            chevron,
+            action.to_message(menu),
+            row_len,
+        )
+    });
 
     let mut row_children: Vec<Element<'_, Message, AppTheme>> =
         vec![main_menu_panel(player, items)];
     let mut anchor_x = pos_x;
     if let Some(kind) = menu.open_submenu_kind(&player.stream_cache) {
-        let entries = submenu_entries(kind, menu, &player.stream_cache, row_len, player.strings);
+        let mut entries =
+            submenu_entries(kind, menu, &player.stream_cache, row_len, player.strings).peekable();
         // Skip until the capture task has delivered geometry, so the submenu
         // doesn't render at the panel top and jump once bounds arrive.
         let geo = player
             .bounds
             .context_menu
             .as_ref()
-            .filter(|_| !entries.is_empty());
+            .filter(|_| entries.peek().is_some());
         if let Some(geo) = geo {
             let parent_index = match menu.anchor.hovered {
                 Some(ContextMenuFocus::Item(i)) => i,
@@ -191,25 +188,21 @@ pub(super) fn view_card_menu<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let row_len = menu_row_len(player);
     let saved = menu.saved(&player.library);
-    let rows: Vec<Element<'_, Message, AppTheme>> = menu
-        .actions()
-        .iter()
-        .enumerate()
-        .map(|(i, action)| {
-            let focused = menu.anchor.hovered == Some(ContextMenuFocus::Item(i));
-            let (label, icon) = card_action(*action, saved, player.strings);
-            menu_item(
-                player.strings.direction,
-                label,
-                icon,
-                i,
-                focused,
-                false,
-                (*action).into(),
-                row_len,
-            )
-        })
-        .collect();
+    let actions = menu.actions();
+    let rows = actions.iter().enumerate().map(|(i, action)| {
+        let focused = menu.anchor.hovered == Some(ContextMenuFocus::Item(i));
+        let (label, icon) = card_action(*action, saved, player.strings);
+        menu_item(
+            player.strings.direction,
+            label,
+            icon,
+            i,
+            focused,
+            false,
+            (*action).into(),
+            row_len,
+        )
+    });
 
     anchored_menu(&menu.anchor, main_menu_panel(player, rows))
 }
@@ -335,22 +328,21 @@ fn menu_item<'a>(
     on_press: Message,
     row_len: Length,
 ) -> Element<'a, Message, AppTheme> {
-    let mut children = vec![
+    let children = [
         icons::icon(icon, theme::ICON_SIZE_MD)
             .style(icon_style_fg_muted())
             .into(),
         dir.leading(text(label)),
-    ];
-    if chevron {
-        children.push(
-            icons::icon(
-                dir.mirror(icons::CHEVRON_RIGHT_ICON, icons::CHEVRON_LEFT_ICON),
-                theme::ICON_SIZE_MD,
-            )
-            .style(icon_style_fg_secondary())
-            .into(),
-        );
-    }
+    ]
+    .into_iter()
+    .chain(chevron.then(|| {
+        icons::icon(
+            dir.mirror(icons::CHEVRON_RIGHT_ICON, icons::CHEVRON_LEFT_ICON),
+            theme::ICON_SIZE_MD,
+        )
+        .style(icon_style_fg_secondary())
+        .into()
+    }));
     let item = context_menu_item(dir, children, focused);
 
     context_menu_button(
@@ -362,7 +354,7 @@ fn menu_item<'a>(
 
 fn context_menu_item<'a>(
     dir: Direction,
-    children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
+    children: impl DoubleEndedIterator<Item = Element<'a, Message, AppTheme>>,
     focused: bool,
 ) -> Container<'a, Message, AppTheme> {
     Container::new(
@@ -393,11 +385,11 @@ fn submenu_entries<'a>(
     cache: &crate::data::cache::StreamCache,
     row_len: Length,
     tr: &'a crate::i18n::Strings,
-) -> Vec<Element<'a, Message, AppTheme>> {
+) -> impl Iterator<Item = Element<'a, Message, AppTheme>> {
     menu.submenu_providers(kind, cache)
         .into_iter()
         .enumerate()
-        .map(|(i, provider)| {
+        .map(move |(i, provider)| {
             let focused = menu.anchor.hovered == Some(ContextMenuFocus::Sub(kind, i));
             // `(label builder, icon, whether the track carries an id here,
             // whether a missing id falls back to search)`.
@@ -446,7 +438,8 @@ fn submenu_entries<'a>(
                         .style(icon_style_fg_muted())
                         .into(),
                     tr.direction.leading(text(label)),
-                ],
+                ]
+                .into_iter(),
                 focused,
             );
 
@@ -456,5 +449,4 @@ fn submenu_entries<'a>(
                 ContextMenuFocus::Sub(kind, i),
             )
         })
-        .collect()
 }

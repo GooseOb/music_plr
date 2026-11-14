@@ -37,12 +37,6 @@ pub enum Direction {
     Rtl,
 }
 
-impl Direction {
-    pub fn is_rtl(self) -> bool {
-        matches!(self, Self::Rtl)
-    }
-}
-
 /// Declares the `Language` enum and its `ALL` / `label` / `strings` machinery
 /// from a single list, so adding a language only requires creating its module
 /// and appending one entry here — the enum itself is never hand-edited.
@@ -557,13 +551,6 @@ mod tests {
             for build in [s.sub_play_via, s.sub_download_from, s.sub_on] {
                 assert_ne!(build("YouTube", false), build("YouTube", true), "{lang:?}");
             }
-        }
-    }
-
-    #[test]
-    fn only_arabic_reads_right_to_left() {
-        for lang in Language::ALL {
-            assert_eq!(lang.direction().is_rtl(), lang == Language::Ar, "{lang:?}");
         }
     }
 

@@ -33,14 +33,17 @@ pub(super) fn view_playlist<'a>(
     // holds in the store.
     let dir = player.strings.direction;
     let add_local = Button::new(
-        dir.row([
-            icons::icon(icons::FOLDER_ICON, theme::ICON_SIZE_MD)
-                .style(icon_style_fg_secondary())
-                .into(),
-            text(player.strings.add_local)
-                .align_y(alignment::Vertical::Center)
-                .into(),
-        ])
+        dir.row(
+            [
+                icons::icon(icons::FOLDER_ICON, theme::ICON_SIZE_MD)
+                    .style(icon_style_fg_secondary())
+                    .into(),
+                text(player.strings.add_local)
+                    .align_y(alignment::Vertical::Center)
+                    .into(),
+            ]
+            .into_iter(),
+        )
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center),
     )
@@ -78,7 +81,8 @@ pub(super) fn view_playlist<'a>(
             icon_button_delete()
                 .on_press(Message::ShowDeleteConfirm(entry.index))
                 .into(),
-        ],
+        ]
+        .into_iter(),
     );
 
     let track_list = view_track_list(&pl.tracks, player, pane, 0);
@@ -97,14 +101,17 @@ pub(super) fn view_trashbin(player: &MusicPlayer, pane: PaneId) -> Element<'_, M
 pub(super) fn view_downloads(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> {
     let dir = player.strings.direction;
     let header = dir
-        .row([
-            icons::icon(icons::DOWNLOAD_ICON, theme::ICON_SIZE_MD)
-                .style(icon_style_fg_muted())
-                .into(),
-            text(player.strings.downloaded_tracks)
-                .style(fg_secondary())
-                .into(),
-        ])
+        .row(
+            [
+                icons::icon(icons::DOWNLOAD_ICON, theme::ICON_SIZE_MD)
+                    .style(icon_style_fg_muted())
+                    .into(),
+                text(player.strings.downloaded_tracks)
+                    .style(fg_secondary())
+                    .into(),
+            ]
+            .into_iter(),
+        )
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)
         .padding([theme::SPACING_SM, theme::SPACING_XL]);

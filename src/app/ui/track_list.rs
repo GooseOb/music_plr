@@ -79,16 +79,11 @@ where
     let translation_y = geo.map_or(0.0, |g| g.translation_y);
     let (first, end) = visible_range(count, row_h, translation_y, viewport_height, overscan);
 
-    let mut children = Vec::with_capacity((end - first) + 2);
-    if first > 0 {
-        children.push(row_spacer(first as f32 * row_h));
-    }
-    for i in first..end {
-        children.push(render_row(i));
-    }
-    if end < count {
-        children.push(row_spacer((count - end) as f32 * row_h));
-    }
+    let children = (first > 0)
+        .then(|| row_spacer(first as f32 * row_h))
+        .into_iter()
+        .chain((first..end).map(render_row))
+        .chain((end < count).then(|| row_spacer((count - end) as f32 * row_h)));
 
     let id = track_list_id(pane);
     scrollable(Column::with_children(children))
@@ -272,11 +267,9 @@ fn track_row_layout_inner<'a>(
         .stream_cache
         .index_contains(track.source, track.primary_id());
 
-    let mut trailing_children = Vec::with_capacity(3);
-
-    if show_album {
-        if let Some(album) = track.album() {
-            let album_button: Element<'a, Message, AppTheme> = Container::new(
+    let album_button = show_album.then(|| track.album()).flatten().map(
+        |album| -> Element<'a, Message, AppTheme> {
+            Container::new(
                 Button::new(text(&album.name).size(theme::TEXT_SIZE_SM))
                     .style(button_style_album())
                     .on_press(Message::Browse(
@@ -292,60 +285,55 @@ fn track_row_layout_inner<'a>(
                     )),
             )
             .width(Length::FillPortion(2))
-            .into();
-            trailing_children.push(album_button);
-        }
-    }
+            .into()
+        },
+    );
 
-    if show_plays {
-        let plays = track.play_count();
-        if plays > 0 {
-            trailing_children.push(
-                text((player.strings.n_plays)(plays))
-                    .size(theme::TEXT_SIZE_SM)
-                    .width(Length::Fill)
-                    .style(fg_secondary())
-                    .into(),
-            );
-        }
-    }
+    let plays = show_plays
+        .then(|| track.play_count())
+        .filter(|&plays| plays > 0)
+        .map(|plays| {
+            text((player.strings.n_plays)(plays))
+                .size(theme::TEXT_SIZE_SM)
+                .width(Length::Fill)
+                .style(fg_secondary())
+                .into()
+        });
 
-    if trashed {
-        trailing_children.push(trailing_icon(icons::DELETE_ICON));
-    }
+    let trashed_icon = trashed.then(|| trailing_icon(icons::DELETE_ICON));
 
     let icon = is_downloaded
         .then_some(icons::DOWNLOAD_ICON)
-        .or_else(|| is_cached.then_some(icons::CACHE_ICON));
-
-    if let Some(icon) = icon {
-        trailing_children.push(trailing_icon(icon));
-    }
+        .or_else(|| is_cached.then_some(icons::CACHE_ICON))
+        .map(trailing_icon);
 
     let liked = player.is_track_liked(track);
-    trailing_children.push(
-        playbar_toggle_button_unsized(icons::HEART_ICON, liked)
-            .padding(theme::SPACING_XS)
-            .on_press(Message::ToggleTrackLike(pos))
-            .into(),
-    );
 
     // Unknown durations (0) render blank rather than "--:--".
     let duration = track.duration();
 
-    trailing_children.push(
-        Container::new(
-            text(if duration > 0 {
-                crate::util::format_duration(duration).into_owned()
-            } else {
-                String::new()
-            })
-            .size(theme::TEXT_SIZE_SM)
-            .style(fg_secondary()),
-        )
-        .padding(theme::SPACING_SM)
-        .into(),
-    );
+    let trailing_children = album_button
+        .into_iter()
+        .chain(plays)
+        .chain(trashed_icon)
+        .chain(icon)
+        .chain([
+            playbar_toggle_button_unsized(icons::HEART_ICON, liked)
+                .padding(theme::SPACING_XS)
+                .on_press(Message::ToggleTrackLike(pos))
+                .into(),
+            Container::new(
+                text(if duration > 0 {
+                    crate::util::format_duration(duration).into_owned()
+                } else {
+                    String::new()
+                })
+                .size(theme::TEXT_SIZE_SM)
+                .style(fg_secondary()),
+            )
+            .padding(theme::SPACING_SM)
+            .into(),
+        ]);
 
     let artist_subtitle = subtitle_artists(pane, track, player.strings.direction);
 

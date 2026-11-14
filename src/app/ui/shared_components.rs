@@ -143,22 +143,25 @@ pub fn inner_row_layout<'a>(
     trailing: Element<'a, Message, AppTheme>,
 ) -> Row<'a, Message, AppTheme> {
     let align = dir.align();
-    dir.row([
-        leading,
-        thumbnail,
-        Column::with_children([
-            text(title)
-                .size(theme::TEXT_SIZE_MD)
-                .width(Length::Fill)
-                .align_x(align)
-                .into(),
-            subtitle,
-        ])
-        .spacing(theme::SPACING_2XS)
-        .align_x(align)
-        .into(),
-        trailing,
-    ])
+    dir.row(
+        [
+            leading,
+            thumbnail,
+            Column::with_children([
+                text(title)
+                    .size(theme::TEXT_SIZE_MD)
+                    .width(Length::Fill)
+                    .align_x(align)
+                    .into(),
+                subtitle,
+            ])
+            .spacing(theme::SPACING_2XS)
+            .align_x(align)
+            .into(),
+            trailing,
+        ]
+        .into_iter(),
+    )
     .spacing(theme::SPACING_SM)
     .align_y(alignment::Vertical::Center)
     .padding([theme::SPACING_XS, theme::SPACING_SM])
@@ -235,13 +238,14 @@ pub fn search_button(on_press: Option<Message>) -> Button<'static, Message, AppT
 
 /// Build a segmented row of scope/provider chips. Each item is
 /// `(label, selected, on_press)`; `pad_x`/`pad_y` set the button padding.
-pub fn scope_tab_row<I, S>(dir: Direction, items: I) -> Element<'static, Message, AppTheme>
+pub fn scope_tab_row<S>(
+    dir: Direction,
+    items: impl DoubleEndedIterator<Item = (S, bool, Message)>,
+) -> Element<'static, Message, AppTheme>
 where
-    I: IntoIterator<Item = (S, bool, Message)>,
     S: text::IntoFragment<'static>,
 {
     let tabs = items
-        .into_iter()
         .map(|(label, selected, on_press)| scope_button(label, selected).on_press(on_press).into());
     dir.row(tabs)
         .spacing(theme::SPACING_XS)
@@ -317,19 +321,15 @@ pub fn subtitle_artists<'a>(
     if track.artists.is_empty() {
         return Space::new().into();
     }
-    let mut children: Vec<Element<'a, Message, AppTheme>> =
-        Vec::with_capacity(track.artists.len() * 2);
-    for (index, name) in track.artists.iter().enumerate() {
-        if index > 0 {
-            children.push(
-                text(", ")
-                    .size(theme::TEXT_SIZE_SM)
-                    .style(fg_secondary())
-                    .into(),
-            );
-        }
+    let children = track.artists.iter().enumerate().flat_map(|(index, name)| {
+        let separator = (index > 0).then(|| {
+            text(", ")
+                .size(theme::TEXT_SIZE_SM)
+                .style(fg_secondary())
+                .into()
+        });
         let name_element = text(name).size(theme::TEXT_SIZE_SM);
-        children.push(match track.artist_target(index) {
+        let name_element: Element<'a, Message, AppTheme> = match track.artist_target(index) {
             Some((id, source)) => link_button(name_element)
                 .on_press(Message::OpenArtist {
                     pane,
@@ -340,8 +340,9 @@ pub fn subtitle_artists<'a>(
                 })
                 .into(),
             None => name_element.style(fg_secondary()).into(),
-        });
-    }
+        };
+        separator.into_iter().chain([name_element])
+    });
     dir.row(children).into()
 }
 
@@ -486,7 +487,7 @@ pub fn dialog_button(
 
 pub fn dialog_button_row(
     dir: Direction,
-    buttons: impl IntoIterator<Item = Element<'static, Message, AppTheme>>,
+    buttons: impl DoubleEndedIterator<Item = Element<'static, Message, AppTheme>>,
 ) -> Row<'static, Message, AppTheme> {
     dir.row(buttons)
         .spacing(theme::SPACING_SM)
@@ -571,7 +572,8 @@ fn card_body<'a>(
     subtitle: &str,
     title_style: impl Fn(&AppTheme) -> iced::widget::text::Style + 'a,
 ) -> Container<'a, Message, AppTheme> {
-    let mut body = vec![
+    let trimmed_subtitle = subtitle.trim();
+    let body = [
         image,
         text(title)
             .size(theme::TEXT_SIZE_SM)
@@ -579,16 +581,14 @@ fn card_body<'a>(
             .wrapping(text::Wrapping::Word)
             .style(title_style)
             .into(),
-    ];
-    let trimmed_subtitle = subtitle.trim();
-    if !trimmed_subtitle.is_empty() {
-        body.push(
-            text(trimmed_subtitle.to_string())
-                .size(theme::TEXT_SIZE_XS)
-                .style(fg_secondary())
-                .into(),
-        );
-    }
+    ]
+    .into_iter()
+    .chain((!trimmed_subtitle.is_empty()).then(|| {
+        text(trimmed_subtitle.to_string())
+            .size(theme::TEXT_SIZE_XS)
+            .style(fg_secondary())
+            .into()
+    }));
     Container::new(Column::with_children(body).spacing(theme::SPACING_2XS))
         .padding(theme::SPACING_2XS)
         .width(CARD_WIDTH)

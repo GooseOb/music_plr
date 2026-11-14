@@ -102,19 +102,17 @@ pub(super) fn view_lyrics<'a>(
         None => Container::new(body).height(Length::Fill).into(),
     };
 
-    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::with_capacity(4);
-    children.push(body);
-    if note_visible {
-        children.push(view_note_block(pane, lyrics_state));
-    }
-    if let Some(row) = view_translation_row(player, pane, lyrics_state) {
-        children.push(Container::new(row).style(bg_secondary()).into());
-    }
-    children.push(
-        Container::new(view_bottom_controls(player, pane, lyrics_state))
-            .style(bg_secondary())
-            .into(),
-    );
+    let children = std::iter::once(body)
+        .chain(note_visible.then(|| view_note_block(pane, lyrics_state)))
+        .chain(
+            view_translation_row(player, pane, lyrics_state)
+                .map(|row| Container::new(row).style(bg_secondary()).into()),
+        )
+        .chain([
+            Container::new(view_bottom_controls(player, pane, lyrics_state))
+                .style(bg_secondary())
+                .into(),
+        ]);
     Column::with_children(children).into()
 }
 
@@ -188,15 +186,14 @@ fn view_custom_editor<'a>(
     let cancel_btn =
         dialog_button(player.strings.cancel).on_press(Message::CancelCustomLyricsEdit(pane));
 
-    let mut buttons: Vec<Element<'a, Message, AppTheme>> = vec![cancel_btn.into(), save_btn.into()];
-    if lyrics_state.editing_custom_name.is_some() {
-        buttons.push(
+    let buttons = [cancel_btn.into(), save_btn.into()].into_iter().chain(
+        lyrics_state.editing_custom_name.is_some().then(|| {
             dialog_button(player.strings.delete)
                 .style(button_style_danger())
                 .on_press(Message::DeleteCustomLyrics(pane))
-                .into(),
-        );
-    }
+                .into()
+        }),
+    );
 
     Column::with_children([
         Container::new(
@@ -256,13 +253,16 @@ fn view_translation_row<'a>(
     let row = scope_tab_row_h_scroll(std::iter::once(original).chain(languages));
     let dir = player.strings.direction;
     Some(
-        dir.row([
-            text(player.strings.lyrics_translations)
-                .size(theme::TEXT_SIZE_SM)
-                .style(fg_secondary())
-                .into(),
-            dir.trailing(row),
-        ])
+        dir.row(
+            [
+                text(player.strings.lyrics_translations)
+                    .size(theme::TEXT_SIZE_SM)
+                    .style(fg_secondary())
+                    .into(),
+                dir.trailing(row),
+            ]
+            .into_iter(),
+        )
         .spacing(theme::SPACING_SM)
         .padding([0.0, theme::SPACING_SM])
         .align_y(alignment::Vertical::Center)
@@ -332,7 +332,7 @@ fn view_bottom_controls<'a>(
     );
 
     let dir = player.strings.direction;
-    dir.row([dir.leading(provider_row), dir.trailing(picker)])
+    dir.row([dir.leading(provider_row), dir.trailing(picker)].into_iter())
         .spacing(theme::SPACING_SM)
         .padding(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center)

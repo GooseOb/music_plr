@@ -37,7 +37,7 @@ pub(super) fn view_delete_confirm(
                 .into(),
             strings
                 .direction
-                .row([cancel_btn.into(), delete_btn.into()])
+                .row([cancel_btn.into(), delete_btn.into()].into_iter())
                 .spacing(theme::SPACING_XL)
                 .align_y(alignment::Vertical::Center)
                 .into(),
@@ -81,7 +81,7 @@ pub(super) fn view_server_playlist_name<'a>(
                 .style(fg_secondary())
                 .into(),
             input.into(),
-            dir.row([cancel_btn.into(), save_btn.into()])
+            dir.row([cancel_btn.into(), save_btn.into()].into_iter())
                 .spacing(theme::SPACING_XL)
                 .align_y(alignment::Vertical::Center)
                 .into(),
@@ -119,7 +119,7 @@ pub(super) fn view_server_playlist_delete<'a>(
             ))
             .style(fg_secondary())
             .into(),
-            dir.row([cancel_btn.into(), delete_btn.into()])
+            dir.row([cancel_btn.into(), delete_btn.into()].into_iter())
                 .spacing(theme::SPACING_XL)
                 .align_y(alignment::Vertical::Center)
                 .into(),

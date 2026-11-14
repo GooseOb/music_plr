@@ -41,10 +41,9 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
             .into()
     };
 
-    let mut children = vec![text(title).into()];
-    if let Some(t) = track {
-        children.push(subtitle_artists(player.session.focused, t, dir));
-    }
+    let children = [text(title).into()]
+        .into_iter()
+        .chain(track.map(|t| subtitle_artists(player.session.focused, t, dir)));
 
     let track_info = Column::with_children(children).spacing(theme::SPACING_XXS);
 
@@ -52,28 +51,31 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
     let total_text = time_text(player.duration as u32);
 
     let controls = Container::new(
-        dir.row([
-            icon_button(
-                dir.mirror(icons::SKIP_BACK_ICON, icons::SKIP_FORWARD_ICON),
-                theme::ICON_SIZE_MD,
-                icon_style_fg(),
-            )
-            .padding(theme::SPACING_2XS)
-            .on_press(Message::PreviousTrack)
-            .into(),
-            play_pause_button(player.is_playing)
-                .padding(theme::SPACING_SM)
-                .on_press(Message::TogglePlayPause)
+        dir.row(
+            [
+                icon_button(
+                    dir.mirror(icons::SKIP_BACK_ICON, icons::SKIP_FORWARD_ICON),
+                    theme::ICON_SIZE_MD,
+                    icon_style_fg(),
+                )
+                .padding(theme::SPACING_2XS)
+                .on_press(Message::PreviousTrack)
                 .into(),
-            icon_button(
-                dir.mirror(icons::SKIP_FORWARD_ICON, icons::SKIP_BACK_ICON),
-                theme::ICON_SIZE_MD,
-                icon_style_fg(),
-            )
-            .padding(theme::SPACING_2XS)
-            .on_press(Message::NextTrack)
-            .into(),
-        ])
+                play_pause_button(player.is_playing)
+                    .padding(theme::SPACING_SM)
+                    .on_press(Message::TogglePlayPause)
+                    .into(),
+                icon_button(
+                    dir.mirror(icons::SKIP_FORWARD_ICON, icons::SKIP_BACK_ICON),
+                    theme::ICON_SIZE_MD,
+                    icon_style_fg(),
+                )
+                .padding(theme::SPACING_2XS)
+                .on_press(Message::NextTrack)
+                .into(),
+            ]
+            .into_iter(),
+        )
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center),
     )
@@ -115,29 +117,32 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
         .on_press(Message::ShowLyrics(player.session.focused));
 
     Container::new(
-        dir.row([
-            Container::new(track_thumb)
-                .width(theme::PLAYBAR_THUMBNAIL_SIZE)
-                .height(theme::PLAYBAR_THUMBNAIL_SIZE)
-                .into(),
-            Container::new(track_info)
-                .width(theme::PLAYBAR_TRACK_INFO_WIDTH)
-                .align_x(dir.align())
-                .into(),
-            like_btn,
-            Container::new(elapsed_text).into(),
-            Container::new(controls_and_progress)
-                .width(Length::Fill)
-                .into(),
-            Container::new(total_text).into(),
-            icons::icon(icons::VOLUME_ICON, theme::ICON_SIZE_SM)
-                .style(icon_style_fg_secondary())
-                .into(),
-            volume_slider.into(),
-            repeat_btn.into(),
-            queue_btn.into(),
-            lyrics_btn.into(),
-        ])
+        dir.row(
+            [
+                Container::new(track_thumb)
+                    .width(theme::PLAYBAR_THUMBNAIL_SIZE)
+                    .height(theme::PLAYBAR_THUMBNAIL_SIZE)
+                    .into(),
+                Container::new(track_info)
+                    .width(theme::PLAYBAR_TRACK_INFO_WIDTH)
+                    .align_x(dir.align())
+                    .into(),
+                like_btn,
+                Container::new(elapsed_text).into(),
+                Container::new(controls_and_progress)
+                    .width(Length::Fill)
+                    .into(),
+                Container::new(total_text).into(),
+                icons::icon(icons::VOLUME_ICON, theme::ICON_SIZE_SM)
+                    .style(icon_style_fg_secondary())
+                    .into(),
+                volume_slider.into(),
+                repeat_btn.into(),
+                queue_btn.into(),
+                lyrics_btn.into(),
+            ]
+            .into_iter(),
+        )
         .spacing(theme::SPACING_MD)
         .align_y(alignment::Vertical::Center)
         .padding([theme::SPACING_LG, theme::SPACING_XL]),

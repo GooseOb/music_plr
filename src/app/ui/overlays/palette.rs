@@ -34,15 +34,15 @@ pub(super) fn view_palette<'a>(
     let dir = strings.direction;
     let rows = palette.rows(player);
 
-    let mut list: Vec<Element<'a, Message, AppTheme>> = Vec::new();
     let mut group = None;
-    for (pos, row) in rows.iter().enumerate() {
-        if group != Some(row.group) {
-            list.push(group_header(row.group, player));
-            group = Some(row.group);
-        }
-        list.push(row_view(player, palette, pos, row));
-    }
+    let list = rows.iter().enumerate().flat_map(|(pos, row)| {
+        let new_group = group != Some(row.group);
+        group = Some(row.group);
+        new_group
+            .then(|| group_header(row.group, player))
+            .into_iter()
+            .chain([row_view(player, palette, pos, row)])
+    });
 
     let list: Element<'_, Message, AppTheme> = if rows.is_empty() {
         Container::new(
@@ -76,17 +76,18 @@ pub(super) fn view_palette<'a>(
         .id(palette_input_id())
         .width(Length::Fill);
 
-    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::new();
-    if let PaletteMode::AddToPlaylist(add) = &palette.mode {
-        let title = if add.indices.len() > 1 {
-            (strings.ctx_add_to_playlist_n)(add.indices.len())
-        } else {
-            strings.ctx_add_to_playlist.to_string()
-        };
-        children.push(text(title).size(theme::TEXT_SIZE_LG).into());
-    }
-    children.push(input.into());
-    children.push(list);
+    let title = match &palette.mode {
+        PaletteMode::AddToPlaylist(add) => {
+            let title = if add.indices.len() > 1 {
+                (strings.ctx_add_to_playlist_n)(add.indices.len())
+            } else {
+                strings.ctx_add_to_playlist.to_string()
+            };
+            Some(text(title).size(theme::TEXT_SIZE_LG).into())
+        }
+        _ => None,
+    };
+    let children = title.into_iter().chain([input.into(), list]);
 
     view_dialog(
         Column::with_children(children)
@@ -132,18 +133,18 @@ fn row_view<'a>(
     .width(Length::Fill)
     .align_x(dir.align())
     .clip(true);
-    let mut children: Vec<Element<'a, Message, AppTheme>> = vec![label.into()];
-    if let Some(detail) = &row.detail {
-        children.push(
-            text(detail.clone())
-                .size(theme::TEXT_SIZE_MD)
-                .wrapping(iced::widget::text::Wrapping::None)
-                .style(fg_secondary())
-                .into(),
-        );
-    }
     let content = dir
-        .row(children)
+        .row(
+            [label.into()]
+                .into_iter()
+                .chain(row.detail.as_ref().map(|detail| {
+                    text(detail.clone())
+                        .size(theme::TEXT_SIZE_MD)
+                        .wrapping(iced::widget::text::Wrapping::None)
+                        .style(fg_secondary())
+                        .into()
+                })),
+        )
         .spacing(theme::SPACING_MD)
         .align_y(alignment::Vertical::Center)
         .width(Length::Fill);

@@ -95,7 +95,7 @@ pub(super) fn view_search_bar(
     .into();
 
     let controls = dir
-        .row([input, search_btn])
+        .row([input, search_btn].into_iter())
         .spacing(theme::SPACING_SM)
         .align_y(alignment::Vertical::Center);
 
@@ -126,7 +126,7 @@ pub(super) fn view_search_bar(
     let dir = player.strings.direction;
     let rows = Column::with_children([
         controls.into(),
-        dir.row([dir.leading(scope_row), dir.trailing(provider_row)])
+        dir.row([dir.leading(scope_row), dir.trailing(provider_row)].into_iter())
             .spacing(theme::SPACING_SM)
             .align_y(alignment::Vertical::Center)
             .into(),
@@ -166,13 +166,15 @@ fn view_search_track_tab<'a>(
     if results.is_empty() {
         empty_state(player.strings.no_tracks_found)
     } else {
-        let mut children = Vec::with_capacity(2);
-        children.push(view_track_list(results, player, pane, 0));
-
-        if !search.exhausted {
-            children.push(load_more_button(player, pane, search.append_in_flight));
-        }
-        Column::with_children(children).into()
+        Column::with_children(
+            [view_track_list(results, player, pane, 0)]
+                .into_iter()
+                .chain(
+                    (!search.exhausted)
+                        .then(|| load_more_button(player, pane, search.append_in_flight)),
+                ),
+        )
+        .into()
     }
 }
 
@@ -218,10 +220,9 @@ fn view_search_card_tab<'a>(
         .enumerate()
         .map(|(i, c)| card_row(player, pane, i, &c.card.title, &c.subtitle, &c.card));
 
-    let mut children: Vec<Element<'_, Message, AppTheme>> = cards.collect();
-    if !search.exhausted {
-        children.push(load_more_button(player, pane, search.append_in_flight));
-    }
+    let children = cards.chain(
+        (!search.exhausted).then(|| load_more_button(player, pane, search.append_in_flight)),
+    );
 
     super::card_scrollable(pane, Column::with_children(children)).into()
 }
@@ -336,7 +337,8 @@ pub(super) fn view_browse<'a>(
         player.strings.loading,
         [toggle_bookmark_button(saved)
             .on_press(Message::ToggleLibrarySave(item))
-            .into()],
+            .into()]
+        .into_iter(),
     )
 }
 
@@ -385,7 +387,7 @@ pub(super) fn view_server_playlist<'a>(
         },
         None,
         tr.loading,
-        [refresh.into(), delete.into()],
+        [refresh.into(), delete.into()].into_iter(),
     )
 }
 
@@ -466,7 +468,7 @@ pub(super) fn track_page_header<'a>(
     player: &'a MusicPlayer,
     spec: TrackPage<'a>,
     browser_url: Option<&str>,
-    leading_buttons: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
+    leading_buttons: impl DoubleEndedIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
     let buttons = leading_buttons
         .into_iter()
@@ -492,20 +494,23 @@ pub(super) fn track_page_header<'a>(
         PageThumbnail::Single(thumb) => thumbnail(theme::PAGE_THUMBNAIL_SIZE, thumb),
         PageThumbnail::Mosaic(tiles) => thumbnail_mosaic(theme::PAGE_THUMBNAIL_SIZE, tiles),
     };
-    dir.row([
-        art,
-        Column::with_children([
-            heading,
-            text(spec.meta)
-                .size(theme::TEXT_SIZE_SM)
-                .style(fg_secondary())
-                .into(),
-            dir.row(buttons).spacing(theme::SPACING_SM).into(),
-        ])
-        .spacing(theme::SPACING_MD)
-        .align_x(align)
-        .into(),
-    ])
+    dir.row(
+        [
+            art,
+            Column::with_children([
+                heading,
+                text(spec.meta)
+                    .size(theme::TEXT_SIZE_SM)
+                    .style(fg_secondary())
+                    .into(),
+                dir.row(buttons).spacing(theme::SPACING_SM).into(),
+            ])
+            .spacing(theme::SPACING_MD)
+            .align_x(align)
+            .into(),
+        ]
+        .into_iter(),
+    )
     .align_y(alignment::Vertical::Center)
     .spacing(theme::SPACING_MD)
     .padding([theme::SPACING_SM, theme::SPACING_XL])
@@ -522,7 +527,7 @@ fn view_track_page<'a>(
     spec: TrackPage<'a>,
     browser_url: Option<&str>,
     loading: &'a str,
-    leading_buttons: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
+    leading_buttons: impl DoubleEndedIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
     let header = track_page_header(
         player,
@@ -572,38 +577,44 @@ pub(super) fn view_search_history(
                 let is_hovered = player.drag.hovered_search_history() == Some(i);
                 let text_color = if is_hovered { p.fg } else { p.fg_muted };
                 let row = Container::new(
-                    dir.row([
-                        Button::new(
-                            player.strings.direction.leading(
-                                dir.row([
-                                    icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_SM)
-                                        .style(icon_color(text_color))
-                                        .into(),
-                                    text(q).size(theme::TEXT_SIZE_SM).into(),
-                                ])
-                                .spacing(theme::SPACING_SM)
-                                .padding([theme::SPACING_XS, theme::SPACING_MD])
-                                .align_y(alignment::Vertical::Center),
-                            ),
-                        )
-                        .width(Length::Fill)
-                        .padding(0)
-                        .style(move |_, _| button::Style {
-                            background: None,
-                            text_color,
-                            ..Default::default()
-                        })
-                        .on_press(Message::SearchHistorySelected(pane, i))
-                        .into(),
-                        icon_button(
-                            icons::DELETE_ICON,
-                            theme::ICON_SIZE_SM,
-                            icon_style_fg_secondary(),
-                        )
-                        .style(button_style_hist())
-                        .on_press(Message::DeleteSearchHistory(pane, i))
-                        .into(),
-                    ])
+                    dir.row(
+                        [
+                            Button::new(
+                                player.strings.direction.leading(
+                                    dir.row(
+                                        [
+                                            icons::icon(icons::SEARCH_ICON, theme::ICON_SIZE_SM)
+                                                .style(icon_color(text_color))
+                                                .into(),
+                                            text(q).size(theme::TEXT_SIZE_SM).into(),
+                                        ]
+                                        .into_iter(),
+                                    )
+                                    .spacing(theme::SPACING_SM)
+                                    .padding([theme::SPACING_XS, theme::SPACING_MD])
+                                    .align_y(alignment::Vertical::Center),
+                                ),
+                            )
+                            .width(Length::Fill)
+                            .padding(0)
+                            .style(move |_, _| button::Style {
+                                background: None,
+                                text_color,
+                                ..Default::default()
+                            })
+                            .on_press(Message::SearchHistorySelected(pane, i))
+                            .into(),
+                            icon_button(
+                                icons::DELETE_ICON,
+                                theme::ICON_SIZE_SM,
+                                icon_style_fg_secondary(),
+                            )
+                            .style(button_style_hist())
+                            .on_press(Message::DeleteSearchHistory(pane, i))
+                            .into(),
+                        ]
+                        .into_iter(),
+                    )
                     .align_y(alignment::Vertical::Center),
                 )
                 .style(move |theme: &AppTheme| container::Style {

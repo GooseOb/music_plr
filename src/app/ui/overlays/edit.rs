@@ -50,40 +50,42 @@ fn provider_row<'a>(
     let dir = player.strings.direction;
     let manual_search = manual_search_button(player, provider);
     let header: Element<'a, Message, AppTheme> = match pt {
-        Some(_pt) => {
-            let mut children: Vec<Element<'a, Message, AppTheme>> = vec![
-                text(player.strings.provider(provider)).into(),
-                if provider == source {
-                    text(player.strings.current).style(fg_secondary()).into()
-                } else {
-                    text_button(player.strings.select)
-                        .on_press(Message::EditTrackSelectProvider(provider))
-                        .into()
-                },
-            ];
-            children.extend(manual_search);
-            dir.row(children)
-                .spacing(theme::SPACING_SM)
-                .align_y(alignment::Vertical::Center)
-                .into()
-        }
-        None if provider.capabilities().search => {
-            let mut children: Vec<Element<'a, Message, AppTheme>> = vec![
-                text(player.strings.provider(provider)).into(),
-                if finding {
-                    text_button(player.strings.finding).into()
-                } else {
-                    text_button(player.strings.find)
-                        .on_press(Message::EditTrackFindProvider(provider))
-                        .into()
-                },
-            ];
-            children.extend(manual_search);
-            dir.row(children)
-                .spacing(theme::SPACING_SM)
-                .align_y(alignment::Vertical::Center)
-                .into()
-        }
+        Some(_pt) => dir
+            .row(
+                [
+                    text(player.strings.provider(provider)).into(),
+                    if provider == source {
+                        text(player.strings.current).style(fg_secondary()).into()
+                    } else {
+                        text_button(player.strings.select)
+                            .on_press(Message::EditTrackSelectProvider(provider))
+                            .into()
+                    },
+                ]
+                .into_iter()
+                .chain(manual_search),
+            )
+            .spacing(theme::SPACING_SM)
+            .align_y(alignment::Vertical::Center)
+            .into(),
+        None if provider.capabilities().search => dir
+            .row(
+                [
+                    text(player.strings.provider(provider)).into(),
+                    if finding {
+                        text_button(player.strings.finding).into()
+                    } else {
+                        text_button(player.strings.find)
+                            .on_press(Message::EditTrackFindProvider(provider))
+                            .into()
+                    },
+                ]
+                .into_iter()
+                .chain(manual_search),
+            )
+            .spacing(theme::SPACING_SM)
+            .align_y(alignment::Vertical::Center)
+            .into(),
         None => text(player.strings.provider(provider)).into(),
     };
 
@@ -108,17 +110,20 @@ fn provider_row<'a>(
                     player.strings.lbl_duration_secs,
                     &pt.duration.to_string(),
                 ),
-                dir.row([
-                    thumbnail(
-                        theme::PLAYBAR_THUMBNAIL_SIZE,
-                        player.thumbnail_index.get(provider, &pt.id),
-                    ),
-                    disabled_text_input_row(
-                        player.strings.direction,
-                        player.strings.lbl_thumbnail,
-                        &pt.thumbnail,
-                    ),
-                ])
+                dir.row(
+                    [
+                        thumbnail(
+                            theme::PLAYBAR_THUMBNAIL_SIZE,
+                            player.thumbnail_index.get(provider, &pt.id),
+                        ),
+                        disabled_text_input_row(
+                            player.strings.direction,
+                            player.strings.lbl_thumbnail,
+                            &pt.thumbnail,
+                        ),
+                    ]
+                    .into_iter(),
+                )
                 .spacing(theme::SPACING_SM)
                 .into(),
                 disabled_text_input_row(player.strings.direction, player.strings.lbl_album, album),
@@ -157,7 +162,7 @@ pub(super) fn view_edit_track<'a>(
     }
     provider_ids.sort_by_key(|p| p.name());
 
-    let provider_rows: Vec<Element<'_, Message, AppTheme>> = provider_ids
+    let mut provider_rows = provider_ids
         .iter()
         .map(|&provider| {
             provider_row(
@@ -168,14 +173,14 @@ pub(super) fn view_edit_track<'a>(
                 edit.finding == Some(provider),
             )
         })
-        .collect();
+        .peekable();
 
     let providers_block = Column::with_children([
         text(player.strings.providers)
             .style(fg_accent())
             .size(theme::TEXT_SIZE_LG)
             .into(),
-        if provider_rows.is_empty() {
+        if provider_rows.peek().is_none() {
             text(player.strings.no_provider_data)
                 .style(fg_secondary())
                 .into()
@@ -228,7 +233,7 @@ pub(super) fn view_edit_track<'a>(
         scrollable(body).height(Length::Fill).into(),
         dialog_button_row(
             player.strings.direction,
-            [cancel_btn.into(), save_btn.into()],
+            [cancel_btn.into(), save_btn.into()].into_iter(),
         )
         .into(),
     ])
@@ -283,18 +288,13 @@ pub(super) fn view_edit_manual_search<'a>(
 
     let scopes = scope_tab_row(
         player.strings.direction,
-        manual
-            .provider
-            .track_scopes()
-            .into_iter()
-            .map(|scope| {
-                (
-                    player.scope_name(scope),
-                    scope == manual.scope,
-                    Message::EditTrackManualScope(scope),
-                )
-            })
-            .collect::<Vec<_>>(),
+        manual.provider.track_scopes().into_iter().map(|scope| {
+            (
+                player.scope_name(scope),
+                scope == manual.scope,
+                Message::EditTrackManualScope(scope),
+            )
+        }),
     );
 
     let cancel_btn = dialog_button(tr.cancel).on_press(Message::EditTrackManualCancel);
@@ -312,13 +312,17 @@ pub(super) fn view_edit_manual_search<'a>(
                 .size(theme::TEXT_SIZE_LG)
                 .into(),
             tr.direction
-                .row([query, search_btn.into()])
+                .row([query, search_btn.into()].into_iter())
                 .spacing(theme::SPACING_SM)
                 .align_y(alignment::Vertical::Center)
                 .into(),
             scopes,
             manual_search_results(player, manual),
-            dialog_button_row(tr.direction, [cancel_btn.into(), confirm_btn.into()]).into(),
+            dialog_button_row(
+                tr.direction,
+                [cancel_btn.into(), confirm_btn.into()].into_iter(),
+            )
+            .into(),
         ])
         .spacing(theme::SPACING_SM)
         .align_x(alignment::Horizontal::Center)

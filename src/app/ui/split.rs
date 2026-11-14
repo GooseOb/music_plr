@@ -23,16 +23,19 @@ pub(super) fn view_split_tree<'a>(
     match node {
         crate::app::pane::SplitNode::Leaf(pane) => view_pane(player, *pane),
         crate::app::pane::SplitNode::Row { first, second } => dir
-            .row([
-                Container::new(view_split_tree(player, first))
-                    .width(Length::FillPortion(1))
-                    .height(Length::Fill)
-                    .into(),
-                Container::new(view_split_tree(player, second))
-                    .width(Length::FillPortion(1))
-                    .height(Length::Fill)
-                    .into(),
-            ])
+            .row(
+                [
+                    Container::new(view_split_tree(player, first))
+                        .width(Length::FillPortion(1))
+                        .height(Length::Fill)
+                        .into(),
+                    Container::new(view_split_tree(player, second))
+                        .width(Length::FillPortion(1))
+                        .height(Length::Fill)
+                        .into(),
+                ]
+                .into_iter(),
+            )
             .height(Length::Fill)
             .into(),
         crate::app::pane::SplitNode::Column { first, second } => Column::with_children([
@@ -53,13 +56,12 @@ pub(super) fn view_split_tree<'a>(
 fn view_pane(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> {
     let multi = player.session.root.leaf_count() > 1;
     let focused = multi && player.session.focused == pane;
-    let mut children = Vec::with_capacity(2);
-    if multi {
-        children.push(view_pane_header(player, pane));
-    }
-    children.push(view_main_content(player, pane));
-
-    let body = Column::with_children(children);
+    let body = Column::with_children(
+        multi
+            .then(|| view_pane_header(player, pane))
+            .into_iter()
+            .chain([view_main_content(player, pane)]),
+    );
     let mut content = MouseArea::new(body);
     if player.session.focused != pane {
         content = content.on_press(Message::FocusPane(pane));
@@ -121,7 +123,7 @@ fn view_pane_header(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, 
             .into(),
         header_button(&p, true, icons::CLOSE_ICON, Message::ClosePane(pane)).into(),
     ];
-    dir.row(buttons)
+    dir.row(buttons.into_iter())
         .spacing(theme::SPACING_XS)
         .align_y(alignment::Vertical::Center)
         .padding([theme::SPACING_XS, theme::SPACING_SM])

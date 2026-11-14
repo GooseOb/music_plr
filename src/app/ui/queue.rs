@@ -57,14 +57,17 @@ pub(super) fn view_queue_panel(player: &MusicPlayer) -> Element<'_, Message, App
 
 fn view_queue_tabs(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let dir = player.strings.direction;
-    dir.row([
-        queue_tab(player, player.strings.queue, QueueTab::Queue),
-        queue_tab(
-            player,
-            player.strings.recently_played,
-            QueueTab::RecentlyPlayed,
-        ),
-    ])
+    dir.row(
+        [
+            queue_tab(player, player.strings.queue, QueueTab::Queue),
+            queue_tab(
+                player,
+                player.strings.recently_played,
+                QueueTab::RecentlyPlayed,
+            ),
+        ]
+        .into_iter(),
+    )
     .spacing(theme::SPACING_SM)
     .padding(theme::SPACING_SM)
     .into()
@@ -80,12 +83,15 @@ fn queue_tab<'a>(
 
     Button::new(
         player.strings.direction.leading(
-            dir.row([
-                icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_SM)
-                    .style(icon_style_tab(active))
-                    .into(),
-                text(label).into(),
-            ])
+            dir.row(
+                [
+                    icons::icon(icons::MUSIC_ICON, theme::ICON_SIZE_SM)
+                        .style(icon_style_tab(active))
+                        .into(),
+                    text(label).into(),
+                ]
+                .into_iter(),
+            )
             .spacing(theme::SPACING_SM)
             .padding([theme::SPACING_SM, theme::SPACING_MD])
             .align_y(alignment::Vertical::Center),
@@ -137,12 +143,15 @@ fn view_queue_tab(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
         .and_then(|v| now_playing_source_label(&v.kind, player.strings))
     {
         Some(source) => dir
-            .row([
-                section_text(player.strings.now_playing_from),
-                link_button(text(source).size(theme::TEXT_SIZE_XS))
-                    .on_press(Message::RevealNowPlaying)
-                    .into(),
-            ])
+            .row(
+                [
+                    section_text(player.strings.now_playing_from),
+                    link_button(text(source).size(theme::TEXT_SIZE_XS))
+                        .on_press(Message::RevealNowPlaying)
+                        .into(),
+                ]
+                .into_iter(),
+            )
             .spacing(theme::SPACING_XS)
             .padding(NOW_PLAYING_PADDING)
             .align_y(alignment::Vertical::Center)

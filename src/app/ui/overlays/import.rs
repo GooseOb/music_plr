@@ -48,7 +48,8 @@ pub(super) fn view_import_playlist<'a>(
                 dialog.method == ImportMethod::Csv,
                 Message::ImportMethodChanged(ImportMethod::Csv),
             ),
-        ],
+        ]
+        .into_iter(),
     );
 
     let content: Element<'_, Message, AppTheme> = match dialog.method {
@@ -68,11 +69,12 @@ pub(super) fn view_import_playlist<'a>(
                         dialog.csv_preset == CsvPreset::Exportify,
                         Message::ImportCsvPresetChanged(CsvPreset::Exportify),
                     ),
-                ],
+                ]
+                .into_iter(),
             );
-            let mut csv_children: Vec<Element<'_, Message, AppTheme>> = vec![
+            let csv_children = [
                 tr.direction
-                    .row([preset_row, preset_tabs])
+                    .row([preset_row, preset_tabs].into_iter())
                     .spacing(theme::SPACING_SM)
                     .align_y(alignment::Vertical::Center)
                     .into(),
@@ -97,14 +99,13 @@ pub(super) fn view_import_playlist<'a>(
                     tr.import_csv_album_col,
                     |v| Message::ImportCsvColChanged(ImportCsvField::Album, v),
                 ),
-            ];
-            if dialog.csv_preset == CsvPreset::Exportify {
-                csv_children.push(
-                    text(tr.import_csv_exportify_note)
-                        .style(fg_secondary())
-                        .into(),
-                );
-            }
+            ]
+            .into_iter()
+            .chain((dialog.csv_preset == CsvPreset::Exportify).then(|| {
+                text(tr.import_csv_exportify_note)
+                    .style(fg_secondary())
+                    .into()
+            }));
             Column::with_children(csv_children)
                 .spacing(theme::SPACING_SM)
                 .align_x(tr.direction.align())
@@ -125,7 +126,7 @@ pub(super) fn view_import_playlist<'a>(
                 .on_press(Message::ImportRemovePattern(i))
                 .into();
                 tr.direction
-                    .row([input, remove])
+                    .row([input, remove].into_iter())
                     .spacing(theme::SPACING_SM)
                     .align_y(alignment::Vertical::Center)
                     .into()
@@ -146,28 +147,6 @@ pub(super) fn view_import_playlist<'a>(
         }
     };
 
-    let mut children: Vec<Element<'_, Message, AppTheme>> = vec![
-        text(tr.import_playlist).size(theme::TEXT_SIZE_LG).into(),
-        method_row,
-    ];
-    if matches!(dialog.method, ImportMethod::Csv | ImportMethod::FileList) {
-        children.push(text_input_row(
-            tr.direction,
-            tr.import_playlist_name,
-            &dialog.playlist_name,
-            "",
-            Message::ImportPlaylistNameChanged,
-        ));
-    }
-    children.push(content);
-    if let Some((a, b)) = dialog.conflict_pair() {
-        children.push(
-            text((tr.import_pattern_conflict)(&a, &b))
-                .style(fg_secondary())
-                .into(),
-        );
-    }
-
     let select_label = match dialog.method {
         ImportMethod::FileList => tr.import_select_folder,
         ImportMethod::Native | ImportMethod::Csv => tr.import_select_file,
@@ -181,13 +160,34 @@ pub(super) fn view_import_playlist<'a>(
         });
     let cancel_btn = dialog_button(tr.cancel).on_press(Message::CloseDialog);
 
-    children.push(
-        tr.direction
-            .row([cancel_btn.into(), select_btn.into()])
-            .spacing(theme::SPACING_SM)
-            .align_y(alignment::Vertical::Center)
-            .into(),
-    );
+    let children = [
+        text(tr.import_playlist).size(theme::TEXT_SIZE_LG).into(),
+        method_row,
+    ]
+    .into_iter()
+    .chain(
+        matches!(dialog.method, ImportMethod::Csv | ImportMethod::FileList).then(|| {
+            text_input_row(
+                tr.direction,
+                tr.import_playlist_name,
+                &dialog.playlist_name,
+                "",
+                Message::ImportPlaylistNameChanged,
+            )
+        }),
+    )
+    .chain([content])
+    .chain(dialog.conflict_pair().map(|(a, b)| {
+        text((tr.import_pattern_conflict)(&a, &b))
+            .style(fg_secondary())
+            .into()
+    }))
+    .chain([tr
+        .direction
+        .row([cancel_btn.into(), select_btn.into()].into_iter())
+        .spacing(theme::SPACING_SM)
+        .align_y(alignment::Vertical::Center)
+        .into()]);
 
     let dialog_col = Column::with_children(children)
         .spacing(theme::SPACING_MD)

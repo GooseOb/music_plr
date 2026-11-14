@@ -44,7 +44,7 @@ pub(super) fn view_translate_dialog<'a>(
             .then_some(Message::TranslateSubmit),
     );
 
-    let mut children: Vec<Element<'_, Message, AppTheme>> = vec![
+    let children = [
         text(tr.translate_title).size(theme::TEXT_SIZE_LG).into(),
         language,
         text(tr.translate_prompt_lbl)
@@ -52,17 +52,18 @@ pub(super) fn view_translate_dialog<'a>(
             .style(fg_secondary())
             .into(),
         prompt,
-    ];
-    if dialog.translating {
-        children.push(text(tr.translating).style(fg_secondary()).into());
-    }
-    children.push(
-        dialog_button_row(
-            tr.direction,
-            [cancel_btn.into(), reset_btn.into(), submit_btn.into()],
-        )
-        .into(),
-    );
+    ]
+    .into_iter()
+    .chain(
+        dialog
+            .translating
+            .then(|| text(tr.translating).style(fg_secondary()).into()),
+    )
+    .chain([dialog_button_row(
+        tr.direction,
+        [cancel_btn.into(), reset_btn.into(), submit_btn.into()].into_iter(),
+    )
+    .into()]);
 
     view_dialog(
         Column::with_children(children)

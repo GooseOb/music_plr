@@ -28,39 +28,52 @@ pub(super) fn view_dependency_dialog<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let tr = &player.strings;
 
-    let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
-
-    let missing_rows: Vec<Element<'_, Message, AppTheme>> = dialog
-        .missing
-        .iter()
-        .map(|&kind| dep_checkbox_row(player, dialog, kind))
-        .collect();
-    if !missing_rows.is_empty() {
-        children.push(text(tr.deps_title).size(theme::TEXT_SIZE_LG).into());
-        children.push(text(tr.deps_intro).style(fg_secondary()).into());
-        children.push(
-            scrollable(Column::with_children(missing_rows).spacing(theme::SPACING_SM)).into(),
-        );
-    }
-
-    if !dialog.found.is_empty() {
-        let found_rows = dialog
-            .found
-            .iter()
-            .map(|&kind| dep_checkbox_row(player, dialog, kind));
-        children.push(
-            text(tr.deps_found_section_title)
-                .size(theme::TEXT_SIZE_LG)
+    let missing = !dialog.missing.is_empty();
+    let found = !dialog.found.is_empty();
+    let rows = missing
+        .then(|| {
+            [
+                text(tr.deps_title).size(theme::TEXT_SIZE_LG).into(),
+                text(tr.deps_intro).style(fg_secondary()).into(),
+                scrollable(
+                    Column::with_children(
+                        dialog
+                            .missing
+                            .iter()
+                            .map(|&kind| dep_checkbox_row(player, dialog, kind)),
+                    )
+                    .spacing(theme::SPACING_SM),
+                )
                 .into(),
+            ]
+        })
+        .into_iter()
+        .flatten()
+        .chain(
+            found
+                .then(|| {
+                    [
+                        text(tr.deps_found_section_title)
+                            .size(theme::TEXT_SIZE_LG)
+                            .into(),
+                        text(tr.deps_found_section_intro)
+                            .style(fg_secondary())
+                            .into(),
+                        scrollable(
+                            Column::with_children(
+                                dialog
+                                    .found
+                                    .iter()
+                                    .map(|&kind| dep_checkbox_row(player, dialog, kind)),
+                            )
+                            .spacing(theme::SPACING_SM),
+                        )
+                        .into(),
+                    ]
+                })
+                .into_iter()
+                .flatten(),
         );
-        children.push(
-            text(tr.deps_found_section_intro)
-                .style(fg_secondary())
-                .into(),
-        );
-        children
-            .push(scrollable(Column::with_children(found_rows).spacing(theme::SPACING_SM)).into());
-    }
 
     let pending = dialog.pending(&player.dep_ops);
     let installing_any = player.dep_ops.values().any(|o| o.installing);
@@ -73,7 +86,11 @@ pub(super) fn view_dependency_dialog<'a>(
         });
     let discard_btn = dialog_button(tr.deps_discard).on_press(Message::DepDismiss);
 
-    children.push(dialog_button_row(tr.direction, [discard_btn.into(), install_btn.into()]).into());
+    let children = rows.chain([dialog_button_row(
+        tr.direction,
+        [discard_btn.into(), install_btn.into()].into_iter(),
+    )
+    .into()]);
 
     let content = Column::with_children(children)
         .spacing(theme::SPACING_MD)
@@ -94,23 +111,24 @@ fn dep_checkbox_row<'a>(
     let checked = dialog.selected.contains(&kind);
     let op = player.dep_ops.get(&kind);
 
-    let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::with_capacity(3);
-    children.push(
+    let children = [
         tr.direction
-            .row([
-                checkbox(checked)
-                    .on_toggle(move |_| Message::DepToggle(kind))
-                    .into(),
-                text(kind.name()).style(fg_accent()).into(),
-            ])
+            .row(
+                [
+                    checkbox(checked)
+                        .on_toggle(move |_| Message::DepToggle(kind))
+                        .into(),
+                    text(kind.name()).style(fg_accent()).into(),
+                ]
+                .into_iter(),
+            )
             .spacing(theme::SPACING_SM)
             .align_y(alignment::Vertical::Center)
             .into(),
-    );
-    children.push(text(dep_desc(tr, kind)).style(fg_secondary()).into());
-    if let Some(status) = dep_install_status(op, tr) {
-        children.push(status);
-    }
+        text(dep_desc(tr, kind)).style(fg_secondary()).into(),
+    ]
+    .into_iter()
+    .chain(dep_install_status(op, tr));
     Column::with_children(children)
         .spacing(theme::SPACING_XS)
         .align_x(tr.direction.align())

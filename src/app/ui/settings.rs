@@ -29,13 +29,12 @@ use crate::{
 };
 
 /// A labelled row of chips: the shared shape of every settings picker.
-fn picker<'a, I, S>(
+fn picker<'a, S>(
     dir: Direction,
     label: impl text::IntoFragment<'a>,
-    items: I,
+    items: impl DoubleEndedIterator<Item = (S, bool, Message)>,
 ) -> Element<'a, Message, AppTheme>
 where
-    I: IntoIterator<Item = (S, bool, Message)>,
     S: text::IntoFragment<'static>,
 {
     Column::with_children([text(label).into(), scope_tab_row(dir, items)])
@@ -106,20 +105,18 @@ fn lyrics_section(
 
 fn cookie_browser_picker(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let current = player.config.cookie_browser.as_deref();
-    let mut items = Vec::with_capacity(crate::deps::COOKIE_BROWSERS.len() + 1);
-    items.push((
+    let items = std::iter::once((
         player.strings.cookies_off,
         current.is_none(),
         Message::SettingsChanged(SettingsChange::CookieBrowser(None)),
-    ));
-    for browser in crate::deps::COOKIE_BROWSERS {
-        let browser = *browser;
-        items.push((
+    ))
+    .chain(crate::deps::COOKIE_BROWSERS.iter().map(|&browser| {
+        (
             browser,
             current == Some(browser),
             Message::SettingsChanged(SettingsChange::CookieBrowser(Some(browser.to_string()))),
-        ));
-    }
+        )
+    }));
     picker(
         player.strings.direction,
         player.strings.cookie_browser_lbl,
@@ -159,49 +156,26 @@ fn translation_section(
     let refresh = text_button(player.strings.translation_refresh_models)
         .on_press_maybe((!loading).then_some(Message::RequestTranslationModels))
         .into();
-    let mut children: Vec<Element<'_, Message, AppTheme>> = vec![base_url, api_key, model, refresh];
-    match &player.translation_models {
-        None => {}
-        Some(LoadState::Loading) => {
-            children.push(text(player.strings.loading).style(fg_secondary()).into());
-        }
-        Some(LoadState::Failed(e)) => {
-            children.push(
-                text((player.strings.translation_models_failed)(e))
-                    .style(fg_secondary())
-                    .into(),
-            );
-        }
-        Some(LoadState::Ready(models)) if models.is_empty() => {
-            children.push(
-                text(player.strings.translation_no_models)
-                    .style(fg_secondary())
-                    .into(),
-            );
-        }
-        Some(LoadState::Ready(models)) => {
-            children.push(
-                text_input(
-                    player.strings.find_in_list,
-                    &player.translation_models_filter,
-                )
-                .align_x(player.strings.direction.align())
-                .on_input(Message::TranslationModelsFilterChanged)
-                .padding(theme::SPACING_SM)
-                .into(),
-            );
+    let models_panel = match &player.translation_models {
+        Some(LoadState::Ready(models)) if !models.is_empty() => {
+            let filter = text_input(
+                player.strings.find_in_list,
+                &player.translation_models_filter,
+            )
+            .align_x(player.strings.direction.align())
+            .on_input(Message::TranslationModelsFilterChanged)
+            .padding(theme::SPACING_SM)
+            .into();
             let needle = crate::util::FuzzyQuery::new(&player.translation_models_filter);
-            let visible: Vec<&String> = models.iter().filter(|name| needle.matches(name)).collect();
-            if visible.is_empty() {
-                children.push(
-                    text(player.strings.no_results_found)
-                        .style(fg_secondary())
-                        .into(),
-                );
+            let mut visible = models.iter().filter(|name| needle.matches(name)).peekable();
+            let list = if visible.peek().is_none() {
+                text(player.strings.no_results_found)
+                    .style(fg_secondary())
+                    .into()
             } else {
-                children.push(scope_tab_row(
+                scope_tab_row(
                     player.strings.direction,
-                    visible.into_iter().map(|name| {
+                    visible.map(|name| {
                         (
                             name.clone(),
                             *name == cfg.translation_model,
@@ -210,11 +184,30 @@ fn translation_section(
                             )),
                         )
                     }),
-                ));
-            }
+                )
+            };
+            Some([filter, list])
         }
-    }
-    children
+        _ => None,
+    };
+    let status = match &player.translation_models {
+        None => None,
+        Some(LoadState::Loading) => Some(text(player.strings.loading).style(fg_secondary()).into()),
+        Some(LoadState::Failed(e)) => Some(
+            text((player.strings.translation_models_failed)(e))
+                .style(fg_secondary())
+                .into(),
+        ),
+        Some(LoadState::Ready(models)) => models.is_empty().then(|| {
+            text(player.strings.translation_no_models)
+                .style(fg_secondary())
+                .into()
+        }),
+    };
+    [base_url, api_key, model, refresh]
+        .into_iter()
+        .chain(status)
+        .chain(models_panel.into_iter().flatten())
 }
 
 fn section<'a>(
@@ -375,60 +368,63 @@ fn providers_section(
 fn custom_providers_section(player: &MusicPlayer) -> Element<'_, Message, AppTheme> {
     let tr = &player.strings;
     let dir = tr.direction;
-    let mut children: Vec<Element<'_, Message, AppTheme>> = Vec::new();
-
-    if player.custom_providers.providers.is_empty() {
-        children.push(text(tr.custom_provider_none).style(fg_secondary()).into());
-    }
-    for provider in &player.custom_providers.providers {
-        let info = Column::with_children([
-            text(&provider.name).style(fg_accent()).into(),
-            text(format!(
-                "{} · {}",
-                provider.kind.label(),
-                provider.server_url
-            ))
-            .style(fg_secondary())
-            .into(),
-        ])
-        .spacing(theme::SPACING_2XS)
-        .width(Length::Fill)
-        .align_x(dir.align());
-        let actions = dir
-            .row([
-                text_button(tr.ctx_edit)
-                    .on_press(Message::CustomProviderEdit(provider.id))
-                    .into(),
-                text_button(tr.delete)
-                    .on_press(Message::CustomProviderDelete(provider.id))
-                    .into(),
+    let children = player
+        .custom_providers
+        .providers
+        .is_empty()
+        .then(|| text(tr.custom_provider_none).style(fg_secondary()).into())
+        .into_iter()
+        .chain(player.custom_providers.providers.iter().map(|provider| {
+            let info = Column::with_children([
+                text(&provider.name).style(fg_accent()).into(),
+                text(format!(
+                    "{} · {}",
+                    provider.kind.label(),
+                    provider.server_url
+                ))
+                .style(fg_secondary())
+                .into(),
             ])
-            .spacing(theme::SPACING_XS);
-        children.push(
-            dir.row([
-                provider_checkbox(
-                    player,
-                    ProviderId::Custom(provider.kind, provider.id),
-                    false,
-                ),
-                info.into(),
-                actions.into(),
-            ])
+            .spacing(theme::SPACING_2XS)
+            .width(Length::Fill)
+            .align_x(dir.align());
+            let actions = dir
+                .row(
+                    [
+                        text_button(tr.ctx_edit)
+                            .on_press(Message::CustomProviderEdit(provider.id))
+                            .into(),
+                        text_button(tr.delete)
+                            .on_press(Message::CustomProviderDelete(provider.id))
+                            .into(),
+                    ]
+                    .into_iter(),
+                )
+                .spacing(theme::SPACING_XS);
+            dir.row(
+                [
+                    provider_checkbox(
+                        player,
+                        ProviderId::Custom(provider.kind, provider.id),
+                        false,
+                    ),
+                    info.into(),
+                    actions.into(),
+                ]
+                .into_iter(),
+            )
             .spacing(theme::SPACING_MD)
             .align_y(alignment::Vertical::Center)
-            .into(),
-        );
-    }
-
-    if let Some(form) = &player.custom_provider_form {
-        children.push(custom_provider_form(player, form));
-    } else {
-        children.push(
-            text_button(tr.custom_provider_add)
-                .on_press(Message::CustomProviderAdd)
-                .into(),
-        );
-    }
+            .into()
+        }))
+        .chain([player.custom_provider_form.as_ref().map_or_else(
+            || {
+                text_button(tr.custom_provider_add)
+                    .on_press(Message::CustomProviderAdd)
+                    .into()
+            },
+            |form| custom_provider_form(player, form),
+        )]);
 
     Column::with_children(children)
         .spacing(theme::SPACING_MD)
@@ -489,17 +485,20 @@ fn custom_provider_form<'a>(
 
     let testing = matches!(form.test, ConnectionTest::Testing);
     let actions = dir
-        .row([
-            text_button(tr.custom_provider_test)
-                .on_press_maybe((!testing).then_some(Message::CustomProviderTest))
-                .into(),
-            text_button(tr.save)
-                .on_press(Message::CustomProviderSave)
-                .into(),
-            text_button(tr.cancel)
-                .on_press(Message::CustomProviderCancel)
-                .into(),
-        ])
+        .row(
+            [
+                text_button(tr.custom_provider_test)
+                    .on_press_maybe((!testing).then_some(Message::CustomProviderTest))
+                    .into(),
+                text_button(tr.save)
+                    .on_press(Message::CustomProviderSave)
+                    .into(),
+                text_button(tr.cancel)
+                    .on_press(Message::CustomProviderCancel)
+                    .into(),
+            ]
+            .into_iter(),
+        )
         .spacing(theme::SPACING_XS);
 
     let status: Element<'a, Message, AppTheme> = match &form.test {

@@ -30,21 +30,12 @@ impl Direction {
     /// the right.
     pub(crate) fn row<'a>(
         self,
-        children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
+        children: impl DoubleEndedIterator<Item = Element<'a, Message, AppTheme>>,
     ) -> Row<'a, Message, AppTheme> {
-        Row::with_children(self.ordered(children))
-    }
-
-    /// `children` in reading order.
-    fn ordered<'a>(
-        self,
-        children: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
-    ) -> Vec<Element<'a, Message, AppTheme>> {
-        let mut children: Vec<_> = children.into_iter().collect();
-        if self.is_rtl() {
-            children.reverse();
+        match self {
+            Direction::Ltr => Row::with_children(children),
+            Direction::Rtl => Row::with_children(children.rev()),
         }
-        children
     }
 
     /// Alignment for a paragraph that fills its container.

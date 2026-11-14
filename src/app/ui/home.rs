@@ -38,77 +38,65 @@ use crate::{
 const CONTINUE_IMAGE_SIZE: f32 = 56.0;
 const QUICK_PICK_ROWS: usize = 8;
 
-pub(super) fn view_home<'a>(
-    player: &'a MusicPlayer,
-    pane: PaneId,
-) -> Element<'a, Message, AppTheme> {
+pub(super) fn view_home(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> {
     let dir = player.strings.direction;
     let view = player.view_data_in(pane);
     let ViewKind::Home(home) = &view.kind else {
         return text(player.strings.nothing_here).into();
     };
 
-    let mut children: Vec<Element<'a, Message, AppTheme>> = Vec::new();
-    children.push(header(player, pane));
-
-    if let Some(banner) = continue_strip(player) {
-        children.push(banner);
-    }
-
-    let mut rails: Vec<Element<'a, Message, AppTheme>> = Vec::new();
-    if let Some(rail) = recent_rail(player, pane) {
-        rails.push(rail);
-    }
-    if let Some(rail) = playlists_rail(player, pane) {
-        rails.push(rail);
-    }
-    if let Some(rail) = library_rail(player, pane) {
-        rails.push(rail);
-    }
-    if let Some(rail) = downloads_rail(player, pane) {
-        rails.push(rail);
-    }
-    children.extend(rails);
-
-    if let LoadState::Ready(tracks) = &view.content {
-        if !tracks.is_empty() {
-            let label = match home.quick_picks_provider {
-                Some(provider) => crate::providers::home::titled(
-                    player.strings,
-                    player.strings.quick_picks,
-                    provider,
-                ),
-                None => player.strings.quick_picks.to_string(),
-            };
-            children.push(section_title(dir, label));
-            // Bounded so the page scrolls around it instead of the list
-            // trapping the wheel for its whole height; longer lists scroll
-            // inside their own viewport.
-            let rows = tracks.len().min(QUICK_PICK_ROWS);
-            children.push(
-                Container::new(super::track_list::view_track_list(tracks, player, pane, 0))
-                    .height(Length::Fixed(theme::ROW_HEIGHT * rows as f32))
-                    .into(),
-            );
-        }
-    } else if matches!(view.content, LoadState::Loading) && home.is_loading() {
-        children.push(super::shared_components::loading_state(
-            player.strings.loading,
-        ));
-    }
+    let quick_tracks = match &view.content {
+        LoadState::Ready(tracks) if !tracks.is_empty() => Some(tracks.as_slice()),
+        _ => None,
+    };
+    let quick_title = quick_tracks.map(|_| {
+        let label = match home.quick_picks_provider {
+            Some(provider) => {
+                crate::providers::home::titled(player.strings, player.strings.quick_picks, provider)
+            }
+            None => player.strings.quick_picks.to_string(),
+        };
+        section_title(dir, label)
+    });
+    // Bounded so the page scrolls around it instead of the list trapping the
+    // wheel for its whole height; longer lists scroll inside their own
+    // viewport.
+    let quick_list = quick_tracks.map(|tracks| {
+        let rows = tracks.len().min(QUICK_PICK_ROWS);
+        Container::new(super::track_list::view_track_list(tracks, player, pane, 0))
+            .height(Length::Fixed(theme::ROW_HEIGHT * rows as f32))
+            .into()
+    });
+    let loading =
+        (quick_tracks.is_none() && matches!(view.content, LoadState::Loading) && home.is_loading())
+            .then(|| super::shared_components::loading_state(player.strings.loading));
 
     let mut block: Option<ProviderId> = None;
-    for section in &home.sections {
+    let sections = home.sections.iter().flat_map(|section| {
         let provider = section.key.provider;
-        if block != Some(provider) {
-            block = Some(provider);
-            children.push(provider_header(player, provider));
-            if let Some(rail) = server_playlists_rail(player, pane, provider) {
-                children.push(rail);
-            }
-        }
-        children.push(section_rail(player, pane, section));
-    }
+        let new_block = block != Some(provider);
+        block = Some(provider);
+        new_block
+            .then(|| provider_header(player, provider))
+            .into_iter()
+            .chain(
+                new_block
+                    .then(|| server_playlists_rail(player, pane, provider))
+                    .flatten(),
+            )
+            .chain([section_rail(player, pane, section)])
+    });
+
+    let children = std::iter::once(header(player, pane))
+        .chain(continue_strip(player))
+        .chain(recent_rail(player, pane))
+        .chain(playlists_rail(player, pane))
+        .chain(library_rail(player, pane))
+        .chain(downloads_rail(player, pane))
+        .chain(quick_title)
+        .chain(quick_list)
+        .chain(loading)
+        .chain(sections);
 
     super::card_scrollable(
         pane,
@@ -132,11 +120,14 @@ fn header(player: &MusicPlayer, pane: PaneId) -> Element<'_, Message, AppTheme> 
     .padding(theme::SPACING_2XS)
     .on_press(Message::HomeRefresh(pane));
 
-    dir.row([
-        text(player.strings.home).size(theme::TEXT_SIZE_XL).into(),
-        Space::new().width(Length::Fill).into(),
-        refresh.into(),
-    ])
+    dir.row(
+        [
+            text(player.strings.home).size(theme::TEXT_SIZE_XL).into(),
+            Space::new().width(Length::Fill).into(),
+            refresh.into(),
+        ]
+        .into_iter(),
+    )
     .align_y(alignment::Vertical::Center)
     .padding([theme::SPACING_MD, theme::SPACING_XL])
     .into()
@@ -158,13 +149,16 @@ fn continue_strip(player: &MusicPlayer) -> Option<Element<'_, Message, AppTheme>
 
     Some(
         Container::new(
-            dir.row([
-                image,
-                info.into(),
-                play_pause_button(player.is_playing)
-                    .on_press(Message::TogglePlayPause)
-                    .into(),
-            ])
+            dir.row(
+                [
+                    image,
+                    info.into(),
+                    play_pause_button(player.is_playing)
+                        .on_press(Message::TogglePlayPause)
+                        .into(),
+                ]
+                .into_iter(),
+            )
             .spacing(theme::SPACING_MD)
             .align_y(alignment::Vertical::Center),
         )
@@ -190,11 +184,14 @@ fn section_title<'a>(
     label: impl text::IntoFragment<'a>,
 ) -> Element<'a, Message, AppTheme> {
     Container::new(
-        dir.row([text(label)
-            .size(theme::TEXT_SIZE_LG)
-            .width(Length::Fill)
-            .into()])
-            .padding([theme::SPACING_SM, theme::SPACING_XL]),
+        dir.row(
+            [text(label)
+                .size(theme::TEXT_SIZE_LG)
+                .width(Length::Fill)
+                .into()]
+            .into_iter(),
+        )
+        .padding([theme::SPACING_SM, theme::SPACING_XL]),
     )
     .width(Length::Fill)
     .into()
@@ -207,7 +204,7 @@ fn rail<'a>(
     pane: PaneId,
     rail: HomeRailId,
     title: Element<'a, Message, AppTheme>,
-    cards: Vec<Element<'a, Message, AppTheme>>,
+    cards: impl IntoIterator<Item = Element<'a, Message, AppTheme>>,
 ) -> Element<'a, Message, AppTheme> {
     iced::widget::Column::with_children([title, card_rail(pane, RailKey::Home(rail), cards)])
         .width(Length::Fill)
@@ -226,11 +223,8 @@ fn track_tile<'a>(
     click_card(image, &track.title, &track.artist_text(), message)
 }
 
-fn recent_rail<'a>(
-    player: &'a MusicPlayer,
-    pane: PaneId,
-) -> Option<Element<'a, Message, AppTheme>> {
-    let tracks: Vec<Element<'a, Message, AppTheme>> = player
+fn recent_rail(player: &MusicPlayer, pane: PaneId) -> Option<Element<'_, Message, AppTheme>> {
+    let mut tracks = player
         .session
         .queue
         .recently_played
@@ -248,10 +242,8 @@ fn recent_rail<'a>(
                 },
             )
         })
-        .collect();
-    if tracks.is_empty() {
-        return None;
-    }
+        .peekable();
+    tracks.peek()?;
     Some(rail(
         pane,
         HomeRailId::Recent,
@@ -260,15 +252,12 @@ fn recent_rail<'a>(
     ))
 }
 
-fn playlists_rail<'a>(
-    player: &'a MusicPlayer,
-    pane: PaneId,
-) -> Option<Element<'a, Message, AppTheme>> {
+fn playlists_rail(player: &MusicPlayer, pane: PaneId) -> Option<Element<'_, Message, AppTheme>> {
     if player.playlists.playlists.is_empty() {
         return None;
     }
     let dir = player.strings.direction;
-    let cards: Vec<Element<'a, Message, AppTheme>> = player
+    let cards = player
         .playlists
         .playlists
         .iter()
@@ -285,8 +274,7 @@ fn playlists_rail<'a>(
                 &playlist.tracks.len().to_string(),
                 Message::NavigateTo(pane, ViewData::new_playlist(index, playlist.name.clone())),
             )
-        })
-        .collect();
+        });
     Some(rail(
         pane,
         HomeRailId::Playlists,
@@ -295,29 +283,20 @@ fn playlists_rail<'a>(
     ))
 }
 
-fn library_rail<'a>(
-    player: &'a MusicPlayer,
-    pane: PaneId,
-) -> Option<Element<'a, Message, AppTheme>> {
+fn library_rail(player: &MusicPlayer, pane: PaneId) -> Option<Element<'_, Message, AppTheme>> {
     if player.library.items.is_empty() {
         return None;
     }
-    let cards: Vec<Element<'a, Message, AppTheme>> = player
-        .library
-        .items
-        .iter()
-        .take(30)
-        .map(|item| {
-            art_card(
-                player,
-                pane,
-                CardMenuTarget::new(item.clone()),
-                &item.title,
-                "",
-                RailKey::Home(HomeRailId::Library),
-            )
-        })
-        .collect();
+    let cards = player.library.items.iter().take(30).map(|item| {
+        art_card(
+            player,
+            pane,
+            CardMenuTarget::new(item.clone()),
+            &item.title,
+            "",
+            RailKey::Home(HomeRailId::Library),
+        )
+    });
     Some(rail(
         pane,
         HomeRailId::Library,
@@ -326,15 +305,12 @@ fn library_rail<'a>(
     ))
 }
 
-fn downloads_rail<'a>(
-    player: &'a MusicPlayer,
-    pane: PaneId,
-) -> Option<Element<'a, Message, AppTheme>> {
+fn downloads_rail(player: &MusicPlayer, pane: PaneId) -> Option<Element<'_, Message, AppTheme>> {
     let downloaded = player.download_registry.tracks();
     if downloaded.is_empty() {
         return None;
     }
-    let cards: Vec<Element<'a, Message, AppTheme>> = downloaded
+    let cards = downloaded
         .into_iter()
         .take(20)
         .enumerate()
@@ -348,8 +324,7 @@ fn downloads_rail<'a>(
                     index,
                 },
             )
-        })
-        .collect();
+        });
     Some(rail(
         pane,
         HomeRailId::Downloads,
@@ -360,12 +335,12 @@ fn downloads_rail<'a>(
 
 /// A custom server's playlist index, drawn straight from the store like the
 /// local rails (the tracks themselves are fetched when a card is opened).
-fn server_playlists_rail<'a>(
-    player: &'a MusicPlayer,
+fn server_playlists_rail(
+    player: &MusicPlayer,
     pane: PaneId,
     provider: ProviderId,
-) -> Option<Element<'a, Message, AppTheme>> {
-    let cards: Vec<Element<'a, Message, AppTheme>> = player
+) -> Option<Element<'_, Message, AppTheme>> {
+    let mut cards = player
         .server_playlists
         .for_provider(provider)
         .take(20)
@@ -387,10 +362,8 @@ fn server_playlists_rail<'a>(
                 RailKey::Home(HomeRailId::ServerPlaylists(provider)),
             )
         })
-        .collect();
-    if cards.is_empty() {
-        return None;
-    }
+        .peekable();
+    cards.peek()?;
     Some(rail(
         pane,
         HomeRailId::ServerPlaylists(provider),
