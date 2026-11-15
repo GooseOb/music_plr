@@ -10,6 +10,8 @@ auto-generated compare link below it.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-15
+
 ### Added
 
 - Audius provider.
@@ -244,7 +246,8 @@ Plain lyrics are now displayed correctly when synced lyrics are not available.
 - Clearing non-main list selection on navigation.
 - Selection ordering; Ctrl+C / Ctrl+V now respect the hovered list.
 
-[Unreleased]: https://github.com/GooseOb/music_plr/compare/v1.5.6...HEAD
+[Unreleased]: https://github.com/GooseOb/music_plr/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/GooseOb/music_plr/compare/v1.5.6...v1.6.0
 [1.5.6]: https://github.com/GooseOb/music_plr/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/GooseOb/music_plr/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/GooseOb/music_plr/compare/v1.5.3...v1.5.4
