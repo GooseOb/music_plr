@@ -323,7 +323,7 @@ pub enum Message {
     ToggleRepeat,
     ShowLyrics(PaneId),
     SetLyricsViewMode(PaneId, crate::app::LyricsViewMode),
-    LyricsLineClicked(f32),
+    LyricsLineClicked(PaneId, f32),
     SelectLyricsProvider(PaneId, crate::lyrics::LyricsProvider),
     RefreshLyrics(PaneId),
     SelectLyricsTranslation(PaneId, Option<String>),

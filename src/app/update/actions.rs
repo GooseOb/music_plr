@@ -1069,6 +1069,45 @@ mod tests {
         providers::ArtistSectionKind,
     };
 
+    /// Clicking a synced line seeks there *and* moves the highlight in the
+    /// same update, rather than leaving it to the next 1Hz tick.
+    #[test]
+    fn clicking_a_synced_line_moves_the_highlight_at_once() {
+        use crate::{
+            app::LyricsState,
+            lyrics::{LyricLine, Lyrics, LyricsProvider},
+        };
+
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        let pane = p.session.focused;
+        p.duration = 100.0;
+        p.is_playing = true;
+        let lyrics = Lyrics {
+            lines: [0.0, 10.0, 20.0]
+                .into_iter()
+                .zip(["a", "b", "c"])
+                .map(|(time, text)| LyricLine {
+                    time: Some(time),
+                    text: text.into(),
+                    description: String::new(),
+                })
+                .collect(),
+            plain: String::new(),
+            provider: LyricsProvider::LrcLib,
+            translations: Vec::new(),
+        };
+        let mut state = LyricsState::new(LyricsProvider::LrcLib);
+        state.lyrics = LoadState::Ready(Arc::new(lyrics));
+        state.mode = LyricsViewMode::Synced;
+        p.pane_mut(pane).lyrics = Some(state);
+
+        let _ = p.update(Message::LyricsLineClicked(pane, 20.0));
+
+        assert!((p.playback_progress() - 0.2).abs() < 0.001);
+        let state = p.pane(pane).lyrics.as_ref().unwrap();
+        assert_eq!(state.scrolled_to, Some(2));
+    }
+
     #[test]
     fn right_click_anchor_subtracts_list_scroll() {
         let mut p = MusicPlayer::new_with(config::Config::default());

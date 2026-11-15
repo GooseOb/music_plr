@@ -20,6 +20,7 @@ auto-generated compare link below it.
 
 ### Fixed
 
+- Lag between clicking a lyric and it becoming active.
 - No more loading for cached lyrics, only non-cached lyrics are fetched.
 
 ## [1.5.6] - 2026-11-10

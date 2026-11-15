@@ -326,11 +326,20 @@ impl Lyrics {
         self.lines.iter().any(|line| !line.description.is_empty())
     }
 
+    /// Index of the line playing at `position_secs`.
+    ///
+    /// The comparison is sloppy on purpose: a position round-trips through the
+    /// progress *fraction* (`secs / duration`, stored, then multiplied back),
+    /// and a seek into a line usually lands a few microseconds before its
+    /// timestamp — exact `<=` would then keep the previous line active. The
+    /// same margin absorbs the sub-frame drift between the audio clock and the
+    /// interpolated anchor.
     pub fn active_index(&self, position_secs: f32) -> Option<usize> {
+        const TOLERANCE_SECS: f32 = 0.01;
         let mut idx = self.lines.iter().position(|line| line.time.is_some())?;
         for (i, line) in self.lines.iter().enumerate() {
             if let Some(t) = line.time {
-                if t <= position_secs {
+                if t <= position_secs + TOLERANCE_SECS {
                     idx = i;
                 } else {
                     break;

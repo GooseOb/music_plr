@@ -411,7 +411,7 @@ fn view_synced(
             Button::new(centered)
                 .padding([theme::SPACING_SM, theme::SPACING_LG])
                 .style(button_style_panel_item(is_active))
-                .on_press(Message::LyricsLineClicked(secs))
+                .on_press(Message::LyricsLineClicked(pane, secs))
                 .into(),
         )
     });

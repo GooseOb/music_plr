@@ -574,6 +574,15 @@ impl AudioPlayer {
     }
 
     pub fn seek(&self, pos: Duration) {
+        // Publish the target immediately: the audio thread only refreshes the
+        // shared position after the mixer has served the seek order (a buffer
+        // period later), and a tick landing in that gap would otherwise read
+        // the pre-seek position and re-anchor the UI to it.
+        if let Ok(mut st) = self.state.lock() {
+            if st.duration > 0.0 {
+                st.progress = (pos.as_secs_f32() / st.duration).min(1.0);
+            }
+        }
         let _ = self.cmd_tx.send(PlayerCommand::Seek(pos));
     }
 

@@ -557,9 +557,9 @@ impl crate::app::MusicPlayer {
             Message::ShowLyrics(pane) => self.handle_show_lyrics(pane),
             Message::RevealNowPlaying => self.handle_reveal_now_playing(),
             Message::SetLyricsViewMode(pane, mode) => self.set_lyrics_view_mode(pane, mode),
-            Message::LyricsLineClicked(secs) => {
+            Message::LyricsLineClicked(pane, secs) => {
                 self.seek_to_seconds(secs);
-                Task::none()
+                self.maybe_autoscroll_lyrics(pane)
             }
             Message::SelectLyricsProvider(pane, id) => {
                 self.handle_select_lyrics_provider(pane, id);
