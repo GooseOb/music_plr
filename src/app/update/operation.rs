@@ -368,34 +368,23 @@ impl CaptureBounds {
     /// The list whose bounds contain `point`, if any. Lists don't overlap so
     /// the first hit wins.
     pub fn get_containing(&self, point: iced::Point) -> Option<(ContainingList, &ListGeometry)> {
-        if let Some(g) = &self.queue {
-            if g.bounds.contains(point) {
-                return Some((ContainingList::Queue, g));
-            }
-        }
-        if let Some(g) = &self.recent {
-            if g.bounds.contains(point) {
-                return Some((ContainingList::Recent, g));
+        for (list, g) in [
+            (ContainingList::Queue, self.queue.as_ref()),
+            (ContainingList::Recent, self.recent.as_ref()),
+            (ContainingList::Sidebar, self.sidebar.as_ref()),
+            (
+                ContainingList::ServerPlaylists,
+                self.server_playlists.as_ref(),
+            ),
+            (ContainingList::Library, self.library.as_ref()),
+        ] {
+            if let Some(g) = g.filter(|g| g.bounds.contains(point)) {
+                return Some((list, g));
             }
         }
         for (pane, g) in &self.tracks {
             if g.bounds.contains(point) {
                 return Some((ContainingList::Track(*pane), g));
-            }
-        }
-        if let Some(g) = &self.sidebar {
-            if g.bounds.contains(point) {
-                return Some((ContainingList::Sidebar, g));
-            }
-        }
-        if let Some(g) = &self.server_playlists {
-            if g.bounds.contains(point) {
-                return Some((ContainingList::ServerPlaylists, g));
-            }
-        }
-        if let Some(g) = &self.library {
-            if g.bounds.contains(point) {
-                return Some((ContainingList::Library, g));
             }
         }
         None

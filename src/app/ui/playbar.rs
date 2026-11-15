@@ -41,9 +41,8 @@ pub(super) fn view_playbar<'a>(player: &'a MusicPlayer) -> Element<'a, Message, 
             .into()
     };
 
-    let children = [text(title).into()]
-        .into_iter()
-        .chain(track.map(|t| subtitle_artists(player.session.focused, t, dir)));
+    let children = std::iter::once(text(title).into())
+        .chain(track.and_then(|t| subtitle_artists(player.session.focused, t, dir)));
 
     let track_info = Column::with_children(children).spacing(theme::SPACING_XXS);
 

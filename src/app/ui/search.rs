@@ -25,7 +25,7 @@ use crate::{
         ui::{
             overlays::pos_absolute,
             shared_components::{
-                icon_button_delete, open_in_browser_button, scope_tab_row_h_scroll,
+                icon_button_delete, leading_number, open_in_browser_button, scope_tab_row_h_scroll,
             },
         },
         update::operation::ScrollTarget,
@@ -241,11 +241,7 @@ fn card_row<'a>(
 ) -> Element<'a, Message, AppTheme> {
     let p = &player.app_theme.palette;
     let thumb = player.thumbnail_index.get(item.provider, &item.id);
-    let leading = text((index + 1).to_string())
-        .size(theme::TEXT_SIZE_SM)
-        .style(fg_secondary())
-        .width(theme::TRACK_LEADING_WIDTH)
-        .center();
+    let leading = leading_number(index);
     let thumb = thumbnail(theme::THUMBNAIL_SIZE, thumb);
     let saved = player.library.contains(item.kind, &item.id);
     let toggle = toggle_bookmark_button(saved)
@@ -257,10 +253,10 @@ fn card_row<'a>(
         .into();
     let main = inner_row_layout(
         player.strings.direction,
-        leading.into(),
+        leading,
         thumb,
         title,
-        subtitle_el,
+        Some(subtitle_el),
         toggle,
     );
     let is_hovered = player.drag.is_hovered_card(item);

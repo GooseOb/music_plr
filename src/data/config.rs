@@ -167,8 +167,8 @@ mod tests {
             translation_language: "Spanish".into(),
             translation_prompt: "translate".into(),
             check_updates_on_startup: false,
-            disabled_providers: [ProviderId::LastFm].into_iter().collect(),
-            disabled_lyrics_providers: [LyricsProvider::Genius].into_iter().collect(),
+            disabled_providers: [ProviderId::LastFm].into(),
+            disabled_lyrics_providers: [LyricsProvider::Genius].into(),
         };
 
         let json = serde_json::to_string(&cfg).unwrap();

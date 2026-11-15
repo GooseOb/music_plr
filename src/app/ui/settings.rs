@@ -697,11 +697,7 @@ fn dep_settings_row(player: &MusicPlayer, kind: DepKind) -> Element<'_, Message,
     let app_managed = crate::deps::installed_via_app(kind);
     let install_delete_btn: Element<'_, Message, AppTheme> = if app_managed {
         text_button(tr.deps_delete)
-            .on_press_maybe(if installing || deleting {
-                None
-            } else {
-                Some(Message::DepSettingsDelete(kind))
-            })
+            .on_press_maybe((!(installing || deleting)).then_some(Message::DepSettingsDelete(kind)))
             .into()
     } else if kind.auto_installable() {
         text_button(tr.deps_install)

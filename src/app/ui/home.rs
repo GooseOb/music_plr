@@ -140,10 +140,10 @@ fn continue_strip(player: &MusicPlayer) -> Option<Element<'_, Message, AppTheme>
         CONTINUE_IMAGE_SIZE,
         player.thumbnail_index.get(track.source, track.primary_id()),
     );
-    let info = iced::widget::Column::with_children([
-        text(track.title.clone()).size(theme::TEXT_SIZE_MD).into(),
-        subtitle_artists(player.session.focused, track, dir),
-    ])
+    let info = iced::widget::Column::with_children(
+        std::iter::once(text(track.title.clone()).size(theme::TEXT_SIZE_MD).into())
+            .chain(subtitle_artists(player.session.focused, track, dir)),
+    )
     .spacing(theme::SPACING_XXS)
     .width(Length::Fill);
 

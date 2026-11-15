@@ -648,11 +648,9 @@ pub fn fetch_artist_page(
     } else {
         None
     };
-    let info = if ArtistDataKind::Header.wanted(kinds) || ArtistDataKind::Related.wanted(kinds) {
-        block_on(client.get_artist_info2(id, None, Some(false))).ok()
-    } else {
-        None
-    };
+    let info = (ArtistDataKind::Header.wanted(kinds) || ArtistDataKind::Related.wanted(kinds))
+        .then(|| block_on(client.get_artist_info2(id, None, Some(false))).ok())
+        .flatten();
 
     if let Some(artist) = &artist {
         if ArtistDataKind::Header.wanted(kinds) {

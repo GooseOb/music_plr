@@ -172,8 +172,8 @@ impl crate::app::MusicPlayer {
             }
             Message::Shortcut(shortcut) => self.apply_shortcut(shortcut),
             Message::LyricsEditorAction(pane, action) => {
-                if let Some(state) = &mut self.pane_mut(pane).lyrics {
-                    if !matches!(action, iced::widget::text_editor::Action::Edit(_)) {
+                if !matches!(action, iced::widget::text_editor::Action::Edit(_)) {
+                    if let Some(state) = &mut self.pane_mut(pane).lyrics {
                         state.editor.perform(action);
                     }
                 }

@@ -35,9 +35,8 @@ pub(super) fn fetch(req: &LyricsRequest) -> Result<Option<Lyrics>> {
         "{GENIUS_BASE}/search/multi?per_page=5&q={}",
         urlencode(query)
     );
-    let search: GeniusSearchResponse = match get_json(&url, "Genius")? {
-        Some(body) => body,
-        None => return Ok(None),
+    let Some(search) = get_json::<GeniusSearchResponse>(&url, "Genius")? else {
+        return Ok(None);
     };
     let songs = search
         .response
@@ -46,10 +45,9 @@ pub(super) fn fetch(req: &LyricsRequest) -> Result<Option<Lyrics>> {
         .flat_map(|s| s.hits.iter())
         .filter_map(|h| h.result.as_ref())
         .filter(|r| r.kind == "song");
-    let Some(hit) = songs
+    let Some((hit, _)) = songs
         .filter_map(|h| score_hit(req, h).map(|score| (h, score)))
         .max_by_key(|(_, score)| *score)
-        .map(|(hit, _)| hit)
     else {
         return Ok(None);
     };

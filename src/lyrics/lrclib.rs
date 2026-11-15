@@ -45,9 +45,8 @@ fn get_lrclib(req: &LyricsRequest, base: &str, provider: LyricsProvider) -> Resu
         url.push_str(&req.duration.to_string());
     }
 
-    let resp: LrcLibRecord = match get_json_opt(&url, "LRCLib-compatible")? {
-        Some(body) => body,
-        None => return Ok(None),
+    let Some(resp) = get_json_opt(&url, "LRCLib-compatible")? else {
+        return Ok(None);
     };
 
     Ok(Some(record_to_lyrics(resp, provider)))
@@ -65,9 +64,8 @@ fn search_lrclib(
         urlencode(&req.title)
     );
 
-    let resp: Vec<LrcLibRecord> = match get_json_opt(&url, "LRCLib-compatible")? {
-        Some(body) => body,
-        None => return Ok(None),
+    let Some(resp) = get_json_opt::<Vec<LrcLibRecord>>(&url, "LRCLib-compatible")? else {
+        return Ok(None);
     };
 
     Ok(resp

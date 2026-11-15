@@ -18,17 +18,14 @@ use super::{
     shared_components::{
         empty_state, inner_row_layout, play_pause_button, subtitle_artists, thumbnail, track_row,
     },
-    styles::{
-        button_style_album, button_style_primary, fg_secondary, icon_style_accent,
-        icon_style_primary,
-    },
+    styles::{button_style_album, fg_secondary, icon_style_accent},
     theme, Message, MusicPlayer,
 };
 use crate::{
     app::{
         interaction::{row_id, HoverTarget, Pressed, TrackPos},
         pane::{is_main_pane, PaneId},
-        ui::shared_components::playbar_toggle_button_unsized,
+        ui::shared_components::{leading_number, playbar_toggle_button_unsized},
         update::operation::ScrollTarget,
         ViewData,
     },
@@ -114,37 +111,25 @@ pub(super) fn row_spacer<'a>(height: f32) -> Element<'a, Message, AppTheme> {
     Space::new().height(height).into()
 }
 
-pub(super) fn leading_control<'a>(
+pub(super) fn leading_control(
     pos: TrackPos,
-    track: &'a Track,
-    player: &'a MusicPlayer,
+    player: &MusicPlayer,
     trashed: bool,
-) -> Element<'a, Message, AppTheme> {
-    let is_current = player
-        .session
-        .queue
-        .current()
-        .is_some_and(|t| t.same_identity(track));
-    let is_hovered = player.drag.hovered_track() == Some(pos);
-
+    is_hovered: bool,
+    is_current: bool,
+) -> Element<'_, Message, AppTheme> {
     if is_current {
         play_pause_button(player.is_playing)
             .padding(theme::SPACING_2XS)
             .on_press(Message::TogglePlayPause)
             .into()
     } else if is_hovered && !trashed {
-        Button::new(icons::icon(icons::PLAY_ICON, theme::ICON_SIZE_LG).style(icon_style_primary()))
+        play_pause_button(false)
             .padding(theme::SPACING_2XS)
-            .style(button_style_primary())
             .on_press(Message::PlayTrackAt(pos))
             .into()
     } else {
-        text((pos.index + 1).to_string())
-            .size(theme::TEXT_SIZE_SM)
-            .style(fg_secondary())
-            .width(theme::TRACK_LEADING_WIDTH)
-            .center()
-            .into()
+        leading_number(pos.index)
     }
 }
 
@@ -195,7 +180,7 @@ fn view_track_row_inner<'a>(
         }
     };
 
-    let leading = leading_control(pos, track, player, trashed);
+    let leading = leading_control(pos, player, trashed, is_hovered, is_current);
 
     let inner =
         track_row_layout_inner(leading, track, player, pos, show_album, show_plays, trashed);

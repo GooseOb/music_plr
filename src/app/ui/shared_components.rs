@@ -139,7 +139,7 @@ pub fn inner_row_layout<'a>(
     leading: Element<'a, Message, AppTheme>,
     thumbnail: Element<'a, Message, AppTheme>,
     title: &'a str,
-    subtitle: Element<'a, Message, AppTheme>,
+    subtitle: Option<Element<'a, Message, AppTheme>>,
     trailing: Element<'a, Message, AppTheme>,
 ) -> Row<'a, Message, AppTheme> {
     let align = dir.align();
@@ -147,14 +147,16 @@ pub fn inner_row_layout<'a>(
         [
             leading,
             thumbnail,
-            Column::with_children([
-                text(title)
-                    .size(theme::TEXT_SIZE_MD)
-                    .width(Length::Fill)
-                    .align_x(align)
-                    .into(),
-                subtitle,
-            ])
+            Column::with_children(
+                std::iter::once(
+                    text(title)
+                        .size(theme::TEXT_SIZE_MD)
+                        .width(Length::Fill)
+                        .align_x(align)
+                        .into(),
+                )
+                .chain(subtitle),
+            )
             .spacing(theme::SPACING_2XS)
             .align_x(align)
             .into(),
@@ -195,6 +197,15 @@ pub fn track_row<'a>(
     } else {
         container
     }
+}
+
+pub fn leading_number(index: usize) -> Element<'static, Message, AppTheme> {
+    text((index + 1).to_string())
+        .size(theme::TEXT_SIZE_SM)
+        .style(fg_secondary())
+        .width(theme::TRACK_LEADING_WIDTH)
+        .center()
+        .into()
 }
 
 pub fn empty_state<'a>(msg: impl text::IntoFragment<'a>) -> Element<'a, Message, AppTheme> {
@@ -317,9 +328,9 @@ pub fn subtitle_artists<'a>(
     pane: PaneId,
     track: &'a crate::types::Track,
     dir: Direction,
-) -> Element<'a, Message, AppTheme> {
+) -> Option<Element<'a, Message, AppTheme>> {
     if track.artists.is_empty() {
-        return Space::new().into();
+        return None;
     }
     let children = track.artists.iter().enumerate().flat_map(|(index, name)| {
         let separator = (index > 0).then(|| {
@@ -343,7 +354,7 @@ pub fn subtitle_artists<'a>(
         };
         separator.into_iter().chain([name_element])
     });
-    dir.row(children).into()
+    Some(dir.row(children).into())
 }
 
 fn raw_input<'a>(
