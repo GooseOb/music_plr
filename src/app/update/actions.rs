@@ -1201,7 +1201,7 @@ mod tests {
             ScrollTarget::Cards(pane),
             iced::Vector::new(0.0, 90.0),
         ));
-        assert_eq!(p.bounds.scroll_offset(ScrollTarget::Cards(pane)), 90.0);
+        assert!((p.bounds.scroll_offset(ScrollTarget::Cards(pane)) - 90.0).abs() < f32::EPSILON);
     }
 
     #[test]

@@ -592,6 +592,6 @@ mod tests {
         p.is_playing = true;
         assert!((p.playback_progress() - 0.5).abs() < 0.02);
         p.is_playing = false;
-        assert_eq!(p.playback_progress(), 0.5);
+        assert!((p.playback_progress() - 0.5).abs() < f32::EPSILON);
     }
 }

@@ -1340,23 +1340,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
-    fn tmp_live_search_ids() {
-        for scope in [SearchScope::Songs, SearchScope::Videos] {
-            let (tracks, _) = search("never gonna give you up", scope, 0).unwrap();
-            eprintln!("scope={scope:?} n={}", tracks.len());
-            for track in tracks.iter().take(5) {
-                eprintln!(
-                    "{} | {:?} | {:?}",
-                    track.title,
-                    track.artists,
-                    track.provider_artist_ids(ProviderId::YouTube)
-                );
-            }
-        }
-    }
-
-    #[test]
     fn normalizes_browse_kinds() {
         assert_eq!(normalize_browse_kind("MPREb_x", ""), "album");
         assert_eq!(normalize_browse_kind("VLPL123", ""), "playlist");
