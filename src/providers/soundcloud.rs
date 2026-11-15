@@ -97,18 +97,13 @@ impl From<&BasicTrack> for Track {
     }
 }
 
-/// Run an async `rsoundcloud` call to completion on the shared multi-thread
-/// tokio runtime (see `super::shared_runtime`). Multi-thread so per-kind
-/// `tokio::spawn`s actually run in parallel and concurrent `block_on`s from
-/// different `std::thread`s don't serialize/panic.
+/// Run an async `rsoundcloud` call to completion on the shared runtime.
 fn block_on_sc<F, T, E>(fut: F) -> Result<T>
 where
     F: std::future::Future<Output = std::result::Result<T, E>>,
-    E: std::fmt::Debug,
+    E: std::fmt::Display,
 {
-    super::shared_runtime()
-        .block_on(fut)
-        .map_err(|e| anyhow::anyhow!("SoundCloud API error: {e:?}"))
+    super::block_on("SoundCloud", fut)
 }
 
 /// The `client_id` scraped once per process, reused for search, browse and the

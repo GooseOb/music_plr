@@ -3,8 +3,6 @@
 //! `ProviderId::Custom(CustomProviderKind::Subsonic, id)` entry backed by
 //! [`custom_providers`].
 
-use std::time::Duration;
-
 use anyhow::{Context, Result};
 use opensubsonic::{
     AlbumListOptions, AlbumListType, Auth, Client, RandomSongsOptions, Search3Options,
@@ -17,9 +15,9 @@ use crate::{
         library::LibraryKind,
     },
     providers::{
-        download_file_path, shared_runtime, AlbumMeta, ArtistAlbumCard, ArtistDataKind,
-        ArtistHeader, ArtistPage, CardData, ErrorKind, PlaylistWrite, ProviderId,
-        RelatedArtistCard, SearchScope, SearchTab, ServerPlaylist,
+        download_file_path, AlbumMeta, ArtistAlbumCard, ArtistDataKind, ArtistHeader, ArtistPage,
+        CardData, ErrorKind, PlaylistWrite, ProviderId, RelatedArtistCard, SearchScope, SearchTab,
+        ServerPlaylist,
     },
     types::{Track, TrackAlbum},
 };
@@ -54,10 +52,7 @@ fn client_for(server_url: &str, username: &str, password: &str) -> Result<Client
 fn block_on<T>(
     future: impl std::future::Future<Output = Result<T, opensubsonic::Error>>,
 ) -> Result<T> {
-    shared_runtime()
-        .block_on(async move { tokio::time::timeout(Duration::from_mins(1), future).await })
-        .map_err(|_| anyhow::anyhow!("Subsonic request timed out"))?
-        .map_err(anyhow::Error::from)
+    super::block_on("Subsonic", future)
 }
 
 fn stream_url(client: &Client, id: &str) -> String {

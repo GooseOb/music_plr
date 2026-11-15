@@ -145,16 +145,38 @@ pub(crate) fn http_agent() -> &'static ureq::Agent {
 }
 
 /// Shared multi-thread tokio runtime for async provider backends
-/// (`rsoundcloud`, `bandcamp` crate). One runtime for all providers instead of
-/// one per provider.
+/// (`rsoundcloud`, `bandcamp`, `opensubsonic`, innertube-rs). One runtime for
+/// all providers instead of one per provider.
+///
+/// Two workers suffice: provider fetches enter this runtime through
+/// [`block_on`], which runs the future on the calling thread, so the workers
+/// only serve `tokio::spawn`ed children (`SoundCloud`'s per-kind fan-out).
 pub(crate) fn shared_runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
     RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
             .enable_all()
             .build()
             .expect("Failed to build provider runtime")
     })
+}
+
+/// Ceiling for one provider request: the caller thread is parked on it, so a
+/// server that never answers must not hold it forever.
+const BLOCK_ON_TIMEOUT: Duration = Duration::from_mins(1);
+
+/// Drive an async provider call to completion on [`shared_runtime`], with a
+/// timeout. `what` names the backend in the error text.
+pub(crate) fn block_on<F, T, E>(what: &str, future: F) -> Result<T>
+where
+    F: std::future::Future<Output = std::result::Result<T, E>>,
+    E: std::fmt::Display,
+{
+    shared_runtime()
+        .block_on(async move { tokio::time::timeout(BLOCK_ON_TIMEOUT, future).await })
+        .map_err(|_| anyhow::anyhow!("{what} request timed out"))?
+        .map_err(|error| anyhow::anyhow!("{what}: {error}"))
 }
 
 /// Ensure `dir` exists and join `{id}.mp3` — the shared download-path preamble.

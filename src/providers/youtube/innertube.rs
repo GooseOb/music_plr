@@ -9,18 +9,7 @@ use serde_json::{json, Value};
 
 const INNERTUBE_TIMEOUT: Duration = Duration::from_secs(30);
 
-static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static SESSION: OnceLock<Arc<Session>> = OnceLock::new();
-
-pub(super) fn runtime() -> &'static tokio::runtime::Runtime {
-    RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .build()
-            .expect("failed to build YouTube Music runtime")
-    })
-}
 
 pub(super) fn run_innertube<F, T>(future: F) -> Result<T>
 where
@@ -33,14 +22,14 @@ where
             .map_err(|_| anyhow::anyhow!("YouTube Music request timed out"))?
     };
     // Provider fetches mostly run on plain threads, but a few call sites are
-    // nested inside an existing runtime; blocking on the runtime we are
-    // already inside would panic, so that case gets its own thread.
+    // nested inside the shared runtime; blocking on it from inside one of its
+    // own worker threads would panic, so that case gets its own thread.
     if tokio::runtime::Handle::try_current().is_ok() {
-        std::thread::spawn(move || runtime().block_on(future))
+        std::thread::spawn(move || crate::providers::shared_runtime().block_on(future))
             .join()
             .map_err(|_| anyhow::anyhow!("YouTube Music worker panicked"))?
     } else {
-        runtime().block_on(future)
+        crate::providers::shared_runtime().block_on(future)
     }
 }
 

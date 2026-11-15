@@ -14,9 +14,7 @@ fn block_on<F, T>(fut: F) -> Result<T>
 where
     F: std::future::Future<Output = std::result::Result<T, bandcamp::Error>>,
 {
-    super::shared_runtime()
-        .block_on(fut)
-        .map_err(|e| anyhow::anyhow!("Bandcamp: {e}"))
+    super::block_on("Bandcamp", fut)
 }
 
 fn stream_url(t: &bandcamp::AlbumTrack) -> Option<String> {
