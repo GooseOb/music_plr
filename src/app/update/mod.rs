@@ -54,7 +54,7 @@ pub(crate) const PREPEND: usize = 0;
 /// (empty falls back to the default `YouTube` still).
 pub fn spawn_thumbnail_download(
     entries: Vec<(crate::providers::ProviderId, String, String)>,
-    tx: &mpsc::Sender<BackendResult>,
+    tx: &tokio::sync::mpsc::UnboundedSender<BackendResult>,
 ) {
     tracing::debug!(
         "Spawning thumbnail download threads for {} entries",

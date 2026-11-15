@@ -1,4 +1,4 @@
-use super::{mpsc, thread, BackendResult, Message, MusicPlayer, Task, ViewData};
+use super::{thread, BackendResult, Message, MusicPlayer, Task, ViewData};
 use crate::{
     app::{
         pane::PaneId, update::operation::CaptureSearchHistoryRows, view_data::RadioData, ViewKind,
@@ -54,7 +54,7 @@ impl MusicPlayer {
         provider: crate::providers::ProviderId,
         run: R,
         make_result: M,
-        tx: mpsc::Sender<BackendResult>,
+        tx: tokio::sync::mpsc::UnboundedSender<BackendResult>,
     ) where
         R: FnOnce() -> anyhow::Result<T> + Send + 'static,
         M: FnOnce(T) -> BackendResult + Send + 'static,

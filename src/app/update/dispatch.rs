@@ -104,6 +104,7 @@ impl crate::app::MusicPlayer {
         }
         match message {
             Message::Tick => self.handle_tick(),
+            Message::BackendResult(result) => self.process_result(result),
             Message::WindowResized(size) => {
                 self.window_size = size;
                 self.capture_bounds_task()
@@ -867,7 +868,7 @@ impl crate::app::MusicPlayer {
     /// final result back to the main thread through `tx` (as [`BackendResult`]).
     /// Single helper for both the startup dialog and the Settings view so the
     /// install/report plumbing lives in one place.
-    fn spawn_dep_install(tx: std::sync::mpsc::Sender<BackendResult>, kind: DepKind) {
+    fn spawn_dep_install(tx: tokio::sync::mpsc::UnboundedSender<BackendResult>, kind: DepKind) {
         std::thread::spawn(move || {
             let tx_progress = tx.clone();
             let result = crate::deps::install(kind, move |downloaded, total| {
@@ -883,7 +884,7 @@ impl crate::app::MusicPlayer {
 
     /// Spawn a background install thread for each selected, not-yet-attempted
     /// dependency. Results arrive via [`BackendResult::DependencyInstalled`],
-    /// drained by the tick and applied in [`Self::process_result`].
+    /// bridged to the UI as they land and applied in [`Self::process_result`].
     fn handle_install_dependencies(&mut self) -> Task<Message> {
         let Some(Dialog::Dependencies(dialog)) = &self.dialog else {
             return Task::none();

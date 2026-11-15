@@ -270,7 +270,7 @@ fn agent() -> &'static ureq::Agent {
 /// and reports the outcome through `tx` as
 /// [`BackendResult::VersionChecked`]. The asset URL is
 /// constructed from the version and the current platform.
-pub fn spawn_version_check(tx: std::sync::mpsc::Sender<BackendResult>) {
+pub fn spawn_version_check(tx: tokio::sync::mpsc::UnboundedSender<BackendResult>) {
     std::thread::spawn(move || {
         if !can_self_update() {
             let _ = tx.send(BackendResult::VersionChecked(Ok(
@@ -303,7 +303,7 @@ pub fn spawn_version_check(tx: std::sync::mpsc::Sender<BackendResult>) {
 /// [`BackendResult::UpdateProgress`] and completion as
 /// [`BackendResult::UpdateComplete`].
 pub fn spawn_update_download(
-    tx: std::sync::mpsc::Sender<BackendResult>,
+    tx: tokio::sync::mpsc::UnboundedSender<BackendResult>,
     asset_url: String,
     version: String,
 ) {

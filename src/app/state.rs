@@ -7,7 +7,7 @@
 
 use std::{sync::mpsc, time::Instant};
 
-use iced::{futures::SinkExt, Task};
+use iced::Task;
 
 use crate::{
     app::{
@@ -179,10 +179,10 @@ pub struct MusicPlayer {
     pub pending_vim_g: Option<Instant>,
     pub muted_volume: Option<f32>,
 
-    pub result_tx: mpsc::Sender<BackendResult>,
-    pub result_rx: mpsc::Receiver<BackendResult>,
-    pub media_event_tx: mpsc::Sender<MediaControlEvent>,
-    pub media_event_rx: mpsc::Receiver<MediaControlEvent>,
+    pub result_tx: tokio::sync::mpsc::UnboundedSender<BackendResult>,
+    pub result_rx: Option<tokio::sync::mpsc::UnboundedReceiver<BackendResult>>,
+    pub media_event_tx: tokio::sync::mpsc::UnboundedSender<MediaControlEvent>,
+    pub media_event_rx: Option<tokio::sync::mpsc::UnboundedReceiver<MediaControlEvent>>,
     pub media_update_tx: Option<mpsc::Sender<MediaUpdate>>,
     pub media_controls_dirty: bool,
     /// Guards `init_media_controls` so it runs at most once (the Windows HWND
@@ -238,6 +238,7 @@ impl MusicPlayer {
         let boot = Task::batch([
             CaptureBounds::with_panes(player.pane_ids()).into(),
             player.take_media_bridge(),
+            player.take_result_bridge(),
             Task::done(Message::RefreshServerPlaylists(None)),
         ]);
         (player, boot)
@@ -245,35 +246,35 @@ impl MusicPlayer {
 
     /// Move the media-event receiver into a never-ending bridge task that
     /// emits each OS media-control event as a message the moment it arrives.
-    /// Push, not poll: media keys stay live with no tick keeping them warm. A
-    /// disconnected dummy is left behind to keep the field type non-optional.
+    /// The task parks on the channel, so media keys stay live with no tick or
+    /// poll keeping them warm.
     fn take_media_bridge(&mut self) -> Task<Message> {
-        let (_, dummy_rx) = mpsc::channel();
-        let rx = std::mem::replace(&mut self.media_event_rx, dummy_rx);
-        Task::stream(iced::stream::channel::<Message>(
-            16,
-            |mut sender: iced::futures::channel::mpsc::Sender<Message>| async move {
-                loop {
-                    match rx.try_recv() {
-                        Ok(event) => {
-                            if sender.send(Message::MediaEvent(event)).await.is_err() {
-                                break;
-                            }
-                        }
-                        Err(mpsc::TryRecvError::Empty) => {
-                            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-                        }
-                        Err(mpsc::TryRecvError::Disconnected) => break,
-                    }
-                }
-            },
-        ))
+        let Some(rx) = self.media_event_rx.take() else {
+            return Task::none();
+        };
+        Task::stream(iced::futures::stream::unfold(rx, |mut rx| async move {
+            let event = rx.recv().await?;
+            Some((Message::MediaEvent(event), rx))
+        }))
+    }
+
+    /// Move the backend-result receiver into a never-ending bridge task that
+    /// emits each thread's result as a message the moment it arrives, instead
+    /// of leaving them queued for the next tick.
+    fn take_result_bridge(&mut self) -> Task<Message> {
+        let Some(rx) = self.result_rx.take() else {
+            return Task::none();
+        };
+        Task::stream(iced::futures::stream::unfold(rx, |mut rx| async move {
+            let result = rx.recv().await?;
+            Some((Message::BackendResult(result), rx))
+        }))
     }
 
     #[allow(clippy::too_many_lines)]
     pub(crate) fn new_with(config: Config) -> Self {
-        let (result_tx, result_rx) = mpsc::channel();
-        let (media_event_tx, media_event_rx) = mpsc::channel();
+        let (result_tx, result_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (media_event_tx, media_event_rx) = tokio::sync::mpsc::unbounded_channel();
         crate::deps::set_cookie_browser(config.cookie_browser.clone());
         // Tests drive the mirror through `set_disabled_providers` (the Settings
         // toggle path); a reset from every `new_with` would race the tests that
@@ -330,9 +331,9 @@ impl MusicPlayer {
             lyrics_requests: std::collections::HashSet::new(),
             request_ids: RequestIdGenerator::default(),
             result_tx,
-            result_rx,
+            result_rx: Some(result_rx),
             media_event_tx,
-            media_event_rx,
+            media_event_rx: Some(media_event_rx),
             media_update_tx: None,
             media_controls_dirty: true,
             media_controls_started: false,

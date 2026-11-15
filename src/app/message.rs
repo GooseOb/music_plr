@@ -199,6 +199,9 @@ pub enum Message {
     /// An OS media-control event (media keys, MPRIS/SMTC), bridged from the
     /// controls thread as it arrives — no tick polling involved.
     MediaEvent(MediaControlEvent),
+    /// A result from a background backend thread, bridged from `result_rx` as
+    /// it arrives — no tick polling involved.
+    BackendResult(BackendResult),
     CursorMoved(Point),
     LeftButtonReleased,
     ListBoundsCaptured(Box<CaptureBounds>),

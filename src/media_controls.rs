@@ -4,7 +4,7 @@
 //! D-Bus on Linux, System Media Transport Controls on Windows, and the Now
 //! Playing center on macOS. Inbound OS events ([`MediaControlEvent`]) are
 //! forwarded verbatim over `media_event_tx`; outbound state is pushed through
-//! [`MediaUpdate`] drained from `update_rx`.
+//! [`MediaUpdate`], applied by the controls thread as it blocks on `update_rx`.
 
 use std::{ffi::c_void, sync::mpsc, thread, time::Duration};
 
@@ -24,7 +24,7 @@ pub struct MediaUpdate {
 /// Spawn the OS media-control server. `hwnd` is required on Windows (the handle
 /// of the application window); it is ignored elsewhere.
 pub fn start(
-    event_tx: mpsc::Sender<MediaControlEvent>,
+    event_tx: tokio::sync::mpsc::UnboundedSender<MediaControlEvent>,
     update_rx: mpsc::Receiver<MediaUpdate>,
     hwnd: Option<*mut c_void>,
 ) {
@@ -56,36 +56,33 @@ pub fn start(
 
         info!("Media controls started");
 
-        loop {
-            while let Ok(update) = update_rx.try_recv() {
-                let MediaUpdate {
-                    playback,
-                    title,
-                    artist,
-                    duration_secs,
-                    has_track,
-                } = update;
-                if let Err(e) = controls.set_playback(playback) {
-                    warn!("Failed to set playback status: {}", e);
-                }
-                if has_track {
-                    let metadata = MediaMetadata {
-                        title: Some(&title),
-                        artist: Some(&artist),
-                        album: None,
-                        cover_url: None,
-                        duration: if duration_secs > 0.0 {
-                            Some(Duration::from_secs_f32(duration_secs))
-                        } else {
-                            None
-                        },
-                    };
-                    if let Err(e) = controls.set_metadata(metadata) {
-                        warn!("Failed to set metadata: {}", e);
-                    }
+        while let Ok(update) = update_rx.recv() {
+            let MediaUpdate {
+                playback,
+                title,
+                artist,
+                duration_secs,
+                has_track,
+            } = update;
+            if let Err(e) = controls.set_playback(playback) {
+                warn!("Failed to set playback status: {}", e);
+            }
+            if has_track {
+                let metadata = MediaMetadata {
+                    title: Some(&title),
+                    artist: Some(&artist),
+                    album: None,
+                    cover_url: None,
+                    duration: if duration_secs > 0.0 {
+                        Some(Duration::from_secs_f32(duration_secs))
+                    } else {
+                        None
+                    },
+                };
+                if let Err(e) = controls.set_metadata(metadata) {
+                    warn!("Failed to set metadata: {}", e);
                 }
             }
-            thread::sleep(Duration::from_millis(100));
         }
     });
 }

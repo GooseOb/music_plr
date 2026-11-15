@@ -37,9 +37,6 @@ impl MusicPlayer {
 
     pub fn handle_tick(&mut self) -> Task<Message> {
         let mut task = Task::none();
-        while let Ok(result) = self.result_rx.try_recv() {
-            task = task.chain(self.process_result(result));
-        }
 
         // A "play when the list arrives" is only meaningful while its request
         // is still the one its view is waiting for; navigating away from that
