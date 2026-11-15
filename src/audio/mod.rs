@@ -799,33 +799,29 @@ fn spawn_stream_to_cache(
         );
         return None;
     };
-    let extractor_arg = client.map(|c| format!("youtube:player_client={c}"));
-    let cookie_args = crate::deps::cookie_args();
-    let mut args = vec![
+    let mut cmd = Command::new(path);
+    cmd.args([
         "-f",
         crate::providers::ytdlp::STREAM_FORMAT,
         "-o",
         "-",
         "--no-warnings",
         "--no-check-formats",
-    ];
-    args.extend(cookie_args.iter().map(String::as_str));
-    if let Some(ref arg) = extractor_arg {
-        args.extend_from_slice(&["--extractor-args", arg.as_str()]);
+    ])
+    .args(&crate::deps::cookie_args());
+    if let Some(arg) = client {
+        cmd.args(["--extractor-args", &format!("youtube:player_client={arg}")]);
     }
-    args.push(url);
-
-    let mut child = match Command::new(path)
-        .args(&args)
+    cmd.arg(url)
         .current_dir(
             cache_path
                 .parent()
                 .unwrap_or_else(|| std::path::Path::new(".")),
         )
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-    {
+        .stderr(Stdio::piped());
+
+    let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
             warn!("Failed to spawn yt-dlp: {}", e);

@@ -225,9 +225,8 @@ fn probe_client_quality(
     client: &str,
 ) -> Option<f64> {
     let prefer_m4a = format_selector.contains("[ext=m4a]");
-    let extractor_arg = format!("youtube:player_client={client}");
-    let cookie_args = crate::deps::cookie_args();
-    let mut args = vec![
+    let mut cmd = std::process::Command::new(yt_dlp);
+    cmd.args([
         "--skip-download",
         "--no-warnings",
         "--no-playlist",
@@ -245,11 +244,13 @@ fn probe_client_quality(
         "acodec",
         "--print",
         "vcodec",
-    ];
-    args.extend(cookie_args.iter().map(String::as_str));
-    args.extend(["--extractor-args", extractor_arg.as_str(), url]);
-    let mut cmd = std::process::Command::new(yt_dlp);
-    cmd.args(&args);
+    ])
+    .args(&crate::deps::cookie_args())
+    .args([
+        "--extractor-args",
+        &format!("youtube:player_client={client}"),
+        url,
+    ]);
     let Ok(output) = run_command_with_stdin_and_timeout(&mut cmd, None, PROBE_TIMEOUT) else {
         return None;
     };
