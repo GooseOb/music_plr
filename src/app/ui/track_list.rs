@@ -195,11 +195,8 @@ fn view_track_row_inner<'a>(
         Message::TrackRightClicked,
     );
 
-    let border = if is_match || is_dragging {
-        Some(if is_interacting { p.accent } else { p.fg_muted })
-    } else {
-        None
-    };
+    let border =
+        (is_match || is_dragging).then_some(if is_interacting { p.accent } else { p.fg_muted });
 
     track_row(
         track_area,

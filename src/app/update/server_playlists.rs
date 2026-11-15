@@ -110,10 +110,8 @@ impl MusicPlayer {
     /// A provider with a request already in flight is skipped, so the boot
     /// refresh and a manual one share a single call.
     pub fn refresh_server_playlists(&mut self, provider: Option<ProviderId>) -> Task<Message> {
-        let providers: Vec<ProviderId> = match provider {
-            Some(provider) => vec![provider],
-            None => Self::server_playlist_providers(),
-        };
+        let providers =
+            provider.map_or_else(Self::server_playlist_providers, |provider| vec![provider]);
         for provider in providers {
             if self.server_playlist_index_busy(provider) {
                 continue;

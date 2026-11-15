@@ -174,19 +174,14 @@ impl MusicPlayer {
     /// ignored. Queue/Recent rows live in the global panel and always count.
     pub fn focused_hovered_track(&self) -> Option<TrackPos> {
         let pos = self.drag.hovered_track()?;
-        if is_main_pane(pos.pane) && pos.pane != self.session.focused {
-            None
-        } else {
-            Some(pos)
-        }
+        (!is_main_pane(pos.pane) || pos.pane == self.session.focused).then_some(pos)
     }
 
     /// Whether `pos` is a match in the active track list search (any occurrence).
     pub fn is_track_list_match(&self, pos: TrackPos) -> bool {
-        match &self.track_list_search {
-            Some(fs) if fs.pane == pos.pane => fs.matches.binary_search(&pos.index).is_ok(),
-            _ => false,
-        }
+        self.track_list_search
+            .as_ref()
+            .is_some_and(|fs| fs.pane == pos.pane && fs.matches.binary_search(&pos.index).is_ok())
     }
 
     pub fn track_list_match_position(&self) -> Option<usize> {
@@ -194,8 +189,8 @@ impl MusicPlayer {
         self.track_list_search
             .as_ref()?
             .matches
-            .iter()
-            .position(|&i| i == current_idx)
+            .binary_search(&current_idx)
+            .ok()
             .map(|p| p + 1)
     }
 

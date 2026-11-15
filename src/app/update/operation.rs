@@ -244,11 +244,11 @@ impl CaptureBounds {
     /// How far a scrollable is scrolled along its own axis, for turning a
     /// reported cursor point back into a window position.
     pub fn scroll_offset(&self, target: ScrollTarget) -> f32 {
-        match target {
-            ScrollTarget::CardRow(pane, rail) => self.rail_scroll(pane, rail),
-            _ => self
-                .geometry(Slot::from(target))
-                .map_or(0.0, |g| g.translation_y),
+        if let ScrollTarget::CardRow(pane, rail) = target {
+            self.rail_scroll(pane, rail)
+        } else {
+            self.geometry(Slot::from(target))
+                .map_or(0.0, |g| g.translation_y)
         }
     }
 
@@ -300,23 +300,17 @@ impl CaptureBounds {
 
     /// The slot an id'd scrollable belongs to, if it is one we capture.
     fn slot(&self, id: &Id) -> Option<Slot> {
-        if *id == SIDEBAR_LIST_ID {
-            return Some(Slot::Sidebar);
-        }
-        if *id == SIDEBAR_SERVER_PLAYLISTS_LIST_ID {
-            return Some(Slot::ServerPlaylists);
-        }
-        if *id == LIBRARY_LIST_ID {
-            return Some(Slot::Library);
-        }
-        if *id == QUEUE_LIST_ID {
-            return Some(Slot::Queue);
-        }
-        if *id == QUEUE_RECENT_LIST_ID {
-            return Some(Slot::Recent);
-        }
-        if *id == MANUAL_SEARCH_LIST_ID {
-            return Some(Slot::ManualSearch);
+        for (slot, list_id) in [
+            (Slot::Sidebar, SIDEBAR_LIST_ID),
+            (Slot::ServerPlaylists, SIDEBAR_SERVER_PLAYLISTS_LIST_ID),
+            (Slot::Library, LIBRARY_LIST_ID),
+            (Slot::Queue, QUEUE_LIST_ID),
+            (Slot::Recent, QUEUE_RECENT_LIST_ID),
+            (Slot::ManualSearch, MANUAL_SEARCH_LIST_ID),
+        ] {
+            if *id == list_id {
+                return Some(slot);
+            }
         }
         self.panes.iter().copied().find_map(|pane| {
             if *id == track_list_id(pane) {
@@ -412,17 +406,14 @@ impl Operation<Message> for CaptureBounds {
         // collect containers.
         self.current =
             matches!(slot, Slot::Sidebar | Slot::ServerPlaylists | Slot::Library).then_some(slot);
-        match slot {
+        if let Slot::CardRow(pane, rail) = slot {
             // A shelf is horizontal-only: it has no geometry of its own.
-            Slot::CardRow(pane, rail) => {
-                self.card_rows.insert((pane, rail), translation.x);
-            }
-            _ => {
-                *self.ensure_geometry(slot) = ListGeometry {
-                    bounds,
-                    translation_y: translation.y,
-                    rows: Vec::new(),
-                };
+            self.card_rows.insert((pane, rail), translation.x);
+        } else {
+            *self.ensure_geometry(slot) = ListGeometry {
+                bounds,
+                translation_y: translation.y,
+                rows: Vec::new(),
             }
         }
     }
@@ -512,16 +503,14 @@ impl Operation<Message> for CaptureSearchHistoryRows {
     }
 
     fn finish(&self) -> Outcome<Message> {
-        match self.geo.clone() {
-            Some(mut geo) => {
-                if !geo.rows.is_empty() {
-                    let last = theme::SEARCH_DROPDOWN_MAX_ITEMS.min(geo.rows.len()) - 1;
-                    geo.bounds.height = geo.rows[last].y + geo.rows[last].height - geo.bounds.y;
-                }
-                Outcome::Some(Message::SearchHistoryBoundsCaptured(self.pane, geo))
-            }
-            None => Outcome::None,
+        let Some(mut geo) = self.geo.clone() else {
+            return Outcome::None;
+        };
+        if !geo.rows.is_empty() {
+            let last = theme::SEARCH_DROPDOWN_MAX_ITEMS.min(geo.rows.len()) - 1;
+            geo.bounds.height = geo.rows[last].y + geo.rows[last].height - geo.bounds.y;
         }
+        Outcome::Some(Message::SearchHistoryBoundsCaptured(self.pane, geo))
     }
 }
 

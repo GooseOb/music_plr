@@ -284,14 +284,12 @@ impl rodio::Source for SymphoniaStreamingSource {
 
         self.decode_into_buffer(&packet).ok_or(FAILED)?;
 
-        let frames_to_skip = match self.time_base {
-            Some(time_base) => time_base
-                .calc_duration(Duration::new(ticks_to_pass))
-                .map_or(ticks_to_pass as usize, |time| {
-                    (time.as_secs_f64() * f64::from(self.spec.rate())).round() as usize
-                }),
-            None => ticks_to_pass as usize,
-        };
+        let frames_to_skip = self
+            .time_base
+            .and_then(|tb| tb.calc_duration(Duration::new(ticks_to_pass)))
+            .map_or(ticks_to_pass as usize, |time| {
+                (time.as_secs_f64() * f64::from(self.spec.rate())).round() as usize
+            });
         let offset = frames_to_skip.saturating_mul(self.spec.channels().count());
         self.sample_offset = offset.min(self.samples.len());
         Ok(())

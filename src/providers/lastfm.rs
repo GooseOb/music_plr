@@ -179,41 +179,67 @@ fn album_art(artist: &str, title: &str) -> Option<String> {
     result
 }
 
-fn enrich_songs_with_album_art(tracks: Vec<Track>) -> Vec<Track> {
-    let tracks = enrich_parallel(tracks, album_art_for);
-    let mut artists: Vec<String> = Vec::new();
-    for track in &tracks {
-        let artist = credited_artist(track);
-        if missing_lastfm_thumbnail(track) && !artists.iter().any(|a| a == &artist) {
-            artists.push(artist);
+/// Fills in real artwork for Last.fm tracks: each track's album cover, then,
+/// for anything still blank, the top album of the track's artist. Both passes
+/// run their requests together, and one artist lookup serves every track
+/// credited to it.
+fn enrich_with_album_art(tracks: &mut [Track]) {
+    let credited: Vec<String> = tracks.iter().map(credited_artist).collect();
+    let arts: Vec<Option<String>> = std::thread::scope(|s| {
+        tracks
+            .iter()
+            .zip(&credited)
+            .map(|(track, artist)| {
+                s.spawn(move || {
+                    if missing_lastfm_thumbnail(track) {
+                        album_art(artist, &track.title)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|h| h.join().ok().flatten())
+            .collect()
+    });
+    for (track, art) in tracks.iter_mut().zip(arts) {
+        if let Some(art) = art {
+            set_lastfm_thumbnail(track, art);
+        }
+    }
+
+    let mut artists: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for (track, artist) in tracks.iter().zip(&credited) {
+        if missing_lastfm_thumbnail(track) {
+            artists.insert(artist.as_str());
         }
     }
     if artists.is_empty() {
-        return tracks;
+        return;
     }
     let arts: Vec<Option<String>> = std::thread::scope(|s| {
         artists
             .iter()
             .map(|artist| s.spawn(move || artist_art(artist)))
+            .collect::<Vec<_>>()
+            .into_iter()
             .map(|h| h.join().ok().flatten())
             .collect()
     });
     let by_artist: std::collections::HashMap<&str, &str> = artists
         .iter()
+        .copied()
         .zip(arts.iter())
-        .filter_map(|(artist, art)| art.as_deref().map(|url| (artist.as_str(), url)))
+        .filter_map(|(artist, art)| art.as_deref().map(|url| (artist, url)))
         .collect();
-    tracks
-        .into_iter()
-        .map(|mut track| {
-            if missing_lastfm_thumbnail(&track) {
-                if let Some(art) = by_artist.get(credited_artist(&track).as_str()) {
-                    set_lastfm_thumbnail(&mut track, (*art).to_string());
-                }
+    for (track, artist) in tracks.iter_mut().zip(&credited) {
+        if missing_lastfm_thumbnail(track) {
+            if let Some(art) = by_artist.get(artist.as_str()) {
+                set_lastfm_thumbnail(track, (*art).to_string());
             }
-            track
-        })
-        .collect()
+        }
+    }
 }
 
 fn set_lastfm_thumbnail(track: &mut Track, art: String) {
@@ -227,10 +253,6 @@ fn missing_lastfm_thumbnail(track: &Track) -> bool {
         .providers
         .get(&ProviderId::LastFm)
         .is_none_or(|pt| pt.thumbnail.is_empty())
-}
-
-fn album_art_for(track: &Track) -> Option<String> {
-    album_art(&credited_artist(track), &track.title)
 }
 
 /// Artist-level fallback for tracks with no album art (covers, remixes):
@@ -287,32 +309,6 @@ fn artist_thumbnails(artists: &[serde_json::Value]) -> Vec<String> {
             .collect::<Vec<_>>()
             .into_iter()
             .map(|handle| handle.join().unwrap_or_default())
-            .collect()
-    })
-}
-
-fn enrich_parallel(
-    tracks: Vec<Track>,
-    art_for: impl Fn(&Track) -> Option<String> + Sync,
-) -> Vec<Track> {
-    let art_for = &art_for;
-    std::thread::scope(|s| {
-        tracks
-            .into_iter()
-            .map(|track| {
-                s.spawn(move || {
-                    let mut track = track;
-                    if missing_lastfm_thumbnail(&track) {
-                        if let Some(art) = art_for(&track) {
-                            set_lastfm_thumbnail(&mut track, art);
-                        }
-                    }
-                    track
-                })
-            })
-            .collect::<Vec<_>>()
-            .into_iter()
-            .filter_map(|h| h.join().ok())
             .collect()
     })
 }
@@ -389,11 +385,12 @@ pub fn search(query: &str, scope: SearchScope, offset: usize) -> Result<(Vec<Tra
                 "track.search",
                 &[("track", query), ("limit", &limit), ("page", &page)],
             )?;
-            let tracks: Vec<Track> = collect(&["results", "trackmatches", "track"], &v)
+            let mut tracks: Vec<Track> = collect(&["results", "trackmatches", "track"], &v)
                 .iter()
                 .map(track_from_search)
                 .collect();
-            Ok((enrich_songs_with_album_art(tracks), SearchTab::Songs))
+            enrich_with_album_art(&mut tracks);
+            Ok((tracks, SearchTab::Songs))
         }
     }
 }
@@ -736,10 +733,10 @@ pub fn resolve_id(track: &Track) -> Result<Option<Track>> {
             .map(track_from_search)
     })
     .unwrap_or_default();
-    Ok(match found {
-        Some(t) => enrich_songs_with_album_art(vec![t]).pop(),
-        None => None,
-    })
+    Ok(found.map(|mut track| {
+        enrich_with_album_art(std::slice::from_mut(&mut track));
+        track
+    }))
 }
 
 pub fn radio_song(id: &str) -> Result<Vec<Track>> {

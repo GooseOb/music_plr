@@ -83,43 +83,43 @@ impl LyricsState {
         }
     }
 
+    /// Index of the translation standing in for `language` — the selected one,
+    /// once it is loaded. An index (not a reference) because
+    /// [`LyricsState::displayed_lyrics_mut`] has to re-borrow it mutably.
+    fn displayed_translation_index(lyrics: &Lyrics, language: Option<&str>) -> Option<usize> {
+        let language = language?;
+        lyrics
+            .translations
+            .iter()
+            .position(|t| t.language == language && t.is_loaded())
+    }
+
     /// The lyrics currently on screen: the selected translation when it is
     /// loaded, otherwise the original. `None` while loading or failed.
     pub fn displayed_lyrics(&self) -> Option<&Lyrics> {
         let LoadState::Ready(lyrics) = &self.lyrics else {
             return None;
         };
-        if let Some(language) = self.selected_translation.as_deref() {
-            if let Some(translation) = lyrics
-                .translations
-                .iter()
-                .find(|t| t.language == language && t.is_loaded())
-            {
-                return Some(&translation.lyrics);
-            }
-        }
-        Some(lyrics.as_ref())
+        let lyrics = lyrics.as_ref();
+        let Some(idx) =
+            Self::displayed_translation_index(lyrics, self.selected_translation.as_deref())
+        else {
+            return Some(lyrics);
+        };
+        Some(&lyrics.translations[idx].lyrics)
     }
 
     pub fn displayed_lyrics_mut(&mut self) -> Option<&mut Lyrics> {
-        let language = self.selected_translation.clone();
         let LoadState::Ready(lyrics) = &mut self.lyrics else {
             return None;
         };
         let lyrics = Arc::make_mut(lyrics);
-        match language {
-            Some(language) => {
-                let pos = lyrics
-                    .translations
-                    .iter()
-                    .position(|t| t.language == language && t.is_loaded());
-                match pos {
-                    Some(pos) => Some(&mut lyrics.translations[pos].lyrics),
-                    None => Some(lyrics),
-                }
-            }
-            None => Some(lyrics),
-        }
+        let Some(idx) =
+            Self::displayed_translation_index(lyrics, self.selected_translation.as_deref())
+        else {
+            return Some(lyrics);
+        };
+        Some(&mut lyrics.translations[idx].lyrics)
     }
 
     pub fn reset_translation_state(&mut self) {
@@ -128,11 +128,10 @@ impl LyricsState {
     }
 
     pub fn sync_plain_lines(&mut self) {
-        match self.displayed_lyrics() {
-            Some(lyrics) => {
-                self.plain_lines = lyrics.plain.lines().map(str::to_string).collect();
-            }
-            None => self.plain_lines.clear(),
+        if let Some(lyrics) = self.displayed_lyrics() {
+            self.plain_lines = lyrics.plain.lines().map(str::to_string).collect();
+        } else {
+            self.plain_lines.clear();
         }
     }
 

@@ -4,7 +4,7 @@ use crate::{
         interaction::TrackPos,
         pane::{PaneId, SplitDir, MAX_PANES},
         ui::track_list_id,
-        ViewKind,
+        Dialog, PaletteMode, ViewKind,
     },
     providers::SearchScope,
 };
@@ -250,18 +250,14 @@ impl MusicPlayer {
         // playlist-jump add target, track editor) must go with it; its
         // position would otherwise resolve against a missing pane.
         let dialog_pane = match &self.dialog {
-            Some(crate::app::Dialog::ContextMenu(m)) if is_main_pane(m.pos.pane) => {
-                Some(m.pos.pane)
-            }
-            Some(crate::app::Dialog::Palette(p)) => match &p.mode {
-                crate::app::PaletteMode::AddToPlaylist(add) if is_main_pane(add.pane) => {
-                    Some(add.pane)
-                }
+            Some(Dialog::ContextMenu(m)) if is_main_pane(m.pos.pane) => Some(m.pos.pane),
+            Some(Dialog::Palette(p)) => match &p.mode {
+                PaletteMode::AddToPlaylist(add) if is_main_pane(add.pane) => Some(add.pane),
                 _ => None,
             },
-            Some(crate::app::Dialog::CardMenu(m)) if is_main_pane(m.pane) => Some(m.pane),
-            Some(crate::app::Dialog::Edit(e)) => Some(e.pos.pane),
-            Some(crate::app::Dialog::Translate(d)) => Some(d.pane),
+            Some(Dialog::CardMenu(m)) if is_main_pane(m.pane) => Some(m.pane),
+            Some(Dialog::Edit(e)) => Some(e.pos.pane),
+            Some(Dialog::Translate(d)) => Some(d.pane),
             _ => None,
         };
         if dialog_pane == Some(pane) {

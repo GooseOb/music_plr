@@ -277,10 +277,10 @@ impl SplitNode {
     /// the focused pane's column/row by replaying its recorded path
     /// depth-aligned at perpendicular splits.
     pub fn wrap_edge(&self, focused: PaneId, dir: PaneDir) -> PaneId {
-        match Self::path_to(self, focused) {
-            Some(path) => Self::descend(self, dir, &path, 0),
-            None => self.first_leaf(),
-        }
+        Self::path_to(self, focused).map_or_else(
+            || self.first_leaf(),
+            |path| Self::descend(self, dir, &path, 0),
+        )
     }
 
     /// Root-to-leaf trail of `(split, went_first)` for `target`, or `None`

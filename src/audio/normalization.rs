@@ -118,10 +118,8 @@ fn canonical_gain_key(key: &str) -> String {
     let Some((prefix, id)) = key.split_once(':') else {
         return key.to_string();
     };
-    match crate::providers::ProviderId::from_legacy_key(prefix) {
-        Some(provider) => provider.cache_key(id),
-        None => key.to_string(),
-    }
+    crate::providers::ProviderId::from_legacy_key(prefix)
+        .map_or_else(|| key.to_string(), |provider| provider.cache_key(id))
 }
 
 pub fn save_gains(gains: &std::collections::HashMap<String, f32>) {

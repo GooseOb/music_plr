@@ -246,10 +246,7 @@ fn push_js_unicode(chars: &mut std::str::Chars<'_>, out: &mut String) {
         out.push('\u{fffd}');
         return;
     }
-    match char::from_u32(high) {
-        Some(c) => out.push(c),
-        None => out.push('\u{fffd}'),
-    }
+    out.push(char::from_u32(high).unwrap_or('\u{fffd}'));
 }
 
 fn push_js_octal(first: char, chars: &mut std::str::Chars<'_>, out: &mut String) {

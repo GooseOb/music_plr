@@ -17,10 +17,10 @@ pub(super) fn view_track_list_search<'a>(
     player: &'a MusicPlayer,
     fs: &'a TrackListSearch,
 ) -> Element<'a, Message, AppTheme> {
-    let count = match player.track_list_match_position() {
-        Some(pos) => (player.strings.list_match_pos)(pos, fs.matches.len()),
-        None => (player.strings.list_match_pos)(0, fs.matches.len()),
-    };
+    let count = (player.strings.list_match_pos)(
+        player.track_list_match_position().unwrap_or(0),
+        fs.matches.len(),
+    );
 
     let dir = player.strings.direction;
     let input = text_input(player.strings.find_in_list, &fs.query)
