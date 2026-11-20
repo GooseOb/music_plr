@@ -17,6 +17,7 @@ use crate::{
         interaction::{DragState, TrackListSearch, TrackPos},
         message::{BackendResult, Message},
         pane::{Pane, PaneId},
+        translate_dialog::TranslationRequest,
         ui,
         update::operation::CaptureBounds,
         view_data::{RequestIdGenerator, ViewData},
@@ -209,6 +210,10 @@ pub struct MusicPlayer {
     pub translation_models: Option<LoadState<Vec<String>>>,
     /// Session-only substring filter for the fetched translation model list.
     pub translation_models_filter: String,
+    /// AI lyrics translations currently running, at most one per pane. Kept
+    /// outside the translate popup so hiding it leaves the request running;
+    /// each reply is matched by request id.
+    pub translation_requests: Vec<TranslationRequest>,
 
     pub track_list_search: Option<TrackListSearch>,
 
@@ -348,6 +353,7 @@ impl MusicPlayer {
             recent_selected_indices: Vec::new(),
             translation_models: None,
             translation_models_filter: String::new(),
+            translation_requests: Vec::new(),
             track_list_search: None,
             app_theme,
             bounds: CaptureBounds::default(),

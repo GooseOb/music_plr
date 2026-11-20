@@ -64,6 +64,7 @@ pub const STRINGS: Strings = Strings {
     translate_prompt_lbl: "提示词",
     translate_submit: "翻译",
     translate_reset: "重置提示词",
+    translate_hide: "隐藏",
     translating: "翻译中…",
     translation_ready: "翻译完成 — 请检查并保存",
     translation_language_empty: "请输入目标语言",

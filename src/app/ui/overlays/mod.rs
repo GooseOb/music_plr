@@ -91,10 +91,10 @@ pub(super) fn view_dialog_overlay<'a>(
         Dialog::Dependencies(dialog) => view_dependency_dialog(player, dialog),
         Dialog::Palette(palette) => view_palette(player, palette),
         Dialog::DeleteConfirm(_) => view_delete_confirm(player.strings),
-        Dialog::ServerPlaylistName(dialog) => view_server_playlist_name(player, dialog),
-        Dialog::ServerPlaylistDelete(dialog) => view_server_playlist_delete(player, dialog),
+        Dialog::ServerPlaylistName(dialog) => view_server_playlist_name(player.strings, dialog),
+        Dialog::ServerPlaylistDelete(dialog) => view_server_playlist_delete(player.strings, dialog),
         Dialog::Edit(edit) => view_edit_track(player, edit),
-        Dialog::Import(dialog) => view_import_playlist(player, dialog),
+        Dialog::Import(dialog) => view_import_playlist(player.strings, dialog),
         Dialog::Translate(dialog) => view_translate_dialog(player, dialog),
         // A menu's own `return_to` is rendered by its caller, so a menu inside
         // one renders just its panel.

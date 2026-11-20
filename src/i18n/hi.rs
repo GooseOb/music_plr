@@ -66,6 +66,7 @@ pub const STRINGS: Strings = Strings {
     translate_prompt_lbl: "प्रॉम्प्ट",
     translate_submit: "अनुवाद करें",
     translate_reset: "प्रॉम्प्ट रीसेट करें",
+    translate_hide: "छिपाएँ",
     translating: "अनुवाद हो रहा है…",
     translation_ready: "अनुवाद तैयार — जाँचें और सहेजें",
     translation_language_empty: "लक्षित भाषा दर्ज करें",

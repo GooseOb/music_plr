@@ -263,6 +263,7 @@ impl MusicPlayer {
         if dialog_pane == Some(pane) {
             self.dialog = None;
         }
+        self.cancel_translation_for(pane);
         if self
             .drag
             .hovered_track()

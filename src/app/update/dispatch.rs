@@ -259,6 +259,14 @@ impl crate::app::MusicPlayer {
                 Task::none()
             }
             Message::TranslateSubmit => self.submit_translation(),
+            Message::TranslateCancel => {
+                self.cancel_translation();
+                Task::none()
+            }
+            Message::TranslateHide => {
+                self.hide_translate_dialog();
+                Task::none()
+            }
             Message::RequestTranslationModels => {
                 self.request_translation_models();
                 Task::none()

@@ -66,6 +66,7 @@ pub const STRINGS: Strings = Strings {
     translate_prompt_lbl: "التعليمات",
     translate_submit: "ترجم",
     translate_reset: "إعادة تعيين التعليمات",
+    translate_hide: "إخفاء",
     translating: "جارٍ الترجمة…",
     translation_ready: "الترجمة جاهزة — راجعها واحفظها",
     translation_language_empty: "أدخل اللغة المستهدفة",

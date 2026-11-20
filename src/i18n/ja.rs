@@ -64,6 +64,7 @@ pub const STRINGS: Strings = Strings {
     translate_prompt_lbl: "プロンプト",
     translate_submit: "翻訳する",
     translate_reset: "プロンプトをリセット",
+    translate_hide: "隠す",
     translating: "翻訳中…",
     translation_ready: "翻訳が完了しました — 確認して保存してください",
     translation_language_empty: "翻訳先の言語を入力してください",

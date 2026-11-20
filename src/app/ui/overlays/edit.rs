@@ -287,7 +287,7 @@ pub(super) fn view_edit_manual_search<'a>(
     let search_btn = search_button(manual.can_run().then_some(Message::EditTrackManualRun));
 
     let scopes = scope_tab_row(
-        player.strings.direction,
+        tr.direction,
         manual.provider.track_scopes().into_iter().map(|scope| {
             (
                 player.scope_name(scope),

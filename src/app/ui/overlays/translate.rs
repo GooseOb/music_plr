@@ -1,4 +1,5 @@
-//! The AI-translate lyrics popup: target language, prompt, in-flight flag.
+//! The AI-translate lyrics popup: target language, prompt, and the Cancel/Hide
+//! pair shown while a request is in flight.
 
 use iced::{
     widget::{text, text_input, Column},
@@ -19,6 +20,7 @@ pub(super) fn view_translate_dialog<'a>(
     dialog: &'a crate::app::TranslateDialog,
 ) -> Element<'a, Message, AppTheme> {
     let tr = player.strings;
+    let translating = player.translation_in_flight(dialog.pane);
     let language = text_input(tr.translate_language_lbl, &dialog.language)
         .on_input(Message::TranslateLanguageChanged)
         .on_submit(Message::TranslateLanguageSubmit)
@@ -31,18 +33,37 @@ pub(super) fn view_translate_dialog<'a>(
         .height(Length::Fixed(180.0))
         .into();
 
-    let cancel_btn = dialog_button(tr.cancel).on_press(Message::CloseDialog);
-    let reset_btn = dialog_button(tr.translate_reset).on_press(Message::TranslateResetPrompt);
-    let submit_btn = dialog_button(if dialog.translating {
-        tr.translating
+    let cancel_btn = dialog_button(tr.cancel);
+    let button_row = if translating {
+        dialog_button_row(
+            tr.direction,
+            [
+                cancel_btn.on_press(Message::TranslateCancel).into(),
+                dialog_button(tr.translate_hide)
+                    .style(button_style_primary())
+                    .on_press(Message::TranslateHide)
+                    .into(),
+            ]
+            .into_iter(),
+        )
     } else {
-        tr.translate_submit
-    })
-    .style(button_style_primary())
-    .on_press_maybe(
-        (!dialog.translating && !dialog.language.trim().is_empty())
-            .then_some(Message::TranslateSubmit),
-    );
+        dialog_button_row(
+            tr.direction,
+            [
+                cancel_btn.on_press(Message::CloseDialog).into(),
+                dialog_button(tr.translate_reset)
+                    .on_press(Message::TranslateResetPrompt)
+                    .into(),
+                dialog_button(tr.translate_submit)
+                    .style(button_style_primary())
+                    .on_press_maybe(
+                        (!dialog.language.trim().is_empty()).then_some(Message::TranslateSubmit),
+                    )
+                    .into(),
+            ]
+            .into_iter(),
+        )
+    };
 
     let children = [
         text(tr.translate_title).size(theme::TEXT_SIZE_LG).into(),
@@ -54,16 +75,8 @@ pub(super) fn view_translate_dialog<'a>(
         prompt,
     ]
     .into_iter()
-    .chain(
-        dialog
-            .translating
-            .then(|| text(tr.translating).style(fg_secondary()).into()),
-    )
-    .chain([dialog_button_row(
-        tr.direction,
-        [cancel_btn.into(), reset_btn.into(), submit_btn.into()].into_iter(),
-    )
-    .into()]);
+    .chain(translating.then(|| text(tr.translating).style(fg_secondary()).into()))
+    .chain([button_row.into()]);
 
     view_dialog(
         Column::with_children(children)

@@ -176,6 +176,7 @@ pub struct Strings {
     pub translate_prompt_lbl: &'static str,
     pub translate_submit: &'static str,
     pub translate_reset: &'static str,
+    pub translate_hide: &'static str,
     pub translating: &'static str,
     pub translation_ready: &'static str,
     pub translation_language_empty: &'static str,

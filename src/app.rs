@@ -39,5 +39,5 @@ pub use shortcut::Shortcut;
 pub use state::{
     MusicPlayer, PendingCache, PendingPlaylistWrite, PendingServerRename, ServerPlaylistUndo, Toast,
 };
-pub use translate_dialog::TranslateDialog;
+pub use translate_dialog::{TranslateDialog, TranslationRequest};
 pub use view_data::{RadioData, ViewData, ViewKind};

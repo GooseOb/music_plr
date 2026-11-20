@@ -1,5 +1,11 @@
-//! Translate-with-AI popup state: which pane requested it, the persisted
-//! target language and prompt drafts, and whether a request is in flight.
+//! Translate-with-AI popup state: which pane requested it and the persisted
+//! target language and prompt drafts. The request itself lives on the player
+//! so hiding the popup doesn't abandon it.
+
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use super::pane::PaneId;
 
@@ -8,7 +14,6 @@ pub struct TranslateDialog {
     pub pane: PaneId,
     pub language: String,
     pub prompt: iced::widget::text_editor::Content,
-    pub translating: bool,
 }
 
 impl TranslateDialog {
@@ -17,7 +22,39 @@ impl TranslateDialog {
             pane,
             language,
             prompt: iced::widget::text_editor::Content::with_text(prompt),
-            translating: false,
         }
+    }
+}
+
+/// One in-flight AI translation. Its `rid` routes the reply back to exactly
+/// this request, so a superseded one's late result is dropped instead of
+/// overwriting the editor or closing a newer popup.
+#[derive(Debug)]
+pub struct TranslationRequest {
+    pub rid: u64,
+    pub pane: PaneId,
+    pub track_id: String,
+    pub language: String,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl TranslationRequest {
+    pub fn new(rid: u64, pane: PaneId, track_id: String, language: String) -> Self {
+        Self {
+            rid,
+            pane,
+            track_id,
+            language,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
+
+    /// The flag the request thread checks before delivering its result.
+    pub fn cancelled(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.cancelled)
     }
 }

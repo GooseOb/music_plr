@@ -69,6 +69,7 @@ pub const STRINGS: Strings = Strings {
     translate_prompt_lbl: "Промпт",
     translate_submit: "Перевести",
     translate_reset: "Сбросить промпт",
+    translate_hide: "Скрыть",
     translating: "Перевод…",
     translation_ready: "Перевод готов — проверьте и сохраните",
     translation_language_empty: "Введите целевой язык",

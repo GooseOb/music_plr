@@ -7,7 +7,7 @@ use iced::{
     Element,
 };
 
-use super::{theme, view_dialog, Message, MusicPlayer};
+use super::{theme, view_dialog, Message};
 use crate::{
     app::{
         import::ImportPlaylistDialog,
@@ -25,11 +25,9 @@ use crate::{
 /// then select the file/folder to import.
 #[allow(clippy::too_many_lines)]
 pub(super) fn view_import_playlist<'a>(
-    player: &'a MusicPlayer,
+    tr: &crate::i18n::Strings,
     dialog: &'a ImportPlaylistDialog,
 ) -> Element<'a, Message, AppTheme> {
-    let tr = player.strings;
-
     let method_row = scope_tab_row(
         tr.direction,
         [

@@ -26,7 +26,7 @@ pub(super) fn view_dependency_dialog<'a>(
     player: &'a MusicPlayer,
     dialog: &'a crate::app::DependencyDialog,
 ) -> Element<'a, Message, AppTheme> {
-    let tr = &player.strings;
+    let tr = player.strings;
 
     let missing = !dialog.missing.is_empty();
     let found = !dialog.found.is_empty();

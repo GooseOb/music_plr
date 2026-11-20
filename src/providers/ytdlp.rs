@@ -245,7 +245,7 @@ fn probe_client_quality(
         "--print",
         "vcodec",
     ])
-    .args(&crate::deps::cookie_args())
+    .args(crate::deps::cookie_args())
     .args([
         "--extractor-args",
         &format!("youtube:player_client={client}"),

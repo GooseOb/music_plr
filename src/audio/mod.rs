@@ -808,7 +808,7 @@ fn spawn_stream_to_cache(
         "--no-warnings",
         "--no-check-formats",
     ])
-    .args(&crate::deps::cookie_args());
+    .args(crate::deps::cookie_args());
     if let Some(arg) = client {
         cmd.args(["--extractor-args", &format!("youtube:player_client={arg}")]);
     }

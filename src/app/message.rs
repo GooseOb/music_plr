@@ -121,15 +121,18 @@ pub enum BackendResult {
     /// The update download/extract/staged-apply finished.
     UpdateComplete(Result<String, String>),
     /// An AI lyrics translation finished; the text opens in the custom-lyrics
-    /// editor of `pane` under `language` when the track still matches.
+    /// editor of `pane` under `language` when the pane still shows `track_id`.
+    /// `rid` must match the request still tracked for that pane, so a
+    /// cancelled or superseded translation is dropped.
     TranslationDone {
+        rid: u64,
         pane: PaneId,
         track_id: String,
         language: String,
         text: String,
     },
     TranslationError {
-        pane: PaneId,
+        rid: u64,
         message: String,
     },
     TranslationModels(Vec<String>),
@@ -345,6 +348,8 @@ pub enum Message {
     TranslatePromptAction(iced::widget::text_editor::Action),
     TranslateResetPrompt,
     TranslateSubmit,
+    TranslateCancel,
+    TranslateHide,
     RequestTranslationModels,
     TranslationModelsFilterChanged(String),
 

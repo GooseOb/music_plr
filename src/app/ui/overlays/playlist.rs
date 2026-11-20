@@ -9,7 +9,7 @@ use iced::{
     Element, Length,
 };
 
-use super::{theme, view_dialog, Message, MusicPlayer};
+use super::{theme, view_dialog, Message};
 use crate::{
     app::ui::{
         shared_components::dialog_button,
@@ -18,25 +18,18 @@ use crate::{
     theme::AppTheme,
 };
 
-pub(super) fn view_delete_confirm(
-    strings: &crate::i18n::Strings,
-) -> Element<'_, Message, AppTheme> {
-    let cancel_btn = dialog_button(strings.cancel).on_press(Message::CloseDialog);
+pub(super) fn view_delete_confirm(tr: &crate::i18n::Strings) -> Element<'_, Message, AppTheme> {
+    let cancel_btn = dialog_button(tr.cancel).on_press(Message::CloseDialog);
 
-    let delete_btn = dialog_button(strings.delete)
+    let delete_btn = dialog_button(tr.delete)
         .style(button_style_danger())
         .on_press(Message::ConfirmDeletePlaylist);
 
     view_dialog(
         Column::with_children([
-            text(strings.delete_playlist_q)
-                .size(theme::TEXT_SIZE_LG)
-                .into(),
-            text(strings.tracks_wont_be_deleted)
-                .style(fg_secondary())
-                .into(),
-            strings
-                .direction
+            text(tr.delete_playlist_q).size(theme::TEXT_SIZE_LG).into(),
+            text(tr.tracks_wont_be_deleted).style(fg_secondary()).into(),
+            tr.direction
                 .row([cancel_btn.into(), delete_btn.into()].into_iter())
                 .spacing(theme::SPACING_XL)
                 .align_y(alignment::Vertical::Center)
@@ -54,10 +47,9 @@ pub(super) fn view_delete_confirm(
 /// The create-playlist dialog's name field (renames happen inline on the
 /// playlist pages).
 pub(super) fn view_server_playlist_name<'a>(
-    player: &'a MusicPlayer,
+    tr: &crate::i18n::Strings,
     dialog: &'a crate::app::ServerPlaylistNameDialog,
 ) -> Element<'a, Message, AppTheme> {
-    let tr = player.strings;
     let dir = tr.direction;
 
     let input = text_input(tr.new_playlist_name, &dialog.name)
@@ -97,10 +89,9 @@ pub(super) fn view_server_playlist_name<'a>(
 
 /// Confirmation for deleting a playlist on its server.
 pub(super) fn view_server_playlist_delete<'a>(
-    player: &'a MusicPlayer,
+    tr: &crate::i18n::Strings,
     dialog: &'a crate::app::ServerPlaylistDeleteDialog,
 ) -> Element<'a, Message, AppTheme> {
-    let tr = player.strings;
     let dir = tr.direction;
 
     let cancel_btn = dialog_button(tr.cancel).on_press(Message::CloseDialog);

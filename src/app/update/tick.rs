@@ -565,13 +565,14 @@ impl MusicPlayer {
                 self.process_lyrics_translation_fetched(&result, &track_id, provider)
             }
             BackendResult::TranslationDone {
+                rid,
                 pane,
                 track_id,
                 language,
                 text,
-            } => self.process_translation_done(pane, &track_id, &language, &text),
-            BackendResult::TranslationError { pane, message } => {
-                self.process_translation_error(pane, &message)
+            } => self.process_translation_done(rid, pane, &track_id, &language, &text),
+            BackendResult::TranslationError { rid, message } => {
+                self.process_translation_error(rid, &message)
             }
             BackendResult::TranslationModels(models) => {
                 self.process_translation_models(models);
