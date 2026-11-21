@@ -10,6 +10,10 @@ auto-generated compare link below it.
 
 ## [Unreleased]
 
+### Fixed
+
+- Genius requests failing.
+
 ## [1.6.1] - 2026-11-20
 
 ### Fixed

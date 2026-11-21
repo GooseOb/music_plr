@@ -13,17 +13,12 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use super::{
-    http::agent, matcher, plain_of, LyricLine, Lyrics, LyricsProvider, LyricsRequest,
-    TranslatedLyrics,
+    http::{agent, USER_AGENT},
+    matcher, plain_of, LyricLine, Lyrics, LyricsProvider, LyricsRequest, TranslatedLyrics,
 };
 use crate::util::urlencode;
 
 const GENIUS_BASE: &str = "https://genius.com/api";
-
-const GENIUS_USER_AGENT: &str = concat!(
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 ",
-    "(KHTML, like Gecko) Chrome/126.0 Safari/537.36 goosemusic/0.1"
-);
 
 pub(super) fn fetch(req: &LyricsRequest) -> Result<Option<Lyrics>> {
     let query = format!("{} {}", req.artist.trim(), req.title.trim());
@@ -271,7 +266,7 @@ fn get_json<T: serde::de::DeserializeOwned>(url: &str, what: &str) -> Result<Opt
     match agent()
         .get(url)
         .header("Accept", "application/json")
-        .header("User-Agent", GENIUS_USER_AGENT)
+        .header("User-Agent", USER_AGENT)
         .call()
     {
         Ok(mut r) => {
@@ -288,7 +283,7 @@ fn get_html(url: &str, what: &str) -> Result<Option<String>> {
     match agent()
         .get(url)
         .header("Accept", "text/html")
-        .header("User-Agent", GENIUS_USER_AGENT)
+        .header("User-Agent", USER_AGENT)
         .call()
     {
         Ok(mut r) => {
