@@ -195,6 +195,10 @@ pub const STRINGS: Strings = Strings {
     custom_provider_required: "Заповніть обов'язкові поля.",
     custom_provider_saved: "Провайдера збережено",
     custom_provider_deleted: "Провайдера видалено",
+    capabilities_lbl: "Можливості",
+    cap_stream: "Стримінг",
+    cap_radio: "Радіо",
+    cap_server_playlists: "Плейлисти сервера",
 
     find_in_list: "Знайти у списку…",
     scope_songs: "Треки",

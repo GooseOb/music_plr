@@ -192,6 +192,10 @@ pub const STRINGS: Strings = Strings {
     custom_provider_required: "आवश्यक फ़ील्ड भरें।",
     custom_provider_saved: "प्रदाता सहेजा गया",
     custom_provider_deleted: "प्रदाता हटाया गया",
+    capabilities_lbl: "क्षमताएँ",
+    cap_stream: "स्ट्रीमिंग",
+    cap_radio: "रेडियो",
+    cap_server_playlists: "सर्वर प्लेलिस्ट",
 
     find_in_list: "सूची में खोजें…",
     scope_songs: "गाने",

@@ -24,7 +24,7 @@ use crate::{
     deps::DepKind,
     i18n::{Direction, Language},
     load_state::LoadState,
-    providers::ProviderId,
+    providers::{ProviderCaps, ProviderId},
     theme::{self, AppTheme},
 };
 
@@ -341,6 +341,29 @@ fn provider_checkbox(
     }
 }
 
+/// One compact line listing what a provider offers, in a fixed order.
+/// Capabilities the provider (or the missing tooling) can't serve are left
+/// out, so the line reflects what the app can actually do with it.
+fn capability_summary(player: &MusicPlayer, caps: ProviderCaps) -> Element<'_, Message, AppTheme> {
+    let tr = player.strings;
+    let labels: Vec<&'static str> = [
+        (caps.search, tr.search),
+        (caps.stream, tr.cap_stream),
+        (caps.download, tr.downloads),
+        (caps.radio, tr.cap_radio),
+        (caps.home, tr.home),
+        (caps.artist_header, tr.artists),
+        (caps.server_playlists, tr.cap_server_playlists),
+    ]
+    .into_iter()
+    .filter_map(|(available, label)| available.then_some(label))
+    .collect();
+    text(format!("{}: {}", tr.capabilities_lbl, labels.join(" · ")))
+        .size(theme::TEXT_SIZE_XS)
+        .style(fg_secondary())
+        .into()
+}
+
 /// The built-in providers' checkboxes plus the custom-provider list.
 fn providers_section(
     player: &MusicPlayer,
@@ -352,9 +375,17 @@ fn providers_section(
             .iter()
             .copied()
             .filter(|provider| *provider != ProviderId::Local)
-            .map(|provider| provider_checkbox(player, provider, true)),
+            .map(|provider| {
+                Column::with_children([
+                    provider_checkbox(player, provider, true),
+                    capability_summary(player, provider.capabilities()),
+                ])
+                .spacing(theme::SPACING_2XS)
+                .align_x(dir.align())
+                .into()
+            }),
     )
-    .spacing(theme::SPACING_SM)
+    .spacing(theme::SPACING_MD)
     .align_x(dir.align());
 
     [
@@ -493,6 +524,23 @@ fn custom_provider_form<'a>(
         .into()
 }
 
+fn custom_provider_kind_picker<'a>(
+    player: &'a MusicPlayer,
+    form: &'a CustomProviderForm,
+) -> Element<'a, Message, AppTheme> {
+    picker(
+        player.strings.direction,
+        player.strings.custom_provider_type_lbl,
+        CustomProviderKind::ALL.iter().map(|&kind| {
+            (
+                kind.label(),
+                form.draft.kind() == kind,
+                Message::CustomProviderKindChanged(kind),
+            )
+        }),
+    )
+}
+
 fn custom_provider_fields<'a>(
     player: &'a MusicPlayer,
     form: &'a CustomProviderForm,
@@ -506,21 +554,13 @@ fn custom_provider_fields<'a>(
         "",
         |value| Message::CustomProviderField(CustomProviderField::Name, value),
     );
-    let kind = picker(
-        dir,
-        tr.custom_provider_type_lbl,
-        CustomProviderKind::ALL.iter().map(|&kind| {
-            (
-                kind.label(),
-                form.draft.kind() == kind,
-                Message::CustomProviderKindChanged(kind),
-            )
-        }),
-    );
+    let kind = custom_provider_kind_picker(player, form);
+    let capabilities = capability_summary(player, form.draft.kind().capabilities());
     match &form.draft.connection {
         CustomProviderConnection::S3(s3) => vec![
             name,
             kind,
+            capabilities,
             text_input_row(
                 dir,
                 tr.custom_provider_bucket_lbl,
@@ -571,6 +611,7 @@ fn custom_provider_fields<'a>(
             vec![
                 name,
                 kind,
+                capabilities,
                 text_input_row(
                     dir,
                     tr.custom_provider_url_lbl,

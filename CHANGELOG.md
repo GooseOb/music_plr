@@ -10,6 +10,8 @@ auto-generated compare link below it.
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-23
+
 ### Added
 
 - Support storing playlists in S3-compatible storages.
@@ -260,7 +262,8 @@ Plain lyrics are now displayed correctly when synced lyrics are not available.
 - Clearing non-main list selection on navigation.
 - Selection ordering; Ctrl+C / Ctrl+V now respect the hovered list.
 
-[Unreleased]: https://github.com/GooseOb/music_plr/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/GooseOb/music_plr/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/GooseOb/music_plr/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/GooseOb/music_plr/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/GooseOb/music_plr/compare/v1.5.6...v1.6.0
 [1.5.6]: https://github.com/GooseOb/music_plr/compare/v1.5.5...v1.5.6

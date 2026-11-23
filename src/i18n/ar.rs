@@ -190,6 +190,10 @@ pub const STRINGS: Strings = Strings {
     custom_provider_required: "املأ الحقول المطلوبة.",
     custom_provider_saved: "تم حفظ المزوّد",
     custom_provider_deleted: "تم حذف المزوّد",
+    capabilities_lbl: "الإمكانات",
+    cap_stream: "البث",
+    cap_radio: "الراديو",
+    cap_server_playlists: "قوائم تشغيل الخادم",
 
     find_in_list: "بحث في القائمة…",
     scope_songs: "أغاني",

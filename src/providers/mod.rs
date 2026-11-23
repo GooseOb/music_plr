@@ -348,6 +348,40 @@ pub struct ProviderCaps {
     pub artist_header: bool,
 }
 
+impl ProviderCaps {
+    pub const NONE: ProviderCaps = ProviderCaps {
+        search: false,
+        stream: false,
+        download: false,
+        radio: false,
+        server_playlists: false,
+        home: false,
+        artist_header: false,
+    };
+}
+
+impl CustomProviderKind {
+    /// What a configured provider of this backend offers. S3 stores playlists
+    /// only; Subsonic and Jellyfin support every capability.
+    pub fn capabilities(self) -> ProviderCaps {
+        match self {
+            CustomProviderKind::S3 => ProviderCaps {
+                server_playlists: true,
+                ..ProviderCaps::NONE
+            },
+            CustomProviderKind::Subsonic | CustomProviderKind::Jellyfin => ProviderCaps {
+                search: true,
+                stream: true,
+                download: true,
+                radio: true,
+                server_playlists: true,
+                home: true,
+                artist_header: true,
+            },
+        }
+    }
+}
+
 impl ProviderId {
     /// Whether this provider is switched on. A disabled provider is hidden
     /// from every picker, submenu and server-playlist group, while tracks that
@@ -554,29 +588,11 @@ impl ProviderId {
                 home: false,
                 artist_header: false,
             },
-            ProviderId::Custom(CustomProviderKind::S3, id) => {
-                let configured =
-                    crate::data::custom_providers::contains(CustomProviderKind::S3, id);
-                ProviderCaps {
-                    search: false,
-                    stream: false,
-                    download: false,
-                    radio: false,
-                    server_playlists: configured,
-                    home: false,
-                    artist_header: false,
-                }
-            }
             ProviderId::Custom(kind, id) => {
-                let configured = crate::data::custom_providers::contains(kind, id);
-                ProviderCaps {
-                    search: configured,
-                    stream: configured,
-                    download: configured,
-                    radio: configured,
-                    server_playlists: configured,
-                    home: configured,
-                    artist_header: configured,
+                if crate::data::custom_providers::contains(kind, id) {
+                    kind.capabilities()
+                } else {
+                    ProviderCaps::NONE
                 }
             }
         }

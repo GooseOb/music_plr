@@ -204,6 +204,10 @@ pub const STRINGS: Strings = Strings {
     custom_provider_required: "必須項目を入力してください。",
     custom_provider_saved: "プロバイダーを保存しました",
     custom_provider_deleted: "プロバイダーを削除しました",
+    capabilities_lbl: "機能",
+    cap_stream: "ストリーミング",
+    cap_radio: "ラジオ",
+    cap_server_playlists: "サーバーのプレイリスト",
 
     find_in_list: "リスト内を検索…",
     scope_songs: "曲",

@@ -192,6 +192,10 @@ pub const STRINGS: Strings = Strings {
     custom_provider_required: "Completa los campos obligatorios.",
     custom_provider_saved: "Proveedor guardado",
     custom_provider_deleted: "Proveedor eliminado",
+    capabilities_lbl: "Capacidades",
+    cap_stream: "Streaming",
+    cap_radio: "Radio",
+    cap_server_playlists: "Listas del servidor",
 
     find_in_list: "Buscar en la lista…",
     scope_songs: "Canciones",

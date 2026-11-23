@@ -204,6 +204,10 @@ pub const STRINGS: Strings = Strings {
     custom_provider_required: "请填写必填字段。",
     custom_provider_saved: "提供商已保存",
     custom_provider_deleted: "提供商已删除",
+    capabilities_lbl: "功能",
+    cap_stream: "流媒体",
+    cap_radio: "电台",
+    cap_server_playlists: "服务器播放列表",
 
     find_in_list: "在列表中查找…",
     scope_songs: "歌曲",

@@ -296,6 +296,10 @@ pub struct Strings {
     pub custom_provider_required: &'static str,
     pub custom_provider_saved: &'static str,
     pub custom_provider_deleted: &'static str,
+    pub capabilities_lbl: &'static str,
+    pub cap_stream: &'static str,
+    pub cap_radio: &'static str,
+    pub cap_server_playlists: &'static str,
 
     pub find_in_list: &'static str,
     pub scope_songs: &'static str,
