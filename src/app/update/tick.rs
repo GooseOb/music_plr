@@ -485,8 +485,7 @@ impl MusicPlayer {
             }
             BackendResult::DownloadError(provider, error) => {
                 error!("Download error: {}", error.detail);
-                let msg = self.strings.error_reason_on(provider, &error);
-                self.notify_error(msg);
+                self.notify_error(self.strings.error_reason_on(provider, &error));
                 Task::none()
             }
             BackendResult::PlayerClientEvent(event) => {
@@ -507,8 +506,7 @@ impl MusicPlayer {
                     edit.finding = None;
                 }
                 warn!("Edit track lookup failed: {}", error.detail);
-                let msg = self.strings.error_reason_on(provider, &error);
-                self.notify_error(msg);
+                self.notify_error(self.strings.error_reason_on(provider, &error));
                 Task::none()
             }
             BackendResult::ManualSearchResults { rid, results } => {
@@ -532,12 +530,11 @@ impl MusicPlayer {
             } => {
                 warn!("Resolving \"{title}\" failed: {}", message.detail);
                 let reason = self.strings.error_reason(&message).to_string();
-                let msg = (self.strings.failed_resolve_on)(
+                self.notify_error((self.strings.failed_resolve_on)(
                     &title,
                     &self.strings.provider(provider),
                     &reason,
-                );
-                self.notify_error(msg);
+                ));
                 Task::none()
             }
             BackendResult::ThumbnailDownloaded(provider, id) => {
@@ -652,14 +649,12 @@ impl MusicPlayer {
                 }
             }
         }
-        let msg = (self.strings.search_failed)(&reason);
-        self.notify_error(msg);
+        self.notify_error((self.strings.search_failed)(&reason));
     }
 
     fn process_download_complete(&mut self, track: crate::types::Track) {
         let path = track.local_path().unwrap_or_default();
-        let msg = (self.strings.download_complete)(&path);
-        self.notify(msg);
+        self.notify((self.strings.download_complete)(&path));
         self.thumbnail_index
             .mark_downloaded(track.source, track.primary_id());
         let panes: Vec<PaneId> = self.pane_ids_unsorted();
@@ -908,7 +903,7 @@ impl MusicPlayer {
         // so the sidebar row agrees with what the page shows.
         let server_playlist = match &self.pane(pane).nav_history[idx].kind {
             ViewKind::PlaylistView(reference)
-                if crate::providers::playlists_supported(reference.provider) =>
+                if reference.provider.capabilities().server_playlists =>
             {
                 Some(crate::data::server_playlists::ServerPlaylistId {
                     provider: reference.provider,
@@ -934,8 +929,7 @@ impl MusicPlayer {
         if idx < self.playlists.playlists.len() {
             let count = self.playlists.insert_tracks_at(idx, tracks.iter(), PREPEND);
             Self::seed_tracks_thumbnails(&mut self.thumbnail_index, tracks);
-            let msg = (self.strings.added_to)(count, name);
-            self.notify(msg);
+            self.notify((self.strings.added_to)(count, name));
         }
     }
 
@@ -990,9 +984,10 @@ impl MusicPlayer {
                 self.spawn_download_thread_for(provider, original);
             }
         } else {
-            let msg =
-                (self.strings.could_not_find_on)(&original.title, &self.strings.provider(provider));
-            self.notify_error(msg);
+            self.notify_error((self.strings.could_not_find_on)(
+                &original.title,
+                &self.strings.provider(provider),
+            ));
         }
     }
 

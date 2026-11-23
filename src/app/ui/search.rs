@@ -365,15 +365,27 @@ pub(super) fn view_server_playlist<'a>(
         reference.name.clone(),
     ));
 
+    let thumbnail = if reference.provider.playlists_store_snapshots() {
+        let tracks = player.view_tracks_in(pane);
+        let cover = std::array::from_fn(|index| {
+            tracks
+                .get(index)
+                .and_then(|track| player.thumbnail_index.get(track.source, track.primary_id()))
+        });
+        PageThumbnail::Mosaic(cover)
+    } else {
+        PageThumbnail::Single(
+            player
+                .thumbnail_index
+                .get(reference.provider, &reference.id),
+        )
+    };
+
     view_track_page(
         player,
         pane,
         TrackPage {
-            thumbnail: PageThumbnail::Single(
-                player
-                    .thumbnail_index
-                    .get(reference.provider, &reference.id),
-            ),
+            thumbnail,
             title: PageTitle::Rename {
                 placeholder: &reference.name,
                 value: &reference.name,

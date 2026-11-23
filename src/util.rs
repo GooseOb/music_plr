@@ -417,6 +417,22 @@ pub fn remap_reinserted_indices(selection: &mut [usize], indices: &[usize]) {
     }
 }
 
+/// A provider id made safe to use as one path segment (stream-cache files,
+/// download names). Everything outside the portable filename alphabet is
+/// percent-encoded, so object keys containing `/`, `..`, `:` or control
+/// characters cannot escape their directory.
+pub fn file_segment(id: &str) -> String {
+    let mut out = String::with_capacity(id.len());
+    for byte in id.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.') {
+            out.push(byte as char);
+        } else {
+            let _ = std::write!(out, "%{byte:02X}");
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -734,6 +750,14 @@ mod tests {
     #[test]
     fn urlencode_keeps_unreserved() {
         assert_eq!(urlencode("abc-XYZ_0189.~"), "abc-XYZ_0189.~");
+    }
+
+    #[test]
+    fn file_segments_cannot_escape_a_directory() {
+        assert_eq!(file_segment("a/b/../c"), "a%2Fb%2F..%2Fc");
+        assert_eq!(file_segment("plain-_.9"), "plain-_.9");
+        assert_eq!(file_segment("naïve"), "na%C3%AFve");
+        assert_eq!(file_segment("a:b"), "a%3Ab");
     }
 
     #[test]

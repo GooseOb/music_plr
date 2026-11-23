@@ -627,6 +627,18 @@ impl crate::app::MusicPlayer {
                 self.handle_custom_provider_kind(kind);
                 Task::none()
             }
+            Message::CustomProviderPathStyle(path_style) => {
+                if let Some(form) = &mut self.custom_provider_form {
+                    form.set_path_style(path_style);
+                }
+                Task::none()
+            }
+            Message::CustomProviderPublicBucket(public_bucket) => {
+                if let Some(form) = &mut self.custom_provider_form {
+                    form.set_public_bucket(public_bucket);
+                }
+                Task::none()
+            }
             Message::CustomProviderTest => {
                 self.handle_custom_provider_test();
                 Task::none()

@@ -40,7 +40,7 @@ pub(super) fn view_main_content(
                 browse_meta(&r.meta.badge, &r.meta.date),
             ),
             ViewKind::PlaylistView(r) => {
-                if crate::providers::playlists_supported(r.provider) {
+                if r.provider.capabilities().server_playlists {
                     search::view_server_playlist(player, pane, r)
                 } else {
                     search::view_browse(player, pane, r.provider, &r.name, &r.id, "".into())

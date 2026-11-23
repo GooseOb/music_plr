@@ -202,7 +202,7 @@ impl MusicPlayer {
         let id = form
             .id
             .unwrap_or_else(|| self.custom_providers.allocate_id());
-        let kind = form.draft.kind;
+        let kind = form.draft.kind();
         // An edit that switches the backend re-identifies the server, so the
         // state filed under the old identity has to go with it.
         let previous_kind = form.id.and_then(|id| {
@@ -210,7 +210,7 @@ impl MusicPlayer {
                 .providers
                 .iter()
                 .find(|provider| provider.id == id)
-                .map(|provider| provider.kind)
+                .map(custom_providers::CustomProvider::kind)
         });
         self.custom_providers.upsert(form.into_provider(id));
         self.custom_providers.save();
@@ -244,7 +244,7 @@ impl MusicPlayer {
             self.custom_provider_form = None;
         }
         // Its playlists went away with the server, and its id is never reused.
-        self.forget_provider_data(crate::providers::ProviderId::Custom(removed.kind, id));
+        self.forget_provider_data(crate::providers::ProviderId::Custom(removed.kind(), id));
         self.reconcile_provider_refs();
         self.notify(self.strings.custom_provider_deleted);
     }
@@ -257,6 +257,7 @@ impl MusicPlayer {
             .entries
             .retain(|entry| entry.provider != provider);
         self.server_playlists.save();
+        crate::providers::forget_server_playlists(provider);
         self.home_cache.forget_provider(provider);
     }
 
@@ -265,26 +266,21 @@ impl MusicPlayer {
         let Some(form) = &mut self.custom_provider_form else {
             return;
         };
-        if form.draft.server_url.trim().is_empty() || form.draft.username.trim().is_empty() {
+        if form.validated().is_none() {
             self.notify_error(self.strings.custom_provider_required);
             return;
         }
-        let kind = form.draft.kind;
-        let server_url = form.draft.server_url.trim().to_string();
-        let username = form.draft.username.trim().to_string();
-        let password = form.draft.password.clone();
+        let provider = form.draft.clone();
         form.test = ConnectionTest::Testing;
         form.test_rid = rid;
 
         let tx = self.result_tx.clone();
         let strings = self.strings;
         std::thread::spawn(move || {
-            let result =
-                crate::providers::test_custom_provider(kind, &server_url, &username, &password)
-                    .map_err(|error| {
-                        let error = crate::providers::ProviderError::from(error);
-                        strings.error_reason(&error).to_string()
-                    });
+            let result = crate::providers::test_custom_provider(&provider).map_err(|error| {
+                let error = crate::providers::ProviderError::from(error);
+                strings.error_reason(&error).to_string()
+            });
             let _ = tx.send(BackendResult::CustomProviderTested { rid, result });
         });
     }
@@ -366,7 +362,7 @@ impl MusicPlayer {
         // The config is the source of truth here; the static lists already
         // filter through the mirror, but checking both keeps this correct no
         // matter when the mirror was last synced.
-        let off = self.config.disabled_providers.clone();
+        let off = &self.config.disabled_providers;
         let default_caps = self.config.default_provider.capabilities();
         let default_ok = default_caps.stream
             && default_caps.download

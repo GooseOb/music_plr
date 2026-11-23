@@ -18,7 +18,6 @@ use crate::{
         server_playlists::ServerPlaylistId,
         JsonStore,
     },
-    providers,
 };
 
 impl MusicPlayer {
@@ -215,7 +214,7 @@ impl MusicPlayer {
             || match &self.view_data_in(pane).kind {
                 ViewKind::Playlist(_) => true,
                 ViewKind::PlaylistView(reference) => {
-                    providers::playlists_supported(reference.provider)
+                    reference.provider.capabilities().server_playlists
                 }
                 _ => false,
             };
@@ -354,9 +353,10 @@ impl MusicPlayer {
         let source = pos.pane;
         let indices = self.dragged_indices(source).to_vec();
 
-        // Dropped on the server-playlist sidebar: append to the playlist on
-        // its server. The write is a background call, so the row's highlight
-        // (not an insertion bar) is the whole drop feedback.
+        // Dropped on the server-playlist sidebar: add to the playlist on its
+        // server (snapshot playlists prepend, id-based ones append). The write
+        // is a background call, so the row's highlight (not an insertion bar)
+        // is the whole drop feedback.
         if let Some(DropTarget::ServerPlaylist(target)) = self.drag.drop_target.clone() {
             let tracks = self.get_tracks_at(&indices, source);
             return self.add_tracks_to_server_playlist(target, tracks);
@@ -371,8 +371,7 @@ impl MusicPlayer {
                 .playlists
                 .insert_tracks_at(playlist_idx, tracks.iter(), PREPEND);
             let name = &self.playlists.playlists[playlist_idx].name;
-            let msg = (self.strings.added_to)(count, name);
-            self.notify(msg);
+            self.notify((self.strings.added_to)(count, name));
             return Task::none();
         }
 
@@ -389,7 +388,7 @@ impl MusicPlayer {
         } else if drop.pane == QUEUE_PANE_ID {
             self.copy_to_queue(source, &indices, drop_idx);
         } else if is_main_pane(drop.pane) {
-            self.copy_from_queue(drop.pane, source, &indices, drop_idx);
+            return self.copy_into_track_list(drop.pane, source, &indices, drop_idx);
         }
         Task::none()
     }
@@ -414,19 +413,34 @@ impl MusicPlayer {
         let inserted = tracks.len();
         self.session.queue.tracks.splice(clamped..clamped, tracks);
         self.save_session();
-        let msg = (self.strings.added_to)(inserted, self.strings.queue);
-        self.notify(msg);
+        self.notify((self.strings.added_to)(inserted, self.strings.queue));
     }
 
     /// Insert tracks from `source` into the target pane's playlist at the
-    /// given drop index. `indices` are positions in the source list.
-    fn copy_from_queue(
+    /// given drop index. Local playlists take the rows directly; a playlist
+    /// that lives on a server is written optimistically (S3 keeps the exact
+    /// position, id-based servers append). `indices` are positions in the
+    /// source list.
+    fn copy_into_track_list(
         &mut self,
         target_pane: PaneId,
         source: PaneId,
         indices: &[usize],
         drop_idx: usize,
-    ) {
+    ) -> Task<Message> {
+        if let ViewKind::PlaylistView(reference) = &self.view_data_in(target_pane).kind {
+            if reference.provider.capabilities().server_playlists {
+                let target = ServerPlaylistId {
+                    provider: reference.provider,
+                    id: reference.id.clone(),
+                };
+                let tracks: Vec<Track> = indices
+                    .iter()
+                    .filter_map(|&i| self.get_track_at(TrackPos::new(i, source)))
+                    .collect();
+                return self.insert_tracks_into_server_playlist(target, tracks, drop_idx);
+            }
+        }
         let active = match &self.view_data_in(target_pane).kind {
             ViewKind::Playlist(p) => Some(p.index),
             _ => None,
@@ -435,10 +449,10 @@ impl MusicPlayer {
             if !self.view_data_in(target_pane).is_search_like() {
                 self.notify(self.strings.select_playlist_drop);
             }
-            return;
+            return Task::none();
         };
         if sp >= self.playlists.playlists.len() {
-            return;
+            return Task::none();
         }
 
         let clamped = drop_idx.min(self.playlists.playlists[sp].tracks.len());
@@ -449,9 +463,12 @@ impl MusicPlayer {
         let inserted = self.playlists.insert_tracks_at(sp, tracks.iter(), clamped);
         self.save_session();
         if inserted > 0 {
-            let msg = (self.strings.added_to)(inserted, &self.playlists.playlists[sp].name);
-            self.notify(msg);
+            self.notify((self.strings.added_to)(
+                inserted,
+                &self.playlists.playlists[sp].name,
+            ));
         }
+        Task::none()
     }
 
     /// Handle reordering within the same list. The selection is always
@@ -832,5 +849,79 @@ mod tests {
         assert_eq!(nearest_row_index(&rows, ROW * 2.4), Some(2));
         assert_eq!(nearest_row_index(&rows, ROW), Some(0));
         assert_eq!(nearest_row_index(&[], 0.0), None);
+    }
+
+    #[test]
+    fn dropping_onto_a_server_playlist_page_inserts_at_the_drop_index() {
+        use std::sync::Arc;
+
+        use crate::{
+            app::{
+                pane::{Pane, SplitNode},
+                view_data::PlaylistRef,
+            },
+            data::custom_providers::CustomProviderKind,
+        };
+
+        let mut p = MusicPlayer::new_with(config::Config::default());
+        let _guard = crate::data::custom_providers::test_registry();
+        let source_track = Track::from_provider(
+            ProviderId::YouTube,
+            "source".into(),
+            "https://example.com/source".into(),
+            String::from("Source"),
+            "Artist",
+            10,
+            String::new(),
+            None,
+            None,
+        );
+        let target_track = |id: &str| {
+            Track::from_provider(
+                ProviderId::YouTube,
+                id.into(),
+                format!("https://example.com/{id}"),
+                format!("Track {id}"),
+                "Artist",
+                10,
+                String::new(),
+                None,
+                None,
+            )
+        };
+        let mut source =
+            ViewData::new_search(String::new(), ProviderId::YouTube, SearchScope::Songs);
+        source.set_tracks(vec![source_track]);
+        let mut target = ViewData {
+            kind: ViewKind::PlaylistView(PlaylistRef {
+                id: "pl".into(),
+                name: "S3".into(),
+                provider: ProviderId::Custom(CustomProviderKind::S3, 8),
+                thumbnail: String::new(),
+                url: String::new(),
+            }),
+            ..Default::default()
+        };
+        target.set_tracks(vec![target_track("a"), target_track("b")]);
+        let mut source_pane = Pane::new(0);
+        source_pane.nav_history = vec![Arc::new(source)];
+        let mut target_pane = Pane::new(1);
+        target_pane.nav_history = vec![Arc::new(target)];
+        p.session.panes = std::collections::HashMap::from([(0, source_pane), (1, target_pane)]);
+        p.session.root = SplitNode::Leaf(0);
+        p.session.focused = 1;
+        p.next_pane_id = 2;
+
+        p.drag.dragged = Some((0, vec![0]));
+        p.drag.drop_target = Some(DropTarget::Track(TrackPos::new(1, 1)));
+        let _ = p.handle_track_drop(TrackPos::new(0, 0));
+
+        let titles: Vec<&str> = p
+            .view_data_in(1)
+            .tracks()
+            .iter()
+            .map(|track| track.title.as_str())
+            .collect();
+        assert_eq!(titles, ["Track a", "Source", "Track b"]);
     }
 }

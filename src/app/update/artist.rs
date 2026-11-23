@@ -58,8 +58,7 @@ impl MusicPlayer {
         );
         let rid = self.request_ids.next();
         self.view_data_in_mut(pane).request_id = rid;
-        let msg = (self.strings.opening_artist)(name);
-        self.notify(msg);
+        self.notify((self.strings.opening_artist)(name));
 
         // Source: everything it can serve. YouTube answers in one request;
         // SoundCloud runs all five endpoints concurrently.
@@ -308,8 +307,7 @@ impl MusicPlayer {
         let dedup = Some((rid, provider));
         if self.artist_error_dedup != dedup {
             self.artist_error_dedup = dedup;
-            let msg = self.strings.error_reason_on(provider, error);
-            self.notify_error(msg);
+            self.notify_error(self.strings.error_reason_on(provider, error));
         }
     }
 

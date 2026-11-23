@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use iced::Task;
 
-use super::{BackendResult, Message, MusicPlayer, TrackPos, ViewData};
+use super::{BackendResult, Message, MusicPlayer, TrackPos, ViewData, PREPEND};
 use crate::{
     app::{
         pane::PaneId, Dialog, PendingPlaylistWrite, PendingServerRename, ServerPlaylistChange,
@@ -29,15 +29,13 @@ use crate::{
     types::Track,
 };
 
+/// Rows one write put on one pane's page: the index each took and the track it
+/// was, so a failed write can find them again after the page moved.
+type AddedRows = Vec<(PaneId, Vec<(usize, Track)>)>;
+
 /// How long an index request may stay unanswered before the guard lets a new
 /// one through. Every provider call times out well inside this, so an entry
 /// that old belongs to a thread that will never report back.
-/// Whether the sidebar shows a server-playlist group for `provider`: a
-/// configured custom server that is switched on in Settings.
-fn server_playlist_group(provider: ProviderId) -> bool {
-    provider.enabled() && providers::playlists_supported(provider) && provider.capabilities().search
-}
-
 const INDEX_REQUEST_TIMEOUT: Duration = Duration::from_mins(2);
 
 /// The quiet period after the last rename keystroke before the write goes
@@ -51,7 +49,7 @@ impl MusicPlayer {
     pub fn server_playlist_providers() -> Vec<ProviderId> {
         ProviderId::all()
             .into_iter()
-            .filter(|provider| server_playlist_group(*provider))
+            .filter(|provider| provider.capabilities().server_playlists)
             .collect()
     }
 
@@ -209,11 +207,12 @@ impl MusicPlayer {
             return Task::none();
         };
         let provider = reference.provider;
-        if !providers::playlists_supported(provider) {
+        if !provider.capabilities().server_playlists {
             return Task::none();
         }
         let id = reference.id.clone();
         let rid = self.request_ids.next();
+        providers::invalidate_server_playlist(provider, &id);
         let view = self.view_data_in_mut(pane);
         view.content = LoadState::Loading;
         view.request_id = rid;
@@ -238,36 +237,86 @@ impl MusicPlayer {
         Task::none()
     }
 
-    /// Append `tracks` to a server playlist. The sidebar count and every open
-    /// page update right away (no loading state); tracks without an id on that
-    /// server are reported as skipped, and a failed write rolls both back.
+    /// Add `tracks` to a server playlist. Snapshot playlists put them at the
+    /// beginning, like an add to a local playlist; id-based servers append,
+    /// since their write API has no insertion parameter. The sidebar count and
+    /// every open page update right away (no loading state); tracks without an
+    /// id on that server are reported as skipped, and a failed write rolls
+    /// both back.
     pub fn add_tracks_to_server_playlist(
         &mut self,
         target: ServerPlaylistId,
         tracks: Vec<Track>,
     ) -> Task<Message> {
+        self.write_tracks_to_server_playlist(target, tracks, PREPEND)
+    }
+
+    /// Add `tracks` at `index` in a server playlist. Snapshot playlists (S3)
+    /// keep the exact position; id-based servers append, since their write
+    /// API has no insertion parameter.
+    pub fn insert_tracks_into_server_playlist(
+        &mut self,
+        target: ServerPlaylistId,
+        tracks: Vec<Track>,
+        index: usize,
+    ) -> Task<Message> {
+        self.write_tracks_to_server_playlist(target, tracks, index)
+    }
+
+    fn write_tracks_to_server_playlist(
+        &mut self,
+        target: ServerPlaylistId,
+        tracks: Vec<Track>,
+        at: usize,
+    ) -> Task<Message> {
         if tracks.is_empty() {
             return Task::none();
         }
         let provider = target.provider;
-        // Only the tracks that carry an id on this server can land, so those
-        // are what the pages show right away; the provider repeats the same
-        // filter and reports the rest as skipped once the write lands.
-        let added: Vec<Track> = tracks
-            .iter()
-            .filter(|track| track.provider_id(provider).is_some_and(|id| !id.is_empty()))
-            .cloned()
-            .collect();
+        let snapshots = provider.playlists_store_snapshots();
+        // Only the tracks that can land are shown right away; the provider
+        // repeats the same filter and reports the rest as skipped once the
+        // write lands. A snapshot playlist (S3) stores whole tracks, so every
+        // track fits, but it skips the ones it already holds — the optimistic
+        // rows have to skip those too or the page would show rows the bucket
+        // never stored.
+        let added: Vec<Track> = if snapshots {
+            let known = providers::snapshot_playlist_tracks(provider, &target.id);
+            tracks
+                .iter()
+                .filter(|track| {
+                    !known
+                        .iter()
+                        .any(|existing| existing.cache_key() == track.cache_key())
+                })
+                .cloned()
+                .collect()
+        } else {
+            tracks
+                .iter()
+                .filter(|track| track.provider_id(provider).is_some_and(|id| !id.is_empty()))
+                .cloned()
+                .collect()
+        };
         if added.is_empty() {
-            let message = (self.strings.skipped_not_on_server)(tracks.len());
-            self.notify_error(message);
+            if snapshots {
+                let name = self.server_playlist_name(&target);
+                self.notify((self.strings.added_to)(0, &name));
+            } else {
+                self.notify_error((self.strings.skipped_not_on_server)(tracks.len()));
+            }
             return Task::none();
         }
-        self.apply_added_tracks(&target, &added);
-        let undo = ServerPlaylistUndo::Added { tracks: added };
+        let (count, rows) = self.apply_inserted_tracks(&target, &added, snapshots.then_some(at));
+        let undo = ServerPlaylistUndo::Added { count, rows };
         let playlist_id = target.id.clone();
+        let request = if snapshots { added } else { tracks };
         self.spawn_playlist_write(target, Some(undo), move || {
-            let write = providers::add_to_playlist(provider, &playlist_id, &tracks)?;
+            let write = if snapshots {
+                providers::insert_into_playlist(provider, &playlist_id, at, &request)?
+            } else {
+                providers::add_to_playlist(provider, &playlist_id, &request)?
+            };
             Ok(ServerPlaylistChange::Added {
                 added: write.added,
                 skipped: write.skipped,
@@ -331,7 +380,7 @@ impl MusicPlayer {
             return;
         };
         let provider = reference.provider;
-        if !providers::playlists_supported(provider) {
+        if !provider.capabilities().server_playlists {
             return;
         }
         let target = ServerPlaylistId {
@@ -354,18 +403,40 @@ impl MusicPlayer {
         );
     }
 
-    /// Append `tracks` to the cached count and to every open page showing the
-    /// playlist, as if the server had already stored them.
-    fn apply_added_tracks(&mut self, target: &ServerPlaylistId, tracks: &[Track]) {
+    /// Put `tracks` at `index` (`None` appends) in every open page showing the
+    /// playlist, shifting the selection along with the rows that moved down.
+    fn apply_inserted_tracks(
+        &mut self,
+        target: &ServerPlaylistId,
+        tracks: &[Track],
+        index: Option<usize>,
+    ) -> (usize, AddedRows) {
         self.server_playlists
             .adjust_count(target, tracks.len().cast_signed());
         Self::seed_tracks_thumbnails(&mut self.thumbnail_index, tracks);
+        let mut rows = Vec::new();
         for pane in self.panes_showing(target) {
-            let Some(list) = self.view_data_in_mut(pane).tracks_mut() else {
+            let view = self.view_data_in_mut(pane);
+            let LoadState::Ready(list) = &mut view.content else {
                 continue;
             };
-            list.extend_from_slice(tracks);
+            let at = index.unwrap_or(list.len()).min(list.len());
+            list.splice(at..at, tracks.iter().cloned());
+            for selected in &mut view.selection {
+                if *selected >= at {
+                    *selected += tracks.len();
+                }
+            }
+            rows.push((
+                pane,
+                tracks
+                    .iter()
+                    .enumerate()
+                    .map(|(offset, track)| (at + offset, track.clone()))
+                    .collect(),
+            ));
         }
+        (tracks.len(), rows)
     }
 
     /// Drop `indices` from the cached count and from every open page showing
@@ -427,7 +498,9 @@ impl MusicPlayer {
     /// overlapped it keeps its own optimistic state.
     fn undo_playlist_write(&mut self, target: &ServerPlaylistId, undo: ServerPlaylistUndo) {
         match undo {
-            ServerPlaylistUndo::Added { tracks } => self.undo_added_tracks(target, &tracks),
+            ServerPlaylistUndo::Added { count, rows } => {
+                self.undo_added_tracks(target, count, &rows);
+            }
             ServerPlaylistUndo::Removed { count, rows } => {
                 self.undo_removed_rows(target, count, &rows);
             }
@@ -450,37 +523,43 @@ impl MusicPlayer {
         }
     }
 
-    /// Take back the rows an append put on every page showing the playlist.
-    fn undo_added_tracks(&mut self, target: &ServerPlaylistId, tracks: &[Track]) {
+    /// Take back the rows an add put on every page showing the playlist. The
+    /// recorded index is used while the row still matches; a row that moved
+    /// because the page changed under the write is found by identity instead,
+    /// so an overlapping removal keeps its own rows.
+    fn undo_added_tracks(&mut self, target: &ServerPlaylistId, count: usize, rows: &AddedRows) {
         self.server_playlists
-            .adjust_count(target, -(tracks.len().cast_signed()));
-        for pane in self.panes_showing(target) {
-            let view = self.view_data_in_mut(pane);
+            .adjust_count(target, -(count.cast_signed()));
+        for (pane, rows) in rows {
+            if !self.shows_playlist_in(*pane, target) {
+                continue;
+            }
+            let view = self.view_data_in_mut(*pane);
             let Some(list) = view.tracks_mut() else {
                 continue;
             };
-            let mut removed = Vec::with_capacity(tracks.len());
-            for track in tracks {
-                // The rows went on the end, so the last copy is the one this
-                // write added (a playlist may hold the same track twice).
-                if let Some(index) = list.iter().rposition(|row| row == track) {
-                    list.remove(index);
-                    removed.push(index);
+            let mut targets = Vec::with_capacity(rows.len());
+            for (index, track) in rows {
+                let at = if list.get(*index) == Some(track) {
+                    Some(*index)
+                } else {
+                    list.iter().position(|row| row == track)
+                };
+                if let Some(at) = at {
+                    if !targets.contains(&at) {
+                        targets.push(at);
+                    }
                 }
             }
-            removed.sort_unstable();
-            crate::util::remap_removed_indices(&mut view.selection, &removed);
+            targets.sort_unstable();
+            crate::util::remove_at(list, &targets);
+            crate::util::remap_removed_indices(&mut view.selection, &targets);
         }
     }
 
     /// Put the rows a failed removal took out back where they were, and shift
     /// the selection back with them.
-    fn undo_removed_rows(
-        &mut self,
-        target: &ServerPlaylistId,
-        count: usize,
-        rows: &[(PaneId, Vec<(usize, Track)>)],
-    ) {
+    fn undo_removed_rows(&mut self, target: &ServerPlaylistId, count: usize, rows: &AddedRows) {
         self.server_playlists
             .adjust_count(target, count.cast_signed());
         for pane in self.panes_showing(target) {
@@ -530,7 +609,7 @@ impl MusicPlayer {
     pub fn handle_server_playlist_rename(&mut self, pane: PaneId, name: &str) {
         let target = match &self.view_data_in(pane).kind {
             ViewKind::PlaylistView(reference)
-                if providers::playlists_supported(reference.provider)
+                if reference.provider.capabilities().server_playlists
                     && !name.trim().is_empty() =>
             {
                 ServerPlaylistId {
@@ -553,10 +632,16 @@ impl MusicPlayer {
                 pending.due = std::time::Instant::now() + RENAME_DEBOUNCE;
             })
             .is_some();
+
+        // The new name shows up in the sidebar and every open page header at
+        // once; a rejected rename puts the old one back.
+        let previous = self.server_playlist_name(&target);
+        self.server_playlists.rename(&target, name);
+        self.rename_server_playlist_views(&target, name);
+
         if !had_pending {
-            let previous = self.server_playlist_name(&target);
             self.pending_server_renames.insert(
-                target.clone(),
+                target,
                 PendingServerRename {
                     previous,
                     name: name.to_string(),
@@ -564,11 +649,6 @@ impl MusicPlayer {
                 },
             );
         }
-
-        // The new name shows up in the sidebar and every open page header at
-        // once; a rejected rename puts the old one back.
-        self.server_playlists.rename(&target, name);
-        self.rename_server_playlist_views(&target, name);
     }
 
     /// Send the renames whose quiet period has lapsed. Called from the tick,
@@ -743,10 +823,10 @@ impl MusicPlayer {
                 thumbnail,
             } => {
                 self.notify((self.strings.playlist_created)(&name));
-                // The server may have been deleted between the write and its
-                // reply; with no sidebar group to draw the row, the entry is
-                // dropped instead of lingering in the index.
-                if server_playlist_group(target.provider) {
+                // The server may have been deleted or switched off between the
+                // write and its reply; with no sidebar group to draw the row,
+                // the entry is dropped instead of lingering in the index.
+                if target.provider.enabled() && target.provider.capabilities().server_playlists {
                     self.server_playlists.insert(ServerPlaylistEntry::new(
                         target.provider,
                         crate::providers::ServerPlaylist {
@@ -826,43 +906,22 @@ fn shows_playlist(view: &ViewData, target: &ServerPlaylistId) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Mutex, MutexGuard};
-
     use crate::{
         app::{MusicPlayer, ViewData, ViewKind},
         data::{
             config,
-            custom_providers::{self, CustomProvider, CustomProviderKind},
+            custom_providers::{self, CustomProviderKind},
             server_playlists::{ServerPlaylistEntry, ServerPlaylistId},
         },
         providers::{ErrorKind, ProviderError, ServerPlaylist},
         types::Track,
     };
 
-    /// The created-playlist write checks the process-global registry, so only
-    /// this module's registry write may run at a time.
-    static REGISTRY: Mutex<()> = Mutex::new(());
-
-    fn lock() -> MutexGuard<'static, ()> {
-        REGISTRY
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
-    /// Trades the test server into the registry for the body's duration, then
+    /// Trades the test servers into the registry for the body's duration, then
     /// restores whatever was registered before it.
     fn with_test_server(body: impl FnOnce()) {
-        let remembered = custom_providers::all();
-        custom_providers::set_registry(&[CustomProvider {
-            id: 9,
-            name: "Test".into(),
-            kind: CustomProviderKind::Subsonic,
-            server_url: "https://example.com".into(),
-            username: String::new(),
-            password: String::new(),
-        }]);
+        let _guard = custom_providers::test_registry();
         body();
-        custom_providers::set_registry(&remembered);
     }
 
     fn provider() -> crate::providers::ProviderId {
@@ -890,12 +949,34 @@ mod tests {
         }
     }
 
+    fn s3_provider() -> crate::providers::ProviderId {
+        crate::providers::ProviderId::Custom(CustomProviderKind::S3, 8)
+    }
+
+    fn s3_target() -> ServerPlaylistId {
+        ServerPlaylistId {
+            provider: s3_provider(),
+            id: "pl".into(),
+        }
+    }
+
     /// A player whose single pane shows a server playlist holding `ids`.
     fn player_with_playlist(ids: &[&str]) -> MusicPlayer {
+        player_with_playlist_of(provider(), ids)
+    }
+
+    fn player_with_s3_playlist(ids: &[&str]) -> MusicPlayer {
+        player_with_playlist_of(s3_provider(), ids)
+    }
+
+    fn player_with_playlist_of(
+        provider: crate::providers::ProviderId,
+        ids: &[&str],
+    ) -> MusicPlayer {
         let mut p = MusicPlayer::new_with(config::Config::default());
         p.server_playlists.entries.clear();
         p.server_playlists.replace_provider(
-            provider(),
+            provider,
             &[ServerPlaylist {
                 id: "pl".into(),
                 name: "Server".into(),
@@ -907,7 +988,7 @@ mod tests {
             kind: ViewKind::PlaylistView(crate::app::view_data::PlaylistRef {
                 id: "pl".into(),
                 name: "Server".into(),
-                provider: provider(),
+                provider,
                 thumbnail: String::new(),
                 url: String::new(),
             }),
@@ -927,13 +1008,25 @@ mod tests {
     }
 
     fn count(p: &MusicPlayer) -> Option<usize> {
+        count_for(p, &target())
+    }
+
+    fn count_for(p: &MusicPlayer, target: &ServerPlaylistId) -> Option<usize> {
         p.server_playlists
-            .get(&target())
+            .get(target)
             .map(|entry| entry.track_count)
     }
 
     fn fail(p: &mut MusicPlayer) {
-        settle(p, Err(ProviderError::new(ErrorKind::Unavailable, "gone")));
+        fail_for(p, &target());
+    }
+
+    fn fail_for(p: &mut MusicPlayer, target: &ServerPlaylistId) {
+        settle_for(
+            p,
+            target,
+            Err(ProviderError::new(ErrorKind::Unavailable, "gone")),
+        );
     }
 
     /// Answer the newest write still in flight, the way the background thread
@@ -942,12 +1035,20 @@ mod tests {
         p: &mut MusicPlayer,
         result: Result<crate::app::ServerPlaylistChange, ProviderError>,
     ) {
+        settle_for(p, &target(), result);
+    }
+
+    fn settle_for(
+        p: &mut MusicPlayer,
+        target: &ServerPlaylistId,
+        result: Result<crate::app::ServerPlaylistChange, ProviderError>,
+    ) {
         let write_id = *p
             .server_playlist_writes
             .keys()
             .max()
             .expect("a write in flight");
-        let _ = p.apply_server_playlist_write(write_id, &target(), result);
+        let _ = p.apply_server_playlist_write(write_id, target, result);
     }
 
     #[test]
@@ -992,6 +1093,52 @@ mod tests {
     }
 
     #[test]
+    fn inserted_tracks_land_at_the_drop_position() {
+        let mut p = player_with_s3_playlist(&["a", "b"]);
+        let _guard = custom_providers::test_registry();
+        p.view_data_mut().selection = vec![1];
+        let _ = p.insert_tracks_into_server_playlist(s3_target(), vec![track("x")], 1);
+
+        assert_eq!(titles(&p), ["Track a", "Track x", "Track b"]);
+        assert_eq!(count_for(&p, &s3_target()), Some(3));
+        assert_eq!(p.view_data().selection, [2]);
+    }
+
+    #[test]
+    fn a_failed_insert_rolls_the_rows_and_selection_back() {
+        let mut p = player_with_s3_playlist(&["a", "b"]);
+        let _guard = custom_providers::test_registry();
+        p.view_data_mut().selection = vec![1];
+        let _ = p.insert_tracks_into_server_playlist(s3_target(), vec![track("x")], 1);
+        fail_for(&mut p, &s3_target());
+
+        assert_eq!(titles(&p), ["Track a", "Track b"]);
+        assert_eq!(count_for(&p, &s3_target()), Some(2));
+        assert_eq!(p.view_data().selection, [1]);
+    }
+
+    #[test]
+    fn adding_to_a_snapshot_playlist_prepends() {
+        let mut p = player_with_s3_playlist(&["a", "b"]);
+        let _guard = custom_providers::test_registry();
+        let _ = p.add_tracks_to_server_playlist(s3_target(), vec![track("x")]);
+
+        assert_eq!(titles(&p), ["Track x", "Track a", "Track b"]);
+        assert_eq!(count_for(&p, &s3_target()), Some(3));
+    }
+
+    #[test]
+    fn pasting_into_a_server_playlist_prepends_the_clipboard() {
+        let mut p = player_with_s3_playlist(&["a", "b"]);
+        let _guard = custom_providers::test_registry();
+        p.clipboard = vec![track("x")];
+        let _ = p.handle_paste_clipboard();
+
+        assert_eq!(titles(&p), ["Track x", "Track a", "Track b"]);
+        assert_eq!(count_for(&p, &s3_target()), Some(3));
+    }
+
+    #[test]
     fn a_dropped_server_playlist_becomes_a_local_playlist() {
         use crate::app::interaction::{DropTarget, Pressed, PressedDrag};
 
@@ -1015,7 +1162,6 @@ mod tests {
 
     #[test]
     fn a_created_playlist_lands_in_the_index_with_its_count() {
-        let _guard = lock();
         let mut p = player_with_playlist(&["a"]);
         with_test_server(|| {
             let created = ServerPlaylistId {
@@ -1065,6 +1211,7 @@ mod tests {
     #[test]
     fn removed_rows_leave_the_page_at_once_and_come_back_on_failure() {
         let mut p = player_with_playlist(&["a", "b", "c"]);
+        let _guard = custom_providers::test_registry();
         p.view_data_mut().selection = vec![0, 2];
         let pane = p.session.focused;
         p.remove_from_server_playlist(pane, &[1]);
@@ -1083,6 +1230,7 @@ mod tests {
     #[test]
     fn a_failed_reorder_restores_the_old_order() {
         let mut p = player_with_playlist(&["a", "b", "c"]);
+        let _guard = custom_providers::test_registry();
         let pane = p.session.focused;
         p.view_data_mut().selection = vec![0];
 
@@ -1099,6 +1247,7 @@ mod tests {
     #[test]
     fn a_failed_rename_restores_the_name_everywhere() {
         let mut p = player_with_playlist(&["a"]);
+        let _guard = custom_providers::test_registry();
         p.handle_server_playlist_rename(p.session.focused, " Renamed ");
 
         // The rename is optimistic: the index record and the open page show
@@ -1142,6 +1291,7 @@ mod tests {
     #[test]
     fn typed_renames_debounce_into_one_server_write() {
         let mut p = player_with_playlist(&["a"]);
+        let _guard = custom_providers::test_registry();
         for name in ["R", "Re", "Renamed"] {
             p.handle_server_playlist_rename(p.session.focused, name);
         }
@@ -1171,6 +1321,7 @@ mod tests {
     #[test]
     fn deleting_a_playlist_drops_its_typed_rename() {
         let mut p = player_with_playlist(&["a"]);
+        let _guard = custom_providers::test_registry();
         p.handle_server_playlist_rename(p.session.focused, "R");
         assert!(p.pending_server_renames.contains_key(&target()));
 

@@ -16,16 +16,18 @@ pub enum CustomProviderKind {
     #[default]
     Subsonic,
     Jellyfin,
+    S3,
 }
 
 impl CustomProviderKind {
-    pub const ALL: &'static [Self] = &[Self::Subsonic, Self::Jellyfin];
+    pub const ALL: &'static [Self] = &[Self::Subsonic, Self::Jellyfin, Self::S3];
 
     /// Untranslated backend name; the API type is a brand, like provider names.
     pub const fn label(self) -> &'static str {
         match self {
             Self::Subsonic => "Subsonic",
             Self::Jellyfin => "Jellyfin",
+            Self::S3 => "S3",
         }
     }
 
@@ -34,6 +36,7 @@ impl CustomProviderKind {
         match self {
             Self::Subsonic => "subsonic",
             Self::Jellyfin => "jellyfin",
+            Self::S3 => "s3",
         }
     }
 
@@ -48,15 +51,102 @@ impl fmt::Display for CustomProviderKind {
     }
 }
 
-/// A user-added provider and the credentials needed to reach it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// A user-added provider and the configuration its backend needs.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CustomProvider {
     pub id: u64,
     pub name: String,
-    pub kind: CustomProviderKind,
+    #[serde(flatten)]
+    pub connection: CustomProviderConnection,
+}
+
+/// Per-backend connection settings, tagged by `kind` in saved files.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind")]
+pub enum CustomProviderConnection {
+    Subsonic(HttpConnection),
+    Jellyfin(HttpConnection),
+    S3(S3Settings),
+}
+
+impl Default for CustomProviderConnection {
+    fn default() -> Self {
+        Self::Subsonic(HttpConnection::default())
+    }
+}
+
+impl CustomProvider {
+    pub fn kind(&self) -> CustomProviderKind {
+        match &self.connection {
+            CustomProviderConnection::Subsonic(_) => CustomProviderKind::Subsonic,
+            CustomProviderConnection::Jellyfin(_) => CustomProviderKind::Jellyfin,
+            CustomProviderConnection::S3(_) => CustomProviderKind::S3,
+        }
+    }
+
+    pub fn http(&self) -> Option<&HttpConnection> {
+        match &self.connection {
+            CustomProviderConnection::Subsonic(http) | CustomProviderConnection::Jellyfin(http) => {
+                Some(http)
+            }
+            CustomProviderConnection::S3(_) => None,
+        }
+    }
+
+    pub fn http_mut(&mut self) -> Option<&mut HttpConnection> {
+        match &mut self.connection {
+            CustomProviderConnection::Subsonic(http) | CustomProviderConnection::Jellyfin(http) => {
+                Some(http)
+            }
+            CustomProviderConnection::S3(_) => None,
+        }
+    }
+
+    pub fn s3(&self) -> Option<&S3Settings> {
+        match &self.connection {
+            CustomProviderConnection::S3(settings) => Some(settings),
+            CustomProviderConnection::Subsonic(_) | CustomProviderConnection::Jellyfin(_) => None,
+        }
+    }
+
+    pub fn s3_mut(&mut self) -> Option<&mut S3Settings> {
+        match &mut self.connection {
+            CustomProviderConnection::S3(settings) => Some(settings),
+            CustomProviderConnection::Subsonic(_) | CustomProviderConnection::Jellyfin(_) => None,
+        }
+    }
+
+    /// The address shown next to the provider in Settings.
+    pub fn location(&self) -> &str {
+        match &self.connection {
+            CustomProviderConnection::Subsonic(http) | CustomProviderConnection::Jellyfin(http) => {
+                &http.server_url
+            }
+            CustomProviderConnection::S3(settings) => &settings.bucket,
+        }
+    }
+}
+
+/// Subsonic and Jellyfin both authenticate with a server URL and basic
+/// credentials.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HttpConnection {
     pub server_url: String,
     pub username: String,
     pub password: String,
+}
+
+/// An S3-compatible bucket. Access and secret keys may stay blank on a public
+/// bucket.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct S3Settings {
+    pub endpoint: String,
+    pub region: String,
+    pub bucket: String,
+    pub access_key: String,
+    pub secret_key: String,
+    pub path_style: bool,
+    pub public_bucket: bool,
 }
 
 /// Persisted custom-provider list. Ids are never reused: `next_id` survives
@@ -67,8 +157,44 @@ pub struct CustomProviderStore {
     pub providers: Vec<CustomProvider>,
 }
 
+#[derive(Deserialize)]
+struct CustomProviderStoreFile {
+    next_id: u64,
+    providers: Vec<serde_json::Value>,
+}
+
+impl CustomProviderStore {
+    fn from_file(text: &str) -> Self {
+        let Ok(file) = serde_json::from_str::<CustomProviderStoreFile>(text) else {
+            return Self::default();
+        };
+        let mut store = Self {
+            next_id: file.next_id,
+            providers: file
+                .providers
+                .into_iter()
+                .filter_map(|value| match serde_json::from_value(value) {
+                    Ok(provider) => Some(provider),
+                    Err(error) => {
+                        tracing::warn!(%error, "skipping invalid custom provider");
+                        None
+                    }
+                })
+                .collect(),
+        };
+        store.after_load();
+        store
+    }
+}
+
 impl JsonStore for CustomProviderStore {
     const FILE: &'static str = "custom_providers.json";
+
+    fn load() -> Self {
+        std::fs::read_to_string(Self::path())
+            .ok()
+            .map_or_else(Self::default, |text| Self::from_file(&text))
+    }
 
     fn after_load(&mut self) {
         self.next_id = self
@@ -135,7 +261,7 @@ pub fn set_registry(providers: &[CustomProvider]) {
 pub fn all_provider_ids() -> Vec<ProviderId> {
     read()
         .iter()
-        .map(|p| ProviderId::Custom(p.kind, p.id))
+        .map(|p| ProviderId::Custom(p.kind(), p.id))
         .collect()
 }
 
@@ -146,14 +272,65 @@ pub fn all() -> Vec<CustomProvider> {
     read().clone()
 }
 
+/// Serializes the tests that swap the process-wide registry, so one test's
+/// restore cannot land in the middle of another's body.
+#[cfg(test)]
+fn registry_guard() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Registers the two fabricated servers the app-layer tests address by id — a
+/// Subsonic server (9) and a keyless S3 bucket (8) whose empty bucket keeps
+/// the backend from ever reaching the network — for the guard's lifetime, then
+/// puts the previous registry back.
+#[cfg(test)]
+pub(crate) fn test_registry() -> RegistryRestore {
+    let lock = registry_guard();
+    let remembered = all();
+    set_registry(&[
+        CustomProvider {
+            id: 9,
+            name: "Test".into(),
+            connection: CustomProviderConnection::Subsonic(HttpConnection {
+                server_url: "https://example.com".into(),
+                ..Default::default()
+            }),
+        },
+        CustomProvider {
+            id: 8,
+            name: "Bucket".into(),
+            connection: CustomProviderConnection::S3(S3Settings::default()),
+        },
+    ]);
+    RegistryRestore {
+        _lock: lock,
+        remembered,
+    }
+}
+
+#[cfg(test)]
+pub(crate) struct RegistryRestore {
+    _lock: std::sync::MutexGuard<'static, ()>,
+    remembered: Vec<CustomProvider>,
+}
+
+#[cfg(test)]
+impl Drop for RegistryRestore {
+    fn drop(&mut self) {
+        set_registry(&self.remembered);
+    }
+}
+
 pub fn contains(kind: CustomProviderKind, id: u64) -> bool {
-    read().iter().any(|p| p.kind == kind && p.id == id)
+    read().iter().any(|p| p.kind() == kind && p.id == id)
 }
 
 pub fn display_name(kind: CustomProviderKind, id: u64) -> Option<String> {
     read()
         .iter()
-        .find(|p| p.kind == kind && p.id == id)
+        .find(|p| p.kind() == kind && p.id == id)
         .map(|p| p.name.clone())
 }
 
@@ -172,10 +349,11 @@ mod tests {
             providers: vec![CustomProvider {
                 id: 7,
                 name: "Home".into(),
-                kind: CustomProviderKind::Subsonic,
-                server_url: "http://localhost:4533".into(),
-                username: "admin".into(),
-                password: "secret".into(),
+                connection: CustomProviderConnection::Subsonic(HttpConnection {
+                    server_url: "http://localhost:4533".into(),
+                    username: "admin".into(),
+                    password: "secret".into(),
+                }),
             }],
         };
         store.after_load();
@@ -200,10 +378,11 @@ mod tests {
         store.upsert(CustomProvider {
             id: first,
             name: "Home".into(),
-            kind: CustomProviderKind::Subsonic,
-            server_url: "http://localhost:4533".into(),
-            username: "admin".into(),
-            password: String::new(),
+            connection: CustomProviderConnection::Subsonic(HttpConnection {
+                server_url: "http://localhost:4533".into(),
+                username: "admin".into(),
+                password: String::new(),
+            }),
         });
         store.remove(first);
         assert_eq!(store.allocate_id(), 3);
@@ -215,10 +394,11 @@ mod tests {
         let provider = CustomProvider {
             id: 4,
             name: "Home".into(),
-            kind: CustomProviderKind::Subsonic,
-            server_url: "http://localhost:4533".into(),
-            username: "admin".into(),
-            password: String::new(),
+            connection: CustomProviderConnection::Subsonic(HttpConnection {
+                server_url: "http://localhost:4533".into(),
+                username: "admin".into(),
+                password: String::new(),
+            }),
         };
         store.upsert(provider.clone());
         let mut edited = provider;
@@ -233,5 +413,89 @@ mod tests {
         for &kind in CustomProviderKind::ALL {
             assert_eq!(CustomProviderKind::from_slug(kind.slug()), Some(kind));
         }
+    }
+
+    #[test]
+    fn invalid_entries_do_not_hide_valid_providers() {
+        let text = r#"{
+          "next_id": 4,
+          "providers": [
+            {
+              "id": 1,
+              "name": "my navidrome",
+              "kind": "Subsonic",
+              "server_url": "http://localhost:4533",
+              "username": "admin",
+              "password": "subsonic",
+              "bucket": "",
+              "region": "",
+              "path_style": false,
+              "public_bucket": false
+            },
+            {
+              "id": 3,
+              "name": "my S3",
+              "kind": "S3",
+              "server_url": "http://127.0.0.1:9000",
+              "username": "goosemusic",
+              "password": "goosemusic-demo-secret",
+              "bucket": "music-demo",
+              "region": "us-east-1",
+              "path_style": true,
+              "public_bucket": false
+            }
+          ]
+        }"#;
+        let store = CustomProviderStore::from_file(text);
+        assert_eq!(store.providers.len(), 1);
+        assert_eq!(store.providers[0].name, "my navidrome");
+        assert_eq!(store.providers[0].kind(), CustomProviderKind::Subsonic);
+        assert_eq!(store.next_id, 4);
+    }
+
+    #[test]
+    fn connections_keep_the_saved_shape_and_s3_has_no_http_credentials() {
+        let http = CustomProvider {
+            id: 1,
+            name: "Home".into(),
+            connection: CustomProviderConnection::Subsonic(HttpConnection {
+                server_url: "http://localhost:4533".into(),
+                username: "admin".into(),
+                password: "secret".into(),
+            }),
+        };
+        let json = serde_json::to_value(&http).unwrap();
+        assert_eq!(json["kind"], "Subsonic");
+        assert_eq!(json["server_url"], "http://localhost:4533");
+        assert_eq!(json["username"], "admin");
+        assert!(json.get("s3").is_none());
+        assert!(json.get("access_key").is_none());
+
+        let legacy: CustomProvider = serde_json::from_value(json).unwrap();
+        assert_eq!(legacy, http);
+
+        let s3 = CustomProvider {
+            id: 2,
+            name: "Bucket".into(),
+            connection: CustomProviderConnection::S3(S3Settings {
+                endpoint: "https://s3.eu-west-1.amazonaws.com".into(),
+                region: "eu-west-1".into(),
+                bucket: "music".into(),
+                access_key: "key".into(),
+                secret_key: "secret".into(),
+                path_style: true,
+                public_bucket: false,
+            }),
+        };
+        let json = serde_json::to_value(&s3).unwrap();
+        assert_eq!(json["kind"], "S3");
+        assert_eq!(json["bucket"], "music");
+        assert_eq!(json["access_key"], "key");
+        assert!(json.get("server_url").is_none());
+        assert!(json.get("username").is_none());
+        assert!(json.get("password").is_none());
+
+        let round_trip: CustomProvider = serde_json::from_value(json).unwrap();
+        assert_eq!(round_trip, s3);
     }
 }

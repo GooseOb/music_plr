@@ -145,7 +145,7 @@ impl StreamCache {
     }
 
     pub fn path_for(provider: ProviderId, id: &str) -> PathBuf {
-        provider_dir(provider).join(format!("{id}.cache"))
+        provider_dir(provider).join(format!("{}.cache", crate::util::file_segment(id)))
     }
 
     /// Update the cache size cap (used by the Settings view). Eviction itself
@@ -366,5 +366,16 @@ mod tests {
                 Some(slug.as_ref())
             );
         }
+    }
+
+    #[test]
+    fn cache_paths_stay_inside_the_provider_directory() {
+        let provider = ProviderId::Custom(crate::data::custom_providers::CustomProviderKind::S3, 4);
+        let path = StreamCache::path_for(provider, "music/../../etc/passwd");
+        assert_eq!(path.parent(), Some(provider_dir(provider).as_path()));
+        assert!(path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| !name.contains('/')));
     }
 }

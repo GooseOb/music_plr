@@ -96,8 +96,7 @@ impl MusicPlayer {
                     edit.original.set_provider(provider, pt.clone());
                 }
             } else {
-                let msg = could_not_find_on(&edit.title, &provider_name);
-                self.notify_error(msg);
+                self.notify_error(could_not_find_on(&edit.title, &provider_name));
                 return;
             }
         }

@@ -10,6 +10,10 @@ auto-generated compare link below it.
 
 ## [Unreleased]
 
+### Added
+
+- Support storing playlists in S3-compatible storages.
+
 ### Fixed
 
 - Genius requests failing.

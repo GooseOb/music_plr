@@ -151,7 +151,7 @@ impl MusicPlayer {
         }
         self.pane_mut(pane).search_scope = scope;
         self.save_session();
-        self.notify(self.scope_name(scope).to_string());
+        self.notify(self.scope_name(scope));
     }
 
     pub fn cycle_search_scope(&mut self, pane: PaneId, dir: isize) {
@@ -405,8 +405,7 @@ impl MusicPlayer {
         );
         let rid = self.request_ids.next();
         self.view_data_in_mut(pane).request_id = rid;
-        let msg = (self.strings.opening)(label);
-        self.notify(msg);
+        self.notify((self.strings.opening)(label));
         let tx = self.result_tx.clone();
         let id = id.to_string();
         Self::spawn_backend_thread(

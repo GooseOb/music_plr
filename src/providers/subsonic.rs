@@ -35,12 +35,13 @@ fn configured(provider: ProviderId) -> Result<CustomProvider> {
         anyhow::bail!("not a custom Subsonic provider");
     };
     custom_providers::get(id)
-        .filter(|config| config.kind == CustomProviderKind::Subsonic)
+        .filter(|config| config.kind() == CustomProviderKind::Subsonic)
         .with_context(|| format!("Subsonic provider {id} is not configured"))
 }
 
 fn make_client(provider: &CustomProvider) -> Result<Client> {
-    client_for(&provider.server_url, &provider.username, &provider.password)
+    let http = provider.http().context("not an HTTP provider")?;
+    client_for(&http.server_url, &http.username, &http.password)
 }
 
 fn client_for(server_url: &str, username: &str, password: &str) -> Result<Client> {

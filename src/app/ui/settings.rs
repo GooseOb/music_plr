@@ -20,7 +20,7 @@ use crate::{
         },
         update::SettingsChange,
     },
-    data::custom_providers::CustomProviderKind,
+    data::custom_providers::{CustomProviderConnection, CustomProviderKind},
     deps::DepKind,
     i18n::{Direction, Language},
     load_state::LoadState,
@@ -375,15 +375,12 @@ fn custom_providers_section(player: &MusicPlayer) -> Element<'_, Message, AppThe
         .then(|| text(tr.custom_provider_none).style(fg_secondary()).into())
         .into_iter()
         .chain(player.custom_providers.providers.iter().map(|provider| {
+            let location = provider.location().to_string();
             let info = Column::with_children([
                 text(&provider.name).style(fg_accent()).into(),
-                text(format!(
-                    "{} · {}",
-                    provider.kind.label(),
-                    provider.server_url
-                ))
-                .style(fg_secondary())
-                .into(),
+                text(format!("{} · {location}", provider.kind().label()))
+                    .style(fg_secondary())
+                    .into(),
             ])
             .spacing(theme::SPACING_2XS)
             .width(Length::Fill)
@@ -405,7 +402,7 @@ fn custom_providers_section(player: &MusicPlayer) -> Element<'_, Message, AppThe
                 [
                     provider_checkbox(
                         player,
-                        ProviderId::Custom(provider.kind, provider.id),
+                        ProviderId::Custom(provider.kind(), provider.id),
                         false,
                     ),
                     info.into(),
@@ -443,45 +440,6 @@ fn custom_provider_form<'a>(
     } else {
         tr.custom_provider_add
     };
-    let name = text_input_row(
-        dir,
-        tr.custom_provider_name_lbl,
-        &form.draft.name,
-        "",
-        |value| Message::CustomProviderField(CustomProviderField::Name, value),
-    );
-    let kind = picker(
-        dir,
-        tr.custom_provider_type_lbl,
-        CustomProviderKind::ALL.iter().map(|&kind| {
-            (
-                kind.label(),
-                form.draft.kind == kind,
-                Message::CustomProviderKindChanged(kind),
-            )
-        }),
-    );
-    let server_url = text_input_row(
-        dir,
-        tr.custom_provider_url_lbl,
-        &form.draft.server_url,
-        "https://music.example.com",
-        |value| Message::CustomProviderField(CustomProviderField::ServerUrl, value),
-    );
-    let username = text_input_row(
-        dir,
-        tr.custom_provider_username_lbl,
-        &form.draft.username,
-        "",
-        |value| Message::CustomProviderField(CustomProviderField::Username, value),
-    );
-    let password = secure_text_input_row(
-        dir,
-        tr.custom_provider_password_lbl,
-        &form.draft.password,
-        "",
-        |value| Message::CustomProviderField(CustomProviderField::Password, value),
-    );
 
     let testing = matches!(form.test, ConnectionTest::Testing);
     let actions = dir
@@ -501,35 +459,142 @@ fn custom_provider_form<'a>(
         )
         .spacing(theme::SPACING_XS);
 
-    let status: Element<'a, Message, AppTheme> = match &form.test {
-        ConnectionTest::Idle => Space::new().into(),
-        ConnectionTest::Testing => text(tr.custom_provider_testing)
-            .style(fg_secondary())
-            .into(),
-        ConnectionTest::Ok(detail) => text((tr.custom_provider_test_ok)(detail))
-            .style(fg_accent())
-            .into(),
-        ConnectionTest::Failed(error) => text((tr.custom_provider_test_failed)(error))
-            .style(fg_secondary())
-            .into(),
+    let status = match &form.test {
+        ConnectionTest::Idle => None,
+        ConnectionTest::Testing => Some(
+            text(tr.custom_provider_testing)
+                .style(fg_secondary())
+                .into(),
+        ),
+        ConnectionTest::Ok(detail) => Some(
+            text((tr.custom_provider_test_ok)(detail))
+                .style(fg_accent())
+                .into(),
+        ),
+        ConnectionTest::Failed(error) => Some(
+            text((tr.custom_provider_test_failed)(error))
+                .style(fg_secondary())
+                .into(),
+        ),
     };
 
-    Column::with_children([
-        text(title)
-            .size(theme::TEXT_SIZE_LG)
-            .style(fg_accent())
-            .into(),
-        name,
-        kind,
-        server_url,
-        username,
-        password,
-        actions.into(),
-        status,
-    ])
-    .spacing(theme::SPACING_SM)
-    .align_x(dir.align())
-    .into()
+    let children = [text(title)
+        .size(theme::TEXT_SIZE_LG)
+        .style(fg_accent())
+        .into()]
+    .into_iter()
+    .chain(custom_provider_fields(player, form))
+    .chain([actions.into()])
+    .chain(status);
+
+    Column::with_children(children)
+        .spacing(theme::SPACING_SM)
+        .align_x(dir.align())
+        .into()
+}
+
+fn custom_provider_fields<'a>(
+    player: &'a MusicPlayer,
+    form: &'a CustomProviderForm,
+) -> Vec<Element<'a, Message, AppTheme>> {
+    let tr = &player.strings;
+    let dir = tr.direction;
+    let name = text_input_row(
+        dir,
+        tr.custom_provider_name_lbl,
+        &form.draft.name,
+        "",
+        |value| Message::CustomProviderField(CustomProviderField::Name, value),
+    );
+    let kind = picker(
+        dir,
+        tr.custom_provider_type_lbl,
+        CustomProviderKind::ALL.iter().map(|&kind| {
+            (
+                kind.label(),
+                form.draft.kind() == kind,
+                Message::CustomProviderKindChanged(kind),
+            )
+        }),
+    );
+    match &form.draft.connection {
+        CustomProviderConnection::S3(s3) => vec![
+            name,
+            kind,
+            text_input_row(
+                dir,
+                tr.custom_provider_bucket_lbl,
+                &s3.bucket,
+                "my-music",
+                |value| Message::CustomProviderField(CustomProviderField::Bucket, value),
+            ),
+            text_input_row(
+                dir,
+                tr.custom_provider_region_lbl,
+                &s3.region,
+                "us-east-1",
+                |value| Message::CustomProviderField(CustomProviderField::Region, value),
+            ),
+            text_input_row(
+                dir,
+                tr.custom_provider_endpoint_lbl,
+                &s3.endpoint,
+                "https://s3.us-east-1.amazonaws.com",
+                |value| Message::CustomProviderField(CustomProviderField::Endpoint, value),
+            ),
+            text_input_row(
+                dir,
+                tr.custom_provider_access_key_lbl,
+                &s3.access_key,
+                "",
+                |value| Message::CustomProviderField(CustomProviderField::AccessKey, value),
+            ),
+            secure_text_input_row(
+                dir,
+                tr.custom_provider_secret_key_lbl,
+                &s3.secret_key,
+                "",
+                |value| Message::CustomProviderField(CustomProviderField::SecretKey, value),
+            ),
+            checkbox(s3.path_style)
+                .label(tr.custom_provider_path_style_lbl)
+                .on_toggle(Message::CustomProviderPathStyle)
+                .spacing(theme::SPACING_MD)
+                .into(),
+            checkbox(s3.public_bucket)
+                .label(tr.custom_provider_public_lbl)
+                .on_toggle(Message::CustomProviderPublicBucket)
+                .spacing(theme::SPACING_MD)
+                .into(),
+        ],
+        CustomProviderConnection::Subsonic(http) | CustomProviderConnection::Jellyfin(http) => {
+            vec![
+                name,
+                kind,
+                text_input_row(
+                    dir,
+                    tr.custom_provider_url_lbl,
+                    &http.server_url,
+                    "https://music.example.com",
+                    |value| Message::CustomProviderField(CustomProviderField::ServerUrl, value),
+                ),
+                text_input_row(
+                    dir,
+                    tr.custom_provider_username_lbl,
+                    &http.username,
+                    "",
+                    |value| Message::CustomProviderField(CustomProviderField::Username, value),
+                ),
+                secure_text_input_row(
+                    dir,
+                    tr.custom_provider_password_lbl,
+                    &http.password,
+                    "",
+                    |value| Message::CustomProviderField(CustomProviderField::Password, value),
+                ),
+            ]
+        }
+    }
 }
 
 #[allow(clippy::too_many_lines)]

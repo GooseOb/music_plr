@@ -7,7 +7,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use super::{custom_dispatch, CardData, ProviderId};
+use super::{CardData, CustomProviderKind, ProviderId};
 use crate::{i18n::Strings, types::Track};
 
 /// One kind of home row. The (provider, kind) pair identifies a row across
@@ -220,7 +220,7 @@ pub fn titled(tr: &'static Strings, label: &str, provider: ProviderId) -> String
 pub fn home_providers(default: ProviderId) -> Vec<ProviderId> {
     let enabled: Vec<ProviderId> = ProviderId::all()
         .into_iter()
-        .filter(|provider| home_capable(*provider))
+        .filter(|provider| provider.capabilities().home)
         .collect();
     let mut providers: Vec<ProviderId> = enabled
         .iter()
@@ -236,22 +236,6 @@ pub fn home_providers(default: ProviderId) -> Vec<ProviderId> {
         .collect();
     providers.extend(sources);
     providers
-}
-
-/// Whether `provider` can serve a home feed right now.
-fn home_capable(provider: ProviderId) -> bool {
-    if !provider.enabled() {
-        return false;
-    }
-    match provider {
-        ProviderId::YouTube
-        | ProviderId::SoundCloud
-        | ProviderId::Bandcamp
-        | ProviderId::Audius
-        | ProviderId::LastFm => true,
-        ProviderId::MusicBrainz | ProviderId::Local => false,
-        ProviderId::Custom(_, _) => provider.capabilities().search,
-    }
 }
 
 /// Sort fetched rows into display order: provider block first, then the
@@ -297,8 +281,13 @@ pub fn fetch_home(provider: ProviderId) -> Result<Vec<HomeSection>> {
         ProviderId::Bandcamp => super::bandcamp::home_sections(),
         ProviderId::Audius => super::audius::home_sections(),
         ProviderId::LastFm => super::lastfm::home_sections(),
-        ProviderId::Custom(kind, _) => custom_dispatch!(kind, home_sections(provider)),
-        ProviderId::MusicBrainz | ProviderId::Local => Ok(Vec::new()),
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            super::subsonic::home_sections(provider)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            super::jellyfin::home_sections(provider)
+        }
+        _ => Ok(Vec::new()),
     }
 }
 

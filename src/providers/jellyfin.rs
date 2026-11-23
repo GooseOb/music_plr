@@ -15,7 +15,9 @@ use serde::Deserialize;
 
 use crate::{
     data::{
-        custom_providers::{self, CustomProvider, CustomProviderKind},
+        custom_providers::{
+            self, CustomProvider, CustomProviderConnection, CustomProviderKind, HttpConnection,
+        },
         library::LibraryKind,
     },
     providers::{
@@ -128,12 +130,15 @@ fn configured(provider: ProviderId) -> Result<CustomProvider> {
         anyhow::bail!("not a custom Jellyfin provider");
     };
     custom_providers::get(id)
-        .filter(|config| config.kind == CustomProviderKind::Jellyfin)
+        .filter(|config| config.kind() == CustomProviderKind::Jellyfin)
         .with_context(|| format!("Jellyfin provider {id} is not configured"))
 }
 
 fn base_url(config: &CustomProvider) -> String {
-    config.server_url.trim_end_matches('/').to_string()
+    let Some(http) = config.http() else {
+        return String::new();
+    };
+    http.server_url.trim_end_matches('/').to_string()
 }
 
 fn auth_header() -> String {
@@ -148,14 +153,15 @@ fn token_header(session: &Session) -> String {
 }
 
 fn authenticate(config: &CustomProvider) -> Result<Session> {
+    let http = config.http().context("not an HTTP provider")?;
     let url = format!("{}/Users/AuthenticateByName", base_url(config));
     let mut response = http_agent()
         .post(&url)
         .header("Authorization", &auth_header())
         .header("Content-Type", "application/json")
         .send_json(serde_json::json!({
-            "Username": config.username,
-            "Pw": config.password,
+            "Username": http.username,
+            "Pw": http.password,
         }))
         .with_context(|| format!("request to {url} failed"))?;
     let parsed: AuthResponse = response
@@ -176,10 +182,10 @@ fn authenticate(config: &CustomProvider) -> Result<Session> {
 fn session(config: &CustomProvider) -> Result<Session> {
     static SESSIONS: OnceLock<Mutex<HashMap<u64, CachedSession>>> = OnceLock::new();
     let cache = SESSIONS.get_or_init(|| Mutex::new(HashMap::new()));
-    let signature = format!(
-        "{}\0{}\0{}",
-        config.server_url, config.username, config.password
-    );
+    let signature = config
+        .http()
+        .map(|http| format!("{}\0{}\0{}", http.server_url, http.username, http.password))
+        .unwrap_or_default();
     if let Ok(cache) = cache.lock() {
         if let Some(cached) = cache.get(&config.id) {
             if cached.signature == signature {
@@ -1328,10 +1334,11 @@ pub fn test_connection(server_url: &str, username: &str, password: &str) -> Resu
     let config = CustomProvider {
         id: 0,
         name: String::new(),
-        kind: CustomProviderKind::Jellyfin,
-        server_url: server_url.to_string(),
-        username: username.to_string(),
-        password: password.to_string(),
+        connection: CustomProviderConnection::Jellyfin(HttpConnection {
+            server_url: server_url.to_string(),
+            username: username.to_string(),
+            password: password.to_string(),
+        }),
     };
     authenticate(&config)?;
     let url = format!("{}/System/Info/Public", base_url(&config));

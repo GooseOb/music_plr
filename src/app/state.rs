@@ -55,8 +55,13 @@ pub struct PendingCache {
 /// whole burst of them.
 #[derive(Clone, Debug)]
 pub enum ServerPlaylistUndo {
-    /// Rows the write appended to every page showing the playlist.
-    Added { tracks: Vec<Track> },
+    /// Rows the write added to every page showing the playlist, with the
+    /// position each took and the track it was, so an insertion can be undone
+    /// exactly even if the page moved underneath it.
+    Added {
+        count: usize,
+        rows: Vec<(PaneId, Vec<(usize, Track)>)>,
+    },
     /// Rows the write took out, with the position each held in its page.
     Removed {
         /// How many rows the cached count lost.

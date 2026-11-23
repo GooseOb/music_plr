@@ -367,6 +367,8 @@ pub enum Message {
     CustomProviderEdit(u64),
     CustomProviderField(CustomProviderField, String),
     CustomProviderKindChanged(CustomProviderKind),
+    CustomProviderPathStyle(bool),
+    CustomProviderPublicBucket(bool),
     CustomProviderTest,
     CustomProviderSave,
     CustomProviderCancel,

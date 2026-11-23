@@ -1,6 +1,6 @@
-use std::{collections::HashMap, fmt::Write as _, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
-use crate::providers::ProviderId;
+use crate::{providers::ProviderId, util::file_segment};
 
 fn thumbnails_dir() -> PathBuf {
     super::cache_path("thumbnails")
@@ -8,18 +8,6 @@ fn thumbnails_dir() -> PathBuf {
 
 fn provider_dir(provider: ProviderId) -> PathBuf {
     thumbnails_dir().join(provider.slug().as_ref())
-}
-
-fn encode_segment(id: &str) -> String {
-    let mut out = String::with_capacity(id.len());
-    for b in id.bytes() {
-        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.') {
-            out.push(b as char);
-        } else {
-            let _ = write!(out, "%{b:02X}");
-        }
-    }
-    out
 }
 
 fn decode_segment(name: &str) -> Option<String> {
@@ -92,7 +80,7 @@ fn has_image_ext(path: &std::path::Path) -> bool {
 
 pub(crate) fn thumbnail_path(provider: ProviderId, id: &str) -> PathBuf {
     let dir = provider_dir(provider);
-    let stem = encode_segment(id);
+    let stem = file_segment(id);
     if let Ok(read) = std::fs::read_dir(&dir) {
         for entry in read.flatten() {
             let path = entry.path();
@@ -134,7 +122,7 @@ pub fn download(provider: ProviderId, id: &str, url: &str) {
                 tracing::warn!("Thumbnail for {id} is not an image, skipping");
                 return;
             };
-            let path = provider_dir(provider).join(format!("{}.{ext}", encode_segment(id)));
+            let path = provider_dir(provider).join(format!("{}.{ext}", file_segment(id)));
             if std::fs::write(&path, &bytes).is_err() {
                 let _ = std::fs::remove_file(&path);
             }
@@ -239,9 +227,9 @@ mod tests {
     #[test]
     fn segments_round_trip() {
         for id in ["abc123", "Cher\x1fBelieve", "https://x/y?a=b", "100%"] {
-            assert_eq!(decode_segment(&encode_segment(id)).as_deref(), Some(id));
+            assert_eq!(decode_segment(&file_segment(id)).as_deref(), Some(id));
         }
-        assert_eq!(encode_segment("abc-_.9"), "abc-_.9");
+        assert_eq!(file_segment("abc-_.9"), "abc-_.9");
     }
 
     #[test]

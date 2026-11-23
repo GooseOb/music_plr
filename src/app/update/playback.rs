@@ -205,8 +205,7 @@ impl MusicPlayer {
             }
         }
         if !to_download.is_empty() {
-            let msg = (self.strings.downloading_n)(to_download.len());
-            self.notify(msg);
+            self.notify((self.strings.downloading_n)(to_download.len()));
             for track in to_download {
                 self.spawn_download_thread_for(provider, track);
             }
@@ -216,8 +215,10 @@ impl MusicPlayer {
     /// Resolve a track's id on `provider` in the background. If `play` is true
     /// the resolved track is streamed; otherwise it is downloaded.
     fn resolve_provider(&mut self, provider: ProviderId, track: Track, pos: TrackPos, play: bool) {
-        let msg = (self.strings.resolving_on)(&track.title, &self.strings.provider(provider));
-        self.notify(msg);
+        self.notify((self.strings.resolving_on)(
+            &track.title,
+            &self.strings.provider(provider),
+        ));
         let rid = if is_main_pane(pos.pane) && self.session.panes.contains_key(&pos.pane) {
             self.slot_request_id(pos.pane)
         } else {
@@ -321,7 +322,10 @@ impl MusicPlayer {
                         self.pending_cache_id = None;
                         analysis_path = Some(path);
                     } else {
-                        let url = track.provider_url(provider).unwrap_or_default().to_string();
+                        let url = track
+                            .provider_url(provider)
+                            .map(str::to_string)
+                            .unwrap_or_default();
                         self.pending_cache_id = Some(crate::app::PendingCache {
                             provider_id: provider,
                             id: id.clone(),
@@ -425,8 +429,7 @@ impl MusicPlayer {
         self.media_controls_dirty = true;
         self.save_session();
         let tr = self.strings;
-        let msg = (tr.removed_from)(removed, tr.queue);
-        self.notify(msg);
+        self.notify((tr.removed_from)(removed, tr.queue));
         self.clear_selection_if_touched_in(QUEUE_PANE_ID, indices);
     }
 
@@ -434,8 +437,7 @@ impl MusicPlayer {
         let removed = self.session.queue.remove_recent_at(indices);
         self.save_session();
         let tr = self.strings;
-        let msg = (tr.removed_from)(removed, tr.recently_played);
-        self.notify(msg);
+        self.notify((tr.removed_from)(removed, tr.recently_played));
         self.clear_selection_if_touched_in(RECENT_PANE_ID, indices);
     }
 

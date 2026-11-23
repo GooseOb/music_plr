@@ -725,7 +725,7 @@ impl MusicPlayer {
         let in_playlist = is_main_pane(pane)
             && match &self.view_data_in(pane).kind {
                 ViewKind::Playlist(_) => true,
-                ViewKind::PlaylistView(r) => crate::providers::playlists_supported(r.provider),
+                ViewKind::PlaylistView(r) => r.provider.capabilities().server_playlists,
                 _ => false,
             };
 

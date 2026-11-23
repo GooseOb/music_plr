@@ -9,7 +9,6 @@ use super::{
 use crate::{
     app::{pane::PaneId, Dialog, ImportMethod, ImportPlaylistDialog, ViewKind},
     data::{server_playlists::ServerPlaylistId, JsonStore},
-    providers,
 };
 
 /// Which list a reorder applies to: a local playlist's stored tracks, or the
@@ -283,16 +282,14 @@ impl MusicPlayer {
             _ => None,
         };
         let Some(idx) = active else {
-            let msg = (self.strings.added_local)(new_tracks.len());
-            self.notify(msg);
+            self.notify((self.strings.added_local)(new_tracks.len()));
             return;
         };
 
         let count = self
             .playlists
             .insert_tracks_at(idx, new_tracks.iter(), PREPEND);
-        let msg = (self.strings.added)(count);
-        self.notify(msg);
+        self.notify((self.strings.added)(count));
     }
 
     pub fn handle_add_to_playlist(&mut self, pane: PaneId, playlist_idx: usize, indices: &[usize]) {
@@ -306,22 +303,20 @@ impl MusicPlayer {
             .insert_tracks_at(playlist_idx, tracks.iter(), PREPEND);
         self.dialog = None;
         let name = &self.playlists.playlists[playlist_idx].name;
-        let msg = (self.strings.added_to)(count, name);
-        self.notify(msg);
+        self.notify((self.strings.added_to)(count, name));
     }
 
     pub fn handle_remove_from_playlist_batch(&mut self, pane: PaneId, indices: &[usize]) {
         match &self.view_data_in(pane).kind {
             ViewKind::Playlist(p) => {
                 let removed = self.playlists.remove_tracks_at(p.index, indices);
-                let msg = (self.strings.removed_n)(removed);
-                self.notify(msg);
+                self.notify((self.strings.removed_n)(removed));
                 self.clear_selection_if_touched_in(pane, indices);
             }
             // A server playlist is written on the server, and its rows leave
             // every open page right away; a failed write puts them back.
             ViewKind::PlaylistView(reference)
-                if crate::providers::playlists_supported(reference.provider) =>
+                if reference.provider.capabilities().server_playlists =>
             {
                 self.remove_from_server_playlist(pane, indices);
             }
@@ -335,8 +330,7 @@ impl MusicPlayer {
             return;
         }
         let count = self.trashbin.add_tracks(tracks.iter());
-        let msg = (self.strings.added_to)(count, self.strings.trashbin);
-        self.notify(msg);
+        self.notify((self.strings.added_to)(count, self.strings.trashbin));
         self.clear_selection_if_touched_in(pane, indices);
     }
 
@@ -349,8 +343,7 @@ impl MusicPlayer {
             .map(|t| t.cache_key())
             .collect();
         let removed = self.trashbin.remove_keys(&keys);
-        let msg = (self.strings.removed_from)(removed, self.strings.trashbin);
-        self.notify(msg);
+        self.notify((self.strings.removed_from)(removed, self.strings.trashbin));
         self.clear_selection_if_touched_in(pane, indices);
     }
 
@@ -363,7 +356,7 @@ impl MusicPlayer {
         let target = match &self.view_data_in(pane).kind {
             ViewKind::Playlist(p) => ReorderTarget::Local(p.index),
             ViewKind::PlaylistView(reference)
-                if providers::playlists_supported(reference.provider) =>
+                if reference.provider.capabilities().server_playlists =>
             {
                 ReorderTarget::Server(ServerPlaylistId {
                     provider: reference.provider,
@@ -436,6 +429,21 @@ impl MusicPlayer {
         let pane = self.session.focused;
         let hovered = self.focused_hovered_track();
         let list = hovered.map_or(pane, |h| h.pane);
+        // A server playlist page is a paste target of its own, but only while
+        // the focused pane's own list is what the cursor is on: hovering the
+        // queue keeps the queue.
+        if list == pane {
+            if let ViewKind::PlaylistView(reference) = &self.view_data_in(pane).kind {
+                if reference.provider.capabilities().server_playlists {
+                    let target = ServerPlaylistId {
+                        provider: reference.provider,
+                        id: reference.id.clone(),
+                    };
+                    let tracks = self.clipboard.clone();
+                    return self.insert_tracks_into_server_playlist(target, tracks, PREPEND);
+                }
+            }
+        }
         let msg = match list {
             QUEUE_PANE_ID => {
                 let insert_at = hovered
@@ -458,8 +466,8 @@ impl MusicPlayer {
                 self.playlists
                     .insert_tracks_at(idx, self.clipboard.iter(), PREPEND);
                 let count = self.clipboard.len();
-                let name = self.playlists.playlists[idx].name.clone();
-                (self.strings.pasted_into)(count, &name)
+                let name = &self.playlists.playlists[idx].name;
+                (self.strings.pasted_into)(count, name)
             }
         };
         self.notify(msg);
@@ -474,7 +482,7 @@ impl MusicPlayer {
 
         let removable_playlist = match &self.view_data().kind {
             ViewKind::Playlist(_) => true,
-            ViewKind::PlaylistView(r) => crate::providers::playlists_supported(r.provider),
+            ViewKind::PlaylistView(r) => r.provider.capabilities().server_playlists,
             _ => false,
         };
         if removable_playlist {
@@ -489,8 +497,7 @@ impl MusicPlayer {
                     .collect();
                 let removed = crate::util::remove_at(tracks, &indices);
                 let tr = self.strings;
-                let msg = (tr.removed_from)(removed, tr.downloads);
-                self.notify(msg);
+                self.notify((tr.removed_from)(removed, tr.downloads));
                 for key in removed_keys {
                     self.download_registry.remove(&key);
                 }
@@ -510,7 +517,7 @@ impl MusicPlayer {
             _ => {
                 let removable = match &self.view_data_in(pane).kind {
                     ViewKind::Playlist(_) | ViewKind::Downloads | ViewKind::Trashbin => true,
-                    ViewKind::PlaylistView(r) => crate::providers::playlists_supported(r.provider),
+                    ViewKind::PlaylistView(r) => r.provider.capabilities().server_playlists,
                     _ => false,
                 };
                 if !removable {
@@ -982,6 +989,7 @@ mod tests {
     #[test]
     fn reordering_a_server_playlist_view_moves_its_rows() {
         let mut p = player_with_playlists(&["A"]);
+        let _guard = crate::data::custom_providers::test_registry();
         let provider = ProviderId::Custom(
             crate::data::custom_providers::CustomProviderKind::Subsonic,
             9,

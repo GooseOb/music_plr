@@ -19,6 +19,7 @@ pub(crate) mod home;
 mod jellyfin;
 pub(crate) mod lastfm;
 mod musicbrainz;
+mod s3;
 mod soundcloud;
 mod subsonic;
 mod youtube;
@@ -286,38 +287,39 @@ pub fn refresh_provider_lists() {
 
 fn build_offered_lists() -> OfferedLists {
     let custom_servers = crate::data::custom_providers::all_provider_ids();
-    let offered_customs: Vec<ProviderId> = custom_servers
+    let all: Vec<ProviderId> = ProviderId::builtin_all()
         .iter()
         .copied()
+        .chain(custom_servers.iter().copied())
         .filter(|provider| provider.enabled())
         .collect();
-    let offered = |mut providers: Vec<ProviderId>| {
-        providers.retain(|provider| provider.enabled());
-        providers.extend(&offered_customs);
-        providers
-    };
+
+    let searchable = all
+        .iter()
+        .copied()
+        .filter(|provider| provider.capabilities().search)
+        .collect();
+
+    let defaultable = all
+        .iter()
+        .copied()
+        .filter(|provider| {
+            let caps = provider.capabilities();
+            caps.stream && caps.download
+        })
+        .collect();
+
+    let header = all
+        .iter()
+        .copied()
+        .filter(|provider| provider.capabilities().artist_header)
+        .collect();
+
     OfferedLists {
-        all: offered(ProviderId::builtin_all().to_vec()),
-        searchable: offered(
-            ProviderId::builtin_all()
-                .iter()
-                .copied()
-                .filter(|provider| *provider != ProviderId::Local)
-                .collect(),
-        ),
-        defaultable: offered(vec![
-            ProviderId::YouTube,
-            ProviderId::SoundCloud,
-            ProviderId::Bandcamp,
-            ProviderId::Audius,
-        ]),
-        header: offered(vec![
-            ProviderId::YouTube,
-            ProviderId::SoundCloud,
-            ProviderId::Bandcamp,
-            ProviderId::Audius,
-            ProviderId::LastFm,
-        ]),
+        all,
+        searchable,
+        defaultable,
+        header,
         custom_servers,
     }
 }
@@ -341,6 +343,9 @@ pub struct ProviderCaps {
     pub stream: bool,
     pub download: bool,
     pub radio: bool,
+    pub server_playlists: bool,
+    pub home: bool,
+    pub artist_header: bool,
 }
 
 impl ProviderId {
@@ -475,29 +480,18 @@ impl ProviderId {
         cached_list(|lists| &lists.all)
     }
 
-    /// All enabled providers that appear in the search provider picker
-    /// (excludes `Local`, which is not a remote search source).
     pub fn searchable() -> Vec<ProviderId> {
         cached_list(|lists| &lists.searchable)
     }
 
-    /// Enabled providers eligible to be the default provider: must support
-    /// both streaming and downloading (search-only `MusicBrainz`/`LastFm` and
-    /// `Local` are excluded).
     pub fn defaultable() -> Vec<ProviderId> {
         cached_list(|lists| &lists.defaultable)
     }
 
-    /// Enabled providers that can serve an artist-page header worth displaying
-    /// (picture + stats + description). Shown in the artist header picker
-    /// and pre-fetched as companions by `open_artist`. `MusicBrainz` is
-    /// excluded: its header is stats-only with no picture.
     pub fn header_providers() -> Vec<ProviderId> {
         cached_list(|lists| &lists.header)
     }
 
-    /// The registered custom servers, whether switched on or off. Off shows up
-    /// only where a section picker needs kinds, not capabilities.
     pub fn custom_servers() -> Vec<ProviderId> {
         cached_list(|lists| &lists.custom_servers)
     }
@@ -510,39 +504,69 @@ impl ProviderId {
                 stream: a.yt_dlp,
                 download: a.yt_dlp,
                 radio: true,
+                server_playlists: false,
+                home: true,
+                artist_header: true,
             },
             ProviderId::SoundCloud => ProviderCaps {
-                // SoundCloud search is crate-based (no external tool); only
-                // streaming/downloading route through yt-dlp.
                 search: true,
                 stream: a.yt_dlp,
                 download: a.yt_dlp,
                 radio: false,
+                server_playlists: false,
+                home: true,
+                artist_header: true,
             },
             ProviderId::MusicBrainz => ProviderCaps {
                 search: true,
                 stream: false,
                 download: false,
                 radio: false,
+                server_playlists: false,
+                home: false,
+                // Provided but stats-only with no picture
+                artist_header: false,
             },
             ProviderId::Bandcamp | ProviderId::Audius => ProviderCaps {
                 search: true,
                 stream: true,
                 download: true,
                 radio: false,
+                server_playlists: false,
+                home: true,
+                artist_header: true,
             },
             ProviderId::LastFm => ProviderCaps {
                 search: true,
                 stream: false,
                 download: false,
                 radio: true,
+                server_playlists: false,
+                home: true,
+                artist_header: true,
             },
             ProviderId::Local => ProviderCaps {
                 search: false,
                 stream: false,
                 download: false,
                 radio: false,
+                server_playlists: false,
+                home: false,
+                artist_header: false,
             },
+            ProviderId::Custom(CustomProviderKind::S3, id) => {
+                let configured =
+                    crate::data::custom_providers::contains(CustomProviderKind::S3, id);
+                ProviderCaps {
+                    search: false,
+                    stream: false,
+                    download: false,
+                    radio: false,
+                    server_playlists: configured,
+                    home: false,
+                    artist_header: false,
+                }
+            }
             ProviderId::Custom(kind, id) => {
                 let configured = crate::data::custom_providers::contains(kind, id);
                 ProviderCaps {
@@ -550,6 +574,9 @@ impl ProviderId {
                     stream: configured,
                     download: configured,
                     radio: configured,
+                    server_playlists: configured,
+                    home: configured,
+                    artist_header: configured,
                 }
             }
         }
@@ -561,6 +588,7 @@ impl ProviderId {
     pub fn supported_scopes(self) -> &'static [SearchScope] {
         match self {
             ProviderId::YouTube => SearchScope::all(),
+            ProviderId::Custom(CustomProviderKind::S3, _) => &[],
             ProviderId::SoundCloud | ProviderId::Audius | ProviderId::Custom(_, _) => &[
                 SearchScope::Songs,
                 SearchScope::Artists,
@@ -612,6 +640,14 @@ impl ProviderId {
     /// built-in source or `Local`).
     pub fn is_custom(self) -> bool {
         matches!(self, ProviderId::Custom(_, _))
+    }
+
+    /// Whether this provider's server playlists store whole track snapshots
+    /// (tracks from any provider) instead of ids into its own catalogue. Only
+    /// the S3 backend does, so its add flow must not filter by
+    /// `track.provider_id` and its writes can keep a position.
+    pub fn playlists_store_snapshots(self) -> bool {
+        matches!(self, ProviderId::Custom(CustomProviderKind::S3, _))
     }
 
     /// The public web page for the artist this provider identifies by `id`.
@@ -852,22 +888,6 @@ impl SearchTab {
     }
 }
 
-/// Calls `fn_name(args)` on the backend module of the custom provider's kind;
-/// the sub-module paths are fully qualified so sibling modules can use it too.
-macro_rules! custom_dispatch {
-    ($custom_kind:expr, $fn_name:ident($($arg:expr),* $(,)?)) => {
-        match $custom_kind {
-            $crate::providers::CustomProviderKind::Subsonic => {
-                $crate::providers::subsonic::$fn_name($($arg),*)
-            }
-            $crate::providers::CustomProviderKind::Jellyfin => {
-                $crate::providers::jellyfin::$fn_name($($arg),*)
-            }
-        }
-    };
-}
-pub(crate) use custom_dispatch;
-
 /// Provider-scoped search entry point. Dispatches to the per-provider backend
 /// and maps results into tracks carrying that provider's id.
 pub fn search(
@@ -883,10 +903,15 @@ pub fn search(
         ProviderId::Bandcamp => bandcamp::search(query, scope, offset),
         ProviderId::Audius => audius::search(query, scope, offset),
         ProviderId::LastFm => lastfm::search(query, scope, offset),
-        ProviderId::Custom(kind, _) => {
-            custom_dispatch!(kind, search(provider, query, scope, offset))
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::search(provider, query, scope, offset)
         }
-        ProviderId::Local => Ok((Vec::new(), SearchTab::Songs)),
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::search(provider, query, scope, offset)
+        }
+        ProviderId::Custom(CustomProviderKind::S3, _) | ProviderId::Local => {
+            Ok((Vec::new(), SearchTab::Songs))
+        }
     }
 }
 
@@ -916,10 +941,13 @@ pub fn search_more(
         ProviderId::Bandcamp => bandcamp::search_more(query, offset)?,
         ProviderId::Audius => audius::search_more(query, offset)?,
         ProviderId::LastFm => lastfm::search_more(query, offset)?,
-        ProviderId::Custom(kind, _) => {
-            custom_dispatch!(kind, search_more(provider, query, offset))?
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::search_more(provider, query, offset)?
         }
-        ProviderId::Local => Vec::new(),
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::search_more(provider, query, offset)?
+        }
+        ProviderId::Custom(CustomProviderKind::S3, _) | ProviderId::Local => Vec::new(),
     };
     Ok((tracks, scope.into()))
 }
@@ -955,9 +983,30 @@ pub struct PlaylistWrite {
     pub skipped: usize,
 }
 
-/// Whether this provider has server-side playlists the app can list and edit.
-pub fn playlists_supported(provider: ProviderId) -> bool {
-    provider.is_custom()
+/// Drop the cached contents of one server playlist before a manual refresh.
+/// Id-based servers always refetch, so only the snapshot backend has anything
+/// cached to drop.
+pub fn invalidate_server_playlist(provider: ProviderId, id: &str) {
+    if let ProviderId::Custom(CustomProviderKind::S3, _) = provider {
+        s3::invalidate_playlist(provider, id);
+    }
+}
+
+/// The tracks a snapshot playlist currently holds locally, so an optimistic
+/// add can leave out what the write will skip as already present. Empty for
+/// servers whose playlists are id references.
+pub fn snapshot_playlist_tracks(provider: ProviderId, id: &str) -> Vec<Track> {
+    match provider {
+        ProviderId::Custom(CustomProviderKind::S3, _) => s3::snapshot_tracks(provider, id),
+        _ => Vec::new(),
+    }
+}
+
+/// Drop a deleted provider's cached playlists.
+pub fn forget_server_playlists(provider: ProviderId) {
+    if let ProviderId::Custom(CustomProviderKind::S3, _) = provider {
+        s3::forget_playlists(provider);
+    }
 }
 
 /// The ids that address `tracks` on `provider`, plus how many tracks had none.
@@ -987,9 +1036,9 @@ pub fn browse(
         ProviderId::Bandcamp => bandcamp::browse(id, kind),
         ProviderId::Audius => audius::browse(id, kind),
         ProviderId::LastFm => lastfm::browse(id, kind),
-        ProviderId::Custom(custom_kind, _) => {
-            custom_dispatch!(custom_kind, browse(provider, id, kind))
-        }
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => subsonic::browse(provider, id, kind),
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => jellyfin::browse(provider, id, kind),
+        ProviderId::Custom(CustomProviderKind::S3, _) => s3::browse(provider, id, kind),
         ProviderId::Local => Ok((Vec::new(), None)),
     }
 }
@@ -997,21 +1046,45 @@ pub fn browse(
 /// Every playlist on `provider`'s server (empty for providers without one).
 pub fn list_playlists(provider: ProviderId) -> Result<Vec<ServerPlaylist>> {
     match provider {
-        ProviderId::Custom(kind, _) => custom_dispatch!(kind, list_playlists(provider)),
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => subsonic::list_playlists(provider),
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => jellyfin::list_playlists(provider),
+        ProviderId::Custom(CustomProviderKind::S3, _) => s3::list_playlists(provider),
         _ => Ok(Vec::new()),
     }
 }
 
+/// Append `tracks` to an id-based server playlist. Snapshot playlists keep a
+/// position, so they go through [`insert_into_playlist`] instead.
 pub fn add_to_playlist(
     provider: ProviderId,
     playlist_id: &str,
     tracks: &[Track],
 ) -> Result<PlaylistWrite> {
     match provider {
-        ProviderId::Custom(kind, _) => {
-            custom_dispatch!(kind, add_to_playlist(provider, playlist_id, tracks))
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::add_to_playlist(provider, playlist_id, tracks)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::add_to_playlist(provider, playlist_id, tracks)
         }
         _ => anyhow::bail!("provider does not support playlists"),
+    }
+}
+
+/// Insert `tracks` at `index` in a snapshot playlist, which is the only kind
+/// that can keep a position (an id-based server has no insertion parameter and
+/// appends through [`add_to_playlist`]).
+pub fn insert_into_playlist(
+    provider: ProviderId,
+    playlist_id: &str,
+    index: usize,
+    tracks: &[Track],
+) -> Result<PlaylistWrite> {
+    match provider {
+        ProviderId::Custom(CustomProviderKind::S3, _) => {
+            s3::insert_into_playlist(provider, playlist_id, index, tracks)
+        }
+        _ => anyhow::bail!("provider playlists cannot hold a position"),
     }
 }
 
@@ -1021,8 +1094,14 @@ pub fn remove_from_playlist(
     positions: &[usize],
 ) -> Result<usize> {
     match provider {
-        ProviderId::Custom(kind, _) => {
-            custom_dispatch!(kind, remove_from_playlist(provider, playlist_id, positions))
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::remove_from_playlist(provider, playlist_id, positions)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::remove_from_playlist(provider, playlist_id, positions)
+        }
+        ProviderId::Custom(CustomProviderKind::S3, _) => {
+            s3::remove_from_playlist(provider, playlist_id, positions)
         }
         _ => anyhow::bail!("provider does not support playlists"),
     }
@@ -1032,8 +1111,14 @@ pub fn remove_from_playlist(
 /// be the playlist's current contents in the wanted order).
 pub fn reorder_playlist(provider: ProviderId, playlist_id: &str, tracks: &[Track]) -> Result<()> {
     match provider {
-        ProviderId::Custom(kind, _) => {
-            custom_dispatch!(kind, reorder_playlist(provider, playlist_id, tracks))
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::reorder_playlist(provider, playlist_id, tracks)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::reorder_playlist(provider, playlist_id, tracks)
+        }
+        ProviderId::Custom(CustomProviderKind::S3, _) => {
+            s3::reorder_playlist(provider, playlist_id, tracks)
         }
         _ => anyhow::bail!("provider does not support playlists"),
     }
@@ -1045,8 +1130,14 @@ pub fn create_playlist(
     tracks: &[Track],
 ) -> Result<ServerPlaylist> {
     match provider {
-        ProviderId::Custom(kind, _) => {
-            custom_dispatch!(kind, create_playlist(provider, name, tracks))
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::create_playlist(provider, name, tracks)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::create_playlist(provider, name, tracks)
+        }
+        ProviderId::Custom(CustomProviderKind::S3, _) => {
+            s3::create_playlist(provider, name, tracks)
         }
         _ => anyhow::bail!("provider does not support playlists"),
     }
@@ -1054,8 +1145,14 @@ pub fn create_playlist(
 
 pub fn rename_playlist(provider: ProviderId, playlist_id: &str, name: &str) -> Result<()> {
     match provider {
-        ProviderId::Custom(kind, _) => {
-            custom_dispatch!(kind, rename_playlist(provider, playlist_id, name))
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::rename_playlist(provider, playlist_id, name)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::rename_playlist(provider, playlist_id, name)
+        }
+        ProviderId::Custom(CustomProviderKind::S3, _) => {
+            s3::rename_playlist(provider, playlist_id, name)
         }
         _ => anyhow::bail!("provider does not support playlists"),
     }
@@ -1063,9 +1160,13 @@ pub fn rename_playlist(provider: ProviderId, playlist_id: &str, name: &str) -> R
 
 pub fn delete_playlist(provider: ProviderId, playlist_id: &str) -> Result<()> {
     match provider {
-        ProviderId::Custom(kind, _) => {
-            custom_dispatch!(kind, delete_playlist(provider, playlist_id))
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::delete_playlist(provider, playlist_id)
         }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::delete_playlist(provider, playlist_id)
+        }
+        ProviderId::Custom(CustomProviderKind::S3, _) => s3::delete_playlist(provider, playlist_id),
         _ => anyhow::bail!("provider does not support playlists"),
     }
 }
@@ -1116,8 +1217,11 @@ pub fn spawn_artist_kinds_fetch(
                 ProviderId::Bandcamp => bandcamp::fetch_artist_page(&id, kinds),
                 ProviderId::Audius => audius::fetch_artist_page(&id, kinds),
                 ProviderId::LastFm => lastfm::fetch_artist_page(&id, kinds),
-                ProviderId::Custom(kind, _) => {
-                    custom_dispatch!(kind, fetch_artist_page(provider, &id, kinds))
+                ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+                    subsonic::fetch_artist_page(provider, &id, kinds)
+                }
+                ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+                    jellyfin::fetch_artist_page(provider, &id, kinds)
                 }
                 _ => Ok(artist_page::ArtistPage::default()),
             }
@@ -1176,12 +1280,19 @@ fn single_kind_data(page: &ArtistPage, kind: ArtistDataKind) -> Option<SectionCo
 /// Probe a candidate custom-provider configuration without saving it. Used by
 /// the Settings form's "Test connection" button.
 pub fn test_custom_provider(
-    kind: CustomProviderKind,
-    server_url: &str,
-    username: &str,
-    password: &str,
+    provider: &crate::data::custom_providers::CustomProvider,
 ) -> Result<String> {
-    custom_dispatch!(kind, test_connection(server_url, username, password))
+    match provider.kind() {
+        CustomProviderKind::Subsonic => {
+            let http = provider.http().context("not an HTTP provider")?;
+            subsonic::test_connection(&http.server_url, &http.username, &http.password)
+        }
+        CustomProviderKind::Jellyfin => {
+            let http = provider.http().context("not an HTTP provider")?;
+            jellyfin::test_connection(&http.server_url, &http.username, &http.password)
+        }
+        CustomProviderKind::S3 => s3::test_connection(provider),
+    }
 }
 
 /// Resolve an artist name to that provider's artist id (used to lazily open
@@ -1195,8 +1306,13 @@ pub fn resolve_artist_id(provider: ProviderId, name: &str) -> Result<Option<Stri
         ProviderId::Bandcamp => bandcamp::resolve_artist_id(name),
         ProviderId::Audius => audius::resolve_artist_id(name),
         ProviderId::LastFm => lastfm::resolve_artist_id(name),
-        ProviderId::Custom(kind, _) => custom_dispatch!(kind, resolve_artist_id(provider, name)),
-        ProviderId::Local => Ok(None),
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::resolve_artist_id(provider, name)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::resolve_artist_id(provider, name)
+        }
+        _ => Ok(None),
     }
 }
 
@@ -1205,12 +1321,9 @@ pub fn radio_song(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     match provider {
         ProviderId::YouTube => youtube::radio_song(id),
         ProviderId::LastFm => lastfm::radio_song(id),
-        ProviderId::Custom(kind, _) => custom_dispatch!(kind, radio_song(provider, id)),
-        ProviderId::SoundCloud
-        | ProviderId::MusicBrainz
-        | ProviderId::Bandcamp
-        | ProviderId::Audius
-        | ProviderId::Local => Ok(Vec::new()),
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => subsonic::radio_song(provider, id),
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => jellyfin::radio_song(provider, id),
+        _ => Ok(Vec::new()),
     }
 }
 
@@ -1219,12 +1332,9 @@ pub fn radio_artist(provider: ProviderId, id: &str) -> Result<Vec<Track>> {
     match provider {
         ProviderId::YouTube => youtube::radio_artist(id),
         ProviderId::LastFm => lastfm::radio_artist(id),
-        ProviderId::Custom(kind, _) => custom_dispatch!(kind, radio_artist(provider, id)),
-        ProviderId::SoundCloud
-        | ProviderId::MusicBrainz
-        | ProviderId::Bandcamp
-        | ProviderId::Audius
-        | ProviderId::Local => Ok(Vec::new()),
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => subsonic::radio_artist(provider, id),
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => jellyfin::radio_artist(provider, id),
+        _ => Ok(Vec::new()),
     }
 }
 
@@ -1242,8 +1352,13 @@ pub fn resolve_id(provider: ProviderId, track: &Track) -> Result<Option<Track>> 
         ProviderId::Bandcamp => bandcamp::resolve_id(track),
         ProviderId::Audius => audius::resolve_id(track),
         ProviderId::LastFm => lastfm::resolve_id(track),
-        ProviderId::Custom(kind, _) => custom_dispatch!(kind, resolve_id(provider, track)),
-        ProviderId::Local => Ok(None),
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::resolve_id(provider, track)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::resolve_id(provider, track)
+        }
+        _ => Ok(None),
     }
 }
 
@@ -1276,8 +1391,11 @@ pub fn download(
         ProviderId::SoundCloud => soundcloud::download(track, download_dir),
         ProviderId::Bandcamp => bandcamp::download(track, download_dir),
         ProviderId::Audius => audius::download(track, download_dir),
-        ProviderId::Custom(kind, _) => {
-            custom_dispatch!(kind, download(provider, track, download_dir))
+        ProviderId::Custom(CustomProviderKind::Subsonic, _) => {
+            subsonic::download(provider, track, download_dir)
+        }
+        ProviderId::Custom(CustomProviderKind::Jellyfin, _) => {
+            jellyfin::download(provider, track, download_dir)
         }
         _ => anyhow::bail!("provider does not support downloading"),
     }
